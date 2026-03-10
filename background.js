@@ -214,6 +214,25 @@ async function createContextMenus() {
     contexts: ["page", "frame"]
   });
 
+  // Add to Project submenu
+  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+  if (argusProjects.length > 0) {
+    browser.contextMenus.create({
+      id: "argus-project-parent",
+      parentId: "argus-parent",
+      title: "\uD83D\uDCC1 Add to Project",
+      contexts: ["page", "frame"]
+    });
+    for (const proj of argusProjects) {
+      browser.contextMenus.create({
+        id: `argus-project-${proj.id}`,
+        parentId: "argus-project-parent",
+        title: proj.name,
+        contexts: ["page", "frame"]
+      });
+    }
+  }
+
   browser.contextMenus.create({
     id: "argus-separator-actions",
     parentId: "argus-parent",
@@ -248,9 +267,9 @@ async function createContextMenus() {
 
 createContextMenus();
 
-// Rebuild context menus when custom presets change
+// Rebuild context menus when presets or projects change
 browser.storage.onChanged.addListener((changes) => {
-  if (changes.customPresets) createContextMenus();
+  if (changes.customPresets || changes.argusProjects) createContextMenus();
   if (changes.showBadge) updateBadge();
 });
 
@@ -391,10 +410,16 @@ function handleApiError(response, errorBody, providerLabel) {
   throw new Error(`${providerLabel} API error (${response.status}): ${errorBody}`);
 }
 
+function isXaiReasoningModel(model) {
+  // Reasoning-capable: grok-3 (not mini), grok-4, grok-4-1-fast-reasoning, 4.20 reasoning
+  return /grok-(4|3(?!-mini))/.test(model) && !/(non-reasoning)/.test(model);
+}
+
 async function callXai(apiKey, model, messages, opts) {
   const temperature = opts.temperature ?? 0.3;
   const maxTokens = opts.maxTokens || 2048;
   const reasoningEffort = opts.reasoningEffort || "medium";
+  const extThink = opts.extendedThinking;
   const isMultiAgent = model.includes("multi-agent");
   const isResponses = isMultiAgent || model.includes("4.20");
 
@@ -403,10 +428,16 @@ async function callXai(apiKey, model, messages, opts) {
     url = "https://api.x.ai/v1/responses";
     body = { model, input: messages, temperature };
     if (maxTokens) body.max_output_tokens = maxTokens;
-    if (isMultiAgent) body.reasoning = { effort: reasoningEffort };
+    if (isMultiAgent || isXaiReasoningModel(model)) {
+      body.reasoning = { effort: reasoningEffort };
+    }
   } else {
     url = "https://api.x.ai/v1/chat/completions";
     body = { model, messages, temperature, max_tokens: maxTokens };
+    // Send reasoning_effort for reasoning-capable models on chat completions
+    if (extThink?.enabled && isXaiReasoningModel(model)) {
+      body.reasoning_effort = reasoningEffort;
+    }
   }
 
   const response = await fetch(url, {
@@ -421,7 +452,18 @@ async function callXai(apiKey, model, messages, opts) {
   if (isResponses) {
     const text = data.output_text || (data.output && data.output.find(o => o.type === "message")?.content?.[0]?.text);
     if (!text) throw new Error("xAI returned an empty response.");
-    return { content: text, model: data.model || model, usage: data.usage };
+    // Extract reasoning from responses API output
+    let thinking = "";
+    if (data.output) {
+      for (const block of data.output) {
+        if (block.type === "reasoning" && block.summary) {
+          for (const s of block.summary) {
+            if (s.text) thinking += s.text + "\n";
+          }
+        }
+      }
+    }
+    return { content: text, thinking: thinking.trim() || null, model: data.model || model, usage: data.usage };
   } else {
     if (!data.choices || data.choices.length === 0) throw new Error("xAI returned an empty response.");
     return { content: data.choices[0].message.content, model: data.model, usage: data.usage };
@@ -447,8 +489,17 @@ function getOpenaiReasoningParams(model, opts) {
 async function callOpenai(apiKey, model, messages, opts) {
   const temperature = opts.temperature ?? 0.3;
   const maxTokens = opts.maxTokens || 2048;
+  const extThink = opts.extendedThinking;
+  const isReasoning = isOpenaiReasoningModel(model);
   const reasoningParams = getOpenaiReasoningParams(model, opts);
-  const body = { model, messages, temperature, max_tokens: maxTokens, ...reasoningParams };
+
+  const body = { model, messages, max_tokens: maxTokens, ...reasoningParams };
+  // o-series models don't support temperature
+  if (!isReasoning) body.temperature = temperature;
+  // Request reasoning summary for o-series when extended thinking is on
+  if (isReasoning && extThink?.enabled) {
+    body.reasoning = { effort: normalizeOpenaiReasoningEffort(opts.reasoningEffort), summary: "auto" };
+  }
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -459,7 +510,22 @@ async function callOpenai(apiKey, model, messages, opts) {
   if (!response.ok) handleApiError(response, await response.text(), "OpenAI");
   const data = await response.json();
   if (!data.choices || data.choices.length === 0) throw new Error("OpenAI returned an empty response.");
-  return { content: data.choices[0].message.content, model: data.model, usage: data.usage };
+
+  // Extract reasoning summary from o-series responses
+  let thinking = "";
+  const msg = data.choices[0].message;
+  if (msg.reasoning) {
+    for (const block of (Array.isArray(msg.reasoning) ? msg.reasoning : [msg.reasoning])) {
+      if (block.summary) {
+        for (const s of (Array.isArray(block.summary) ? block.summary : [block.summary])) {
+          if (typeof s === "string") thinking += s + "\n";
+          else if (s?.text) thinking += s.text + "\n";
+        }
+      }
+    }
+  }
+
+  return { content: msg.content, thinking: thinking.trim() || null, model: data.model, usage: data.usage };
 }
 
 async function callAnthropic(apiKey, model, messages, opts) {
@@ -515,9 +581,14 @@ async function callAnthropic(apiKey, model, messages, opts) {
   };
 }
 
+function isGeminiThinkingModel(model) {
+  return /gemini-2\.5/.test(model);
+}
+
 async function callGemini(apiKey, model, messages, opts) {
   const temperature = opts.temperature ?? 0.3;
   const maxTokens = opts.maxTokens || 2048;
+  const extThink = opts.extendedThinking;
 
   const systemMsg = messages.find(m => m.role === "system");
   const nonSystem = messages.filter(m => m.role !== "system");
@@ -536,6 +607,12 @@ async function callGemini(apiKey, model, messages, opts) {
   if (systemMsg) {
     body.system_instruction = { parts: [{ text: systemMsg.content }] };
   }
+  // Gemini 2.5 supports native thinking with thinkingConfig
+  if (extThink?.enabled && isGeminiThinkingModel(model)) {
+    body.generationConfig.thinkingConfig = {
+      thinkingBudget: extThink.budgetTokens || 10000
+    };
+  }
 
   const response = await fetch(url, {
     method: "POST",
@@ -548,9 +625,20 @@ async function callGemini(apiKey, model, messages, opts) {
   const candidate = data.candidates && data.candidates[0];
   if (!candidate || !candidate.content || !candidate.content.parts) throw new Error("Gemini returned an empty response.");
 
-  const text = candidate.content.parts.map(p => p.text || "").join("");
+  // Separate thinking parts from content parts
+  let thinking = "";
+  let text = "";
+  for (const part of candidate.content.parts) {
+    if (part.thought) {
+      thinking += (part.text || "") + "\n";
+    } else {
+      text += part.text || "";
+    }
+  }
+
   return {
     content: text,
+    thinking: thinking.trim() || null,
     model: model,
     usage: data.usageMetadata ? { prompt_tokens: data.usageMetadata.promptTokenCount, completion_tokens: data.usageMetadata.candidatesTokenCount } : null
   };
@@ -586,9 +674,10 @@ async function parseSSEStream(reader, onChunk, onThinking) {
   }
 }
 
-async function callXaiStream(apiKey, model, messages, opts, onChunk) {
+async function callXaiStream(apiKey, model, messages, opts, onChunk, onThinking) {
   const temperature = opts.temperature ?? 0.3;
   const maxTokens = opts.maxTokens || 2048;
+  const extThink = opts.extendedThinking;
   const isMultiAgent = model.includes("multi-agent");
   const isResponses = isMultiAgent || model.includes("4.20");
 
@@ -596,13 +685,19 @@ async function callXaiStream(apiKey, model, messages, opts, onChunk) {
   if (isResponses) {
     const result = await callXai(apiKey, model, messages, opts);
     onChunk(result.content);
+    if (result.thinking && onThinking) onThinking(result.thinking);
     return result;
+  }
+
+  const body = { model, messages, temperature, max_tokens: maxTokens, stream: true };
+  if (extThink?.enabled && isXaiReasoningModel(model)) {
+    body.reasoning_effort = opts.reasoningEffort || "medium";
   }
 
   const response = await fetch("https://api.x.ai/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-    body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens, stream: true })
+    body: JSON.stringify(body)
   });
 
   if (!response.ok) handleApiError(response, await response.text(), "xAI");
@@ -621,11 +716,18 @@ async function callXaiStream(apiKey, model, messages, opts, onChunk) {
   return { content: fullContent, model: modelName, usage: null };
 }
 
-async function callOpenaiStream(apiKey, model, messages, opts, onChunk) {
+async function callOpenaiStream(apiKey, model, messages, opts, onChunk, onThinking) {
   const temperature = opts.temperature ?? 0.3;
   const maxTokens = opts.maxTokens || 2048;
+  const extThink = opts.extendedThinking;
+  const isReasoning = isOpenaiReasoningModel(model);
   const reasoningParams = getOpenaiReasoningParams(model, opts);
-  const body = { model, messages, temperature, max_tokens: maxTokens, stream: true, ...reasoningParams };
+
+  const body = { model, messages, max_tokens: maxTokens, stream: true, ...reasoningParams };
+  if (!isReasoning) body.temperature = temperature;
+  if (isReasoning && extThink?.enabled) {
+    body.reasoning = { effort: normalizeOpenaiReasoningEffort(opts.reasoningEffort), summary: "auto" };
+  }
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -636,17 +738,23 @@ async function callOpenaiStream(apiKey, model, messages, opts, onChunk) {
   if (!response.ok) handleApiError(response, await response.text(), "OpenAI");
 
   let fullContent = "";
+  let fullThinking = "";
   let modelName = model;
   await parseSSEStream(response.body.getReader(), (parsed) => {
     if (parsed.model) modelName = parsed.model;
-    const delta = parsed.choices?.[0]?.delta?.content;
-    if (delta) {
-      fullContent += delta;
-      onChunk(delta);
+    const delta = parsed.choices?.[0]?.delta;
+    if (delta?.content) {
+      fullContent += delta.content;
+      onChunk(delta.content);
+    }
+    // Capture reasoning/thinking summary from o-series streaming
+    if (delta?.reasoning_content) {
+      fullThinking += delta.reasoning_content;
+      if (onThinking) onThinking(delta.reasoning_content);
     }
   });
 
-  return { content: fullContent, model: modelName, usage: null };
+  return { content: fullContent, thinking: fullThinking.trim() || null, model: modelName, usage: null };
 }
 
 async function callAnthropicStream(apiKey, model, messages, opts, onChunk, onThinking) {
@@ -730,9 +838,10 @@ async function callAnthropicStream(apiKey, model, messages, opts, onChunk, onThi
   };
 }
 
-async function callGeminiStream(apiKey, model, messages, opts, onChunk) {
+async function callGeminiStream(apiKey, model, messages, opts, onChunk, onThinking) {
   const temperature = opts.temperature ?? 0.3;
   const maxTokens = opts.maxTokens || 2048;
+  const extThink = opts.extendedThinking;
   const systemMsg = messages.find(m => m.role === "system");
   const nonSystem = messages.filter(m => m.role !== "system");
 
@@ -744,6 +853,9 @@ async function callGeminiStream(apiKey, model, messages, opts, onChunk) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
   const body = { contents, generationConfig: { temperature, maxOutputTokens: maxTokens } };
   if (systemMsg) body.system_instruction = { parts: [{ text: systemMsg.content }] };
+  if (extThink?.enabled && isGeminiThinkingModel(model)) {
+    body.generationConfig.thinkingConfig = { thinkingBudget: extThink.budgetTokens || 10000 };
+  }
 
   const response = await fetch(url, {
     method: "POST",
@@ -754,15 +866,22 @@ async function callGeminiStream(apiKey, model, messages, opts, onChunk) {
   if (!response.ok) handleApiError(response, await response.text(), "Gemini");
 
   let fullContent = "";
+  let fullThinking = "";
   await parseSSEStream(response.body.getReader(), (parsed) => {
-    const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (text) {
-      fullContent += text;
-      onChunk(text);
+    const parts = parsed.candidates?.[0]?.content?.parts;
+    if (!parts) return;
+    for (const part of parts) {
+      if (part.thought && part.text) {
+        fullThinking += part.text;
+        if (onThinking) onThinking(part.text);
+      } else if (part.text) {
+        fullContent += part.text;
+        onChunk(part.text);
+      }
     }
   });
 
-  return { content: fullContent, model: model, usage: null };
+  return { content: fullContent, thinking: fullThinking.trim() || null, model: model, usage: null };
 }
 
 // ──────────────────────────────────────────────
@@ -781,9 +900,9 @@ async function callProvider(provider, apiKey, model, messages, opts = {}) {
 async function callProviderStream(provider, apiKey, model, messages, opts, onChunk, onThinking) {
   switch (provider) {
     case "xai": return callXaiStream(apiKey, model, messages, opts, onChunk, onThinking);
-    case "openai": return callOpenaiStream(apiKey, model, messages, opts, onChunk);
+    case "openai": return callOpenaiStream(apiKey, model, messages, opts, onChunk, onThinking);
     case "anthropic": return callAnthropicStream(apiKey, model, messages, opts, onChunk, onThinking);
-    case "gemini": return callGeminiStream(apiKey, model, messages, opts, onChunk);
+    case "gemini": return callGeminiStream(apiKey, model, messages, opts, onChunk, onThinking);
     default: throw new Error(`Unknown provider: ${provider}`);
   }
 }
@@ -878,7 +997,7 @@ function buildMessages(systemPrompt, userPrompt) {
   ];
 }
 
-async function buildAnalysisPrompts(page, analysisType, customPrompt, settings, provider, opts) {
+async function buildAnalysisPrompts(page, analysisType, customPrompt, settings) {
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const defaultPreset = ANALYSIS_PRESETS[analysisType];
   const customPreset = settings.customPresets[analysisType];
@@ -886,12 +1005,7 @@ async function buildAnalysisPrompts(page, analysisType, customPrompt, settings, 
   const baseSystem = customPreset?.system || defaultPreset?.system || "You are a helpful assistant that analyzes web content.";
   const langInstruction = await getLanguageInstruction();
   const sharelineInstruction = ' At the very end of your response, include a single catchy shareable one-liner (under 180 characters) on its own line prefixed with exactly "SHARELINE:" — this will be hidden from the user and only used for social sharing.';
-  let systemPrompt = `Today's date is ${today}. ${baseSystem}${langInstruction}${sharelineInstruction}`;
-
-  // Best-effort extended thinking for providers without native thinking stream output.
-  if (opts?.extendedThinking?.enabled && (provider === "xai" || provider === "openai")) {
-    systemPrompt += " Before your final answer, include a clearly marked 'REASONING:' section that concisely explains your analysis steps and key checks.";
-  }
+  const systemPrompt = `Today's date is ${today}. ${baseSystem}${langInstruction}${sharelineInstruction}`;
 
   const analysisInstruction = customPrompt
     ? customPrompt
@@ -998,7 +1112,7 @@ async function handleAnalyzeStream(port, message) {
     }
 
     const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
-    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings, settings.provider, opts);
+    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings);
     const messages = buildMessages(systemPrompt, userPrompt);
 
     port.postMessage({ type: "start", provider: settings.provider, model: settings.model, pageTitle: page.title });
@@ -1095,7 +1209,7 @@ async function handleCompareStream(port, message) {
       try {
         const settings = await getProviderSettings(providerKey);
         const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
-        const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings, settings.provider, opts);
+        const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings);
         const msgs = buildMessages(systemPrompt, userPrompt);
 
         port.postMessage({ type: "compareStart", provider: providerKey, model: settings.model });
@@ -1277,7 +1391,7 @@ async function handleAnalyze(message) {
     const settings = await getProviderSettings(message.provider, message.analysisType);
     const page = await extractPageContent();
     const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
-    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings, settings.provider, opts);
+    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings);
     const messages = buildMessages(systemPrompt, userPrompt);
 
     const result = await callProvider(
@@ -1412,7 +1526,7 @@ async function handleCompareInTab(message) {
 async function streamAnalysisToStorage(resultId, page, message, settings, presetLabel) {
   try {
     const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
-    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings, settings.provider, opts);
+    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings);
     const messages = buildMessages(systemPrompt, userPrompt);
 
     let streamedContent = "";
@@ -1547,6 +1661,37 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
         iconUrl: "icons/icon-96.png",
         title: "Argus — Error",
         message: `Failed to bookmark: ${err.message}`
+      });
+    }
+    return;
+  }
+
+  // Handle add to project context menu
+  if (info.menuItemId.startsWith("argus-project-")) {
+    const projectId = info.menuItemId.replace("argus-project-", "");
+    try {
+      await handleAddProjectItem({
+        projectId,
+        item: {
+          type: "url",
+          url: tab.url,
+          title: tab.title || tab.url,
+          summary: "",
+          tags: []
+        }
+      });
+      browser.notifications.create({
+        type: "basic",
+        iconUrl: "icons/icon-96.png",
+        title: "Argus",
+        message: `Added to project: ${tab.title || tab.url}`
+      });
+    } catch (err) {
+      browser.notifications.create({
+        type: "basic",
+        iconUrl: "icons/icon-96.png",
+        title: "Argus — Error",
+        message: `Failed to add to project: ${err.message}`
       });
     }
     return;
@@ -1691,7 +1836,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
     }
 
     const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
-    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, presetKey, null, settings, settings.provider, opts);
+    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, presetKey, null, settings);
     const messages = buildMessages(systemPrompt, userPrompt);
 
     // Stream to storage for results page
@@ -1777,7 +1922,7 @@ browser.commands.onCommand.addListener(async (command) => {
       const settings = await getProviderSettings();
       const page = await extractPageContent(tab.id);
       const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
-      const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, "summary", null, settings, settings.provider, opts);
+      const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, "summary", null, settings);
       const messages = buildMessages(systemPrompt, userPrompt);
 
       let streamedContent = "";
@@ -1826,7 +1971,7 @@ browser.commands.onCommand.addListener(async (command) => {
       const settings = await getProviderSettings();
       const page = { title: tab.title, url: tab.url, description: "", text: selection };
       const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
-      const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, "summary", null, settings, settings.provider, opts);
+      const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, "summary", null, settings);
       const messages = buildMessages(systemPrompt, userPrompt);
 
       let streamedContent = "";
@@ -1913,7 +2058,7 @@ browser.webNavigation.onCompleted.addListener(async (details) => {
       const settings = await getProviderSettings(rule.provider || null);
       const page = await extractPageContent(details.tabId);
       const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
-      const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, presetKey, null, settings, settings.provider, opts);
+      const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, presetKey, null, settings);
       const messages = buildMessages(systemPrompt, userPrompt);
 
       let streamedContent = "";
@@ -2579,7 +2724,7 @@ Summarize the key differences in 2-4 bullet points.`;
           const settings = await getProviderSettings(null, monitor.analysisPreset);
           const page = { url: monitor.url, title: monitor.title, text: newText.slice(0, settings.maxInputChars || 100000) };
           const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
-          const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, monitor.analysisPreset, null, settings, settings.provider, opts);
+          const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, monitor.analysisPreset, null, settings);
           const msgs = buildMessages(systemPrompt, userPrompt);
           const result = await callProvider(settings.provider, settings.apiKey, settings.model, msgs, opts);
 

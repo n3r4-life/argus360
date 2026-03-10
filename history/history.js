@@ -72,6 +72,50 @@ function attachListeners() {
     closeDetail();
     loadHistory();
   });
+
+  const projBtn = document.getElementById("detail-add-project");
+  projBtn.addEventListener("click", async () => {
+    if (!currentItem) return;
+    const resp = await browser.runtime.sendMessage({ action: "getProjects" });
+    if (!resp.success || !resp.projects.length) {
+      alert("No projects yet. Create one in the Argus console first.");
+      return;
+    }
+    let picker = projBtn.querySelector(".proj-picker");
+    if (picker) { picker.remove(); return; }
+    picker = document.createElement("div");
+    picker.className = "proj-picker";
+    picker.style.cssText = "position:absolute;bottom:100%;left:0;z-index:99;background:var(--bg-secondary,#1a1a2e);border:1px solid var(--border,#333);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.4);max-height:200px;overflow-y:auto;min-width:180px;margin-bottom:4px;";
+    for (const proj of resp.projects) {
+      const opt = document.createElement("div");
+      opt.style.cssText = "padding:8px 12px;cursor:pointer;font-size:13px;";
+      opt.textContent = proj.name;
+      opt.addEventListener("mouseenter", () => opt.style.background = "var(--bg-hover,#2a2a4a)");
+      opt.addEventListener("mouseleave", () => opt.style.background = "");
+      opt.addEventListener("click", async () => {
+        await browser.runtime.sendMessage({
+          action: "addProjectItem",
+          projectId: proj.id,
+          item: {
+            type: "analysis",
+            refId: currentItem.id,
+            url: currentItem.pageUrl || "",
+            title: currentItem.pageTitle || "Analysis",
+            summary: (currentItem.content || "").slice(0, 500),
+            tags: [currentItem.presetLabel || "analysis"]
+          }
+        });
+        picker.remove();
+        projBtn.textContent = "Added!";
+        setTimeout(() => { projBtn.textContent = "+ Project"; }, 1500);
+      });
+      picker.appendChild(opt);
+    }
+    projBtn.appendChild(picker);
+    setTimeout(() => document.addEventListener("click", function dismiss(e) {
+      if (!picker.contains(e.target) && e.target !== projBtn) { picker.remove(); document.removeEventListener("click", dismiss); }
+    }), 0);
+  });
 }
 
 async function loadHistory() {

@@ -1897,8 +1897,10 @@ async function projAddItem(type) {
   const item = { type, title, notes: "", url: "" };
 
   if (type === "url") {
-    const url = prompt("Enter a URL:");
+    let url = (prompt("Enter a URL:") || "").trim();
     if (!url) return;
+    // Auto-prepend https:// if no protocol
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
     item.url = url;
     item.title = url;
   }

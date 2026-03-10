@@ -188,6 +188,53 @@ function renderEntries() {
     });
     actions.appendChild(summarizeBtn);
 
+    const projBtn = document.createElement("button");
+    projBtn.className = "btn btn-small btn-secondary";
+    projBtn.textContent = "+ Project";
+    projBtn.addEventListener("click", async () => {
+      const resp = await browser.runtime.sendMessage({ action: "getProjects" });
+      if (!resp.success || !resp.projects.length) {
+        alert("No projects yet. Create one in the Argus console first.");
+        return;
+      }
+      // Simple dropdown picker
+      let picker = projBtn.parentElement.querySelector(".proj-picker");
+      if (picker) { picker.remove(); return; }
+      picker = document.createElement("div");
+      picker.className = "proj-picker";
+      picker.style.cssText = "position:absolute;z-index:99;background:var(--bg-secondary,#1a1a2e);border:1px solid var(--border,#333);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.4);max-height:200px;overflow-y:auto;min-width:180px;margin-top:4px;";
+      for (const proj of resp.projects) {
+        const opt = document.createElement("div");
+        opt.style.cssText = "padding:8px 12px;cursor:pointer;font-size:13px;";
+        opt.textContent = proj.name;
+        opt.addEventListener("mouseenter", () => opt.style.background = "var(--bg-hover,#2a2a4a)");
+        opt.addEventListener("mouseleave", () => opt.style.background = "");
+        opt.addEventListener("click", async () => {
+          await browser.runtime.sendMessage({
+            action: "addProjectItem",
+            projectId: proj.id,
+            item: {
+              type: "feed",
+              url: entry.link || "",
+              title: entry.title || "Feed Entry",
+              summary: (entry.description || "").slice(0, 500),
+              tags: ["feed"]
+            }
+          });
+          picker.remove();
+          projBtn.textContent = "Added!";
+          setTimeout(() => { projBtn.textContent = "+ Project"; }, 1500);
+        });
+        picker.appendChild(opt);
+      }
+      projBtn.parentElement.style.position = "relative";
+      projBtn.parentElement.appendChild(picker);
+      setTimeout(() => document.addEventListener("click", function dismiss(e) {
+        if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener("click", dismiss); }
+      }), 0);
+    });
+    actions.appendChild(projBtn);
+
     if (!entry.read) {
       const readBtn = document.createElement("button");
       readBtn.className = "btn btn-small btn-secondary";
