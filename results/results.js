@@ -77,22 +77,31 @@ document.addEventListener("DOMContentLoaded", () => {
     return (url && url !== "#") ? url : "";
   }
 
+  function getShareAttrib() {
+    const prov = analysisProvider || "";
+    const provNames = { xai: "Grok", openai: "ChatGPT", anthropic: "Claude", gemini: "Gemini" };
+    const name = provNames[prov] || prov;
+    return name ? `Argus 360 w/ ${name}` : "Argus 360";
+  }
+
   document.getElementById("share-x").addEventListener("click", () => {
     const url = getShareUrl();
     const title = pageTitle || "this page";
+    const attrib = getShareAttrib();
     const text = url
-      ? `${title}\n\n${getShareSnippet()}\n\n${url}`
-      : `${title}\n\n${getShareSnippet()}`;
+      ? `${title}\n\n${getShareSnippet()}\n\n— ${attrib}\n${url}`
+      : `${title}\n\n${getShareSnippet()}\n\n— ${attrib}`;
     window.open(`https://x.com/intent/post?text=${encodeURIComponent(text)}`, "_blank");
   });
 
   document.getElementById("share-reddit").addEventListener("click", () => {
     const url = getShareUrl();
-    const title = `${pageTitle || "Analysis"} — Argus 360 AI Analysis`;
+    const attrib = getShareAttrib();
+    const title = `${pageTitle || "Analysis"} — ${attrib}`;
     if (url) {
       window.open(`https://www.reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`, "_blank");
     } else {
-      window.open(`https://www.reddit.com/submit?selftext=true&title=${encodeURIComponent(title)}&text=${encodeURIComponent(getShareSnippet())}`, "_blank");
+      window.open(`https://www.reddit.com/submit?selftext=true&title=${encodeURIComponent(title)}&text=${encodeURIComponent(getShareSnippet() + "\n\n— " + attrib)}`, "_blank");
     }
   });
 
@@ -105,10 +114,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("share-email").addEventListener("click", () => {
     const url = getShareUrl();
-    const subject = `${pageTitle || "Analysis"} — Argus 360`;
+    const attrib = getShareAttrib();
+    const subject = `${pageTitle || "Analysis"} — ${attrib}`;
     const body = url
-      ? `${getShareSnippet()}\n\nSource: ${url}\n\nAnalyzed with Argus 360`
-      : `${getShareSnippet()}\n\nAnalyzed with Argus 360`;
+      ? `${getShareSnippet()}\n\nSource: ${url}\n\n— ${attrib}`
+      : `${getShareSnippet()}\n\n— ${attrib}`;
     window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
   });
 
