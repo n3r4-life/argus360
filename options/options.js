@@ -653,6 +653,11 @@ function attachListeners() {
   el.openFeedReader.addEventListener("click", () => {
     browser.tabs.create({ url: browser.runtime.getURL("feeds/feeds.html") });
   });
+  document.getElementById("delete-all-feeds").addEventListener("click", async () => {
+    if (!confirm("Delete all feeds and their entries? This cannot be undone.")) return;
+    await browser.runtime.sendMessage({ action: "deleteAllFeeds" });
+    renderFeeds();
+  });
 
   // Archive Redirect
   loadArchiveSettings();

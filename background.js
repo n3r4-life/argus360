@@ -860,7 +860,8 @@ async function buildAnalysisPrompts(page, analysisType, customPrompt, settings) 
 
   const baseSystem = customPreset?.system || defaultPreset?.system || "You are a helpful assistant that analyzes web content.";
   const langInstruction = await getLanguageInstruction();
-  const systemPrompt = `Today's date is ${today}. ${baseSystem}${langInstruction}`;
+  const sharelineInstruction = ' At the very end of your response, include a single catchy shareable one-liner (under 180 characters) on its own line prefixed with exactly "SHARELINE:" — this will be hidden from the user and only used for social sharing.';
+  const systemPrompt = `Today's date is ${today}. ${baseSystem}${langInstruction}${sharelineInstruction}`;
 
   const analysisInstruction = customPrompt
     ? customPrompt
@@ -1131,6 +1132,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "getFeeds") return handleGetFeeds();
   if (message.action === "getFeedEntries") return handleGetFeedEntries(message);
   if (message.action === "deleteFeed") return handleDeleteFeed(message);
+  if (message.action === "deleteAllFeeds") return handleDeleteAllFeeds();
   if (message.action === "updateFeed") return handleUpdateFeed(message);
   if (message.action === "markFeedEntryRead") return handleMarkFeedEntryRead(message);
   if (message.action === "markAllFeedRead") return handleMarkAllFeedRead(message);
@@ -1576,7 +1578,21 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
           })();
         `
       });
-      const feedUrl = (feedResults && feedResults[0]) || tab.url;
+      const detectedFeed = feedResults && feedResults[0];
+
+      // Also try background-side discovery if no <link> found
+      let feedUrl = detectedFeed || await discoverFeedUrl(tab.url);
+
+      if (!feedUrl) {
+        browser.notifications.create({
+          type: "basic",
+          iconUrl: "icons/icon-96.png",
+          title: "Argus",
+          message: "No RSS or Atom feed found on this page."
+        });
+        return;
+      }
+
       const result = await handleAddFeed({
         url: feedUrl,
         title: tab.title || feedUrl,
@@ -2873,7 +2889,17 @@ async function handleAddFeed(message) {
 
     // Fetch and parse to validate
     const resp = await fetch(feedUrl);
+    const contentType = (resp.headers.get("content-type") || "").toLowerCase();
     const xmlText = await resp.text();
+
+    // Reject if this is clearly an HTML page, not a feed
+    const isHtml = contentType.includes("text/html") && !contentType.includes("xml");
+    const looksLikeHtml = xmlText.trimStart().slice(0, 200).toLowerCase().includes("<!doctype html") ||
+                          xmlText.trimStart().slice(0, 200).toLowerCase().includes("<html");
+    if (isHtml || (looksLikeHtml && !xmlText.includes("<rss") && !xmlText.includes("<feed") && !xmlText.includes("<channel"))) {
+      return { success: false, error: "This URL is a webpage, not an RSS/Atom feed." };
+    }
+
     const parsed = parseRSSFeed(xmlText);
 
     if (!parsed.entries.length) {
@@ -2950,6 +2976,17 @@ async function handleDeleteFeed(message) {
     await browser.storage.local.remove([`feed-entries-${feed.id}`]);
   }
   await browser.storage.local.set({ rssFeeds: rssFeeds.filter(f => f.id !== message.id) });
+  return { success: true };
+}
+
+async function handleDeleteAllFeeds() {
+  const { rssFeeds } = await browser.storage.local.get({ rssFeeds: [] });
+  const keysToRemove = rssFeeds.map(f => `feed-entries-${f.id}`);
+  for (const feed of rssFeeds) {
+    await browser.alarms.clear(`${RSS_ALARM_PREFIX}${feed.id}`);
+  }
+  if (keysToRemove.length) await browser.storage.local.remove(keysToRemove);
+  await browser.storage.local.set({ rssFeeds: [] });
   return { success: true };
 }
 

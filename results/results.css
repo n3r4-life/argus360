@@ -454,6 +454,14 @@ body {
   line-height: 1.7;
 }
 
+.followup-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.6;
+  margin-top: 6px;
+  font-style: italic;
+}
+
 .followup-answer.streaming::after {
   content: "";
   display: inline-block;

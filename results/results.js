@@ -31,6 +31,7 @@ let pageTitle = "";
 let resultId = null;
 let analysisProvider = "";
 let analysisModel = "";
+let shareline = "";
 
 document.addEventListener("DOMContentLoaded", () => {
   const params = new URLSearchParams(window.location.search);
@@ -64,7 +65,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Share buttons
   function getShareSnippet() {
-    // Strip markdown formatting, headings, bullets, links, labels
+    // Use AI-generated shareline if available
+    if (shareline) return shareline;
+    // Fallback: strip markdown formatting, headings, bullets, links, labels
     const lines = rawMarkdown.split("\n")
       .map(l => l.replace(/^#{1,6}\s+/g, "").replace(/\*\*|__/g, "").replace(/[*_`>\[\]()!]/g, "").replace(/^[-•]\s+/g, "").trim())
       .filter(l => l.length > 30 && !/^(summary|source|url|article|publication|http)/i.test(l));
@@ -257,8 +260,10 @@ async function pollForResult(id) {
       elements.resultsContainer.classList.remove("hidden");
       elements.resultContent.classList.add("streaming");
 
-      rawMarkdown = data.content || "";
-      renderMarkdown(rawMarkdown, elements.resultContent);
+      // Strip shareline from streaming display so it doesn't flash
+      const streamContent = (data.content || "").replace(/\n?SHARELINE:\s*.+$/m, "");
+      rawMarkdown = streamContent;
+      renderMarkdown(streamContent, elements.resultContent);
 
       if (data.provider && data.model) {
         elements.resultMeta.textContent = `${data.provider} | ${data.model} | Streaming...`;
@@ -301,11 +306,21 @@ function updatePageInfo(data) {
   }
 }
 
+function extractShareline(text) {
+  const match = text.match(/\n?SHARELINE:\s*(.+)$/m);
+  if (match) {
+    return { cleaned: text.replace(/\n?SHARELINE:\s*.+$/m, "").trimEnd(), shareline: match[1].trim() };
+  }
+  return { cleaned: text, shareline: "" };
+}
+
 function showResult(data) {
-  rawMarkdown = data.content;
+  const extracted = extractShareline(data.content);
+  shareline = extracted.shareline;
+  rawMarkdown = extracted.cleaned;
   pageTitle = data.pageTitle || pageTitle;
 
-  renderMarkdown(data.content, elements.resultContent);
+  renderMarkdown(rawMarkdown, elements.resultContent);
 
   // Research mode: show sources panel and enhance content
   if (data.isResearch && data.sources) {
@@ -505,6 +520,27 @@ async function pollForFollowUp(followupId, answerDiv) {
       answerDiv.classList.remove("streaming");
       renderMarkdown(data.content, answerDiv);
       rawMarkdown += `\n\n---\n\n**Follow-up:** ${elements.followupInput.value || ""}\n\n${data.content}`;
+
+      // Show per-answer attribution
+      if (data.provider || data.model) {
+        const attrDiv = document.createElement("div");
+        attrDiv.className = "followup-meta";
+        const provNames = { xai: "Grok", openai: "OpenAI", anthropic: "Claude", gemini: "Gemini" };
+        let attrText = provNames[data.provider] || data.provider || "";
+        if (data.model) attrText += attrText ? ` (${data.model})` : data.model;
+        attrDiv.textContent = attrText;
+        answerDiv.appendChild(attrDiv);
+
+        // Update footer if provider changed
+        if (data.provider) analysisProvider = data.provider;
+        if (data.model) analysisModel = data.model;
+        let meta = data.provider || "";
+        if (data.model) meta += ` | ${data.model}`;
+        if (data.usage) {
+          meta += ` | Tokens: ${data.usage.prompt_tokens || "?"} in / ${data.usage.completion_tokens || "?"} out`;
+        }
+        elements.resultMeta.textContent = meta;
+      }
 
       if (data.thinking) {
         elements.thinkingSection.classList.remove("hidden");
