@@ -60,6 +60,52 @@ document.addEventListener("DOMContentLoaded", () => {
     exportAsText(rawMarkdown, (pageTitle || "analysis") + ".txt");
   });
 
+  // Share buttons
+  function getShareSnippet() {
+    const plain = rawMarkdown.replace(/[#*_`>\[\]()!]/g, "").trim();
+    return plain.length > 200 ? plain.slice(0, 197) + "..." : plain;
+  }
+
+  function getShareUrl() {
+    const url = elements.pageUrl.href;
+    return (url && url !== "#") ? url : "";
+  }
+
+  document.getElementById("share-x").addEventListener("click", () => {
+    const url = getShareUrl();
+    const snippet = getShareSnippet();
+    const text = url
+      ? `${snippet}\n\nAnalyzed with Argus 360\n${url}`
+      : `${snippet}\n\nAnalyzed with Argus 360`;
+    window.open(`https://x.com/intent/post?text=${encodeURIComponent(text)}`, "_blank");
+  });
+
+  document.getElementById("share-reddit").addEventListener("click", () => {
+    const url = getShareUrl();
+    const title = `${pageTitle || "Analysis"} — Argus 360 AI Analysis`;
+    if (url) {
+      window.open(`https://www.reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`, "_blank");
+    } else {
+      window.open(`https://www.reddit.com/submit?selftext=true&title=${encodeURIComponent(title)}&text=${encodeURIComponent(getShareSnippet())}`, "_blank");
+    }
+  });
+
+  document.getElementById("share-linkedin").addEventListener("click", () => {
+    const url = getShareUrl();
+    if (url) {
+      window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`, "_blank");
+    }
+  });
+
+  document.getElementById("share-email").addEventListener("click", () => {
+    const url = getShareUrl();
+    const subject = `${pageTitle || "Analysis"} — Argus 360`;
+    const body = url
+      ? `${getShareSnippet()}\n\nSource: ${url}\n\nAnalyzed with Argus 360`
+      : `${getShareSnippet()}\n\nAnalyzed with Argus 360`;
+    window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+  });
+
   elements.thinkingToggle.addEventListener("click", () => {
     elements.thinkingContent.classList.toggle("hidden");
     elements.thinkingToggle.textContent =

@@ -43,8 +43,8 @@
           <span>Automation</span>
         </button>
         <button class="nav-tab" data-tab="archive">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
-          <span>Archive</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+          <span>Redirects</span>
         </button>
       </div>
       <div class="nav-row nav-row-secondary">
@@ -699,8 +699,27 @@
     <!-- ═══════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="help">
 
+      <div class="help-jump-nav" id="help-top">
+        <a href="#help-getting-started">Getting Started</a>
+        <a href="#help-basic-usage">Basic Usage</a>
+        <a href="#help-shortcuts">Shortcuts</a>
+        <a href="#help-analysis-modes">Analysis Modes</a>
+        <a href="#help-presets">Presets</a>
+        <a href="#help-bookmarks">Bookmarks</a>
+        <a href="#help-monitoring">Monitoring</a>
+        <a href="#help-feeds">RSS Feeds</a>
+        <a href="#help-archive">Redirects</a>
+        <a href="#help-providers">Provider Features</a>
+        <a href="#help-export">Exporting</a>
+        <a href="#help-config">Config Reference</a>
+        <a href="#help-privacy">Privacy</a>
+        <a href="#help-troubleshooting">Troubleshooting</a>
+        <a href="#help-opensource">Open Source</a>
+        <a href="#help-about">About</a>
+      </div>
+
       <!-- Getting Started -->
-      <section class="card">
+      <section class="card" id="help-getting-started">
         <h2 class="card-title">Getting Started</h2>
         <div class="card-body help-content">
           <h3>What is Argus?</h3>
@@ -745,7 +764,7 @@
       </section>
 
       <!-- Basic Usage -->
-      <section class="card">
+      <section class="card" id="help-basic-usage">
         <h2 class="card-title">Basic Usage</h2>
         <div class="card-body help-content">
           <h3>Analyzing a Page</h3>
@@ -781,7 +800,7 @@
       </section>
 
       <!-- Keyboard Shortcuts -->
-      <section class="card">
+      <section class="card" id="help-shortcuts">
         <h2 class="card-title">Keyboard Shortcuts</h2>
         <div class="card-body help-content">
           <div class="help-table-wrap">
@@ -799,7 +818,7 @@
       </section>
 
       <!-- Analysis Modes -->
-      <section class="card">
+      <section class="card" id="help-analysis-modes">
         <h2 class="card-title">Analysis Modes</h2>
         <div class="card-body help-content">
           <h3>Compare Providers</h3>
@@ -829,7 +848,7 @@
       </section>
 
       <!-- Built-in Presets -->
-      <section class="card">
+      <section class="card" id="help-presets">
         <h2 class="card-title">Built-in Analysis Presets</h2>
         <div class="card-body help-content">
           <div class="help-table-wrap">
@@ -876,7 +895,7 @@
       </section>
 
       <!-- Smart Bookmarks -->
-      <section class="card">
+      <section class="card" id="help-bookmarks">
         <h2 class="card-title">Smart Bookmarks</h2>
         <div class="card-body help-content">
           <h3>Bookmarking Pages</h3>
@@ -903,7 +922,7 @@
       </section>
 
       <!-- Page Monitoring -->
-      <section class="card">
+      <section class="card" id="help-monitoring">
         <h2 class="card-title">Page Monitoring</h2>
         <div class="card-body help-content">
           <p>Monitor any page for content changes. Argus periodically checks for updates and notifies you when something changes.</p>
@@ -937,7 +956,7 @@
       </section>
 
       <!-- RSS Feeds -->
-      <section class="card">
+      <section class="card" id="help-feeds">
         <h2 class="card-title">RSS Feeds</h2>
         <div class="card-body help-content">
           <p>Subscribe to RSS/Atom feeds for lightweight content monitoring without scraping entire pages.</p>
@@ -959,12 +978,12 @@
       </section>
 
       <!-- Archive Redirect -->
-      <section class="card">
+      <section class="card" id="help-archive">
         <h2 class="card-title">Archive Redirect</h2>
         <div class="card-body help-content">
           <p>Automatically redirect paywalled or annoying news sites through <strong>archive.is</strong> for clean, ad-free reading.</p>
           <ol>
-            <li>Go to the <strong>Archive</strong> tab in this console</li>
+            <li>Go to the <strong>Redirects</strong> tab in this console</li>
             <li>Toggle <strong>Enable Archive Redirect</strong></li>
             <li>Edit the domain list — add or remove sites (one per line)</li>
             <li>Click <strong>Save</strong></li>
@@ -974,7 +993,7 @@
       </section>
 
       <!-- Provider-Specific Features -->
-      <section class="card">
+      <section class="card" id="help-providers">
         <h2 class="card-title">Provider-Specific Features</h2>
         <div class="card-body help-content">
           <h3>Extended Thinking <span class="badge">Claude</span></h3>
@@ -993,7 +1012,7 @@
       </section>
 
       <!-- Exporting Results -->
-      <section class="card">
+      <section class="card" id="help-export">
         <h2 class="card-title">Exporting Results</h2>
         <div class="card-body help-content">
           <p>From any results page, use the toolbar buttons to export:</p>
@@ -1013,7 +1032,7 @@
       </section>
 
       <!-- Configuration Reference -->
-      <section class="card">
+      <section class="card" id="help-config">
         <h2 class="card-title">Configuration Reference</h2>
         <div class="card-body help-content">
           <div class="help-table-wrap">
@@ -1035,7 +1054,7 @@
       </section>
 
       <!-- Privacy -->
-      <section class="card">
+      <section class="card" id="help-privacy">
         <h2 class="card-title">Privacy &amp; Security</h2>
         <div class="card-body help-content">
           <div class="help-callout">
@@ -1054,7 +1073,7 @@
       </section>
 
       <!-- Troubleshooting -->
-      <section class="card">
+      <section class="card" id="help-troubleshooting">
         <h2 class="card-title">Troubleshooting</h2>
         <div class="card-body help-content">
           <h3>"No API key configured"</h3>
@@ -1081,7 +1100,7 @@
       </section>
 
       <!-- Open Source -->
-      <section class="card">
+      <section class="card" id="help-opensource">
         <h2 class="card-title">Open Source</h2>
         <div class="card-body help-content">
           <p>Argus is fully open source under the MIT license. The entire extension is vanilla JavaScript with zero dependencies (except <code>marked.min.js</code> for Markdown rendering) — no frameworks, no bundlers, no transpilers. Just open the files and read them.</p>
@@ -1103,7 +1122,7 @@
       </section>
 
       <!-- About -->
-      <section class="card">
+      <section class="card" id="help-about">
         <h2 class="card-title">About Argus</h2>
         <div class="card-body help-content">
           <p>Argus is named after the all-seeing giant of Greek mythology — a guardian with a hundred eyes, ever-watchful. Like its namesake, Argus watches the web for you, analyzing pages and tracking changes across the sites you care about.</p>

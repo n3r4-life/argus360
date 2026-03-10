@@ -57,7 +57,7 @@
 ### Archive Redirect
 - Automatically redirect paywalled or annoying news sites through **archive.is**
 - Manage a customizable domain blocklist (24 common sites pre-loaded)
-- Toggle on/off from the **Archive** tab — off by default
+- Toggle on/off from the **Redirects** tab — off by default
 
 ### Auto-Analyze
 - Set up rules to automatically analyze pages matching URL patterns
@@ -268,7 +268,7 @@ You can bind this to any provider and even attach it to a monitored page — so 
 
 ### Archive Redirect
 
-1. Open Settings → **Archive** tab
+1. Open Settings → **Redirects** tab
 2. Toggle **Enable Archive Redirect**
 3. Edit the domain list (one per line) — add or remove sites as needed
 4. Click **Save** — any matching site will redirect through archive.is automatically

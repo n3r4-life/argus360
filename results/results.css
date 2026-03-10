@@ -134,7 +134,15 @@ body {
 
 .toolbar-right {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
 }
 
 .btn {

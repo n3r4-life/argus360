@@ -212,6 +212,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateMultiAgentVisibility();
   loadVersion();
   initMainTabs();
+  initHelpBackToTop();
 });
 
 function loadVersion() {
@@ -1171,6 +1172,16 @@ function initMainTabs() {
       sessionStorage.setItem("argus-activeTab", tabName);
       history.replaceState(null, "", `#${tabName}`);
     });
+  });
+}
+
+function initHelpBackToTop() {
+  document.querySelectorAll('[data-panel="help"] section[id^="help-"]').forEach(section => {
+    const link = document.createElement("a");
+    link.href = "#help-top";
+    link.className = "help-back-top";
+    link.textContent = "Back to top";
+    section.querySelector(".card-body").appendChild(link);
   });
 }
 

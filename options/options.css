@@ -610,6 +610,44 @@ textarea {
   text-align: center;
 }
 
+/* ═══ Help Jump Nav ═══ */
+.help-jump-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+}
+
+.help-jump-nav a {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.help-jump-nav a:hover {
+  background: rgba(233, 69, 96, 0.15);
+  text-decoration: none;
+}
+
+.help-back-top {
+  display: inline-block;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.help-back-top:hover {
+  color: var(--accent);
+}
+
 /* ═══ About ═══ */
 .about-meta {
   display: flex;
