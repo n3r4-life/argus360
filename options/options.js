@@ -108,14 +108,16 @@ const PROVIDER_MODELS = {
     "gemini-2.5-flash": "Gemini 2.5 Flash",
     "gemini-2.0-flash": "Gemini 2.0 Flash",
     "gemini-2.0-flash-lite": "Gemini 2.0 Flash Lite"
-  }
+  },
+  custom: {}
 };
 
 const DEFAULT_MODELS = {
   xai: "grok-4-0709",
   openai: "gpt-4.1",
   anthropic: "claude-sonnet-4-6",
-  gemini: "gemini-2.5-flash"
+  gemini: "gemini-2.5-flash",
+  custom: ""
 };
 
 // ──────────────────────────────────────────────
@@ -249,7 +251,8 @@ async function loadAllSettings() {
       xai: { apiKey: "", model: "grok-4-0709" },
       openai: { apiKey: "", model: "gpt-4.1" },
       anthropic: { apiKey: "", model: "claude-sonnet-4-6" },
-      gemini: { apiKey: "", model: "gemini-2.5-flash" }
+      gemini: { apiKey: "", model: "gemini-2.5-flash" },
+      custom: { apiKey: "", model: "", baseUrl: "" }
     },
     maxTokens: 2048,
     maxInputChars: 100000,
@@ -312,6 +315,19 @@ function selectProviderTab(key) {
     el.providerKeyHint.appendChild(a);
   }
 
+  // Custom provider: show base URL + text model input; hide model dropdown
+  const customFields = document.getElementById("custom-provider-fields");
+  if (key === "custom") {
+    customFields.classList.remove("hidden");
+    el.providerModel.parentElement.classList.add("hidden");
+    document.getElementById("custom-base-url").value = config.baseUrl || "";
+    document.getElementById("custom-model-name").value = config.model || "";
+    if (!hint) el.providerKeyHint.textContent = "API key for your OpenAI-compatible endpoint (if required)";
+  } else {
+    customFields.classList.add("hidden");
+    el.providerModel.parentElement.classList.remove("hidden");
+  }
+
   const models = PROVIDER_MODELS[key] || {};
   el.providerModel.replaceChildren();
   for (const [modelId, modelLabel] of Object.entries(models)) {
@@ -326,7 +342,9 @@ function selectProviderTab(key) {
 function updateProviderTabIndicators() {
   el.providerTabList.querySelectorAll(".tab-btn").forEach(btn => {
     const key = btn.dataset.provider;
-    if (providers[key]?.apiKey) {
+    const cfg = providers[key];
+    const configured = key === "custom" ? (cfg?.baseUrl && cfg?.model) : cfg?.apiKey;
+    if (configured) {
       btn.classList.add("configured");
     } else {
       btn.classList.remove("configured");
@@ -427,10 +445,18 @@ async function saveAllSettings() {
 }
 
 function saveProviderConfig() {
-  providers[currentProviderKey] = {
-    apiKey: el.providerApiKey.value.trim(),
-    model: el.providerModel.value
-  };
+  if (currentProviderKey === "custom") {
+    providers.custom = {
+      apiKey: el.providerApiKey.value.trim(),
+      model: document.getElementById("custom-model-name").value.trim(),
+      baseUrl: document.getElementById("custom-base-url").value.trim()
+    };
+  } else {
+    providers[currentProviderKey] = {
+      apiKey: el.providerApiKey.value.trim(),
+      model: el.providerModel.value
+    };
+  }
   updateProviderTabIndicators();
   updateReasoningControls();
   scheduleSave();
@@ -576,6 +602,8 @@ function attachListeners() {
 
   el.providerApiKey.addEventListener("input", saveProviderConfig);
   el.providerModel.addEventListener("change", saveProviderConfig);
+  document.getElementById("custom-base-url").addEventListener("input", saveProviderConfig);
+  document.getElementById("custom-model-name").addEventListener("input", saveProviderConfig);
   el.maxTokens.addEventListener("input", scheduleSave);
   el.maxInputChars.addEventListener("input", scheduleSave);
   el.reasoningEffort.addEventListener("change", scheduleSave);
@@ -758,26 +786,22 @@ async function importSettingsFromFile(event) {
 async function populateMonitorPresetDropdown() {
   // Clear existing options except "None"
   while (el.monitorPreset.options.length > 1) el.monitorPreset.remove(1);
-  // Built-in presets
-  const builtIn = [
-    { key: "summary", label: "Summary" }, { key: "sentiment", label: "Sentiment" },
-    { key: "factcheck", label: "Fact-Check" }, { key: "keypoints", label: "Key Points" },
-    { key: "eli5", label: "ELI5" }, { key: "critique", label: "Critical Analysis" },
-    { key: "actions", label: "Action Items" }, { key: "research", label: "Research Report" }
-  ];
-  builtIn.forEach(p => {
-    const opt = document.createElement("option");
-    opt.value = p.key;
-    opt.textContent = p.label;
-    el.monitorPreset.appendChild(opt);
-  });
-  // Custom presets
-  const { customPresets } = await browser.storage.local.get({ customPresets: {} });
-  for (const [key, preset] of Object.entries(customPresets)) {
+  // All built-in presets from DEFAULT_PRESETS
+  for (const [key, preset] of Object.entries(DEFAULT_PRESETS)) {
     const opt = document.createElement("option");
     opt.value = key;
-    opt.textContent = preset.label || key;
+    opt.textContent = preset.label;
     el.monitorPreset.appendChild(opt);
+  }
+  // User-created custom presets
+  const { customPresets } = await browser.storage.local.get({ customPresets: {} });
+  for (const [key, preset] of Object.entries(customPresets)) {
+    if (preset.isCustom) {
+      const opt = document.createElement("option");
+      opt.value = key;
+      opt.textContent = preset.label || key;
+      el.monitorPreset.appendChild(opt);
+    }
   }
 }
 

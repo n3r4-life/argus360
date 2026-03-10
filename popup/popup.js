@@ -61,7 +61,8 @@ async function loadSettings() {
       xai: { apiKey: "", model: "grok-4-0709" },
       openai: { apiKey: "", model: "gpt-4.1" },
       anthropic: { apiKey: "", model: "claude-sonnet-4-6" },
-      gemini: { apiKey: "", model: "gemini-2.5-flash" }
+      gemini: { apiKey: "", model: "gemini-2.5-flash" },
+      custom: { apiKey: "", model: "", baseUrl: "" }
     },
     apiKey: ""
   });

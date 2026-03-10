@@ -232,6 +232,11 @@ const PROVIDERS = {
       "gemini-2.0-flash-lite": "Gemini 2.0 Flash Lite"
     },
     defaultModel: "gemini-2.5-flash"
+  },
+  custom: {
+    label: "Custom (OpenAI-compatible)",
+    models: {},
+    defaultModel: ""
   }
 };
 
@@ -871,6 +876,65 @@ async function callOpenaiStream(apiKey, model, messages, opts, onChunk, onThinki
   return { content: fullContent, thinking: fullThinking.trim() || null, model: modelName, usage: null };
 }
 
+// ──────────────────────────────────────────────
+// Custom OpenAI-compatible provider
+// ──────────────────────────────────────────────
+async function getCustomProviderConfig() {
+  const { providers } = await browser.storage.local.get({ providers: {} });
+  const cfg = providers.custom || {};
+  if (!cfg.baseUrl) throw new Error("Custom provider: no Base URL configured. Set it in Settings → AI Providers → Custom.");
+  // Ensure baseUrl ends without trailing slash
+  const baseUrl = cfg.baseUrl.replace(/\/+$/, "");
+  const model = cfg.model || "default";
+  return { baseUrl, model, apiKey: cfg.apiKey };
+}
+
+async function callCustom(apiKey, model, messages, opts) {
+  const cfg = await getCustomProviderConfig();
+  const temperature = opts.temperature ?? 0.3;
+  const maxTokens = opts.maxTokens || 2048;
+  const body = { model: cfg.model, messages, max_tokens: maxTokens, temperature };
+
+  const response = await fetch(`${cfg.baseUrl}/v1/chat/completions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) handleApiError(response, await response.text(), "Custom");
+  const data = await response.json();
+  if (!data.choices || data.choices.length === 0) throw new Error("Custom provider returned an empty response.");
+  return { content: data.choices[0].message.content, thinking: null, model: data.model || cfg.model, usage: data.usage };
+}
+
+async function callCustomStream(apiKey, model, messages, opts, onChunk, onThinking) {
+  const cfg = await getCustomProviderConfig();
+  const temperature = opts.temperature ?? 0.3;
+  const maxTokens = opts.maxTokens || 2048;
+  const body = { model: cfg.model, messages, max_tokens: maxTokens, temperature, stream: true };
+
+  const response = await fetch(`${cfg.baseUrl}/v1/chat/completions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) handleApiError(response, await response.text(), "Custom");
+
+  let fullContent = "";
+  let modelName = cfg.model;
+  await parseSSEStream(response.body.getReader(), (parsed) => {
+    if (parsed.model) modelName = parsed.model;
+    const delta = parsed.choices?.[0]?.delta;
+    if (delta?.content) {
+      fullContent += delta.content;
+      onChunk(delta.content);
+    }
+  });
+
+  return { content: fullContent, thinking: null, model: modelName, usage: null };
+}
+
 async function callAnthropicStream(apiKey, model, messages, opts, onChunk, onThinking) {
   const maxTokens = opts.maxTokens || 2048;
   const extendedThinking = opts.extendedThinking;
@@ -1007,6 +1071,7 @@ async function callProvider(provider, apiKey, model, messages, opts = {}) {
     case "openai": return callOpenai(apiKey, model, messages, opts);
     case "anthropic": return callAnthropic(apiKey, model, messages, opts);
     case "gemini": return callGemini(apiKey, model, messages, opts);
+    case "custom": return callCustom(apiKey, model, messages, opts);
     default: throw new Error(`Unknown provider: ${provider}`);
   }
 }
@@ -1017,6 +1082,7 @@ async function callProviderStream(provider, apiKey, model, messages, opts, onChu
     case "openai": return callOpenaiStream(apiKey, model, messages, opts, onChunk, onThinking);
     case "anthropic": return callAnthropicStream(apiKey, model, messages, opts, onChunk, onThinking);
     case "gemini": return callGeminiStream(apiKey, model, messages, opts, onChunk, onThinking);
+    case "custom": return callCustomStream(apiKey, model, messages, opts, onChunk, onThinking);
     default: throw new Error(`Unknown provider: ${provider}`);
   }
 }
@@ -1031,7 +1097,8 @@ async function getProviderSettings(overrideProvider, presetKey) {
       xai: { apiKey: "", model: "grok-4-0709" },
       openai: { apiKey: "", model: "gpt-4.1" },
       anthropic: { apiKey: "", model: "claude-sonnet-4-6" },
-      gemini: { apiKey: "", model: "gemini-2.5-flash" }
+      gemini: { apiKey: "", model: "gemini-2.5-flash" },
+      custom: { apiKey: "", model: "", baseUrl: "" }
     },
     maxTokens: 2048,
     maxInputChars: 100000,

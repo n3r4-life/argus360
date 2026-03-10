@@ -12,8 +12,8 @@
       <div class="header-left">
         <img src="../icons/icon-48.png" alt="Argus" class="logo">
         <div>
-          <h1>Argus <span style="font-size:14px;font-weight:400;color:var(--text-muted);">360</span></h1>
-          <p class="subtitle" style="line-height:1.4;">AI-powered web analysis, monitoring, feeds &amp; tools<br><span style="color:var(--text-muted);font-size:11px;">See every angle. Analyze any page. Monitor changes. Read feeds. Bypass paywalls.</span></p>
+          <h1 style="display:flex;align-items:baseline;gap:10px;">Argus <span style="font-size:13px;font-weight:400;color:var(--text-secondary);">AI-powered web analysis, monitoring, feeds &amp; tools</span></h1>
+          <p class="subtitle" style="line-height:1.4;"><span style="color:var(--text-muted);font-size:11px;">See every angle. See any page. See any changes. Read the feeds. Any AI. Prompts fully editable &amp; fully addable.</span></p>
         </div>
       </div>
       <span id="save-indicator" class="save-indicator hidden">Saved</span>
@@ -84,6 +84,7 @@
                 <option value="openai">OpenAI</option>
                 <option value="anthropic">Anthropic (Claude)</option>
                 <option value="gemini">Google (Gemini)</option>
+                <option value="custom">Custom (OpenAI-compatible)</option>
               </select>
             </div>
           </div>
@@ -102,6 +103,7 @@
               <button class="tab-btn" data-provider="openai">OpenAI</button>
               <button class="tab-btn" data-provider="anthropic">Claude</button>
               <button class="tab-btn" data-provider="gemini">Gemini</button>
+              <button class="tab-btn" data-provider="custom">Custom</button>
             </div>
           </div>
 
@@ -119,6 +121,18 @@
                 </button>
               </div>
               <span id="provider-key-hint" class="hint"></span>
+            </div>
+            <div id="custom-provider-fields" class="hidden">
+              <div class="form-group">
+                <label for="custom-base-url">Base URL</label>
+                <input type="text" id="custom-base-url" placeholder="e.g. https://api.example.com or http://localhost:1234">
+                <span class="hint">OpenAI-compatible endpoint. Argus will call {baseUrl}/v1/chat/completions</span>
+              </div>
+              <div class="form-group">
+                <label for="custom-model-name">Model Name</label>
+                <input type="text" id="custom-model-name" placeholder="e.g. meta-llama/Llama-3-70b, mistral-7b, etc.">
+                <span class="hint">The model identifier your endpoint expects</span>
+              </div>
             </div>
             <div class="form-group">
               <label for="provider-model">Default Model</label>
@@ -161,6 +175,7 @@
                 <option value="openai">OpenAI</option>
                 <option value="anthropic">Anthropic (Claude)</option>
                 <option value="gemini">Google (Gemini)</option>
+                <option value="custom">Custom</option>
               </select>
             </div>
             <div class="form-group">
@@ -353,6 +368,7 @@
                   <option value="openai">OpenAI</option>
                   <option value="anthropic">Claude</option>
                   <option value="gemini">Gemini</option>
+                  <option value="custom">Custom</option>
                 </select>
               </div>
             </div>
