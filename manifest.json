@@ -1,0 +1,75 @@
+{
+  "manifest_version": 2,
+  "name": "Argus",
+  "version": "360.1.0.0",
+  "description": "Analyze any webpage using Grok, ChatGPT, Claude, or Gemini. Streaming responses, follow-up questions, multi-provider comparison, analysis history, and more.",
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "argus@local",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  },
+
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png",
+    "128": "icons/icon-128.png"
+  },
+
+  "permissions": [
+    "activeTab",
+    "storage",
+    "unlimitedStorage",
+    "contextMenus",
+    "tabs",
+    "webNavigation",
+    "downloads",
+    "alarms",
+    "notifications",
+    "<all_urls>",
+    "https://api.x.ai/*",
+    "https://api.openai.com/*",
+    "https://api.anthropic.com/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": true
+  },
+
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+
+  "browser_action": {
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    },
+    "default_title": "Argus",
+    "default_popup": "popup/popup.html"
+  },
+
+  "commands": {
+    "_execute_browser_action": {
+      "suggested_key": { "default": "Ctrl+Shift+G" },
+      "description": "Open Argus"
+    },
+    "quick-summary": {
+      "suggested_key": { "default": "Ctrl+Shift+S" },
+      "description": "Quick Summary of current page"
+    },
+    "quick-selection": {
+      "suggested_key": { "default": "Ctrl+Shift+A" },
+      "description": "Analyze selected text"
+    }
+  }
+}

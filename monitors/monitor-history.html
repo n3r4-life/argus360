@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitor History - Argus</title>
+  <link rel="stylesheet" href="monitor-history.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-left">
+      <img src="../icons/icon-32.png" alt="" class="header-icon">
+      <h1 class="header-title">Monitor History</h1>
+    </div>
+    <div class="header-right">
+      <div class="view-tabs">
+        <button id="tab-changes" class="view-tab active">Changes</button>
+        <button id="tab-timeline" class="view-tab">Timeline</button>
+      </div>
+      <span id="monitor-title" class="preset-badge"></span>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <!-- Changes view (existing) -->
+    <div id="changes-view">
+      <div id="change-list" class="change-list"></div>
+    </div>
+
+    <!-- Timeline view (new: full snapshots) -->
+    <div id="timeline-view" class="hidden">
+      <div class="timeline-controls">
+        <span id="snapshot-count" class="timeline-info"></span>
+        <button id="timeline-refresh" class="btn btn-sm btn-secondary">Refresh</button>
+      </div>
+      <div id="timeline-list" class="timeline-list"></div>
+    </div>
+
+    <div id="empty-state" class="empty-state hidden">
+      <p>No changes detected yet. The monitor will check periodically and record any differences.</p>
+    </div>
+  </main>
+
+  <script src="monitor-history.js"></script>
+</body>
+</html>

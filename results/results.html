@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Argus Analysis</title>
+  <link rel="stylesheet" href="results.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-left">
+      <img src="../icons/icon-32.png" alt="" class="header-icon">
+      <h1 class="header-title">Argus</h1>
+    </div>
+    <span id="preset-label" class="preset-badge"></span>
+  </header>
+
+  <div id="page-info" class="page-info">
+    <span id="page-title" class="page-title-text"></span>
+    <a id="page-url" class="page-url-link" href="#" target="_blank"></a>
+  </div>
+
+  <div id="loading-container" class="loading-container">
+    <div class="loading-spinner"></div>
+    <p id="loading-text" class="loading-text">Analyzing page content...</p>
+  </div>
+
+  <div id="results-container" class="results-container hidden">
+    <div class="results-toolbar">
+      <div class="toolbar-right">
+        <button id="monitor-page" class="btn btn-secondary btn-small" title="Monitor this page for changes">Monitor</button>
+        <button id="bookmark-page" class="btn btn-secondary btn-small" title="Smart Bookmark this page">Bookmark</button>
+        <button id="export-md" class="btn btn-secondary btn-small">Export .md</button>
+        <button id="export-html" class="btn btn-secondary btn-small">Export .html</button>
+        <button id="export-txt" class="btn btn-secondary btn-small">Export .txt</button>
+        <button id="copy-result" class="btn btn-secondary btn-small">Copy Markdown</button>
+      </div>
+    </div>
+
+    <div id="thinking-section" class="thinking-section hidden">
+      <button id="thinking-toggle" class="thinking-toggle-btn">Show Thinking</button>
+      <pre id="thinking-content" class="thinking-content hidden"></pre>
+    </div>
+
+    <div id="sources-panel" class="sources-panel hidden">
+      <h3 class="sources-heading">Sources</h3>
+      <div id="sources-list" class="sources-list"></div>
+    </div>
+
+    <div id="result-content" class="result-content markdown-body"></div>
+    <div id="result-meta" class="result-meta"></div>
+  </div>
+
+  <div id="followup-container" class="followup-container hidden">
+    <div class="followup-input-row">
+      <select id="followup-provider" class="followup-provider" title="Choose provider for this follow-up">
+        <option value="">Same</option>
+        <option value="xai">Grok</option>
+        <option value="openai">OpenAI</option>
+        <option value="anthropic">Claude</option>
+        <option value="gemini">Gemini</option>
+      </select>
+      <input type="text" id="followup-input" placeholder="Ask a follow-up question..." class="followup-input">
+      <button id="followup-send" class="btn btn-primary btn-small followup-btn">Send</button>
+    </div>
+  </div>
+
+  <div id="error-container" class="error-container hidden">
+    <div class="error-icon">!</div>
+    <p id="error-message" class="error-text"></p>
+  </div>
+
+  <script src="../lib/marked.min.js"></script>
+  <script src="../lib/export-utils.js"></script>
+  <script src="results.js"></script>
+</body>
+</html>

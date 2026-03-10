@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analysis History - Argus</title>
+  <link rel="stylesheet" href="history.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-left">
+      <img src="../icons/icon-32.png" alt="" class="header-icon">
+      <h1 class="header-title">Analysis History</h1>
+    </div>
+    <div class="header-actions">
+      <input type="text" id="search-input" placeholder="Search history..." class="search-input">
+      <button id="clear-all" class="btn btn-secondary btn-small">Clear All</button>
+    </div>
+  </header>
+
+  <div id="history-list" class="history-list">
+    <div class="loading-text">Loading history...</div>
+  </div>
+
+  <div id="detail-overlay" class="detail-overlay hidden">
+    <div class="detail-panel">
+      <div class="detail-header">
+        <div>
+          <h2 id="detail-title" class="detail-title"></h2>
+          <a id="detail-url" class="detail-url" href="#" target="_blank"></a>
+        </div>
+        <button id="detail-close" class="btn btn-secondary btn-small">Close</button>
+      </div>
+      <div class="detail-meta" id="detail-meta"></div>
+      <div id="detail-thinking" class="detail-thinking hidden">
+        <h3>Thinking</h3>
+        <pre id="detail-thinking-content"></pre>
+      </div>
+      <div id="detail-content" class="detail-content markdown-body"></div>
+      <div class="detail-actions">
+        <button id="detail-copy" class="btn btn-secondary btn-small">Copy Markdown</button>
+        <button id="detail-export-md" class="btn btn-secondary btn-small">Export .md</button>
+        <button id="detail-export-html" class="btn btn-secondary btn-small">Export .html</button>
+        <button id="detail-delete" class="btn btn-secondary btn-small" style="color:#ff5252;">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../lib/marked.min.js"></script>
+  <script src="../lib/export-utils.js"></script>
+  <script src="history.js"></script>
+</body>
+</html>
