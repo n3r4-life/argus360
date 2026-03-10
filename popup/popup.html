@@ -110,6 +110,13 @@
     <div id="settings-status" class="status-msg"></div>
   </section>
 
+  <!-- Previous analysis indicator -->
+  <div id="prev-analysis" class="prev-analysis hidden"></div>
+  <!-- Archive availability indicator -->
+  <div id="archive-available" class="archive-available hidden"></div>
+  <!-- Wayback availability indicator -->
+  <div id="wayback-available" class="archive-available hidden"></div>
+
   <!-- Main analysis panel -->
   <section id="analysis-panel">
     <div class="form-group">
@@ -201,6 +208,31 @@
           <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
         </svg>
         <span>Bookmark</span>
+      </button>
+    </div>
+
+    <!-- OSINT Quick Tools -->
+    <div class="form-group btn-row osint-tools-row">
+      <button id="osint-metadata" class="btn btn-osint" title="Extract page metadata, OG tags, JSON-LD">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+        <span>Metadata</span>
+      </button>
+      <button id="osint-links" class="btn btn-osint" title="Map all links on this page">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+        </svg>
+        <span>Links</span>
+      </button>
+      <button id="osint-whois" class="btn btn-osint" title="Whois & DNS lookup for this domain">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        </svg>
+        <span>Whois</span>
       </button>
     </div>
 

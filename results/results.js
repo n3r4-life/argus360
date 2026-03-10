@@ -36,6 +36,20 @@ let shareline = "";
 document.addEventListener("DOMContentLoaded", () => {
   const params = new URLSearchParams(window.location.search);
   resultId = params.get("id");
+  const metadataKey = params.get("metadata");
+  const whoisKey = params.get("whois");
+
+  // OSINT: Metadata display
+  if (metadataKey) {
+    displayMetadata(metadataKey);
+    return;
+  }
+
+  // OSINT: Whois display
+  if (whoisKey) {
+    displayWhois(whoisKey);
+    return;
+  }
 
   if (!resultId) {
     showError("No result ID provided. This page must be opened by the extension.");
@@ -72,7 +86,8 @@ document.addEventListener("DOMContentLoaded", () => {
       .map(l => l.replace(/^#{1,6}\s+/g, "").replace(/\*\*|__/g, "").replace(/[*_`>\[\]()!]/g, "").replace(/^[-•]\s+/g, "").trim())
       .filter(l => l.length > 30 && !/^(summary|source|url|article|publication|http)/i.test(l));
     const snippet = lines.slice(0, 2).join(" ").trim();
-    return snippet.length > 180 ? snippet.slice(0, 177) + "..." : snippet;
+    const clean = snippet.replace(/—/g, "-");
+    return clean.length > 180 ? clean.slice(0, 177) + "..." : clean;
   }
 
   function getShareUrl() {
@@ -92,19 +107,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const title = pageTitle || "this page";
     const attrib = getShareAttrib();
     const text = url
-      ? `${title}\n\n${getShareSnippet()}\n\n— ${attrib}\n${url}`
-      : `${title}\n\n${getShareSnippet()}\n\n— ${attrib}`;
+      ? `${title}\n\n${getShareSnippet()}\n\n- ${attrib}\n${url}`
+      : `${title}\n\n${getShareSnippet()}\n\n- ${attrib}`;
     window.open(`https://x.com/intent/post?text=${encodeURIComponent(text)}`, "_blank");
   });
 
   document.getElementById("share-reddit").addEventListener("click", () => {
     const url = getShareUrl();
     const attrib = getShareAttrib();
-    const title = `${pageTitle || "Analysis"} — ${attrib}`;
+    const title = `${pageTitle || "Analysis"} - ${attrib}`;
     if (url) {
       window.open(`https://www.reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`, "_blank");
     } else {
-      window.open(`https://www.reddit.com/submit?selftext=true&title=${encodeURIComponent(title)}&text=${encodeURIComponent(getShareSnippet() + "\n\n— " + attrib)}`, "_blank");
+      window.open(`https://www.reddit.com/submit?selftext=true&title=${encodeURIComponent(title)}&text=${encodeURIComponent(getShareSnippet() + "\n\n- " + attrib)}`, "_blank");
     }
   });
 
@@ -118,11 +133,18 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("share-email").addEventListener("click", () => {
     const url = getShareUrl();
     const attrib = getShareAttrib();
-    const subject = `${pageTitle || "Analysis"} — ${attrib}`;
+    const subject = `${pageTitle || "Analysis"} - ${attrib}`;
     const body = url
-      ? `${getShareSnippet()}\n\nSource: ${url}\n\n— ${attrib}`
-      : `${getShareSnippet()}\n\n— ${attrib}`;
+      ? `${getShareSnippet()}\n\nSource: ${url}\n\n- ${attrib}`
+      : `${getShareSnippet()}\n\n- ${attrib}`;
     window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+  });
+
+  // Save to Archive
+  document.getElementById("save-archive").addEventListener("click", () => {
+    const url = getShareUrl();
+    if (!url) return;
+    window.open("https://archive.is/?run=1&url=" + encodeURIComponent(url), "_blank");
   });
 
   // Save to Project
@@ -309,7 +331,7 @@ function updatePageInfo(data) {
 function extractShareline(text) {
   const match = text.match(/\n?SHARELINE:\s*(.+)$/m);
   if (match) {
-    return { cleaned: text.replace(/\n?SHARELINE:\s*.+$/m, "").trimEnd(), shareline: match[1].trim() };
+    return { cleaned: text.replace(/\n?SHARELINE:\s*.+$/m, "").trimEnd(), shareline: match[1].trim().replace(/—/g, "-") };
   }
   return { cleaned: text, shareline: "" };
 }
@@ -581,4 +603,135 @@ function showError(message) {
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ──────────────────────────────────────────────
+// OSINT: Metadata display
+// ──────────────────────────────────────────────
+async function displayMetadata(storeKey) {
+  const data = (await browser.storage.local.get(storeKey))[storeKey];
+  if (!data) { showError("Metadata not found."); return; }
+
+  elements.presetLabel.textContent = "Page Metadata";
+  elements.pageTitle.textContent = data.pageTitle || "Unknown";
+  if (elements.pageUrl) {
+    elements.pageUrl.textContent = data.pageUrl || "";
+    elements.pageUrl.href = data.pageUrl || "#";
+  }
+
+  elements.loadingContainer.classList.add("hidden");
+  elements.resultsContainer.classList.remove("hidden");
+
+  let md = "## Page Metadata\n\n";
+
+  if (data.author) md += `**Author:** ${data.author}\n\n`;
+  if (data.lang) md += `**Language:** ${data.lang}\n\n`;
+  if (data.charset) md += `**Charset:** ${data.charset}\n\n`;
+
+  if (data.dates && data.dates.length) {
+    md += "### Dates\n";
+    data.dates.forEach(d => { md += `- **${d.type || "Date"}:** ${d.value}\n`; });
+    md += "\n";
+  }
+
+  if (data.og && Object.keys(data.og).length) {
+    md += "### Open Graph\n";
+    for (const [k, v] of Object.entries(data.og)) md += `- **${k}:** ${v}\n`;
+    md += "\n";
+  }
+
+  if (data.twitter && Object.keys(data.twitter).length) {
+    md += "### Twitter Card\n";
+    for (const [k, v] of Object.entries(data.twitter)) md += `- **${k}:** ${v}\n`;
+    md += "\n";
+  }
+
+  if (data.meta && Object.keys(data.meta).length) {
+    md += "### Meta Tags\n";
+    for (const [k, v] of Object.entries(data.meta)) md += `- **${k}:** ${v}\n`;
+    md += "\n";
+  }
+
+  if (data.jsonLd && data.jsonLd.length) {
+    md += "### JSON-LD / Schema.org\n";
+    data.jsonLd.forEach((block, i) => {
+      md += `\n**Block ${i + 1}** (${block["@type"] || "Unknown type"}):\n\`\`\`json\n${JSON.stringify(block, null, 2)}\n\`\`\`\n`;
+    });
+    md += "\n";
+  }
+
+  if (data.links && Object.keys(data.links).length) {
+    md += "### Link Relations\n";
+    for (const [rel, href] of Object.entries(data.links)) md += `- **${rel}:** ${href}\n`;
+    md += "\n";
+  }
+
+  rawMarkdown = md;
+  renderMarkdown(md, elements.resultContent);
+  elements.resultMeta.textContent = "Extracted from page DOM";
+
+  // Clean up stored data
+  browser.storage.local.remove(storeKey);
+}
+
+// ──────────────────────────────────────────────
+// OSINT: Whois display
+// ──────────────────────────────────────────────
+async function displayWhois(storeKey) {
+  const data = (await browser.storage.local.get(storeKey))[storeKey];
+  if (!data) { showError("Whois data not found."); return; }
+
+  elements.presetLabel.textContent = "Whois / DNS Lookup";
+  elements.pageTitle.textContent = data.whois?.domain || data.pageTitle || "Unknown";
+  if (elements.pageUrl) {
+    elements.pageUrl.textContent = data.pageUrl || "";
+    elements.pageUrl.href = data.pageUrl || "#";
+  }
+
+  elements.loadingContainer.classList.add("hidden");
+  elements.resultsContainer.classList.remove("hidden");
+
+  let md = `## Whois: ${data.whois?.domain || "Unknown"}\n\n`;
+
+  const w = data.whois || {};
+  if (w.registrar) md += `**Registrar:** ${w.registrar}\n\n`;
+  if (w.created) md += `**Created:** ${w.created}\n\n`;
+  if (w.updated) md += `**Updated:** ${w.updated}\n\n`;
+  if (w.expires) md += `**Expires:** ${w.expires}\n\n`;
+  if (w.status && w.status.length) md += `**Status:** ${w.status.join(", ")}\n\n`;
+  if (w.nameservers && w.nameservers.length) {
+    md += "### Nameservers\n";
+    w.nameservers.forEach(ns => { md += `- ${ns}\n`; });
+    md += "\n";
+  }
+  if (w.registrant) {
+    md += "### Registrant\n";
+    for (const [k, v] of Object.entries(w.registrant)) {
+      if (v) md += `- **${k}:** ${v}\n`;
+    }
+    md += "\n";
+  }
+
+  const dns = data.dns || {};
+  if (dns.a && dns.a.length) {
+    md += "### DNS A Records\n";
+    dns.a.forEach(r => { md += `- ${r}\n`; });
+    md += "\n";
+  }
+  if (dns.ns && dns.ns.length) {
+    md += "### DNS NS Records\n";
+    dns.ns.forEach(r => { md += `- ${r}\n`; });
+    md += "\n";
+  }
+  if (dns.mx && dns.mx.length) {
+    md += "### DNS MX Records\n";
+    dns.mx.forEach(r => { md += `- ${r}\n`; });
+    md += "\n";
+  }
+
+  rawMarkdown = md;
+  renderMarkdown(md, elements.resultContent);
+  elements.resultMeta.textContent = "RDAP/DNS lookup";
+
+  browser.storage.local.remove(storeKey);
 }

@@ -1,0 +1,53 @@
+.argus-ribbon {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: #16213e;
+  border-bottom: 1px solid #2a2a4a;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+  color: #a0a0b0;
+  position: sticky;
+  top: 0;
+  z-index: 999;
+}
+.argus-ribbon .ribbon-brand {
+  font-weight: 700;
+  font-size: 14px;
+  color: #e94560;
+  margin-right: 8px;
+  text-decoration: none;
+  cursor: pointer;
+}
+.argus-ribbon .ribbon-sep {
+  width: 1px;
+  height: 18px;
+  background: #2a2a4a;
+  margin: 0 4px;
+}
+.argus-ribbon .ribbon-btn {
+  background: none;
+  border: none;
+  color: #a0a0b0;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.argus-ribbon .ribbon-btn:hover {
+  color: #e8e8e8;
+  background: #2a2a4a;
+}
+.argus-ribbon .ribbon-btn svg {
+  width: 14px;
+  height: 14px;
+}
+.argus-ribbon .ribbon-spacer {
+  flex: 1;
+}

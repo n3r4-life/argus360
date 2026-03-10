@@ -8,6 +8,12 @@ const elements = {
   timelineRefresh: document.getElementById("timeline-refresh"),
   tabChanges: document.getElementById("tab-changes"),
   tabTimeline: document.getElementById("tab-timeline"),
+  tabDiff: document.getElementById("tab-diff"),
+  diffView: document.getElementById("diff-view"),
+  diffSnapshotA: document.getElementById("diff-snapshot-a"),
+  diffSnapshotB: document.getElementById("diff-snapshot-b"),
+  diffRun: document.getElementById("diff-run"),
+  diffOutput: document.getElementById("diff-output"),
   emptyState: document.getElementById("empty-state"),
 };
 
@@ -35,7 +41,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Tab switching
   elements.tabChanges.addEventListener("click", () => switchTab("changes"));
   elements.tabTimeline.addEventListener("click", () => switchTab("timeline"));
+  elements.tabDiff.addEventListener("click", () => switchTab("diff"));
   elements.timelineRefresh.addEventListener("click", loadTimeline);
+  elements.diffRun.addEventListener("click", runDiff);
 
   // Load default view
   if (defaultView === "timeline") {
@@ -48,14 +56,18 @@ document.addEventListener("DOMContentLoaded", async () => {
 function switchTab(tab) {
   elements.tabChanges.classList.toggle("active", tab === "changes");
   elements.tabTimeline.classList.toggle("active", tab === "timeline");
+  elements.tabDiff.classList.toggle("active", tab === "diff");
   elements.changesView.classList.toggle("hidden", tab !== "changes");
   elements.timelineView.classList.toggle("hidden", tab !== "timeline");
+  elements.diffView.classList.toggle("hidden", tab !== "diff");
   elements.emptyState.classList.add("hidden");
 
   if (tab === "changes") {
     loadChanges();
-  } else {
+  } else if (tab === "timeline") {
     loadTimeline();
+  } else if (tab === "diff") {
+    loadDiffSnapshots();
   }
 }
 
@@ -244,4 +256,84 @@ function renderTimeline(snapshots) {
     entry.appendChild(content);
     elements.timelineList.appendChild(entry);
   });
+}
+
+// ──────────────────────────────────────────────
+// Diff view
+// ──────────────────────────────────────────────
+async function loadDiffSnapshots() {
+  const key = `monitor-snapshots-${monitorId}`;
+  const data = await browser.storage.local.get(key);
+  const snapshots = data[key] || [];
+
+  elements.diffSnapshotA.replaceChildren();
+  elements.diffSnapshotB.replaceChildren();
+
+  if (snapshots.length < 2) {
+    elements.diffOutput.innerHTML = '<p style="color:var(--text-secondary);padding:16px;">Need at least 2 snapshots to compare. Wait for the monitor to capture more.</p>';
+    return;
+  }
+
+  snapshots.forEach((snap, idx) => {
+    const label = `#${snapshots.length - idx} - ${new Date(snap.timestamp).toLocaleString()}${snap.changed ? " (changed)" : ""}`;
+    const optA = document.createElement("option");
+    optA.value = idx;
+    optA.textContent = label;
+    const optB = optA.cloneNode(true);
+    elements.diffSnapshotA.appendChild(optA);
+    elements.diffSnapshotB.appendChild(optB);
+  });
+
+  // Default: compare most recent two
+  elements.diffSnapshotA.value = "1";
+  elements.diffSnapshotB.value = "0";
+}
+
+async function runDiff() {
+  const idxA = parseInt(elements.diffSnapshotA.value);
+  const idxB = parseInt(elements.diffSnapshotB.value);
+  if (isNaN(idxA) || isNaN(idxB) || idxA === idxB) {
+    elements.diffOutput.innerHTML = '<p style="color:var(--error);">Select two different snapshots.</p>';
+    return;
+  }
+
+  elements.diffOutput.innerHTML = '<p style="color:var(--text-secondary);">Computing diff...</p>';
+
+  const resp = await browser.runtime.sendMessage({
+    action: "getMonitorDiff",
+    monitorId,
+    snapshotIndex1: idxA,
+    snapshotIndex2: idxB
+  });
+
+  if (!resp || !resp.success) {
+    elements.diffOutput.innerHTML = `<p style="color:var(--error);">${resp?.error || "Failed to compute diff."}</p>`;
+    return;
+  }
+
+  elements.diffOutput.innerHTML = "";
+  let addCount = 0, removeCount = 0;
+
+  for (const line of resp.diff) {
+    const span = document.createElement("span");
+    if (line.type === "add") {
+      span.className = "diff-line-add";
+      span.textContent = "+ " + line.text;
+      addCount++;
+    } else if (line.type === "remove") {
+      span.className = "diff-line-remove";
+      span.textContent = "- " + line.text;
+      removeCount++;
+    } else {
+      span.className = "diff-line-same";
+      span.textContent = "  " + line.text;
+    }
+    elements.diffOutput.appendChild(span);
+  }
+
+  // Summary at top
+  const summary = document.createElement("div");
+  summary.style.cssText = "padding:8px 12px;margin-bottom:8px;font-size:12px;color:var(--text-secondary);border-bottom:1px solid var(--border);";
+  summary.innerHTML = `<span style="color:var(--success);">+${addCount} additions</span> &nbsp; <span style="color:var(--error);">-${removeCount} removals</span>`;
+  elements.diffOutput.insertBefore(summary, elements.diffOutput.firstChild);
 }

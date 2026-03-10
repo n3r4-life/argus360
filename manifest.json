@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "Argus",
   "version": "360.1.0.0",
-  "description": "Analyze any webpage using Grok, ChatGPT, Claude, or Gemini. Streaming responses, follow-up questions, multi-provider comparison, analysis history, and more.",
+  "description": "Analyze any webpage using Grok, ChatGPT, Claude, or Gemini. Custom prompts, OSINT tools, streaming responses, multi-provider comparison, analysis history, and more.",
 
   "browser_specific_settings": {
     "gecko": {
@@ -42,7 +42,7 @@
   ],
 
   "background": {
-    "scripts": ["background.js"],
+    "scripts": ["background.js", "background-osint.js"],
     "persistent": true
   },
 

@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Monitor History - Argus</title>
   <link rel="stylesheet" href="monitor-history.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
 </head>
 <body>
+  <script src="../shared/ribbon.js"></script>
   <header class="header">
     <div class="header-left">
       <img src="../icons/icon-32.png" alt="" class="header-icon">
@@ -16,6 +18,7 @@
       <div class="view-tabs">
         <button id="tab-changes" class="view-tab active">Changes</button>
         <button id="tab-timeline" class="view-tab">Timeline</button>
+        <button id="tab-diff" class="view-tab">Diff</button>
       </div>
       <span id="monitor-title" class="preset-badge"></span>
     </div>
@@ -34,6 +37,18 @@
         <button id="timeline-refresh" class="btn btn-sm btn-secondary">Refresh</button>
       </div>
       <div id="timeline-list" class="timeline-list"></div>
+    </div>
+
+    <!-- Diff view -->
+    <div id="diff-view" class="hidden">
+      <div class="diff-controls">
+        <label>Compare: </label>
+        <select id="diff-snapshot-a" class="diff-select"></select>
+        <span> vs </span>
+        <select id="diff-snapshot-b" class="diff-select"></select>
+        <button id="diff-run" class="btn btn-sm btn-secondary">Compare</button>
+      </div>
+      <div id="diff-output" class="diff-output"></div>
     </div>
 
     <div id="empty-state" class="empty-state hidden">

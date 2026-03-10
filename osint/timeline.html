@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Timeline - Argus OSINT</title>
+  <link rel="stylesheet" href="timeline.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+</head>
+<body>
+  <script src="../shared/ribbon.js"></script>
+  <header class="tl-header">
+    <div class="header-left">
+      <h1 class="project-title">Argus OSINT</h1>
+      <span class="project-name" id="projectName">Timeline</span>
+    </div>
+    <div class="header-controls">
+      <div class="filter-group">
+        <label class="filter-label">From</label>
+        <input type="date" id="dateFrom" class="date-input">
+        <label class="filter-label">To</label>
+        <input type="date" id="dateTo" class="date-input">
+        <button id="clearDates" class="btn-secondary">Clear</button>
+      </div>
+      <div class="type-filters">
+        <label class="type-checkbox">
+          <input type="checkbox" data-type="published" checked>
+          <span class="type-dot" style="background:#4caf50"></span>
+          Published
+        </label>
+        <label class="type-checkbox">
+          <input type="checkbox" data-type="mentioned" checked>
+          <span class="type-dot" style="background:#64b5f6"></span>
+          Mentioned
+        </label>
+        <label class="type-checkbox">
+          <input type="checkbox" data-type="event" checked>
+          <span class="type-dot" style="background:#e94560"></span>
+          Event
+        </label>
+        <label class="type-checkbox">
+          <input type="checkbox" data-type="modified" checked>
+          <span class="type-dot" style="background:#ffb74d"></span>
+          Modified
+        </label>
+      </div>
+      <button id="exportMd" class="btn-export">Export Markdown</button>
+    </div>
+  </header>
+
+  <main class="tl-container">
+    <div class="timeline" id="timeline">
+      <div class="tl-line"></div>
+      <div id="eventsContainer"></div>
+    </div>
+    <div class="tl-empty" id="emptyState">
+      <p>No events to display.</p>
+    </div>
+  </main>
+
+  <script src="timeline.js"></script>
+</body>
+</html>

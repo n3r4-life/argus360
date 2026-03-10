@@ -69,6 +69,87 @@ Use markdown formatting. Be specific and cite sources throughout.`
     label: "Late Night Recap",
     system: "You are a sharp-witted comedic editorial writer. Your style is punchy, irreverent, and conversational — like a late-night monologue meets a newspaper column. Use sarcasm, wit, and strong opinions. Never reference your style, influences, or that you're an AI. Just deliver the content.",
     prompt: "Recap the following page content as if you're writing your editorial column. Hit the key points but make it entertaining. Be sharp, punchy, and opinionated. Use markdown formatting."
+  },
+  entities: {
+    label: "Entity Extraction (OSINT)",
+    osint: true,
+    system: "You are an OSINT analyst specializing in entity extraction and intelligence gathering. Extract structured data from text. Respond ONLY with valid JSON - no markdown fences, no explanation.",
+    prompt: `Extract all identifiable entities from this page content. Return as JSON with this exact structure:
+{
+  "people": [{ "name": "", "role": "", "context": "" }],
+  "organizations": [{ "name": "", "type": "", "context": "" }],
+  "locations": [{ "name": "", "type": "city/country/address/region", "context": "" }],
+  "dates": [{ "date": "", "event": "", "context": "" }],
+  "amounts": [{ "value": "", "currency": "", "context": "" }],
+  "contact": [{ "type": "email/phone/social/website", "value": "" }],
+  "claims": [{ "claim": "", "attribution": "", "verifiable": true }]
+}
+Include EVERY entity you can find, no matter how minor. For dates, normalize to ISO format where possible. For people, include their role/title if mentioned. For claims, note who made them and whether they are verifiable.`
+  },
+  credibility: {
+    label: "Source Credibility",
+    osint: true,
+    system: "You are a media literacy and source evaluation expert with deep expertise in journalism standards, propaganda techniques, and information quality assessment.",
+    prompt: `Evaluate this page's credibility on a scale of 1-10. Assess each of these dimensions:
+
+## Credibility Score: X/10
+
+### Author & Publication
+- Author credentials and expertise
+- Publication reputation and editorial standards
+
+### Sourcing Quality
+- Are claims attributed to named sources?
+- Are primary sources linked or referenced?
+- Quality and diversity of citations
+
+### Content Analysis
+- Logical consistency and reasoning quality
+- Presence of logical fallacies
+- Emotional manipulation or loaded language
+- Headline accuracy vs content
+
+### Bias Indicators
+- Political or ideological lean
+- Conflicts of interest
+- Selective framing or omission
+
+### Verification Status
+- Claims that can be independently verified
+- Claims that contradict established consensus
+- Red flags or misinformation patterns
+
+Use markdown formatting. Be specific with examples from the text.`
+  },
+  profile: {
+    label: "Person/Org Profile",
+    osint: true,
+    system: "You are an OSINT research analyst who builds comprehensive profiles from available information.",
+    prompt: `Build a structured intelligence profile based on this page content. Extract and organize:
+
+## Profile Summary
+One paragraph overview of the subject.
+
+## Key Details
+- Full name / Organization name
+- Known aliases or alternate names
+- Location(s)
+- Affiliations and associations
+- Online presence (websites, social media)
+
+## Activity & History
+Timeline of notable activities, roles, or events mentioned.
+
+## Network & Associations
+People, organizations, and entities connected to the subject.
+
+## Notable Statements or Positions
+Key quotes, stances, or public positions.
+
+## Assessment
+Brief analytical assessment of the subject based on available information.
+
+Use markdown formatting. Only include what is supported by the content.`
   }
 };
 
@@ -208,6 +289,13 @@ async function createContextMenus() {
   });
 
   browser.contextMenus.create({
+    id: "argus-save-archive",
+    parentId: "argus-parent",
+    title: "\uD83D\uDCBE Save to Archive",
+    contexts: ["page", "frame"]
+  });
+
+  browser.contextMenus.create({
     id: "argus-add-feed",
     parentId: "argus-parent",
     title: "\uD83D\uDCE1 Subscribe to Feed",
@@ -232,6 +320,32 @@ async function createContextMenus() {
       });
     }
   }
+
+  // ── OSINT Tools ──
+  browser.contextMenus.create({
+    id: "argus-osint-parent",
+    parentId: "argus-parent",
+    title: "\uD83D\uDD0D OSINT Tools",
+    contexts: ["page", "frame"]
+  });
+  browser.contextMenus.create({
+    id: "argus-extract-metadata",
+    parentId: "argus-osint-parent",
+    title: "Extract Metadata",
+    contexts: ["page", "frame"]
+  });
+  browser.contextMenus.create({
+    id: "argus-map-links",
+    parentId: "argus-osint-parent",
+    title: "Map Links",
+    contexts: ["page", "frame"]
+  });
+  browser.contextMenus.create({
+    id: "argus-whois",
+    parentId: "argus-osint-parent",
+    title: "Whois / DNS Lookup",
+    contexts: ["page", "frame"]
+  });
 
   browser.contextMenus.create({
     id: "argus-separator-actions",
@@ -1252,6 +1366,11 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "deleteHistoryItem") return handleDeleteHistoryItem(message);
   if (message.action === "clearHistory") return handleClearHistory();
   if (message.action === "searchHistory") return handleSearchHistory(message);
+  if (message.action === "getHistoryForUrl") return handleGetHistoryForUrl(message);
+  if (message.action === "getArchiveCheck") {
+    const cached = archiveCheckCache.get(message.tabId);
+    return Promise.resolve({ success: true, archiveUrl: cached?.archiveUrl || null, checked: !!cached });
+  }
   if (message.action === "getSelection") return handleGetSelection(message);
   if (message.action === "getOpenTabs") return handleGetOpenTabs();
   if (message.action === "getConversationState") return handleGetConversationState(message);
@@ -1295,6 +1414,11 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "updateProjectItem") return handleUpdateProjectItem(message);
   if (message.action === "removeProjectItem") return handleRemoveProjectItem(message);
   if (message.action === "exportProject") return handleExportProject(message);
+  if (message.action === "batchAnalyzeProjectItem") return handleBatchAnalyzeProjectItem(message);
+  if (message.action === "batchAnalyzeProject") return handleBatchAnalyzeProject(message);
+  if (message.action === "getBatchStatus") return handleGetBatchStatus();
+  if (message.action === "cancelBatch") return handleCancelBatch();
+  // OSINT tools are handled by background-osint.js's own message listener
   return false;
 });
 
@@ -1360,6 +1484,13 @@ async function handleSearchHistory(message) {
     (h.presetLabel || "").toLowerCase().includes(query)
   );
   return { success: true, history: filtered.slice(0, 100), total: filtered.length };
+}
+
+async function handleGetHistoryForUrl(message) {
+  const { analysisHistory } = await browser.storage.local.get({ analysisHistory: [] });
+  const url = message.url;
+  const matches = analysisHistory.filter(h => h.pageUrl === url);
+  return { success: true, history: matches.slice(0, 10), total: matches.length };
 }
 
 async function handleGetSelection(message) {
@@ -1745,6 +1876,22 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
     return;
   }
 
+  // Handle save to archive context menu
+  if (info.menuItemId === "argus-save-archive") {
+    try {
+      const submitUrl = "https://archive.is/?run=1&url=" + encodeURIComponent(tab.url);
+      await browser.tabs.create({ url: submitUrl });
+    } catch (err) {
+      browser.notifications.create({
+        type: "basic",
+        iconUrl: "icons/icon-96.png",
+        title: "Argus — Error",
+        message: `Failed to save to archive: ${err.message}`
+      });
+    }
+    return;
+  }
+
   // Handle subscribe to feed context menu
   if (info.menuItemId === "argus-add-feed") {
     try {
@@ -1794,6 +1941,52 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
         title: "Argus — Error",
         message: `Failed to subscribe: ${err.message}`
       });
+    }
+    return;
+  }
+
+  // ── OSINT Tool handlers ──
+  if (info.menuItemId === "argus-extract-metadata") {
+    try {
+      const result = await handleExtractMetadata({ tabId: tab.id });
+      if (result.success) {
+        const storeKey = `metadata-${Date.now()}`;
+        await browser.storage.local.set({ [storeKey]: { ...result.metadata, pageUrl: tab.url, pageTitle: tab.title } });
+        browser.tabs.create({ url: browser.runtime.getURL(`results/results.html?metadata=${encodeURIComponent(storeKey)}`) });
+      } else {
+        browser.notifications.create({ type: "basic", iconUrl: "icons/icon-96.png", title: "Argus", message: result.error || "Failed to extract metadata." });
+      }
+    } catch (err) {
+      browser.notifications.create({ type: "basic", iconUrl: "icons/icon-96.png", title: "Argus - Error", message: err.message });
+    }
+    return;
+  }
+
+  if (info.menuItemId === "argus-map-links") {
+    try {
+      const result = await handleExtractLinks({ tabId: tab.id });
+      if (result.success) {
+        const storeKey = `linkmap-${Date.now()}`;
+        await browser.storage.local.set({ [storeKey]: { pageUrl: tab.url, pageTitle: tab.title, links: result.links, stats: result.stats } });
+        browser.tabs.create({ url: browser.runtime.getURL(`osint/link-map.html?id=${encodeURIComponent(storeKey)}`) });
+      }
+    } catch (err) {
+      browser.notifications.create({ type: "basic", iconUrl: "icons/icon-96.png", title: "Argus - Error", message: err.message });
+    }
+    return;
+  }
+
+  if (info.menuItemId === "argus-whois") {
+    try {
+      const domain = new URL(tab.url).hostname;
+      const result = await handleWhoisLookup({ domain });
+      if (result.success) {
+        const storeKey = `whois-${Date.now()}`;
+        await browser.storage.local.set({ [storeKey]: { ...result, pageUrl: tab.url, pageTitle: tab.title } });
+        browser.tabs.create({ url: browser.runtime.getURL(`results/results.html?whois=${encodeURIComponent(storeKey)}`) });
+      }
+    } catch (err) {
+      browser.notifications.create({ type: "basic", iconUrl: "icons/icon-96.png", title: "Argus - Error", message: err.message });
     }
     return;
   }
@@ -2395,14 +2588,66 @@ async function hashText(text) {
   return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+function getArchiveUrl(url) {
+  // Check if this URL's domain is on the archive redirect list
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    if (archiveRedirectDomains.some(d => host === d || host.endsWith("." + d))) {
+      return (archiveProviderUrl || "https://archive.is/") + url;
+    }
+  } catch { /* invalid URL */ }
+  return null;
+}
+
 async function fetchPageText(url) {
-  const response = await fetch(url);
+  // Auto-route through archive provider if domain is on the redirect list
+  const archiveUrl = getArchiveUrl(url);
+  let fetchUrl = url;
+  let isArchive = false;
+
+  if (archiveUrl) {
+    try {
+      const archiveResp = await fetch(archiveUrl);
+      if (archiveResp.ok) {
+        fetchUrl = archiveUrl;
+        isArchive = true;
+        const html = await archiveResp.text();
+        const text = extractTextFromHtml(html);
+        if (text.length >= 200) return text;
+        // If archive returned little content, fall through to direct fetch
+      }
+    } catch { /* archive fetch failed, fall through to direct */ }
+  }
+
+  const response = await fetch(fetchUrl === archiveUrl ? url : fetchUrl);
   const html = await response.text();
+  return extractTextFromHtml(html);
+}
+
+function extractTextFromHtml(html) {
   const doc = new DOMParser().parseFromString(html, "text/html");
   // Remove scripts, styles, nav, footer
   doc.querySelectorAll("script, style, nav, footer, header, aside").forEach(el => el.remove());
-  const article = doc.querySelector("article") || doc.querySelector("main") || doc.querySelector('[role="main"]') || doc.body;
-  return article ? article.textContent.replace(/\s+/g, " ").trim() : "";
+  // Try multiple selectors, pick longest
+  const candidates = [
+    "article", "main", '[role="main"]', '[itemprop="articleBody"]',
+    ".article-body", ".article-content", ".article__body", ".article__content",
+    ".post-content", ".post-body", ".entry-content",
+    ".story-body", ".story-content", "#article-body", "#article-content",
+    ".content-body", ".page-content"
+  ];
+  let bestText = "";
+  for (const sel of candidates) {
+    const el = doc.querySelector(sel);
+    if (el) {
+      const t = el.textContent.replace(/\s+/g, " ").trim();
+      if (t.length > bestText.length) bestText = t;
+    }
+  }
+  if (bestText.length < 200) {
+    bestText = doc.body ? doc.body.textContent.replace(/\s+/g, " ").trim() : "";
+  }
+  return bestText;
 }
 
 async function handleAddMonitor(message) {
@@ -2718,6 +2963,13 @@ Summarize the key differences in 2-4 bullet points.`;
         } catch { /* non-critical */ }
       }
 
+      // Scan for watchlist keywords
+      try {
+        if (typeof scanForWatchwords === "function") {
+          await scanForWatchwords(newText, "monitor", monitor.url, monitor.title);
+        }
+      } catch { /* non-critical */ }
+
       // Auto-analyze with preset if configured
       if (monitor.analysisPreset) {
         try {
@@ -2983,6 +3235,56 @@ browser.webRequest.onBeforeRequest.addListener(
   { urls: ["<all_urls>"] },
   ["blocking"]
 );
+
+// ══════════════════════════════════════════════════════════════
+// Archive Availability Checker
+// ══════════════════════════════════════════════════════════════
+
+// Cache of archive check results: tabId -> { url, archiveUrl, timestamp }
+const archiveCheckCache = new Map();
+
+browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status !== "complete" || !tab.url) return;
+  if (tab.url.startsWith("about:") || tab.url.startsWith("moz-extension:") || tab.url.startsWith("chrome:")) return;
+
+  const { archiveCheckMode } = await browser.storage.local.get({ archiveCheckMode: "off" });
+  if (archiveCheckMode === "off") return;
+
+  try {
+    const host = new URL(tab.url).hostname.replace(/^www\./, "");
+
+    // Skip archive sites themselves
+    if (host.includes("archive.is") || host.includes("archive.ph") || host.includes("archive.today")) return;
+
+    // If mode is "redirect-list", only check domains on the redirect list
+    if (archiveCheckMode === "redirect-list") {
+      const onList = archiveRedirectDomains.some(d => host === d || host.endsWith("." + d));
+      if (!onList) return;
+    }
+
+    // Don't re-check the same URL for the same tab
+    const cached = archiveCheckCache.get(tabId);
+    if (cached && cached.url === tab.url && (Date.now() - cached.timestamp) < 300000) return;
+
+    // Lightweight check: fetch archive.is/newest/URL with HEAD/redirect follow
+    const checkUrl = `https://archive.is/newest/${tab.url}`;
+    const resp = await fetch(checkUrl, { method: "HEAD", redirect: "follow" });
+
+    if (resp.ok && resp.url && resp.url !== checkUrl && !resp.url.includes("/newest/")) {
+      // Archive exists — resp.url is the archived snapshot URL
+      archiveCheckCache.set(tabId, { url: tab.url, archiveUrl: resp.url, timestamp: Date.now() });
+    } else {
+      archiveCheckCache.set(tabId, { url: tab.url, archiveUrl: null, timestamp: Date.now() });
+    }
+  } catch {
+    // Network error or archive.is down — silently skip
+  }
+});
+
+// Clean up cache when tabs are closed
+browser.tabs.onRemoved.addListener((tabId) => {
+  archiveCheckCache.delete(tabId);
+});
 
 // ══════════════════════════════════════════════════════════════
 // RSS Feeds — lightweight feed reader + monitor bridge
@@ -3281,6 +3583,16 @@ async function checkFeedForUpdates(feed, allFeeds) {
         }
       }
 
+      // Scan new entries for watchlist keywords
+      try {
+        if (typeof scanForWatchwords === "function") {
+          for (const entry of newEntries) {
+            const scanText = (entry.title || "") + " " + (entry.description || "");
+            await scanForWatchwords(scanText, "feed", entry.link || feed.url, entry.title || feed.title);
+          }
+        }
+      } catch { /* non-critical */ }
+
       const merged = [...newEntries, ...existingEntries].slice(0, 200);
       await browser.storage.local.set({ [entryKey]: merged });
 
@@ -3449,4 +3761,143 @@ async function handleExportProject(message) {
   const proj = argusProjects.find(p => p.id === message.projectId);
   if (!proj) return { success: false, error: "Project not found" };
   return { success: true, project: proj };
+}
+
+async function handleBatchAnalyzeProjectItem(message) {
+  try {
+    const { projectId, itemId, presetKey } = message;
+    const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+    const proj = argusProjects.find(p => p.id === projectId);
+    if (!proj) return { success: false, error: "Project not found" };
+    const item = proj.items.find(i => i.id === itemId);
+    if (!item || !item.url) return { success: false, error: "Item has no URL" };
+
+    // Check history first — reuse existing analysis if available
+    const { analysisHistory } = await browser.storage.local.get({ analysisHistory: [] });
+    const existingAnalysis = analysisHistory.find(h =>
+      h.pageUrl === item.url && h.presetKey === presetKey
+    );
+    if (existingAnalysis && existingAnalysis.content) {
+      item.summary = existingAnalysis.content.slice(0, 500);
+      item.analysisContent = existingAnalysis.content;
+      item.analysisPreset = presetKey;
+      proj.updatedAt = new Date().toISOString();
+      await browser.storage.local.set({ argusProjects });
+      return { success: true, cached: true };
+    }
+
+    // Fetch page and analyze
+    const text = await fetchPageText(item.url);
+    if (!text || text.length < 20) return { success: false, error: "Could not fetch page content" };
+
+    const page = { url: item.url, title: item.title || item.url, description: "", text };
+    const settings = await getProviderSettings();
+    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, presetKey, null, settings);
+    const messages = buildMessages(systemPrompt, userPrompt);
+    const result = await callProvider(settings.provider, settings.apiKey, settings.model, messages, {
+      maxTokens: settings.maxTokens,
+      temperature: settings.temperature,
+      reasoningEffort: settings.reasoningEffort,
+      extendedThinking: settings.extendedThinking
+    });
+
+    // Update project item with analysis
+    item.summary = result.content.replace(/\n?SHARELINE:\s*.+$/m, "").slice(0, 500);
+    item.analysisContent = result.content.replace(/\n?SHARELINE:\s*.+$/m, "");
+    item.analysisPreset = presetKey;
+    proj.updatedAt = new Date().toISOString();
+    await browser.storage.local.set({ argusProjects });
+
+    // Also save to history
+    await saveToHistory({
+      pageTitle: item.title || item.url,
+      pageUrl: item.url,
+      presetKey,
+      presetLabel: ANALYSIS_PRESETS[presetKey]?.label || presetKey,
+      content: result.content,
+      thinking: result.thinking || null,
+      provider: settings.provider,
+      model: settings.model,
+      usage: result.usage
+    });
+
+    return { success: true, cached: false };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ──────────────────────────────────────────────
+// Background batch analysis for projects
+// ──────────────────────────────────────────────
+let batchState = { running: false, projectId: null, total: 0, done: 0, current: "", errors: [], cancelled: false };
+
+async function handleBatchAnalyzeProject(message) {
+  if (batchState.running) return { success: false, error: "A batch analysis is already running." };
+
+  const { projectId, presetKey, reanalyze } = message;
+  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+  const proj = argusProjects.find(p => p.id === projectId);
+  if (!proj) return { success: false, error: "Project not found" };
+
+  const targets = reanalyze
+    ? proj.items.filter(i => i.url)
+    : proj.items.filter(i => i.url && !i.summary);
+  if (targets.length === 0) return { success: false, error: "No items to analyze." };
+
+  batchState = { running: true, projectId, total: targets.length, done: 0, current: "", errors: [], cancelled: false };
+
+  // Fire-and-forget — runs in background
+  runBatchLoop(targets.map(i => i.id), projectId, presetKey);
+
+  return { success: true, total: targets.length };
+}
+
+async function runBatchLoop(itemIds, projectId, presetKey) {
+  for (const itemId of itemIds) {
+    if (batchState.cancelled) break;
+
+    const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+    const proj = argusProjects.find(p => p.id === projectId);
+    if (!proj) { batchState.errors.push("Project disappeared"); break; }
+    const item = proj.items.find(i => i.id === itemId);
+    if (!item) { batchState.done++; continue; }
+
+    batchState.current = item.title || item.url;
+
+    try {
+      const resp = await handleBatchAnalyzeProjectItem({ projectId, itemId, presetKey });
+      if (!resp.success) {
+        batchState.errors.push(`${item.title || item.url}: ${resp.error}`);
+      }
+    } catch (err) {
+      batchState.errors.push(`${item.title || item.url}: ${err.message}`);
+    }
+
+    batchState.done++;
+  }
+
+  batchState.running = false;
+  batchState.current = "";
+}
+
+function handleGetBatchStatus() {
+  return {
+    success: true,
+    running: batchState.running,
+    projectId: batchState.projectId,
+    total: batchState.total,
+    done: batchState.done,
+    current: batchState.current,
+    errors: batchState.errors,
+    cancelled: batchState.cancelled
+  };
+}
+
+function handleCancelBatch() {
+  if (batchState.running) {
+    batchState.cancelled = true;
+    return { success: true };
+  }
+  return { success: false, error: "No batch running." };
 }

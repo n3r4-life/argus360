@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Argus - Link Map</title>
+  <link rel="stylesheet" href="link-map.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+</head>
+<body>
+  <script src="../shared/ribbon.js"></script>
+  <header class="header">
+    <div class="header-left">
+      <img src="../icons/icon-32.png" alt="" class="header-icon">
+      <h1 class="header-title">Link Map</h1>
+    </div>
+    <a id="page-url" class="page-url" href="#" target="_blank" title="Open analyzed page"></a>
+  </header>
+
+  <section id="stats-bar" class="stats-bar">
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-total">0</span>
+      <span class="stat-label">Total Links</span>
+    </div>
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-domains">0</span>
+      <span class="stat-label">Unique Domains</span>
+    </div>
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-external">0</span>
+      <span class="stat-label">External</span>
+    </div>
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-internal">0</span>
+      <span class="stat-label">Internal</span>
+    </div>
+  </section>
+
+  <nav class="filter-tabs">
+    <button class="tab active" data-filter="all">All</button>
+    <button class="tab" data-filter="external">External</button>
+    <button class="tab" data-filter="internal">Internal</button>
+    <button class="tab" data-filter="social">Social</button>
+    <button class="tab" data-filter="emails">Email</button>
+    <button class="tab" data-filter="phones">Phone</button>
+    <button class="tab" data-filter="files">Files</button>
+  </nav>
+
+  <div class="actions-bar">
+    <div class="actions-left">
+      <div class="project-picker-wrapper">
+        <button id="add-to-project" class="btn btn-primary">Add All to Project</button>
+        <div id="project-picker" class="project-picker hidden"></div>
+      </div>
+      <button id="export-csv" class="btn btn-secondary">Export CSV</button>
+    </div>
+  </div>
+
+  <main id="link-list" class="link-list">
+    <div class="empty-state" id="empty-state">
+      <p>Loading link data...</p>
+    </div>
+  </main>
+
+  <script src="link-map.js"></script>
+</body>
+</html>

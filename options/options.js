@@ -46,6 +46,21 @@ const DEFAULT_PRESETS = {
     label: "Late Night Recap",
     system: "You are a sharp-witted comedic editorial writer. Your style is punchy, irreverent, and conversational — like a late-night monologue meets a newspaper column. Use sarcasm, wit, and strong opinions. Never reference your style, influences, or that you're an AI. Just deliver the content.",
     prompt: "Recap the following page content as if you're writing your editorial column. Hit the key points but make it entertaining. Be sharp, punchy, and opinionated. Use markdown formatting."
+  },
+  entities: {
+    label: "Entity Extraction (OSINT)",
+    system: "You are an OSINT analyst specializing in entity extraction and intelligence gathering. Extract structured data from text. Respond ONLY with valid JSON - no markdown fences, no explanation.",
+    prompt: "Extract all identifiable entities from this page content. Return as JSON with people, organizations, locations, dates, amounts, contact info, and claims. Include every entity you can find."
+  },
+  credibility: {
+    label: "Source Credibility",
+    system: "You are a media literacy and source evaluation expert with deep expertise in journalism standards, propaganda techniques, and information quality assessment.",
+    prompt: "Evaluate this page's credibility on a scale of 1-10. Assess author & publication, sourcing quality, content analysis, bias indicators, and verification status. Use markdown formatting."
+  },
+  profile: {
+    label: "Person/Org Profile",
+    system: "You are an OSINT research analyst who builds comprehensive profiles from available information.",
+    prompt: "Build a structured intelligence profile based on this page content. Include profile summary, key details, activity & history, network & associations, notable statements, and assessment. Use markdown formatting."
   }
 };
 
@@ -217,6 +232,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   loadVersion();
   initMainTabs();
   initHelpBackToTop();
+  initWatchlist();
 });
 
 function loadVersion() {
@@ -576,6 +592,8 @@ function attachListeners() {
     scheduleSave();
   });
   el.thinkingBudget.addEventListener("input", scheduleSave);
+  el.responseLanguage.addEventListener("change", scheduleSave);
+  el.showBadge.addEventListener("change", scheduleSave);
 
   // History
   el.maxHistory.addEventListener("input", scheduleSave);
@@ -1080,6 +1098,10 @@ async function loadArchiveSettings() {
     el.archiveCustomUrl.value = providerUrl;
     el.archiveCustomGroup.style.display = "";
   }
+  // Archive check mode
+  const { archiveCheckMode, waybackCheckMode } = await browser.storage.local.get({ archiveCheckMode: "off", waybackCheckMode: "off" });
+  document.getElementById("archive-check-mode").value = archiveCheckMode;
+  document.getElementById("wayback-check-mode").value = waybackCheckMode ?? "off";
   // Toggle custom field visibility
   el.archiveProvider.addEventListener("change", () => {
     el.archiveCustomGroup.style.display = el.archiveProvider.value === "custom" ? "" : "none";
@@ -1099,6 +1121,11 @@ async function saveArchiveSettings() {
     enabled: el.archiveEnabled.checked,
     domains,
     providerUrl
+  });
+  // Save archive check mode
+  await browser.storage.local.set({
+    archiveCheckMode: document.getElementById("archive-check-mode").value,
+    waybackCheckMode: document.getElementById("wayback-check-mode").value
   });
   el.archiveStatus.textContent = "Saved!";
   el.archiveStatus.style.color = "var(--success)";
@@ -1674,12 +1701,43 @@ function initProjects() {
   document.getElementById("proj-item-save").addEventListener("click", projSaveItemNotes);
   document.getElementById("proj-item-cancel").addEventListener("click", () => projEl.itemModal.classList.add("hidden"));
 
+  // Batch analysis — populate preset dropdown
+  const batchSelect = document.getElementById("proj-batch-preset");
+  for (const [key, preset] of Object.entries(DEFAULT_PRESETS)) {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = preset.label;
+    batchSelect.appendChild(opt);
+  }
+  document.getElementById("proj-batch-run").addEventListener("click", projBatchAnalyze);
+
   projEl.search.addEventListener("input", () => {
     projState.query = projEl.search.value.trim().toLowerCase();
     projRenderSidebar();
   });
 
+  // OSINT project tool buttons
+  document.getElementById("proj-entity-extract").addEventListener("click", projRunEntityExtraction);
+  document.getElementById("proj-connection-graph").addEventListener("click", projOpenConnectionGraph);
+  document.getElementById("proj-timeline").addEventListener("click", projOpenTimeline);
+  document.getElementById("proj-report").addEventListener("click", projGenerateReport);
+
   projLoadProjects();
+  checkRunningBatch();
+}
+
+async function checkRunningBatch() {
+  try {
+    const s = await browser.runtime.sendMessage({ action: "getBatchStatus" });
+    if (s && s.success && s.running) {
+      const runBtn = document.getElementById("proj-batch-run");
+      const statusEl = document.getElementById("proj-batch-status");
+      runBtn.textContent = "Cancel";
+      runBtn.onclick = projCancelBatch;
+      statusEl.textContent = `Analyzing ${s.done + 1} of ${s.total}: ${s.current}...`;
+      batchPollTimer = setInterval(() => pollBatchStatus(), 1500);
+    }
+  } catch { /* ignore */ }
 }
 
 async function projLoadProjects() {
@@ -1789,6 +1847,10 @@ function projRenderItems(proj) {
       ? `<a href="${escHtml(item.url)}" target="_blank">${escHtml(item.title || item.url)}</a>`
       : escHtml(item.title || "Untitled");
 
+    const analyzedBadge = item.analysisPreset
+      ? `<span class="proj-type-badge analysis" title="Analyzed with ${escHtml(item.analysisPreset)}">analyzed</span>`
+      : "";
+
     card.innerHTML = `
       <div class="proj-item-body">
         <div class="proj-item-title">${titleHtml}</div>
@@ -1797,14 +1859,34 @@ function projRenderItems(proj) {
         ${item.notes ? `<div class="proj-item-notes">${escHtml(item.notes)}</div>` : ""}
         <div class="proj-item-meta">
           <span class="proj-type-badge ${item.type}">${item.type}</span>
+          ${analyzedBadge}
           <span>${new Date(item.addedAt).toLocaleDateString()}</span>
         </div>
       </div>
       <div class="proj-item-actions">
+        ${item.analysisContent ? `<button class="proj-item-view-btn" title="View analysis">View</button>` : ""}
         <button class="proj-item-note-btn" title="Edit notes">Notes</button>
         <button class="proj-item-remove-btn" title="Remove from project">Remove</button>
       </div>
     `;
+
+    const viewBtn = card.querySelector(".proj-item-view-btn");
+    if (viewBtn) {
+      viewBtn.addEventListener("click", () => {
+        // Open analysis in a results-like view
+        const resultId = `proj-view-${Date.now()}`;
+        browser.storage.local.set({
+          [resultId]: {
+            status: "done",
+            content: item.analysisContent,
+            pageTitle: item.title || item.url,
+            pageUrl: item.url,
+            presetLabel: item.analysisPreset || "Analysis"
+          }
+        });
+        browser.tabs.create({ url: browser.runtime.getURL(`results/results.html?id=${encodeURIComponent(resultId)}`) });
+      });
+    }
 
     card.querySelector(".proj-item-note-btn").addEventListener("click", () => {
       projState.editingItemId = item.id;
@@ -1948,4 +2030,296 @@ async function projExportAll() {
   a.download = "argus-projects.json";
   a.click();
   URL.revokeObjectURL(url);
+}
+
+let batchPollTimer = null;
+
+async function projBatchAnalyze() {
+  const presetKey = document.getElementById("proj-batch-preset").value;
+  if (!presetKey || !projState.activeProjectId) return;
+
+  const proj = projState.projects.find(p => p.id === projState.activeProjectId);
+  if (!proj) return;
+
+  const statusEl = document.getElementById("proj-batch-status");
+  const runBtn = document.getElementById("proj-batch-run");
+
+  // Check if unsummarized items exist; if not, offer re-analyze
+  const unsummarized = proj.items.filter(i => i.url && !i.summary);
+  const allWithUrl = proj.items.filter(i => i.url);
+  let reanalyze = false;
+
+  if (unsummarized.length === 0) {
+    if (allWithUrl.length === 0) {
+      statusEl.textContent = "No items with URLs to analyze.";
+      return;
+    }
+    if (!confirm(`All ${allWithUrl.length} items already have summaries. Re-analyze them all?`)) return;
+    reanalyze = true;
+  }
+
+  // Kick off in background
+  const resp = await browser.runtime.sendMessage({
+    action: "batchAnalyzeProject",
+    projectId: proj.id,
+    presetKey,
+    reanalyze
+  });
+
+  if (!resp.success) {
+    statusEl.textContent = resp.error;
+    return;
+  }
+
+  runBtn.disabled = true;
+  runBtn.textContent = "Cancel";
+  runBtn.disabled = false;
+  runBtn.onclick = projCancelBatch;
+
+  // Poll for progress
+  batchPollTimer = setInterval(() => pollBatchStatus(), 1500);
+  statusEl.textContent = `Starting batch analysis (${resp.total} items)...`;
+}
+
+async function pollBatchStatus() {
+  const statusEl = document.getElementById("proj-batch-status");
+  const runBtn = document.getElementById("proj-batch-run");
+
+  try {
+    const s = await browser.runtime.sendMessage({ action: "getBatchStatus" });
+    if (!s.success) return;
+
+    if (s.running) {
+      statusEl.textContent = `Analyzing ${s.done + 1} of ${s.total}: ${s.current}...`;
+    } else {
+      // Finished
+      clearInterval(batchPollTimer);
+      batchPollTimer = null;
+
+      const errCount = s.errors.length;
+      if (s.cancelled) {
+        statusEl.textContent = `Cancelled after ${s.done} of ${s.total} items.`;
+      } else if (errCount > 0) {
+        statusEl.textContent = `Done - analyzed ${s.done} item(s), ${errCount} error(s).`;
+      } else {
+        statusEl.textContent = `Done - analyzed ${s.done} item(s).`;
+      }
+
+      runBtn.textContent = "Run Batch";
+      runBtn.onclick = projBatchAnalyze;
+
+      // Refresh project display
+      await projLoadProjects();
+      projSelectProject(projState.activeProjectId);
+      setTimeout(() => { statusEl.textContent = ""; }, 5000);
+    }
+  } catch { /* ignore */ }
+}
+
+async function projCancelBatch() {
+  await browser.runtime.sendMessage({ action: "cancelBatch" });
+  document.getElementById("proj-batch-status").textContent = "Cancelling...";
+}
+
+// ──────────────────────────────────────────────
+// OSINT Project Tools
+// ──────────────────────────────────────────────
+async function projRunEntityExtraction() {
+  if (!projState.activeProjectId) return;
+  const statusEl = document.getElementById("proj-osint-status");
+  statusEl.textContent = "Running entity extraction on all project items...";
+
+  // Use batch analyze with entities preset
+  const resp = await browser.runtime.sendMessage({
+    action: "batchAnalyzeProject",
+    projectId: projState.activeProjectId,
+    presetKey: "entities",
+    reanalyze: true
+  });
+
+  if (!resp.success) {
+    statusEl.textContent = resp.error;
+    return;
+  }
+
+  // Poll for completion
+  const pollId = setInterval(async () => {
+    const s = await browser.runtime.sendMessage({ action: "getBatchStatus" });
+    if (s.running) {
+      statusEl.textContent = `Extracting entities: ${s.done}/${s.total} - ${s.current}...`;
+    } else {
+      clearInterval(pollId);
+      statusEl.textContent = `Entity extraction complete (${s.done} items).`;
+      await projLoadProjects();
+      projSelectProject(projState.activeProjectId);
+      setTimeout(() => { statusEl.textContent = ""; }, 5000);
+    }
+  }, 1500);
+}
+
+async function projOpenConnectionGraph() {
+  if (!projState.activeProjectId) return;
+  const statusEl = document.getElementById("proj-osint-status");
+  statusEl.textContent = "Building connection graph...";
+
+  const resp = await browser.runtime.sendMessage({
+    action: "buildConnectionGraph",
+    projectId: projState.activeProjectId
+  });
+
+  if (resp && resp.success) {
+    const proj = projState.projects.find(p => p.id === projState.activeProjectId);
+    const storeKey = `graph-${Date.now()}`;
+    await browser.storage.local.set({ [storeKey]: { projectName: proj?.name || "Project", nodes: resp.nodes, edges: resp.edges } });
+    browser.tabs.create({ url: browser.runtime.getURL(`osint/graph.html?id=${encodeURIComponent(storeKey)}`) });
+    statusEl.textContent = "";
+  } else {
+    statusEl.textContent = resp?.error || "No entity data found. Run entity extraction first.";
+    setTimeout(() => { statusEl.textContent = ""; }, 5000);
+  }
+}
+
+async function projOpenTimeline() {
+  if (!projState.activeProjectId) return;
+  const statusEl = document.getElementById("proj-osint-status");
+  statusEl.textContent = "Building timeline...";
+
+  const resp = await browser.runtime.sendMessage({
+    action: "buildTimeline",
+    projectId: projState.activeProjectId
+  });
+
+  if (resp && resp.success) {
+    const proj = projState.projects.find(p => p.id === projState.activeProjectId);
+    const storeKey = `timeline-${Date.now()}`;
+    await browser.storage.local.set({ [storeKey]: { projectName: proj?.name || "Project", events: resp.events } });
+    browser.tabs.create({ url: browser.runtime.getURL(`osint/timeline.html?id=${encodeURIComponent(storeKey)}`) });
+    statusEl.textContent = "";
+  } else {
+    statusEl.textContent = resp?.error || "No date data found. Run entity extraction first.";
+    setTimeout(() => { statusEl.textContent = ""; }, 5000);
+  }
+}
+
+async function projGenerateReport() {
+  if (!projState.activeProjectId) return;
+  const statusEl = document.getElementById("proj-osint-status");
+  statusEl.textContent = "Generating investigation report (this may take a minute)...";
+
+  const resp = await browser.runtime.sendMessage({
+    action: "generateReport",
+    projectId: projState.activeProjectId
+  });
+
+  if (resp && resp.success) {
+    // Open in results page
+    const storeKey = `report-${Date.now()}`;
+    await browser.storage.local.set({
+      [storeKey]: {
+        status: "done",
+        content: resp.content,
+        pageTitle: resp.title || "Investigation Report",
+        pageUrl: "",
+        presetLabel: "Investigation Report",
+        provider: resp.provider,
+        model: resp.model
+      }
+    });
+    browser.tabs.create({ url: browser.runtime.getURL(`results/results.html?id=${encodeURIComponent(storeKey)}`) });
+    statusEl.textContent = "";
+  } else {
+    statusEl.textContent = resp?.error || "Failed to generate report.";
+    setTimeout(() => { statusEl.textContent = ""; }, 5000);
+  }
+}
+
+// ──────────────────────────────────────────────
+// Keyword Watchlist
+// ──────────────────────────────────────────────
+async function initWatchlist() {
+  document.getElementById("add-watchword").addEventListener("click", addWatchword);
+  await loadWatchlist();
+  await loadWatchlistMatches();
+}
+
+async function loadWatchlist() {
+  const resp = await browser.runtime.sendMessage({ action: "getWatchlist" });
+  const list = document.getElementById("watchlist-items");
+  list.innerHTML = "";
+  if (!resp || !resp.success || !resp.watchlist.length) {
+    list.innerHTML = '<p class="info-text" style="padding:8px 0;">No keywords tracked yet.</p>';
+    return;
+  }
+  for (const w of resp.watchlist) {
+    const div = document.createElement("div");
+    div.className = "rule-item";
+    div.innerHTML = `
+      <div class="rule-info">
+        <span class="rule-label">${w.term}</span>
+        <span class="rule-meta">${w.caseSensitive ? "Case sensitive" : "Case insensitive"}${w.regex ? " | Regex" : ""} | ${w.matchCount || 0} matches</span>
+      </div>
+      <div class="rule-actions">
+        <label class="toggle-label"><input type="checkbox" ${w.enabled ? "checked" : ""} data-id="${w.id}" class="watchword-toggle"><span>Active</span></label>
+        <button class="btn btn-secondary btn-sm watchword-delete" data-id="${w.id}">Delete</button>
+      </div>
+    `;
+    list.appendChild(div);
+  }
+
+  list.querySelectorAll(".watchword-toggle").forEach(cb => {
+    cb.addEventListener("change", async () => {
+      await browser.runtime.sendMessage({ action: "updateWatchword", id: cb.dataset.id, enabled: cb.checked });
+    });
+  });
+
+  list.querySelectorAll(".watchword-delete").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      await browser.runtime.sendMessage({ action: "deleteWatchword", id: btn.dataset.id });
+      await loadWatchlist();
+    });
+  });
+}
+
+async function addWatchword() {
+  const termInput = document.getElementById("watchword-term");
+  const term = termInput.value.trim();
+  if (!term) return;
+  const caseSensitive = document.getElementById("watchword-case").checked;
+  const regex = document.getElementById("watchword-regex").checked;
+
+  // Validate regex if enabled
+  if (regex) {
+    try { new RegExp(term); } catch (e) {
+      document.getElementById("watchlist-status").textContent = "Invalid regex: " + e.message;
+      return;
+    }
+  }
+
+  await browser.runtime.sendMessage({ action: "addWatchword", term, caseSensitive, regex });
+  termInput.value = "";
+  document.getElementById("watchword-case").checked = false;
+  document.getElementById("watchword-regex").checked = false;
+  await loadWatchlist();
+}
+
+async function loadWatchlistMatches() {
+  const { watchlistMatches } = await browser.storage.local.get({ watchlistMatches: [] });
+  const container = document.getElementById("watchlist-matches");
+  if (!watchlistMatches.length) {
+    container.innerHTML = "";
+    return;
+  }
+  container.innerHTML = `<h4 style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">Recent Matches</h4>`;
+  const recent = watchlistMatches.slice(-20).reverse();
+  for (const m of recent) {
+    const div = document.createElement("div");
+    div.className = "rule-item";
+    div.innerHTML = `
+      <div class="rule-info">
+        <span class="rule-label">"${m.term}" found in ${m.sourceType}</span>
+        <span class="rule-meta">${m.sourceTitle || m.sourceUrl} - ${new Date(m.matchedAt).toLocaleString()}</span>
+      </div>
+    `;
+    container.appendChild(div);
+  }
 }

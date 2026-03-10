@@ -465,7 +465,23 @@
                   <button id="proj-add-note" class="btn btn-secondary btn-sm">+ Add Note</button>
                   <button id="proj-add-url" class="btn btn-secondary btn-sm">+ Add URL</button>
                   <button id="proj-export" class="btn btn-secondary btn-sm">Export Project</button>
+                  <span style="flex:1;"></span>
+                  <select id="proj-batch-preset" class="btn btn-secondary btn-sm" style="min-width:120px;">
+                    <option value="">Analyze Project...</option>
+                  </select>
+                  <button id="proj-batch-run" class="btn btn-accent btn-sm">Run</button>
                 </div>
+                <div id="proj-batch-status" class="prompt-status" style="padding:4px 0;font-size:12px;"></div>
+                <!-- OSINT Project Tools -->
+                <div class="proj-items-toolbar" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;">
+                  <span style="font-size:12px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">OSINT Tools</span>
+                  <span style="flex:1;"></span>
+                  <button id="proj-entity-extract" class="btn btn-secondary btn-sm" title="Run entity extraction on all project items">Entities</button>
+                  <button id="proj-connection-graph" class="btn btn-secondary btn-sm" title="Build connection graph from entities">Graph</button>
+                  <button id="proj-timeline" class="btn btn-secondary btn-sm" title="Build timeline from dates">Timeline</button>
+                  <button id="proj-report" class="btn btn-secondary btn-sm" title="Generate investigation report">Report</button>
+                </div>
+                <div id="proj-osint-status" class="prompt-status" style="padding:4px 0;font-size:12px;"></div>
                 <div class="proj-items-list" id="proj-items-list"></div>
               </div>
             </div>
@@ -604,6 +620,42 @@
         </div>
       </section>
 
+      <!-- Keyword Watchlist -->
+      <section class="card">
+        <h2 class="card-title">Keyword Watchlist
+          <span class="badge">OSINT</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Track keywords across monitored pages and RSS feeds. Get notified when a keyword appears.</p>
+          <div id="watchlist-items" class="rules-list"></div>
+          <div class="rule-form">
+            <div class="form-row">
+              <div class="form-group flex-2">
+                <label for="watchword-term">Keyword or Phrase</label>
+                <input type="text" id="watchword-term" placeholder="e.g. merger, data breach, John Smith">
+              </div>
+              <div class="form-group flex-1">
+                <label class="toggle-label">
+                  <input type="checkbox" id="watchword-case">
+                  <span>Case Sensitive</span>
+                </label>
+              </div>
+              <div class="form-group flex-1">
+                <label class="toggle-label">
+                  <input type="checkbox" id="watchword-regex">
+                  <span>Regex</span>
+                </label>
+              </div>
+              <div class="form-group flex-1" style="justify-content:flex-end;">
+                <button id="add-watchword" class="btn btn-secondary btn-sm">Add Keyword</button>
+              </div>
+            </div>
+          </div>
+          <span id="watchlist-status" class="prompt-status"></span>
+          <div id="watchlist-matches" class="rules-list" style="margin-top:12px;"></div>
+        </div>
+      </section>
+
     </div>
 
     <!-- ═══════════════════════════════════════════ -->
@@ -713,6 +765,29 @@
             <button id="archive-save" class="btn btn-secondary btn-sm" style="padding:4px 14px;font-size:12px;">Save</button>
             <button id="archive-reset" class="btn btn-secondary btn-sm" style="padding:4px 14px;font-size:12px;">Reset to Defaults</button>
             <span id="archive-status" class="prompt-status" style="margin-left:4px;"></span>
+          </div>
+
+          <hr style="border-color:var(--border);margin:16px 0;">
+          <p class="info-text">Automatically check if an archive.is snapshot exists when you visit a page. Shows a subtle indicator in the Argus popup.</p>
+          <div class="form-row" style="margin-top:8px;">
+            <div class="form-group flex-1">
+              <label for="archive-check-mode">Archive Availability Check</label>
+              <select id="archive-check-mode">
+                <option value="off">Off</option>
+                <option value="redirect-list">Redirect list domains only</option>
+                <option value="all">All sites</option>
+              </select>
+              <span class="hint">When enabled, Argus checks archive.is in the background as you browse</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="wayback-check-mode">Wayback Machine Check</label>
+              <select id="wayback-check-mode">
+                <option value="off">Off</option>
+                <option value="redirect-list">Redirect list domains only</option>
+                <option value="all">All sites</option>
+              </select>
+              <span class="hint">Also check Internet Archive's Wayback Machine for snapshots</span>
+            </div>
           </div>
         </div>
       </section>

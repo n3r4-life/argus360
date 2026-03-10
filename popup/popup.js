@@ -49,6 +49,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   await checkSelection();
   attachEventListeners();
   await checkAutoAnalyzeStatus();
+  await checkPreviousAnalysis();
+  await checkArchiveAvailability();
+  await checkWaybackAvailability();
 });
 
 async function loadSettings() {
@@ -149,6 +152,109 @@ async function checkAutoAnalyzeStatus() {
       elements.modeAuto.classList.add("active");
       elements.modeAuto.title = `Auto-analyzing ${url.hostname}`;
     }
+  } catch { /* ignore */ }
+}
+
+async function checkPreviousAnalysis() {
+  try {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+    if (!tab || !tab.url || tab.url.startsWith("about:") || tab.url.startsWith("moz-extension:")) return;
+
+    const resp = await browser.runtime.sendMessage({ action: "getHistoryForUrl", url: tab.url });
+    if (!resp || !resp.success || !resp.history.length) return;
+
+    const prevEl = document.getElementById("prev-analysis");
+    const latest = resp.history[0];
+    const count = resp.total;
+    const timeAgo = getTimeAgo(new Date(latest.timestamp || latest.createdAt));
+    const presetLabel = latest.presetLabel || "Analysis";
+
+    prevEl.innerHTML = `
+      <span class="prev-dot"></span>
+      <span>Previously analyzed${count > 1 ? ` (${count}x)` : ""} — ${presetLabel} ${timeAgo}</span>
+      <a id="prev-view-link">View</a>
+    `;
+    prevEl.classList.remove("hidden");
+
+    document.getElementById("prev-view-link").addEventListener("click", () => {
+      // Open the most recent analysis in results page
+      const resultId = `prev-view-${Date.now()}`;
+      browser.storage.local.set({
+        [resultId]: {
+          status: "done",
+          content: latest.content,
+          pageTitle: latest.pageTitle || tab.title,
+          pageUrl: latest.pageUrl || tab.url,
+          presetLabel: latest.presetLabel || "Analysis",
+          provider: latest.provider,
+          model: latest.model
+        }
+      });
+      browser.tabs.create({ url: browser.runtime.getURL(`results/results.html?id=${encodeURIComponent(resultId)}`) });
+      window.close();
+    });
+  } catch { /* ignore */ }
+}
+
+function getTimeAgo(date) {
+  const now = new Date();
+  const diffMs = now - date;
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString();
+}
+
+async function checkArchiveAvailability() {
+  try {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+    if (!tab || !tab.url || tab.url.startsWith("about:") || tab.url.startsWith("moz-extension:")) return;
+
+    const resp = await browser.runtime.sendMessage({ action: "getArchiveCheck", tabId: tab.id });
+    if (!resp || !resp.archiveUrl) return;
+
+    const archiveEl = document.getElementById("archive-available");
+    archiveEl.innerHTML = `
+      <span class="archive-dot"></span>
+      <span>Archived version available</span>
+      <a id="archive-view-link">View</a>
+    `;
+    archiveEl.classList.remove("hidden");
+
+    document.getElementById("archive-view-link").addEventListener("click", () => {
+      browser.tabs.create({ url: resp.archiveUrl });
+      window.close();
+    });
+  } catch { /* ignore */ }
+}
+
+async function checkWaybackAvailability() {
+  try {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+    if (!tab || !tab.url || tab.url.startsWith("about:") || tab.url.startsWith("moz-extension:")) return;
+
+    const resp = await browser.runtime.sendMessage({ action: "getWaybackCheck", tabId: tab.id });
+    if (!resp || !resp.waybackUrl) return;
+
+    const wbEl = document.getElementById("wayback-available");
+    wbEl.innerHTML = `
+      <span class="archive-dot" style="background:#ffb74d"></span>
+      <span>Wayback Machine snapshot available</span>
+      <a id="wayback-view-link">View</a>
+    `;
+    wbEl.classList.remove("hidden");
+
+    document.getElementById("wayback-view-link").addEventListener("click", () => {
+      browser.tabs.create({ url: resp.waybackUrl });
+      window.close();
+    });
   } catch { /* ignore */ }
 }
 
@@ -390,6 +496,54 @@ function attachEventListeners() {
     } catch (err) {
       elements.bookmarkBtn.classList.remove("bookmark-btn-saving");
       elements.bookmarkBtn.disabled = false;
+      showToast(err.message, "error");
+    }
+  });
+
+  // ── OSINT Tool Buttons ──
+  document.getElementById("osint-metadata").addEventListener("click", async () => {
+    showToast("Extracting metadata...", "loading");
+    const resp = await browser.runtime.sendMessage({ action: "extractMetadata", tabId: currentTabId });
+    if (resp && resp.success) {
+      const storeKey = `metadata-${Date.now()}`;
+      const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+      await browser.storage.local.set({ [storeKey]: { ...resp.metadata, pageUrl: tabs[0]?.url, pageTitle: tabs[0]?.title } });
+      browser.tabs.create({ url: browser.runtime.getURL(`results/results.html?metadata=${encodeURIComponent(storeKey)}`) });
+      window.close();
+    } else {
+      showToast(resp?.error || "Failed to extract metadata.", "error");
+    }
+  });
+
+  document.getElementById("osint-links").addEventListener("click", async () => {
+    showToast("Mapping links...", "loading");
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const resp = await browser.runtime.sendMessage({ action: "extractLinks", tabId: currentTabId });
+    if (resp && resp.success) {
+      const storeKey = `linkmap-${Date.now()}`;
+      await browser.storage.local.set({ [storeKey]: { pageUrl: tabs[0]?.url, pageTitle: tabs[0]?.title, links: resp.links, stats: resp.stats } });
+      browser.tabs.create({ url: browser.runtime.getURL(`osint/link-map.html?id=${encodeURIComponent(storeKey)}`) });
+      window.close();
+    } else {
+      showToast(resp?.error || "Failed to map links.", "error");
+    }
+  });
+
+  document.getElementById("osint-whois").addEventListener("click", async () => {
+    showToast("Looking up domain...", "loading");
+    try {
+      const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+      const domain = new URL(tabs[0].url).hostname;
+      const resp = await browser.runtime.sendMessage({ action: "whoisLookup", domain });
+      if (resp && resp.success) {
+        const storeKey = `whois-${Date.now()}`;
+        await browser.storage.local.set({ [storeKey]: { ...resp, pageUrl: tabs[0].url, pageTitle: tabs[0].title } });
+        browser.tabs.create({ url: browser.runtime.getURL(`results/results.html?whois=${encodeURIComponent(storeKey)}`) });
+        window.close();
+      } else {
+        showToast(resp?.error || "Whois lookup failed.", "error");
+      }
+    } catch (err) {
       showToast(err.message, "error");
     }
   });

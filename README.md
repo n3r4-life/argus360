@@ -12,7 +12,7 @@
 
 ### Multi-Provider AI Analysis
 - **4 providers:** xAI (Grok), OpenAI (GPT-4.1), Anthropic (Claude), Google (Gemini)
-- **Streaming responses** — see results as they're generated
+- **Strlly eaming responses** — see results as they're generated
 - **Follow-up questions** — ask clarifying questions without losing context
 - **Provider comparison** — run the same analysis across multiple providers side-by-side
 

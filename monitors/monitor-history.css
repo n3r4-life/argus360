@@ -358,4 +358,56 @@ body {
   font-size: 15px;
 }
 
+/* Diff view */
+.diff-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+.diff-select {
+  padding: 6px 10px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-family: var(--font);
+  min-width: 180px;
+}
+.diff-output {
+  padding: 16px;
+  font-family: monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+.diff-line-add {
+  background: rgba(76, 175, 80, 0.15);
+  color: var(--success);
+  display: block;
+  padding: 1px 8px;
+  border-left: 3px solid var(--success);
+}
+.diff-line-remove {
+  background: rgba(255, 82, 82, 0.15);
+  color: var(--error);
+  display: block;
+  padding: 1px 8px;
+  border-left: 3px solid var(--error);
+  text-decoration: line-through;
+}
+.diff-line-same {
+  display: block;
+  padding: 1px 8px;
+  border-left: 3px solid transparent;
+  color: var(--text-secondary);
+}
+
 .hidden { display: none !important; }
