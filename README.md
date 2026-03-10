@@ -75,7 +75,8 @@
 ### Additional Features
 - **Multi-page analysis** — analyze multiple open tabs together
 - **Selection analysis** — highlight text and analyze just that selection
-- **Extended thinking** — see Claude's reasoning process
+- **Extended thinking** — Claude native thinking plus best-effort `REASONING:` sections for OpenAI and Grok
+- **Provider-specific reasoning controls** — configure Grok multi-agent effort and OpenAI o-series reasoning effort separately
 - **Multi-agent mode** — use Grok 4.20 Swarm with configurable agent count
 - **Export results** as Markdown, HTML, or plain text
 - **Response language** — auto-detects your browser language or set manually; AI responds in your language

@@ -211,7 +211,7 @@
               <label for="response-language">Response Language</label>
               <select id="response-language">
                 <option value="auto">Auto-detect (browser language)</option>
-                <option value="">English</option>
+                <option value="English">English (default)</option>
                 <option value="Spanish">Spanish</option>
                 <option value="French">French</option>
                 <option value="German">German</option>
@@ -255,10 +255,10 @@
       <!-- Extended Thinking -->
       <section class="card">
         <h2 class="card-title">Extended Thinking
-          <span class="badge">Claude</span>
+          <span class="badge">Claude + OpenAI + Grok</span>
         </h2>
         <div class="card-body">
-          <p class="info-text">Enable extended thinking for Claude models. The AI will show its reasoning process before giving the final answer.</p>
+          <p class="info-text">Enable extended thinking across supported providers. Claude uses native thinking output, while OpenAI and Grok are prompted to include a visible REASONING section before the final answer.</p>
           <div class="form-row">
             <div class="form-group flex-1">
               <label class="toggle-label">
@@ -269,7 +269,27 @@
             <div class="form-group flex-1">
               <label for="thinking-budget">Thinking Budget (tokens)</label>
               <input type="number" id="thinking-budget" value="10000" min="1000" max="100000" step="1000">
-              <span class="hint">How many tokens the AI can use for thinking</span>
+              <span class="hint" id="thinking-budget-hint">Claude native thinking token budget (OpenAI and Grok ignore this value)</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- OpenAI Reasoning -->
+      <section class="card" id="openai-reasoning-card">
+        <h2 class="card-title">OpenAI Reasoning
+          <span class="badge">o-series</span>
+        </h2>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="openai-reasoning-effort">Reasoning Effort</label>
+              <select id="openai-reasoning-effort">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+              <span class="hint" id="openai-reasoning-hint">Used when default provider is OpenAI, Extended Thinking is enabled, and model is o3/o3-mini/o4-mini.</span>
             </div>
           </div>
         </div>

@@ -86,7 +86,7 @@ const BROWSER_LANG_MAP = {
 
 async function getLanguageInstruction() {
   const { responseLanguage } = await browser.storage.local.get({ responseLanguage: "auto" });
-  if (!responseLanguage || responseLanguage === "") return ""; // English — no instruction needed
+  if (!responseLanguage || responseLanguage === "" || responseLanguage === "English") return "";
   if (responseLanguage === "auto") {
     const browserLang = (navigator.language || "en").split("-")[0].toLowerCase();
     if (browserLang === "en") return "";
@@ -428,14 +428,32 @@ async function callXai(apiKey, model, messages, opts) {
   }
 }
 
+function isOpenaiReasoningModel(model) {
+  return typeof model === "string" && /^o\d/i.test(model);
+}
+
+function normalizeOpenaiReasoningEffort(effort) {
+  if (effort === "low" || effort === "medium" || effort === "high") return effort;
+  if (effort === "xhigh") return "high";
+  return "medium";
+}
+
+function getOpenaiReasoningParams(model, opts) {
+  if (!opts?.extendedThinking?.enabled) return {};
+  if (!isOpenaiReasoningModel(model)) return {};
+  return { reasoning_effort: normalizeOpenaiReasoningEffort(opts.reasoningEffort) };
+}
+
 async function callOpenai(apiKey, model, messages, opts) {
   const temperature = opts.temperature ?? 0.3;
   const maxTokens = opts.maxTokens || 2048;
+  const reasoningParams = getOpenaiReasoningParams(model, opts);
+  const body = { model, messages, temperature, max_tokens: maxTokens, ...reasoningParams };
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-    body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens })
+    body: JSON.stringify(body)
   });
 
   if (!response.ok) handleApiError(response, await response.text(), "OpenAI");
@@ -606,11 +624,13 @@ async function callXaiStream(apiKey, model, messages, opts, onChunk) {
 async function callOpenaiStream(apiKey, model, messages, opts, onChunk) {
   const temperature = opts.temperature ?? 0.3;
   const maxTokens = opts.maxTokens || 2048;
+  const reasoningParams = getOpenaiReasoningParams(model, opts);
+  const body = { model, messages, temperature, max_tokens: maxTokens, stream: true, ...reasoningParams };
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-    body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens, stream: true })
+    body: JSON.stringify(body)
   });
 
   if (!response.ok) handleApiError(response, await response.text(), "OpenAI");
@@ -784,6 +804,7 @@ async function getProviderSettings(overrideProvider, presetKey) {
     maxInputChars: 100000,
     temperature: 0.3,
     reasoningEffort: "medium",
+    openaiReasoningEffort: "medium",
     customPresets: {},
     extendedThinking: { enabled: false, budgetTokens: 10000 },
     apiKey: "" // Legacy
@@ -809,6 +830,10 @@ async function getProviderSettings(overrideProvider, presetKey) {
     throw new Error(`No API key configured for ${PROVIDERS[provider]?.label || provider}. Open settings to add one.`);
   }
 
+  const effectiveReasoningEffort = provider === "openai"
+    ? (settings.openaiReasoningEffort || "medium")
+    : (settings.reasoningEffort || "medium");
+
   return {
     provider,
     apiKey: providerConfig.apiKey,
@@ -816,7 +841,7 @@ async function getProviderSettings(overrideProvider, presetKey) {
     maxTokens: settings.maxTokens,
     maxInputChars: settings.maxInputChars,
     temperature: settings.temperature,
-    reasoningEffort: settings.reasoningEffort,
+    reasoningEffort: effectiveReasoningEffort,
     customPresets: settings.customPresets || {},
     extendedThinking: settings.extendedThinking || { enabled: false, budgetTokens: 10000 }
   };
@@ -853,7 +878,7 @@ function buildMessages(systemPrompt, userPrompt) {
   ];
 }
 
-async function buildAnalysisPrompts(page, analysisType, customPrompt, settings) {
+async function buildAnalysisPrompts(page, analysisType, customPrompt, settings, provider, opts) {
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const defaultPreset = ANALYSIS_PRESETS[analysisType];
   const customPreset = settings.customPresets[analysisType];
@@ -861,7 +886,12 @@ async function buildAnalysisPrompts(page, analysisType, customPrompt, settings) 
   const baseSystem = customPreset?.system || defaultPreset?.system || "You are a helpful assistant that analyzes web content.";
   const langInstruction = await getLanguageInstruction();
   const sharelineInstruction = ' At the very end of your response, include a single catchy shareable one-liner (under 180 characters) on its own line prefixed with exactly "SHARELINE:" — this will be hidden from the user and only used for social sharing.';
-  const systemPrompt = `Today's date is ${today}. ${baseSystem}${langInstruction}${sharelineInstruction}`;
+  let systemPrompt = `Today's date is ${today}. ${baseSystem}${langInstruction}${sharelineInstruction}`;
+
+  // Best-effort extended thinking for providers without native thinking stream output.
+  if (opts?.extendedThinking?.enabled && (provider === "xai" || provider === "openai")) {
+    systemPrompt += " Before your final answer, include a clearly marked 'REASONING:' section that concisely explains your analysis steps and key checks.";
+  }
 
   const analysisInstruction = customPrompt
     ? customPrompt
@@ -967,14 +997,15 @@ async function handleAnalyzeStream(port, message) {
       page = await extractPageContent();
     }
 
-    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings);
+    const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
+    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings, settings.provider, opts);
     const messages = buildMessages(systemPrompt, userPrompt);
 
     port.postMessage({ type: "start", provider: settings.provider, model: settings.model, pageTitle: page.title });
 
     const result = await callProviderStream(
       settings.provider, settings.apiKey, settings.model, messages,
-      { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking },
+      opts,
       (chunk) => { try { port.postMessage({ type: "chunk", text: chunk }); } catch(e) {} },
       (thinking) => { try { port.postMessage({ type: "thinking", text: thinking }); } catch(e) {} }
     );
@@ -1063,14 +1094,15 @@ async function handleCompareStream(port, message) {
     for (const providerKey of providers) {
       try {
         const settings = await getProviderSettings(providerKey);
-        const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings);
+        const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
+        const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings, settings.provider, opts);
         const msgs = buildMessages(systemPrompt, userPrompt);
 
         port.postMessage({ type: "compareStart", provider: providerKey, model: settings.model });
 
         const result = await callProviderStream(
           settings.provider, settings.apiKey, settings.model, msgs,
-          { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking },
+          opts,
           (chunk) => { try { port.postMessage({ type: "compareChunk", provider: providerKey, text: chunk }); } catch(e) {} },
           (thinking) => { try { port.postMessage({ type: "compareThinking", provider: providerKey, text: thinking }); } catch(e) {} }
         );
@@ -1244,12 +1276,13 @@ async function handleAnalyze(message) {
   try {
     const settings = await getProviderSettings(message.provider, message.analysisType);
     const page = await extractPageContent();
-    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings);
+    const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
+    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings, settings.provider, opts);
     const messages = buildMessages(systemPrompt, userPrompt);
 
     const result = await callProvider(
       settings.provider, settings.apiKey, settings.model, messages,
-      { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking }
+      opts
     );
 
     // Save to history
@@ -1378,13 +1411,14 @@ async function handleCompareInTab(message) {
 
 async function streamAnalysisToStorage(resultId, page, message, settings, presetLabel) {
   try {
-    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings);
+    const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
+    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings, settings.provider, opts);
     const messages = buildMessages(systemPrompt, userPrompt);
 
     let streamedContent = "";
     const result = await callProviderStream(
       settings.provider, settings.apiKey, settings.model, messages,
-      { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking },
+      opts,
       async (chunk) => {
         streamedContent += chunk;
         await browser.storage.local.set({
@@ -1656,14 +1690,15 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
       page = await extractFrameContent(tab.id, info.frameId);
     }
 
-    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, presetKey, null, settings);
+    const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
+    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, presetKey, null, settings, settings.provider, opts);
     const messages = buildMessages(systemPrompt, userPrompt);
 
     // Stream to storage for results page
     let streamedContent = "";
     const result = await callProviderStream(
       settings.provider, settings.apiKey, settings.model, messages,
-      { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking },
+      opts,
       async (chunk) => {
         streamedContent += chunk;
         await browser.storage.local.set({
@@ -1741,13 +1776,14 @@ browser.commands.onCommand.addListener(async (command) => {
     try {
       const settings = await getProviderSettings();
       const page = await extractPageContent(tab.id);
-      const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, "summary", null, settings);
+      const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
+      const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, "summary", null, settings, settings.provider, opts);
       const messages = buildMessages(systemPrompt, userPrompt);
 
       let streamedContent = "";
       const result = await callProviderStream(
         settings.provider, settings.apiKey, settings.model, messages,
-        { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort },
+        opts,
         async (chunk) => {
           streamedContent += chunk;
           await browser.storage.local.set({
@@ -1789,13 +1825,14 @@ browser.commands.onCommand.addListener(async (command) => {
     try {
       const settings = await getProviderSettings();
       const page = { title: tab.title, url: tab.url, description: "", text: selection };
-      const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, "summary", null, settings);
+      const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
+      const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, "summary", null, settings, settings.provider, opts);
       const messages = buildMessages(systemPrompt, userPrompt);
 
       let streamedContent = "";
       const result = await callProviderStream(
         settings.provider, settings.apiKey, settings.model, messages,
-        { maxTokens: settings.maxTokens, temperature: settings.temperature },
+        opts,
         async (chunk) => {
           streamedContent += chunk;
           await browser.storage.local.set({
@@ -1875,13 +1912,14 @@ browser.webNavigation.onCompleted.addListener(async (details) => {
     try {
       const settings = await getProviderSettings(rule.provider || null);
       const page = await extractPageContent(details.tabId);
-      const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, presetKey, null, settings);
+      const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
+      const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, presetKey, null, settings, settings.provider, opts);
       const messages = buildMessages(systemPrompt, userPrompt);
 
       let streamedContent = "";
       const result = await callProviderStream(
         settings.provider, settings.apiKey, settings.model, messages,
-        { maxTokens: settings.maxTokens, temperature: settings.temperature },
+        opts,
         async (chunk) => {
           streamedContent += chunk;
           await browser.storage.local.set({
@@ -2540,9 +2578,10 @@ Summarize the key differences in 2-4 bullet points.`;
         try {
           const settings = await getProviderSettings(null, monitor.analysisPreset);
           const page = { url: monitor.url, title: monitor.title, text: newText.slice(0, settings.maxInputChars || 100000) };
-          const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, monitor.analysisPreset, null, settings);
+          const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
+          const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, monitor.analysisPreset, null, settings, settings.provider, opts);
           const msgs = buildMessages(systemPrompt, userPrompt);
-          const result = await callProvider(settings.provider, settings.apiKey, settings.model, msgs, { maxTokens: settings.maxTokens || 2048, temperature: settings.temperature || 0.3 });
+          const result = await callProvider(settings.provider, settings.apiKey, settings.model, msgs, opts);
 
           // Store the analysis result
           const resultId = `monitor-analysis-${monitor.id}-${Date.now()}`;

@@ -131,6 +131,9 @@ const el = {
   showBadge: document.getElementById("show-badge"),
   responseLanguage: document.getElementById("response-language"),
   reasoningEffort: document.getElementById("reasoning-effort"),
+  openaiReasoningEffort: document.getElementById("openai-reasoning-effort"),
+  openaiReasoningHint: document.getElementById("openai-reasoning-hint"),
+  openaiReasoningCard: document.getElementById("openai-reasoning-card"),
   multiAgentCard: document.getElementById("multi-agent-card"),
   tabList: document.getElementById("prompt-tab-list"),
   promptProvider: document.getElementById("prompt-provider"),
@@ -145,6 +148,7 @@ const el = {
   // Extended thinking
   extendedThinkingEnabled: document.getElementById("extended-thinking-enabled"),
   thinkingBudget: document.getElementById("thinking-budget"),
+  thinkingBudgetHint: document.getElementById("thinking-budget-hint"),
   // Auto-analyze
   autoRulesList: document.getElementById("auto-rules-list"),
   ruleUrl: document.getElementById("rule-url"),
@@ -209,7 +213,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderAutoRules();
   renderMonitors();
   attachListeners();
-  updateMultiAgentVisibility();
+  updateReasoningControls();
   loadVersion();
   initMainTabs();
   initHelpBackToTop();
@@ -235,6 +239,7 @@ async function loadAllSettings() {
     maxInputChars: 100000,
     temperature: 0.3,
     reasoningEffort: "medium",
+    openaiReasoningEffort: "medium",
     customPresets: {},
     extendedThinking: { enabled: false, budgetTokens: 10000 },
     autoAnalyzeRules: [],
@@ -256,8 +261,9 @@ async function loadAllSettings() {
   el.temperature.value = settings.temperature;
   el.tempValue.textContent = settings.temperature;
   el.showBadge.checked = settings.showBadge !== false;
-  el.responseLanguage.value = settings.responseLanguage || "auto";
+  el.responseLanguage.value = settings.responseLanguage ?? "auto";
   el.reasoningEffort.value = settings.reasoningEffort;
+  el.openaiReasoningEffort.value = settings.openaiReasoningEffort || "medium";
   el.extendedThinkingEnabled.checked = settings.extendedThinking.enabled;
   el.thinkingBudget.value = settings.extendedThinking.budgetTokens || 10000;
   el.maxHistory.value = settings.maxHistorySize;
@@ -390,6 +396,7 @@ async function saveAllSettings() {
     maxInputChars: parseInt(el.maxInputChars.value, 10) || 100000,
     temperature: parseFloat(el.temperature.value),
     reasoningEffort: el.reasoningEffort.value,
+    openaiReasoningEffort: el.openaiReasoningEffort.value,
     customPresets,
     extendedThinking: {
       enabled: el.extendedThinkingEnabled.checked,
@@ -409,6 +416,7 @@ function saveProviderConfig() {
     model: el.providerModel.value
   };
   updateProviderTabIndicators();
+  updateReasoningControls();
   scheduleSave();
 }
 
@@ -542,7 +550,7 @@ function attachListeners() {
   });
 
   el.defaultProvider.addEventListener("change", () => {
-    updateMultiAgentVisibility();
+    updateReasoningControls();
     scheduleSave();
   });
 
@@ -555,6 +563,7 @@ function attachListeners() {
   el.maxTokens.addEventListener("input", scheduleSave);
   el.maxInputChars.addEventListener("input", scheduleSave);
   el.reasoningEffort.addEventListener("change", scheduleSave);
+  el.openaiReasoningEffort.addEventListener("change", scheduleSave);
 
   el.temperature.addEventListener("input", () => {
     el.tempValue.textContent = el.temperature.value;
@@ -562,7 +571,10 @@ function attachListeners() {
   });
 
   // Extended thinking
-  el.extendedThinkingEnabled.addEventListener("change", scheduleSave);
+  el.extendedThinkingEnabled.addEventListener("change", () => {
+    updateReasoningControls();
+    scheduleSave();
+  });
   el.thinkingBudget.addEventListener("input", scheduleSave);
 
   // History
@@ -680,7 +692,7 @@ async function exportSettingsToFile() {
   const exported = {};
   const keepKeys = [
     "defaultProvider", "providers", "maxTokens", "maxInputChars", "temperature",
-    "reasoningEffort", "customPresets", "extendedThinking", "autoAnalyzeRules", "maxHistorySize"
+    "reasoningEffort", "openaiReasoningEffort", "customPresets", "extendedThinking", "autoAnalyzeRules", "maxHistorySize"
   ];
   for (const key of keepKeys) {
     if (data[key] !== undefined) exported[key] = data[key];
@@ -1154,6 +1166,45 @@ function updateMultiAgentVisibility() {
   const isDefault = el.defaultProvider.value === "xai";
   const isMultiAgent = isDefault && xaiModel.includes("multi-agent");
   el.multiAgentCard.style.display = isMultiAgent ? "" : "none";
+}
+
+function isOpenaiReasoningModel(model) {
+  return typeof model === "string" && /^o\d/i.test(model);
+}
+
+function updateThinkingBudgetState() {
+  const isClaudeDefault = el.defaultProvider.value === "anthropic";
+  el.thinkingBudget.disabled = !isClaudeDefault;
+  if (el.thinkingBudgetHint) {
+    el.thinkingBudgetHint.textContent = isClaudeDefault
+      ? "Claude native thinking token budget."
+      : "Only used when the default provider is Claude.";
+  }
+}
+
+function updateOpenaiReasoningVisibility() {
+  const isOpenaiDefault = el.defaultProvider.value === "openai";
+  const openaiModel = providers.openai?.model || "";
+  const supportsReasoning = isOpenaiReasoningModel(openaiModel);
+
+  el.openaiReasoningCard.style.display = isOpenaiDefault ? "" : "none";
+  el.openaiReasoningEffort.disabled = !supportsReasoning;
+
+  if (el.openaiReasoningHint) {
+    if (!isOpenaiDefault) {
+      el.openaiReasoningHint.textContent = "Available when OpenAI is the default provider.";
+    } else if (!supportsReasoning) {
+      el.openaiReasoningHint.textContent = "Select an OpenAI o-series model (o3/o3-mini/o4-mini) to use reasoning effort.";
+    } else {
+      el.openaiReasoningHint.textContent = "Used when Extended Thinking is enabled with OpenAI o-series models.";
+    }
+  }
+}
+
+function updateReasoningControls() {
+  updateMultiAgentVisibility();
+  updateThinkingBudgetState();
+  updateOpenaiReasoningVisibility();
 }
 
 // ──────────────────────────────────────────────
