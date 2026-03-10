@@ -81,7 +81,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const prov = analysisProvider || "";
     const provNames = { xai: "Grok", openai: "ChatGPT", anthropic: "Claude", gemini: "Gemini" };
     const name = provNames[prov] || prov;
-    return name ? `Argus 360 w/ ${name}` : "Argus 360";
+    return name ? `Argus w/ ${name}` : "Argus";
   }
 
   document.getElementById("share-x").addEventListener("click", () => {
