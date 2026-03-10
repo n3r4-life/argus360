@@ -29,6 +29,8 @@ const elements = {
 let rawMarkdown = "";
 let pageTitle = "";
 let resultId = null;
+let analysisProvider = "";
+let analysisModel = "";
 
 document.addEventListener("DOMContentLoaded", () => {
   const params = new URLSearchParams(window.location.search);
@@ -62,8 +64,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Share buttons
   function getShareSnippet() {
-    const plain = rawMarkdown.replace(/[#*_`>\[\]()!]/g, "").trim();
-    return plain.length > 200 ? plain.slice(0, 197) + "..." : plain;
+    // Strip markdown formatting, headings, bullets, links, labels
+    const lines = rawMarkdown.split("\n")
+      .map(l => l.replace(/^#{1,6}\s+/g, "").replace(/\*\*|__/g, "").replace(/[*_`>\[\]()!]/g, "").replace(/^[-•]\s+/g, "").trim())
+      .filter(l => l.length > 30 && !/^(summary|source|url|article|publication|http)/i.test(l));
+    const snippet = lines.slice(0, 2).join(" ").trim();
+    return snippet.length > 180 ? snippet.slice(0, 177) + "..." : snippet;
   }
 
   function getShareUrl() {
@@ -73,10 +79,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("share-x").addEventListener("click", () => {
     const url = getShareUrl();
-    const snippet = getShareSnippet();
+    const title = pageTitle || "this page";
     const text = url
-      ? `${snippet}\n\nAnalyzed with Argus 360\n${url}`
-      : `${snippet}\n\nAnalyzed with Argus 360`;
+      ? `${title}\n\n${getShareSnippet()}\n\n${url}`
+      : `${title}\n\n${getShareSnippet()}`;
     window.open(`https://x.com/intent/post?text=${encodeURIComponent(text)}`, "_blank");
   });
 
@@ -104,6 +110,51 @@ document.addEventListener("DOMContentLoaded", () => {
       ? `${getShareSnippet()}\n\nSource: ${url}\n\nAnalyzed with Argus 360`
       : `${getShareSnippet()}\n\nAnalyzed with Argus 360`;
     window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+  });
+
+  // Save to Project
+  const projBtn = document.getElementById("save-to-project");
+  const projPicker = document.getElementById("proj-picker");
+
+  projBtn.addEventListener("click", async () => {
+    const resp = await browser.runtime.sendMessage({ action: "getProjects" });
+    if (!resp || !resp.success) return;
+
+    projPicker.innerHTML = "";
+    if (resp.projects.length === 0) {
+      projPicker.innerHTML = `<div class="proj-picker-empty">No projects yet. Create one in the Console.</div>`;
+    } else {
+      for (const proj of resp.projects) {
+        const btn = document.createElement("button");
+        btn.className = "proj-picker-item";
+        btn.innerHTML = `<span class="proj-color-dot" style="background:${proj.color || '#e94560'};width:8px;height:8px;border-radius:50%;display:inline-block;"></span> ${proj.name}`;
+        btn.addEventListener("click", async () => {
+          const url = elements.pageUrl.href !== "#" ? elements.pageUrl.href : "";
+          await browser.runtime.sendMessage({
+            action: "addProjectItem",
+            projectId: proj.id,
+            item: {
+              type: "analysis",
+              refId: resultId,
+              url,
+              title: pageTitle,
+              summary: rawMarkdown.slice(0, 500)
+            }
+          });
+          projPicker.classList.add("hidden");
+          projBtn.textContent = "Saved!";
+          setTimeout(() => { projBtn.textContent = "Save to Project"; }, 1500);
+        });
+        projPicker.appendChild(btn);
+      }
+    }
+    projPicker.classList.toggle("hidden");
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!projBtn.contains(e.target) && !projPicker.contains(e.target)) {
+      projPicker.classList.add("hidden");
+    }
   });
 
   elements.thinkingToggle.addEventListener("click", () => {
@@ -257,6 +308,9 @@ function showResult(data) {
     elements.thinkingSection.classList.remove("hidden");
     elements.thinkingContent.textContent = data.thinking;
   }
+
+  if (data.provider) analysisProvider = data.provider;
+  if (data.model) analysisModel = data.model;
 
   let meta = "";
   if (data.provider) meta += data.provider;

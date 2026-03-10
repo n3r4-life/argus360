@@ -39,6 +39,14 @@
 - Full-text search, tag cloud, and category filtering
 - **Analyze collected bookmarks** — select multiple bookmarks and synthesize them into a research report with footnotes and source citations
 
+### Projects
+- Organize analyses, bookmarks, and notes into **project folders**
+- **Star/favorite** projects for quick access
+- **Add notes and URLs** directly to any project
+- **Save to Project** from any results page or bookmark
+- **Export projects** as JSON for backup or sharing
+- Color-coded projects with descriptions
+
 ### Page Monitoring
 - Monitor any page for content changes
 - Configurable check intervals (15 min to daily)

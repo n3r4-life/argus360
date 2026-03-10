@@ -1193,6 +1193,9 @@ function switchMainTab(tabName, tabs, panels) {
   if (tabName === "bookmarks" && !bmState.initialized) {
     initBookmarks();
   }
+  if (tabName === "projects" && !projState.initialized) {
+    initProjects();
+  }
 }
 
 // ──────────────────────────────────────────────
@@ -1382,7 +1385,45 @@ function bmRenderBookmarks(bookmarks, total) {
     deleteBtn.style.color = "var(--error)";
     deleteBtn.textContent = "Delete";
     deleteBtn.addEventListener("click", () => bmDeleteBookmark(bm.id));
+    const projBtn = document.createElement("button");
+    projBtn.className = "btn btn-sm btn-secondary";
+    projBtn.textContent = "+ Project";
+    projBtn.addEventListener("click", async () => {
+      const resp = await browser.runtime.sendMessage({ action: "getProjects" });
+      if (!resp || !resp.success || resp.projects.length === 0) {
+        projBtn.textContent = "No projects";
+        setTimeout(() => { projBtn.textContent = "+ Project"; }, 1500);
+        return;
+      }
+      // Simple dropdown
+      let dd = projBtn.parentElement.querySelector(".bm-proj-dropdown");
+      if (dd) { dd.remove(); return; }
+      dd = document.createElement("div");
+      dd.className = "bm-proj-dropdown";
+      dd.style.cssText = "position:absolute;top:100%;right:0;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);min-width:180px;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,0.3);";
+      for (const proj of resp.projects) {
+        const opt = document.createElement("button");
+        opt.style.cssText = "display:flex;align-items:center;gap:6px;width:100%;padding:8px 12px;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text-primary);font-size:12px;cursor:pointer;text-align:left;";
+        opt.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:${proj.color || '#e94560'};display:inline-block;"></span>${proj.name}`;
+        opt.addEventListener("click", async () => {
+          await browser.runtime.sendMessage({
+            action: "addProjectItem",
+            projectId: proj.id,
+            item: { type: "bookmark", refId: bm.id, url: bm.url, title: bm.title, summary: bm.summary || "", tags: bm.tags || [] }
+          });
+          dd.remove();
+          projBtn.textContent = "Added!";
+          setTimeout(() => { projBtn.textContent = "+ Project"; }, 1500);
+        });
+        dd.appendChild(opt);
+      }
+      projBtn.parentElement.style.position = "relative";
+      projBtn.parentElement.appendChild(dd);
+      const dismiss = (e) => { if (!dd.contains(e.target) && e.target !== projBtn) { dd.remove(); document.removeEventListener("click", dismiss); } };
+      setTimeout(() => document.addEventListener("click", dismiss), 0);
+    });
     actions.appendChild(editBtn);
+    actions.appendChild(projBtn);
     actions.appendChild(deleteBtn);
     header.appendChild(headerLeft);
     header.appendChild(actions);
@@ -1534,4 +1575,319 @@ async function bmAnalyzeSelected() {
     bmEl.analyzeSelected.disabled = false;
     bmEl.analyzeSelected.textContent = `Analyze ${bmState.selected.size} Bookmarks`;
   }
+}
+
+// ──────────────────────────────────────────────
+// Projects
+// ──────────────────────────────────────────────
+const projState = {
+  initialized: false,
+  projects: [],
+  activeProjectId: null,
+  editingProjectId: null,
+  editingItemId: null,
+  query: ""
+};
+
+const projEl = {};
+
+function initProjects() {
+  projState.initialized = true;
+  projEl.search = document.getElementById("proj-search");
+  projEl.sidebar = document.getElementById("proj-list");
+  projEl.main = document.getElementById("proj-main");
+  projEl.empty = document.getElementById("proj-empty");
+  projEl.detail = document.getElementById("proj-detail");
+  projEl.detailHeader = document.getElementById("proj-detail-header");
+  projEl.itemsList = document.getElementById("proj-items-list");
+  projEl.modal = document.getElementById("proj-modal");
+  projEl.modalTitle = document.getElementById("proj-modal-title");
+  projEl.modalName = document.getElementById("proj-modal-name");
+  projEl.modalDesc = document.getElementById("proj-modal-desc");
+  projEl.modalColor = document.getElementById("proj-modal-color");
+  projEl.itemModal = document.getElementById("proj-item-modal");
+  projEl.itemNotes = document.getElementById("proj-item-notes");
+
+  document.getElementById("proj-new").addEventListener("click", () => projOpenModal());
+  document.getElementById("proj-export-all").addEventListener("click", projExportAll);
+  document.getElementById("proj-add-note").addEventListener("click", () => projAddItem("note"));
+  document.getElementById("proj-add-url").addEventListener("click", () => projAddItem("url"));
+  document.getElementById("proj-export").addEventListener("click", () => projExportOne(projState.activeProjectId));
+  document.getElementById("proj-modal-save").addEventListener("click", projSaveModal);
+  document.getElementById("proj-modal-cancel").addEventListener("click", () => projEl.modal.classList.add("hidden"));
+  document.getElementById("proj-item-save").addEventListener("click", projSaveItemNotes);
+  document.getElementById("proj-item-cancel").addEventListener("click", () => projEl.itemModal.classList.add("hidden"));
+
+  projEl.search.addEventListener("input", () => {
+    projState.query = projEl.search.value.trim().toLowerCase();
+    projRenderSidebar();
+  });
+
+  projLoadProjects();
+}
+
+async function projLoadProjects() {
+  const resp = await browser.runtime.sendMessage({ action: "getProjects" });
+  if (resp && resp.success) {
+    projState.projects = resp.projects;
+    projRenderSidebar();
+    if (projState.activeProjectId) {
+      const still = projState.projects.find(p => p.id === projState.activeProjectId);
+      if (still) projSelectProject(still.id);
+      else projShowEmpty();
+    }
+  }
+}
+
+function projRenderSidebar() {
+  let projects = projState.projects;
+  if (projState.query) {
+    projects = projects.filter(p =>
+      p.name.toLowerCase().includes(projState.query) ||
+      (p.description || "").toLowerCase().includes(projState.query)
+    );
+  }
+  // Starred first
+  projects.sort((a, b) => (b.starred ? 1 : 0) - (a.starred ? 1 : 0));
+
+  if (projects.length === 0) {
+    projEl.sidebar.innerHTML = `<p class="info-text" style="padding:16px;text-align:center;">${projState.query ? "No matching projects." : "No projects yet. Click \\"+ New Project\\" to get started."}</p>`;
+    return;
+  }
+
+  projEl.sidebar.innerHTML = "";
+  for (const proj of projects) {
+    const item = document.createElement("div");
+    item.className = "proj-list-item" + (proj.id === projState.activeProjectId ? " active" : "");
+    item.innerHTML = `
+      <span class="proj-color-dot" style="background:${proj.color || '#e94560'}"></span>
+      <span class="proj-list-name">${escHtml(proj.name)}</span>
+      <span class="proj-list-count">${proj.items.length}</span>
+      <button class="proj-star-btn ${proj.starred ? 'starred' : ''}" data-id="${proj.id}" title="Star">${proj.starred ? '\u2605' : '\u2606'}</button>
+    `;
+    item.addEventListener("click", (e) => {
+      if (e.target.classList.contains("proj-star-btn")) return;
+      projSelectProject(proj.id);
+    });
+    item.querySelector(".proj-star-btn").addEventListener("click", () => projToggleStar(proj.id));
+    projEl.sidebar.appendChild(item);
+  }
+}
+
+function escHtml(str) {
+  const d = document.createElement("div");
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function projShowEmpty() {
+  projState.activeProjectId = null;
+  projEl.empty.classList.remove("hidden");
+  projEl.detail.classList.add("hidden");
+}
+
+function projSelectProject(id) {
+  projState.activeProjectId = id;
+  projEl.empty.classList.add("hidden");
+  projEl.detail.classList.remove("hidden");
+  projRenderSidebar();
+  projRenderDetail();
+}
+
+function projRenderDetail() {
+  const proj = projState.projects.find(p => p.id === projState.activeProjectId);
+  if (!proj) return projShowEmpty();
+
+  projEl.detailHeader.innerHTML = `
+    <div class="proj-detail-title">
+      <span class="proj-color-dot" style="background:${proj.color || '#e94560'};width:14px;height:14px;"></span>
+      <h3>${escHtml(proj.name)}</h3>
+      <button class="proj-star-btn ${proj.starred ? 'starred' : ''}" id="proj-detail-star" title="Star">${proj.starred ? '\u2605' : '\u2606'}</button>
+    </div>
+    ${proj.description ? `<p class="proj-detail-desc">${escHtml(proj.description)}</p>` : ""}
+    <div class="proj-detail-actions">
+      <button class="btn btn-secondary btn-sm" id="proj-edit-btn">Edit</button>
+      <button class="btn btn-secondary btn-sm" id="proj-delete-btn">Delete</button>
+      <span style="font-size:11px;color:var(--text-muted);margin-left:auto;">${proj.items.length} items &middot; Updated ${new Date(proj.updatedAt).toLocaleDateString()}</span>
+    </div>
+  `;
+
+  document.getElementById("proj-detail-star").addEventListener("click", () => projToggleStar(proj.id));
+  document.getElementById("proj-edit-btn").addEventListener("click", () => projOpenModal(proj));
+  document.getElementById("proj-delete-btn").addEventListener("click", () => projDelete(proj.id));
+
+  projRenderItems(proj);
+}
+
+function projRenderItems(proj) {
+  if (proj.items.length === 0) {
+    projEl.itemsList.innerHTML = `<p class="info-text" style="text-align:center;padding:32px;">No items in this project yet. Add analyses from results pages, bookmarks, notes, or URLs.</p>`;
+    return;
+  }
+
+  projEl.itemsList.innerHTML = "";
+  for (const item of proj.items) {
+    const card = document.createElement("div");
+    card.className = "proj-item-card";
+    const titleHtml = item.url
+      ? `<a href="${escHtml(item.url)}" target="_blank">${escHtml(item.title || item.url)}</a>`
+      : escHtml(item.title || "Untitled");
+
+    card.innerHTML = `
+      <div class="proj-item-body">
+        <div class="proj-item-title">${titleHtml}</div>
+        ${item.url ? `<div class="proj-item-url">${escHtml(item.url)}</div>` : ""}
+        ${item.summary ? `<div class="proj-item-summary">${escHtml(item.summary.slice(0, 200))}</div>` : ""}
+        ${item.notes ? `<div class="proj-item-notes">${escHtml(item.notes)}</div>` : ""}
+        <div class="proj-item-meta">
+          <span class="proj-type-badge ${item.type}">${item.type}</span>
+          <span>${new Date(item.addedAt).toLocaleDateString()}</span>
+        </div>
+      </div>
+      <div class="proj-item-actions">
+        <button class="proj-item-note-btn" title="Edit notes">Notes</button>
+        <button class="proj-item-remove-btn" title="Remove from project">Remove</button>
+      </div>
+    `;
+
+    card.querySelector(".proj-item-note-btn").addEventListener("click", () => {
+      projState.editingItemId = item.id;
+      projEl.itemNotes.value = item.notes || "";
+      projEl.itemModal.classList.remove("hidden");
+      projEl.itemNotes.focus();
+    });
+
+    card.querySelector(".proj-item-remove-btn").addEventListener("click", async () => {
+      await browser.runtime.sendMessage({ action: "removeProjectItem", projectId: proj.id, itemId: item.id });
+      await projLoadProjects();
+      projSelectProject(proj.id);
+    });
+
+    projEl.itemsList.appendChild(card);
+  }
+}
+
+function projOpenModal(existing) {
+  projState.editingProjectId = existing ? existing.id : null;
+  projEl.modalTitle.textContent = existing ? "Edit Project" : "New Project";
+  projEl.modalName.value = existing ? existing.name : "";
+  projEl.modalDesc.value = existing ? (existing.description || "") : "";
+  projEl.modalColor.value = existing ? (existing.color || "#e94560") : "#e94560";
+  projEl.modal.classList.remove("hidden");
+  projEl.modalName.focus();
+}
+
+async function projSaveModal() {
+  const name = projEl.modalName.value.trim();
+  if (!name) return;
+
+  if (projState.editingProjectId) {
+    await browser.runtime.sendMessage({
+      action: "updateProject",
+      projectId: projState.editingProjectId,
+      name,
+      description: projEl.modalDesc.value.trim(),
+      color: projEl.modalColor.value
+    });
+  } else {
+    const resp = await browser.runtime.sendMessage({
+      action: "createProject",
+      name,
+      description: projEl.modalDesc.value.trim(),
+      color: projEl.modalColor.value
+    });
+    if (resp && resp.success) {
+      projState.activeProjectId = resp.project.id;
+    }
+  }
+
+  projEl.modal.classList.add("hidden");
+  await projLoadProjects();
+  if (projState.activeProjectId) projSelectProject(projState.activeProjectId);
+}
+
+async function projSaveItemNotes() {
+  if (!projState.activeProjectId || !projState.editingItemId) return;
+  await browser.runtime.sendMessage({
+    action: "updateProjectItem",
+    projectId: projState.activeProjectId,
+    itemId: projState.editingItemId,
+    notes: projEl.itemNotes.value
+  });
+  projEl.itemModal.classList.add("hidden");
+  await projLoadProjects();
+  projSelectProject(projState.activeProjectId);
+}
+
+async function projToggleStar(id) {
+  const proj = projState.projects.find(p => p.id === id);
+  if (!proj) return;
+  await browser.runtime.sendMessage({ action: "updateProject", projectId: id, starred: !proj.starred });
+  await projLoadProjects();
+  if (projState.activeProjectId) projSelectProject(projState.activeProjectId);
+}
+
+async function projDelete(id) {
+  if (!confirm("Delete this project and all its items?")) return;
+  await browser.runtime.sendMessage({ action: "deleteProject", projectId: id });
+  projState.activeProjectId = null;
+  await projLoadProjects();
+  projShowEmpty();
+}
+
+async function projAddItem(type) {
+  if (!projState.activeProjectId) return;
+  const title = type === "note" ? "New Note" : "";
+  const item = { type, title, notes: "", url: "" };
+
+  if (type === "url") {
+    const url = prompt("Enter a URL:");
+    if (!url) return;
+    item.url = url;
+    item.title = url;
+  }
+
+  await browser.runtime.sendMessage({
+    action: "addProjectItem",
+    projectId: projState.activeProjectId,
+    item
+  });
+  await projLoadProjects();
+  projSelectProject(projState.activeProjectId);
+
+  // Auto-open notes editor for new notes
+  if (type === "note") {
+    const proj = projState.projects.find(p => p.id === projState.activeProjectId);
+    if (proj && proj.items.length > 0) {
+      const newItem = proj.items[0];
+      projState.editingItemId = newItem.id;
+      projEl.itemNotes.value = "";
+      projEl.itemModal.classList.remove("hidden");
+      projEl.itemNotes.focus();
+    }
+  }
+}
+
+async function projExportOne(id) {
+  const resp = await browser.runtime.sendMessage({ action: "exportProject", projectId: id });
+  if (!resp || !resp.success) return;
+  const blob = new Blob([JSON.stringify(resp.project, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${resp.project.name.replace(/[^a-z0-9]/gi, "_")}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function projExportAll() {
+  const resp = await browser.runtime.sendMessage({ action: "getProjects" });
+  if (!resp || !resp.success || resp.projects.length === 0) return;
+  const blob = new Blob([JSON.stringify(resp.projects, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "argus-projects.json";
+  a.click();
+  URL.revokeObjectURL(url);
 }

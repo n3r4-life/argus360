@@ -30,6 +30,10 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
           <span>Bookmarks</span>
         </button>
+        <button class="nav-tab" data-tab="projects">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span>Projects</span>
+        </button>
         <button class="nav-tab" data-tab="monitors">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           <span>Monitors</span>
@@ -410,6 +414,86 @@
     </div>
 
     <!-- ═══════════════════════════════════════════ -->
+    <!-- TAB: Projects                                -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="projects">
+
+      <section class="card">
+        <h2 class="card-title">Projects</h2>
+        <div class="card-body">
+          <p class="info-text">Organize your analyses, bookmarks, and notes into projects. Save to a project from any results page or bookmark.</p>
+
+          <div class="proj-toolbar">
+            <input type="text" id="proj-search" class="proj-search" placeholder="Search projects...">
+            <button id="proj-new" class="btn btn-secondary btn-sm">+ New Project</button>
+            <button id="proj-export-all" class="btn btn-secondary btn-sm">Export All</button>
+          </div>
+
+          <div class="proj-layout">
+            <aside class="proj-sidebar" id="proj-sidebar">
+              <div class="proj-list" id="proj-list">
+                <p class="info-text" style="padding:16px;text-align:center;">No projects yet. Click "+ New Project" to get started.</p>
+              </div>
+            </aside>
+            <div class="proj-main" id="proj-main">
+              <div class="proj-empty" id="proj-empty">
+                <p>Select a project from the sidebar, or create a new one.</p>
+              </div>
+              <div class="proj-detail hidden" id="proj-detail">
+                <div class="proj-detail-header" id="proj-detail-header"></div>
+                <div class="proj-items-toolbar">
+                  <button id="proj-add-note" class="btn btn-secondary btn-sm">+ Add Note</button>
+                  <button id="proj-add-url" class="btn btn-secondary btn-sm">+ Add URL</button>
+                  <button id="proj-export" class="btn btn-secondary btn-sm">Export Project</button>
+                </div>
+                <div class="proj-items-list" id="proj-items-list"></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Create/Edit Project Modal -->
+      <div class="proj-modal-overlay hidden" id="proj-modal">
+        <div class="proj-modal">
+          <h3 id="proj-modal-title">New Project</h3>
+          <div class="form-group">
+            <label for="proj-modal-name">Project Name</label>
+            <input type="text" id="proj-modal-name" placeholder="My Research Project">
+          </div>
+          <div class="form-group">
+            <label for="proj-modal-desc">Description <span class="hint" style="display:inline;margin:0;">(optional)</span></label>
+            <textarea id="proj-modal-desc" rows="2" placeholder="What's this project about?"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="proj-modal-color">Color</label>
+            <input type="color" id="proj-modal-color" value="#e94560" style="width:40px;height:30px;border:none;cursor:pointer;">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px;">
+            <button id="proj-modal-save" class="btn btn-secondary btn-sm">Save</button>
+            <button id="proj-modal-cancel" class="btn btn-secondary btn-sm">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Edit Item Notes Modal -->
+      <div class="proj-modal-overlay hidden" id="proj-item-modal">
+        <div class="proj-modal">
+          <h3>Edit Notes</h3>
+          <div class="form-group">
+            <textarea id="proj-item-notes" rows="5" placeholder="Your notes..."></textarea>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px;">
+            <button id="proj-item-save" class="btn btn-secondary btn-sm">Save</button>
+            <button id="proj-item-cancel" class="btn btn-secondary btn-sm">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
     <!-- TAB: Monitors                               -->
     <!-- ═══════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="monitors">
@@ -706,6 +790,7 @@
         <a href="#help-analysis-modes">Analysis Modes</a>
         <a href="#help-presets">Presets</a>
         <a href="#help-bookmarks">Bookmarks</a>
+        <a href="#help-projects">Projects</a>
         <a href="#help-monitoring">Monitoring</a>
         <a href="#help-feeds">RSS Feeds</a>
         <a href="#help-archive">Redirects</a>
@@ -918,6 +1003,31 @@
             <li>Click <strong>"Analyze Selected"</strong></li>
             <li>A research report is generated with cross-references and source citations</li>
           </ol>
+        </div>
+      </section>
+
+      <!-- Projects -->
+      <section class="card" id="help-projects">
+        <h2 class="card-title">Projects</h2>
+        <div class="card-body help-content">
+          <p>Projects let you organize your research into folders. Collect analyses, bookmarks, notes, and URLs in one place.</p>
+
+          <h3>Creating a Project</h3>
+          <ol>
+            <li>Go to the <strong>Projects</strong> tab and click <strong>"+ New Project"</strong></li>
+            <li>Give it a name, optional description, and pick a color</li>
+            <li>Click <strong>Save</strong></li>
+          </ol>
+
+          <h3>Adding Items</h3>
+          <ul>
+            <li><strong>From results page:</strong> Click <strong>"Save to Project"</strong> in the toolbar after any analysis</li>
+            <li><strong>From bookmarks:</strong> Click <strong>"+ Project"</strong> on any bookmark card</li>
+            <li><strong>Notes &amp; URLs:</strong> Add freeform notes or URLs directly from the project view</li>
+          </ul>
+
+          <h3>Managing Projects</h3>
+          <p>Star projects to pin them to the top. Add notes to individual items. Export a single project or all projects as JSON.</p>
         </div>
       </section>
 

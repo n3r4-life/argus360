@@ -27,15 +27,21 @@
 
   <div id="results-container" class="results-container hidden">
     <div class="results-toolbar">
-      <div class="toolbar-right">
+      <div class="toolbar-row">
         <button id="monitor-page" class="btn btn-secondary btn-small" title="Monitor this page for changes">Monitor</button>
         <button id="bookmark-page" class="btn btn-secondary btn-small" title="Smart Bookmark this page">Bookmark</button>
+        <div style="position:relative;display:inline-block;">
+          <button id="save-to-project" class="btn btn-secondary btn-small" title="Save to a Project">Save to Project</button>
+          <div id="proj-picker" class="proj-picker hidden"></div>
+        </div>
         <button id="export-md" class="btn btn-secondary btn-small">Export .md</button>
         <button id="export-html" class="btn btn-secondary btn-small">Export .html</button>
         <button id="export-txt" class="btn btn-secondary btn-small">Export .txt</button>
         <button id="copy-result" class="btn btn-secondary btn-small">Copy Markdown</button>
-        <span class="toolbar-divider"></span>
-        <button id="share-x" class="btn btn-secondary btn-small" title="Share on X / Twitter">Share on X</button>
+      </div>
+      <div class="toolbar-row toolbar-row-share">
+        <span class="toolbar-share-label">Share:</span>
+        <button id="share-x" class="btn btn-secondary btn-small" title="Share on X / Twitter">X</button>
         <button id="share-reddit" class="btn btn-secondary btn-small" title="Share on Reddit">Reddit</button>
         <button id="share-linkedin" class="btn btn-secondary btn-small" title="Share on LinkedIn">LinkedIn</button>
         <button id="share-email" class="btn btn-secondary btn-small" title="Share via Email">Email</button>

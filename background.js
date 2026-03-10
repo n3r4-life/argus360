@@ -1080,6 +1080,15 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "summarizeFeedEntry") return handleSummarizeFeedEntry(message);
   if (message.action === "discoverFeed") return handleDiscoverFeed(message);
   if (message.action === "analyzeBookmarks") return handleAnalyzeBookmarks(message);
+  // Projects
+  if (message.action === "getProjects") return handleGetProjects(message);
+  if (message.action === "createProject") return handleCreateProject(message);
+  if (message.action === "updateProject") return handleUpdateProject(message);
+  if (message.action === "deleteProject") return handleDeleteProject(message);
+  if (message.action === "addProjectItem") return handleAddProjectItem(message);
+  if (message.action === "updateProjectItem") return handleUpdateProjectItem(message);
+  if (message.action === "removeProjectItem") return handleRemoveProjectItem(message);
+  if (message.action === "exportProject") return handleExportProject(message);
   return false;
 });
 
@@ -2972,3 +2981,106 @@ browser.alarms.onAlarm.addListener(async (alarm) => {
     }
   }
 })();
+
+// ══════════════════════════════════════════════════════════════
+// Projects — organize analyses, bookmarks, and notes
+// ══════════════════════════════════════════════════════════════
+
+function genId(prefix) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function handleGetProjects() {
+  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+  return { success: true, projects: argusProjects };
+}
+
+async function handleCreateProject(message) {
+  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+  const project = {
+    id: genId("proj"),
+    name: message.name || "Untitled Project",
+    description: message.description || "",
+    starred: false,
+    color: message.color || "#e94560",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    items: []
+  };
+  argusProjects.unshift(project);
+  await browser.storage.local.set({ argusProjects });
+  return { success: true, project };
+}
+
+async function handleUpdateProject(message) {
+  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+  const idx = argusProjects.findIndex(p => p.id === message.projectId);
+  if (idx === -1) return { success: false, error: "Project not found" };
+  const proj = argusProjects[idx];
+  if (message.name !== undefined) proj.name = message.name;
+  if (message.description !== undefined) proj.description = message.description;
+  if (message.starred !== undefined) proj.starred = message.starred;
+  if (message.color !== undefined) proj.color = message.color;
+  proj.updatedAt = new Date().toISOString();
+  await browser.storage.local.set({ argusProjects });
+  return { success: true, project: proj };
+}
+
+async function handleDeleteProject(message) {
+  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+  const filtered = argusProjects.filter(p => p.id !== message.projectId);
+  await browser.storage.local.set({ argusProjects: filtered });
+  return { success: true };
+}
+
+async function handleAddProjectItem(message) {
+  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+  const proj = argusProjects.find(p => p.id === message.projectId);
+  if (!proj) return { success: false, error: "Project not found" };
+  const item = {
+    id: genId("item"),
+    type: message.item.type || "note",
+    refId: message.item.refId || null,
+    url: message.item.url || "",
+    title: message.item.title || "",
+    summary: (message.item.summary || "").slice(0, 500),
+    notes: message.item.notes || "",
+    tags: message.item.tags || [],
+    addedAt: new Date().toISOString()
+  };
+  proj.items.unshift(item);
+  proj.updatedAt = new Date().toISOString();
+  await browser.storage.local.set({ argusProjects });
+  return { success: true, item };
+}
+
+async function handleUpdateProjectItem(message) {
+  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+  const proj = argusProjects.find(p => p.id === message.projectId);
+  if (!proj) return { success: false, error: "Project not found" };
+  const item = proj.items.find(i => i.id === message.itemId);
+  if (!item) return { success: false, error: "Item not found" };
+  if (message.notes !== undefined) item.notes = message.notes;
+  if (message.tags !== undefined) item.tags = message.tags;
+  if (message.title !== undefined) item.title = message.title;
+  proj.updatedAt = new Date().toISOString();
+  await browser.storage.local.set({ argusProjects });
+  return { success: true, item };
+}
+
+async function handleRemoveProjectItem(message) {
+  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+  const proj = argusProjects.find(p => p.id === message.projectId);
+  if (!proj) return { success: false, error: "Project not found" };
+  proj.items = proj.items.filter(i => i.id !== message.itemId);
+  proj.updatedAt = new Date().toISOString();
+  await browser.storage.local.set({ argusProjects });
+  return { success: true };
+}
+
+async function handleExportProject(message) {
+  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+  const proj = argusProjects.find(p => p.id === message.projectId);
+  if (!proj) return { success: false, error: "Project not found" };
+  return { success: true, project: proj };
+}

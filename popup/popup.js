@@ -224,6 +224,11 @@ function attachEventListeners() {
     window.close();
   });
 
+  document.getElementById("open-projects").addEventListener("click", () => {
+    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#projects") });
+    window.close();
+  });
+
   document.getElementById("open-feeds").addEventListener("click", () => {
     browser.tabs.create({ url: browser.runtime.getURL("feeds/feeds.html") });
     window.close();
