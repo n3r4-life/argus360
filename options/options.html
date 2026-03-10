@@ -880,7 +880,7 @@
         <h2 class="card-title">About</h2>
         <div class="card-body">
           <p class="info-text">
-            Argus supports multiple AI providers with streaming responses, follow-up questions, multi-provider comparison, and more. Your API keys are stored locally and never shared.
+            Argus is an AI-powered web analysis toolkit with OSINT capabilities. Supports Grok, OpenAI, Claude, Gemini, and any OpenAI-compatible endpoint. Features streaming responses, custom editable prompts, multi-provider comparison, page monitoring, RSS feeds, smart bookmarks, project-based investigations, entity extraction, connection graphing, and more. Your API keys are stored locally and never shared.
           </p>
           <div class="about-meta">
             <span>Version <strong id="version-number"></strong></span>
@@ -906,6 +906,7 @@
         <a href="#help-monitoring">Monitoring</a>
         <a href="#help-feeds">RSS Feeds</a>
         <a href="#help-archive">Redirects</a>
+        <a href="#help-osint">OSINT Tools</a>
         <a href="#help-providers">Provider Features</a>
         <a href="#help-export">Exporting</a>
         <a href="#help-config">Config Reference</a>
@@ -920,7 +921,7 @@
         <h2 class="card-title">Getting Started</h2>
         <div class="card-body help-content">
           <h3>What is Argus?</h3>
-          <p>Argus is a Firefox extension that lets you run AI-powered analysis on any webpage using your choice of provider — xAI (Grok), OpenAI (GPT), Anthropic (Claude), or Google (Gemini). Results stream in real-time, and you can ask follow-up questions, compare providers, bookmark pages with AI tags, monitor pages for changes, and more.</p>
+          <p>Argus is a Firefox extension that lets you run AI-powered analysis on any webpage using your choice of provider — xAI (Grok), OpenAI (GPT), Anthropic (Claude), Google (Gemini), or any custom OpenAI-compatible endpoint. Beyond analysis, Argus includes built-in OSINT tools (metadata extraction, link mapping, whois/DNS lookups, Wayback Machine checks), fully customizable prompts, and support for custom providers like Ollama, LM Studio, and vLLM. Results stream in real-time, and you can ask follow-up questions, compare providers, bookmark pages with AI tags, monitor pages for changes, and more.</p>
 
           <h3>Step 1: Get an API Key</h3>
           <p>Argus connects directly to AI providers using <strong>your own API keys</strong>. This means no middleman, no subscription, and you only pay for what you use. Most providers offer generous free tiers — many users spend less than $1/month.</p>
@@ -934,6 +935,7 @@
                 <tr><td>Google (Gemini)</td><td><a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com</a></td><td>Generous free tier</td></tr>
                 <tr><td>OpenAI</td><td><a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a></td><td>Pay-as-you-go (low cost)</td></tr>
                 <tr><td>Anthropic (Claude)</td><td><a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a></td><td>$5 free credit on signup</td></tr>
+                <tr><td>Custom (OpenAI-compatible)</td><td>Your endpoint</td><td>Bring your own</td></tr>
               </tbody>
             </table>
           </div>
@@ -956,7 +958,7 @@
             <li>Click the <strong>gear icon</strong> to open Quick Settings</li>
             <li>Select your provider, paste your API key, choose a model, and click <strong>Save Settings</strong></li>
           </ol>
-          <p>For full configuration, use this Console — the <strong>Providers</strong> tab lets you configure all four providers, and the <strong>Analysis</strong> tab lets you tweak response settings, create custom presets, and more.</p>
+          <p>For full configuration, use this Console — the <strong>Providers</strong> tab lets you configure all five built-in providers plus a Custom (OpenAI-compatible) provider, and the <strong>Analysis</strong> tab lets you tweak response settings, create custom presets, and more.</p>
         </div>
       </section>
 
@@ -993,6 +995,9 @@
           </ul>
           <p><strong>Selected text:</strong> Highlight text on any page, then right-click &rarr; <strong>Argus</strong> &rarr; choose a preset. Only the selected text is analyzed, not the full page — perfect for checking a specific quote, claim, or paragraph.</p>
           <p>All presets you create automatically appear in the context menu.</p>
+
+          <h3>OSINT Quick Tools</h3>
+          <p>The popup also includes quick-access OSINT buttons — <strong>Metadata</strong>, <strong>Links</strong>, and <strong>Whois</strong> — that run instantly on the current page without requiring an AI provider.</p>
         </div>
       </section>
 
@@ -1061,9 +1066,14 @@
                 <tr><td><strong>Action Items</strong></td><td>Extracts tasks and next steps as a checklist</td></tr>
                 <tr><td><strong>Research Report</strong></td><td>Multi-source synthesis with citations and cross-references</td></tr>
                 <tr><td><strong>Late Night Recap</strong></td><td>Sharp, witty comedic editorial recap of the page content</td></tr>
+                <tr><td><strong>Entity Extraction (OSINT)</strong></td><td>Structured extraction of people, orgs, locations, dates, amounts, contacts, claims</td></tr>
+                <tr><td><strong>Source Credibility</strong></td><td>Credibility scoring (1-10) with sourcing, bias, and verification assessment</td></tr>
+                <tr><td><strong>Person/Org Profile</strong></td><td>Structured intelligence profile from page content</td></tr>
               </tbody>
             </table>
           </div>
+
+          <p>All presets — both built-in and custom — are fully editable. You can modify their system prompts, user prompts, and preferred providers to suit your workflow.</p>
 
           <h3>Custom Presets</h3>
           <p>Create your own presets in the <strong>Analysis</strong> tab under <strong>Analysis Prompts</strong>.</p>
@@ -1140,6 +1150,16 @@
 
           <h3>Managing Projects</h3>
           <p>Star projects to pin them to the top. Add notes to individual items. Export a single project or all projects as JSON.</p>
+
+          <h3>OSINT Project Tools</h3>
+          <p>Projects include specialized OSINT tools for deeper investigation across all collected items:</p>
+          <ul>
+            <li><strong>Entity Extraction</strong> — batch extract entities (people, organizations, locations, dates, amounts) across all project items</li>
+            <li><strong>Connection Graph</strong> — force-directed graph showing entity relationships across your project, with drag/zoom/pan interaction and PNG export</li>
+            <li><strong>Timeline</strong> — chronological event timeline assembled from project data, with date range filters and markdown export</li>
+            <li><strong>Investigation Report</strong> — AI-generated report synthesizing all project data into a structured intelligence brief</li>
+          </ul>
+          <p>Batch analysis runs in the background, so you can navigate away from the project while it processes.</p>
         </div>
       </section>
 
@@ -1167,7 +1187,7 @@
           </ol>
 
           <h3>Viewing Changes</h3>
-          <p>When a change is detected, you'll get a browser notification. Click any monitor's <strong>"History"</strong> button to see a timeline of all detected changes with before/after comparisons.</p>
+          <p>When a change is detected, you'll get a browser notification. Click any monitor's <strong>"History"</strong> button to see a timeline of all detected changes with before/after comparisons. Use the <strong>Diff view</strong> tab to compare any two snapshots side-by-side.</p>
 
           <h3>Monitor Duration</h3>
           <p>Set an auto-expiry so monitors don't run indefinitely. Options: 12 hours, 1 day, 3 days (default for quick-monitor), 7 days, 30 days, or indefinite. Expired monitors auto-stop and show "EXPIRED" in the list.</p>
@@ -1214,6 +1234,32 @@
         </div>
       </section>
 
+      <!-- OSINT Tools -->
+      <section class="card" id="help-osint">
+        <h2 class="card-title">OSINT Tools</h2>
+        <div class="card-body help-content">
+          <p>Argus includes a suite of open-source intelligence tools that work without an AI provider. These are available from the popup quick tools, the context menu, or as project tools.</p>
+
+          <h3>Metadata Extraction</h3>
+          <p>Extracts meta tags, Open Graph data, Twitter Cards, JSON-LD structured data, publication dates, and author information from the current page.</p>
+
+          <h3>Link Mapping</h3>
+          <p>Categorizes all links on a page — external, internal, social media, email addresses, phone numbers, and file links — with summary statistics and CSV export.</p>
+
+          <h3>Whois / DNS Lookup</h3>
+          <p>Performs RDAP whois lookups and DNS record queries (via Google DNS) for the current page's domain. View registration details, nameservers, and DNS records without leaving the browser.</p>
+
+          <h3>Wayback Machine</h3>
+          <p>Automatically checks the Wayback Machine (archive.org) for availability of visited pages. See when a page was last archived and jump directly to the archived version.</p>
+
+          <h3>Archive.is Availability</h3>
+          <p>Automatically checks for archived versions of visited pages on archive.is. Quickly access clean, cached copies of articles.</p>
+
+          <h3>Keyword Watchlist</h3>
+          <p>Watch for specific keywords across your monitors and feeds. Supports regular expressions for advanced pattern matching. When a watched keyword is detected, Argus sends a browser notification so you never miss a relevant update.</p>
+        </div>
+      </section>
+
       <!-- Provider-Specific Features -->
       <section class="card" id="help-providers">
         <h2 class="card-title">Provider-Specific Features</h2>
@@ -1230,6 +1276,9 @@
             <li><strong>Extra High</strong> — 16 agents, exhaustive research</li>
           </ul>
           <p>Higher effort means more agents and deeper research, but higher API cost.</p>
+
+          <h3>Custom (OpenAI-compatible) <span class="badge">Custom</span></h3>
+          <p>Connect Argus to any OpenAI-compatible endpoint — including HuggingFace TGI, Ollama, LM Studio, vLLM, LocalAI, and llama.cpp. Configure the <strong>Base URL</strong>, <strong>Model Name</strong>, and an optional <strong>API Key</strong> in the <strong>Providers</strong> tab under the Custom section. Streaming is supported.</p>
         </div>
       </section>
 
@@ -1290,7 +1339,7 @@
             <li><strong>No accounts required</strong> — there is nothing to sign up for because there is no service behind this extension</li>
             <li><strong>Fully auditable</strong> — Argus is open source. Every line of code is available for you to read, verify, and modify</li>
           </ul>
-          <p>The only network requests Argus makes are to the AI provider APIs you configure (xAI, OpenAI, Anthropic, Google), RSS feed URLs you subscribe to, and archive redirect URLs if you enable that feature. That's it.</p>
+          <p>The only network requests Argus makes are to the AI provider APIs you configure (xAI, OpenAI, Anthropic, Google, or your custom endpoint), RSS feed URLs you subscribe to, archive redirect URLs if you enable that feature, RDAP (rdap.org) for whois lookups, Google DNS (dns.google) for DNS records, and the Wayback Machine API (archive.org) for availability checks. That's it.</p>
         </div>
       </section>
 
@@ -1299,7 +1348,7 @@
         <h2 class="card-title">Troubleshooting</h2>
         <div class="card-body help-content">
           <h3>"No API key configured"</h3>
-          <p>Go to the <strong>Providers</strong> tab and paste your API key for the provider you want to use. Make sure to select the correct provider tab (xAI, OpenAI, Claude, or Gemini).</p>
+          <p>Go to the <strong>Providers</strong> tab and paste your API key for the provider you want to use. Make sure to select the correct provider tab (xAI, OpenAI, Claude, Gemini, or Custom). For the Custom provider, you need at minimum a Base URL configured.</p>
 
           <h3>"Failed to start analysis"</h3>
           <p>This usually means the page content couldn't be extracted. Some pages (browser internal pages like <code>about:*</code>, PDFs, or heavily JavaScript-rendered pages) may not work. Try a different page.</p>
@@ -1315,6 +1364,9 @@
 
           <h3>Monitors not checking</h3>
           <p>Firefox must be running for monitors to check. Alarms may also be delayed if Firefox was recently started. Monitors use Firefox's built-in alarm API which has a minimum interval of ~1 minute.</p>
+
+          <h3>Custom provider not working</h3>
+          <p>Verify that the Base URL is correct and that the endpoint supports the <code>/v1/chat/completions</code> API format. Check that the model name matches exactly what the endpoint expects. If the endpoint requires authentication, make sure the API key is entered.</p>
 
           <h3>Extension shortcuts not working</h3>
           <p>Another extension may be using the same shortcut. Go to <strong>about:addons</strong> &rarr; Gear icon &rarr; <strong>Manage Extension Shortcuts</strong> to check for conflicts and reassign.</p>
@@ -1347,7 +1399,7 @@
       <section class="card" id="help-about">
         <h2 class="card-title">About Argus</h2>
         <div class="card-body help-content">
-          <p>Argus is named after the all-seeing giant of Greek mythology — a guardian with a hundred eyes, ever-watchful. Like its namesake, Argus watches the web for you, analyzing pages and tracking changes across the sites you care about.</p>
+          <p>Argus is named after the all-seeing giant of Greek mythology — a guardian with a hundred eyes, ever-watchful. Like its namesake, Argus watches the web for you, analyzing pages and tracking changes across the sites you care about. The peacock eye motif in the icon design ties back to the legend — when Argus Panoptes was slain, Hera placed his hundred eyes on the tail of the peacock as a tribute to her faithful guardian.</p>
           <div class="about-meta" style="margin-top:12px;">
             <span>Version <strong id="help-version-number"></strong></span>
             <span style="margin-left:16px;">License: MIT</span>

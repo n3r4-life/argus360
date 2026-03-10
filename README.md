@@ -1,9 +1,9 @@
 # Argus
 
-**Analyze any webpage with AI.** Argus is a Firefox extension that lets you run AI-powered analysis on any page using Grok, ChatGPT, Claude, or Gemini — with streaming responses, follow-up questions, multi-provider comparison, smart bookmarks, page monitoring, and more.
+**Analyze any webpage with any AI.** Argus is a Firefox extension that lets you run AI-powered analysis on any page using Grok, ChatGPT, Claude, Gemini, or any OpenAI-compatible provider -- with OSINT tools, custom prompts, streaming responses, follow-up questions, multi-provider comparison, smart bookmarks, page monitoring, and more.
 
 ![Firefox](https://img.shields.io/badge/Firefox-142%2B-orange)
-![Version](https://img.shields.io/badge/version-360.1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ---
@@ -11,10 +11,11 @@
 ## Features
 
 ### Multi-Provider AI Analysis
-- **4 providers:** xAI (Grok), OpenAI (GPT-4.1), Anthropic (Claude), Google (Gemini)
-- **Strlly eaming responses** — see results as they're generated
-- **Follow-up questions** — ask clarifying questions without losing context
-- **Provider comparison** — run the same analysis across multiple providers side-by-side
+- **5 providers + custom:** xAI (Grok), OpenAI (GPT-4.1), Anthropic (Claude), Google (Gemini), and Custom (OpenAI-compatible)
+- **Custom (OpenAI-compatible)** -- works with HuggingFace, Ollama, LM Studio, vLLM, LocalAI, llama.cpp, or any OpenAI-compatible endpoint. Just provide your base URL and model name.
+- **Streaming responses** -- see results as they're generated
+- **Follow-up questions** -- ask clarifying questions without losing context
+- **Provider comparison** -- run the same analysis across multiple providers side-by-side
 
 ### Built-in Analysis Presets
 | Preset | What it does |
@@ -28,16 +29,33 @@
 | **Action Items** | Extracts tasks and next steps as a checklist |
 | **Research Report** | Multi-source synthesis with citations and cross-references |
 | **Late Night Recap** | Sharp, witty comedic editorial recap of the page content |
+| **Entity Extraction (OSINT)** | Structured extraction of people, orgs, locations, dates, amounts, contacts, and claims as JSON |
+| **Source Credibility** | Credibility scoring (1-10) with detailed assessment of sourcing, bias, and verification |
+| **Person/Org Profile** | Structured intelligence profile from page content |
 
 ### Custom Presets & Provider Binding
 - Create your own analysis presets with custom system and user prompts
-- **Bind presets to specific providers** — e.g., always use Grok for fact-checking, Gemini for visual content analysis, Claude for deep reasoning
+- **Bind presets to specific providers** -- e.g., always use Grok for fact-checking, Gemini for visual content analysis, Claude for deep reasoning
 - Use template variables: `{title}`, `{url}`, `{domain}`, `{date}`, `{wordcount}`
+
+### OSINT Tools
+- **Metadata Extraction** -- extract page meta tags, Open Graph, Twitter Cards, JSON-LD, dates, author, and language
+- **Link Mapping** -- categorize all links (external, internal, social media for 14 platforms, emails, phones, files) with stats and domain grouping. CSV export.
+- **Whois / DNS Lookup** -- RDAP whois + Google DNS records with 24-hour caching
+- **Wayback Machine** -- auto-checks Wayback Machine availability for visited pages and shows an indicator in the popup
+- **Archive.is Availability** -- auto-checks archive.is for visited pages
+- **Keyword Watchlist** -- set keywords or phrases to watch for across monitors and feeds. Supports regex. Browser notifications on match.
+- **Entity Extraction** -- batch extract entities across all project items
+- **Connection Graph** -- force-directed canvas graph showing entity relationships across project items. Drag, zoom, pan, type filters, and PNG export.
+- **Timeline Builder** -- chronological timeline of events extracted from project analyses. Date range filters and markdown export.
+- **Investigation Report** -- AI-generated comprehensive report synthesizing all project data
+
+All OSINT tools feed into the Projects system.
 
 ### Smart Bookmarks
 - Bookmark any page with **AI-generated tags, categories, and summaries**
 - Full-text search, tag cloud, and category filtering
-- **Analyze collected bookmarks** — select multiple bookmarks and synthesize them into a research report with footnotes and source citations
+- **Analyze collected bookmarks** -- select multiple bookmarks and synthesize them into a research report with footnotes and source citations
 
 ### Projects
 - Organize analyses, bookmarks, and notes into **project folders**
@@ -46,26 +64,31 @@
 - **Save to Project** from any results page or bookmark
 - **Export projects** as JSON for backup or sharing
 - Color-coded projects with descriptions
+- **OSINT tools integration** -- run entity extraction, connection graph, timeline, and investigation report generation from project data
+- **Batch analysis** runs in the background across all project items
 
 ### Page Monitoring
 - Monitor any page for content changes
 - Configurable check intervals (15 min to daily)
-- **Monitor duration** — set auto-expiry (12h, 1 day, 3 days, 7 days, 30 days, or indefinite)
-- **AI-powered change summaries** — get notified with an explanation of what changed
+- **Monitor duration** -- set auto-expiry (12h, 1 day, 3 days, 7 days, 30 days, or indefinite)
+- **AI-powered change summaries** -- get notified with an explanation of what changed
 - Full diff history with side-by-side comparison
-- **Storage-aware** — built-in usage indicator, automatic snapshot limits, and lightweight data storage
+- **Diff view** -- side-by-side snapshot comparison with LCS-based diff highlighting
+- **Storage-aware** -- built-in usage indicator, automatic snapshot limits, and lightweight data storage
 
 ### RSS Feed Reader
-- Built-in **RSS/Atom feed reader** — subscribe to any feed or paste a page URL and Argus auto-discovers the feed
+- Built-in **RSS/Atom feed reader** -- subscribe to any feed or paste a page URL and Argus auto-discovers the feed
 - Configurable check intervals per feed
-- **AI-summarized entries** — new articles are summarized automatically using your configured provider
-- **Monitor bridge** — link feeds to page monitors so RSS updates show as monitor changes
+- **AI-summarized entries** -- new articles are summarized automatically using your configured provider
+- **Monitor bridge** -- link feeds to page monitors so RSS updates show as monitor changes
 - Unread counts, mark-as-read, and a dedicated feed reader page
 
-### Archive Redirect
+### Archive & Availability
 - Automatically redirect paywalled or annoying news sites through **archive.is**
 - Manage a customizable domain blocklist (24 common sites pre-loaded)
-- Toggle on/off from the **Redirects** tab — off by default
+- Toggle on/off from the **Redirects** tab -- off by default
+- **Wayback Machine availability checker** -- auto-checks archive.org for visited pages and shows status in the popup
+- **Archive.is availability checker** -- auto-checks archive.is for visited pages
 
 ### Auto-Analyze
 - Set up rules to automatically analyze pages matching URL patterns
@@ -73,16 +96,18 @@
 - One-click setup from the popup for the current site
 
 ### Additional Features
-- **Multi-page analysis** — analyze multiple open tabs together
-- **Selection analysis** — highlight text and analyze just that selection
-- **Extended thinking** — Claude native thinking plus best-effort `REASONING:` sections for OpenAI and Grok
-- **Provider-specific reasoning controls** — configure Grok multi-agent effort and OpenAI o-series reasoning effort separately
-- **Multi-agent mode** — use Grok 4.20 Swarm with configurable agent count
+- **Multi-page analysis** -- analyze multiple open tabs together
+- **Selection analysis** -- highlight text and analyze just that selection
+- **Extended thinking** -- Claude native thinking plus best-effort `REASONING:` sections for OpenAI and Grok
+- **Provider-specific reasoning controls** -- configure Grok multi-agent effort and OpenAI o-series reasoning effort separately
+- **Multi-agent mode** -- use Grok 4.20 Swarm with configurable agent count
 - **Export results** as Markdown, HTML, or plain text
-- **Response language** — auto-detects your browser language or set manually; AI responds in your language
-- **Context menu integration** — right-click any page to analyze
+- **Share results** -- share to X/Twitter, Reddit, or Email directly from results pages
+- **Navigation ribbon** -- persistent nav bar on all generated pages (results, feeds, history, link maps, graphs, timelines)
+- **Response language** -- auto-detects your browser language or set manually; AI responds in your language
+- **Context menu integration** -- right-click any page to analyze
 - **Keyboard shortcuts** for quick access
-- **Analysis history** — searchable log of all past analyses
+- **Analysis history** -- searchable log of all past analyses
 
 ---
 
@@ -92,8 +117,8 @@
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/n3r4-life/argus360.git
-   cd argus360
+   git clone https://github.com/n3r4-life/argus.git
+   cd argus
    ```
 
 2. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`
@@ -104,7 +129,7 @@
 
 1. Download the latest `.zip` from releases
 
-2. In Firefox, go to `about:addons` → gear icon → **Install Add-on From File**
+2. In Firefox, go to `about:addons` -> gear icon -> **Install Add-on From File**
 
 3. Select the downloaded `.zip` file
 
@@ -127,7 +152,7 @@ npx web-ext run
 
 ### 1. Get an API Key
 
-Argus connects directly to AI providers using **your own API keys**. This means no middleman, no subscription, and you only pay for what you use. Most providers offer generous free tiers or credits for new accounts — many users spend less than $1/month with normal use.
+Argus connects directly to AI providers using **your own API keys**. This means no middleman, no subscription, and you only pay for what you use. Most providers offer generous free tiers or credits for new accounts -- many users spend less than $1/month with normal use.
 
 You only need **one** key to get started. Add more providers later if you want to compare results.
 
@@ -137,15 +162,16 @@ You only need **one** key to get started. Add more providers later if you want t
 | Google (Gemini) | [aistudio.google.com](https://aistudio.google.com/apikey) | Generous free tier |
 | OpenAI | [platform.openai.com](https://platform.openai.com/api-keys) | Pay-as-you-go (low cost) |
 | Anthropic (Claude) | [console.anthropic.com](https://console.anthropic.com) | $5 free credit on signup |
+| Custom (OpenAI-compatible) | Your endpoint | Bring your own |
 
 **How to get a key (takes ~2 minutes):**
 
 1. Click any link above and create a free account
 2. Navigate to the API keys section (usually under Settings or API)
 3. Click "Create new key" and copy it
-4. That's it — paste it into Argus and you're ready
+4. That's it -- paste it into Argus and you're ready
 
-> **Why your own keys?** Your keys stay on your machine — Argus never sees, stores, or transmits them anywhere except directly to the provider you choose. No accounts, no tracking, no data collection. You're in full control.
+> **Why your own keys?** Your keys stay on your machine -- Argus never sees, stores, or transmits them anywhere except directly to the provider you choose. No accounts, no tracking, no data collection. You're in full control.
 
 ### 2. Configure Argus
 
@@ -183,7 +209,7 @@ For full configuration, click the **grid icon** to open the Argus Console where 
 ### Selection Analysis
 
 1. Highlight text on any page
-2. Open Argus — it auto-detects the selection
+2. Open Argus -- it auto-detects the selection
 3. Click **"Analyze Selection"**
 
 Or use `Ctrl+Shift+A` to instantly analyze selected text.
@@ -220,16 +246,16 @@ Selecting the **Research Report** preset automatically activates multi-page mode
 3. Click **"+ New Preset"** and name it
 4. Set the **Preferred Provider** (e.g., Gemini for visual analysis)
 5. Write your system prompt and user prompt
-6. The preset now always uses that provider — shown as `Preset Name → Provider` in the popup
+6. The preset now always uses that provider -- shown as `Preset Name -> Provider` in the popup
 
 **Example: "Late Night Recap" preset**
 
-> Want the news delivered with personality? Create a preset that recites page content in a comedic editorial style — sharp, punchy, and opinionated — without naming the style or breaking character. Great for making dry news actually fun to read.
+> Want the news delivered with personality? Create a preset that recites page content in a comedic editorial style -- sharp, punchy, and opinionated -- without naming the style or breaking character. Great for making dry news actually fun to read.
 
 ```
 System prompt:
 You are a sharp-witted comedic editorial writer. Your style is punchy,
-irreverent, and conversational — like a late-night monologue meets a
+irreverent, and conversational -- like a late-night monologue meets a
 newspaper column. Use sarcasm, wit, and strong opinions. Never reference
 your style, influences, or that you're an AI. Just deliver the content.
 
@@ -238,7 +264,7 @@ Recap the following page content as if you're writing your editorial column.
 Hit the key points but make it entertaining. Use markdown formatting.
 ```
 
-You can bind this to any provider and even attach it to a monitored page — so every time the page changes, Argus auto-runs your preset and delivers the update in your preferred style.
+You can bind this to any provider and even attach it to a monitored page -- so every time the page changes, Argus auto-runs your preset and delivers the update in your preferred style.
 
 ### Page Monitoring
 
@@ -248,7 +274,7 @@ You can bind this to any provider and even attach it to a monitored page — so 
 3. The page is monitored hourly for 3 days (default) with AI change summaries
 
 **From Settings:**
-1. Open Settings → **Page Monitors**
+1. Open Settings -> **Page Monitors**
 2. Enter a URL, set the check interval, duration, and add a label
 3. Toggle **AI Change Analysis** for smart diff summaries
 4. View change history with before/after comparisons
@@ -262,48 +288,48 @@ You can bind this to any provider and even attach it to a monitored page — so 
 3. All pages on that domain will be auto-analyzed when visited
 
 **Advanced setup in Settings:**
-1. Open Settings → **Auto-Analyze Rules**
+1. Open Settings -> **Auto-Analyze Rules**
 2. Enter a URL pattern (e.g., `*://news.ycombinator.com/*`)
 3. Choose an analysis type, provider, and delay
 4. Toggle rules on/off as needed
 
 ### RSS Feeds
 
-1. Open Settings → **Feeds** tab
-2. Paste a feed URL (or any page URL — Argus will try to find the feed automatically)
+1. Open Settings -> **Feeds** tab
+2. Paste a feed URL (or any page URL -- Argus will try to find the feed automatically)
 3. Set check interval and optionally enable **AI Summarize** for auto-summaries
 4. Enable **Bridge to Page Monitor** to link feed updates to your monitor dashboard
 5. Click **Open Feed Reader** for a dedicated reading view with unread counts
 
 ### Archive Redirect
 
-1. Open Settings → **Redirects** tab
+1. Open Settings -> **Redirects** tab
 2. Toggle **Enable Archive Redirect**
-3. Edit the domain list (one per line) — add or remove sites as needed
-4. Click **Save** — any matching site will redirect through archive.is automatically
+3. Edit the domain list (one per line) -- add or remove sites as needed
+4. Click **Save** -- any matching site will redirect through archive.is automatically
 
 ### Context Menu (Right-Click)
 
-Right-click anywhere on a page to access Argus directly — no need to open the popup first.
+Right-click anywhere on a page to access Argus directly -- no need to open the popup first.
 
 **On any page:**
-- **Bookmark with AI Tags** — instant smart bookmark with AI-generated tags, category, and summary
+- **Bookmark with AI Tags** -- instant smart bookmark with AI-generated tags, category, and summary
 - Run any built-in or custom analysis preset directly from the menu (Summary, Fact-Check, Late Night Recap, etc.)
 
 **On selected text:**
-- Highlight any text on a page, then right-click → **Argus** → choose a preset
+- Highlight any text on a page, then right-click -> **Argus** -> choose a preset
 - Only the selected text is sent for analysis, not the entire page
 - Great for analyzing a specific paragraph, quote, or claim without the noise of the full page
 
-All presets — including any custom presets you've created — appear in the context menu automatically.
+All presets -- including any custom presets you've created -- appear in the context menu automatically.
 
 ### Exporting Results
 
 From any results page, use the toolbar to:
 - **Copy Markdown** to clipboard
-- **Export .md** — download as Markdown
-- **Export .html** — self-contained HTML with dark theme
-- **Export .txt** — plain text with formatting stripped
+- **Export .md** -- download as Markdown
+- **Export .html** -- self-contained HTML with dark theme
+- **Export .txt** -- plain text with formatting stripped
 
 ---
 
@@ -313,22 +339,22 @@ From any results page, use the toolbar to:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Max Response Tokens | 2048 | Maximum tokens in AI response (256–16,384) |
-| Max Input Characters | 100,000 | How much page text to send (1,000–500,000) |
+| Max Response Tokens | 2048 | Maximum tokens in AI response (256-16,384) |
+| Max Input Characters | 100,000 | How much page text to send (1,000-500,000) |
 | Temperature | 0.3 | Creativity level (0 = focused, 1 = creative) |
-| Response Language | Auto-detect | Language for AI responses — auto uses browser locale |
+| Response Language | Auto-detect | Language for AI responses -- auto uses browser locale |
 
 ### Extended Thinking (Claude)
 
-Enable to see Claude's reasoning process before the final answer. Set a thinking budget (1,000–100,000 tokens) to control depth.
+Enable to see Claude's reasoning process before the final answer. Set a thinking budget (1,000-100,000 tokens) to control depth.
 
 ### Multi-Agent (Grok 4.20 Swarm)
 
 When using Grok's multi-agent model, configure reasoning effort:
-- **Low** — 4 agents, quick
-- **Medium** — 4 agents, balanced
-- **High** — 16 agents, deep
-- **Extra High** — 16 agents, exhaustive
+- **Low** -- 4 agents, quick
+- **Medium** -- 4 agents, balanced
+- **High** -- 16 agents, deep
+- **Extra High** -- 16 agents, exhaustive
 
 ### Prompt Variables
 
@@ -350,6 +376,7 @@ Use these in custom presets:
 Argus/
 ├── manifest.json          # Extension manifest (Manifest V2)
 ├── background.js          # Core logic: API calls, streaming, message handling
+├── background-osint.js    # OSINT backend handlers
 ├── popup/                 # Browser action popup
 │   ├── popup.html
 │   ├── popup.js
@@ -378,10 +405,17 @@ Argus/
 │   ├── feeds.html
 │   ├── feeds.js
 │   └── feeds.css
+├── osint/                 # OSINT tool pages
+│   ├── link-map.html/.js/.css
+│   ├── graph.html/.js/.css
+│   └── timeline.html/.js/.css
+├── shared/                # Shared UI components
+│   ├── ribbon.js
+│   └── ribbon.css
 ├── lib/
 │   ├── marked.min.js      # Markdown rendering
 │   └── export-utils.js    # Shared export functions
-└── icons/                 # Extension icons (16–128px)
+└── icons/                 # Extension icons (16-128px)
 ```
 
 ---
@@ -389,9 +423,10 @@ Argus/
 ## Privacy
 
 - **API keys are stored locally** in your browser's extension storage and are never transmitted anywhere except to the provider you configured
-- **No telemetry or analytics** — Argus does not phone home
-- **No data collection** — declared in `manifest.json` under `data_collection_permissions`
+- **No telemetry or analytics** -- Argus does not phone home
+- **No data collection** -- declared in `manifest.json` under `data_collection_permissions`
 - Page content is sent only to the AI provider you select for analysis
+- OSINT tools make additional network requests to **rdap.org** (RDAP whois lookups), **dns.google** (DNS record queries), and **archive.org** (Wayback Machine availability checks). These requests contain only the domain or URL being looked up -- no personal data is sent.
 
 ---
 
@@ -404,16 +439,16 @@ Argus/
 
 ## Fork It, Make It Yours
 
-Argus is fully open source. Clone it, rename it, rip it apart and build something new — no restrictions.
+Argus is fully open source. Clone it, rename it, rip it apart and build something new -- no restrictions.
 
 ```bash
 # Clone the repo
-git clone https://github.com/n3r4-life/argus360.git
-cd argus360
+git clone https://github.com/n3r4-life/argus.git
+cd argus
 
 # Load in Firefox for development
 # 1. Open about:debugging#/runtime/this-firefox
-# 2. Click "Load Temporary Add-on" → select manifest.json
+# 2. Click "Load Temporary Add-on" -> select manifest.json
 
 # Run with auto-reload
 npx web-ext run
@@ -424,12 +459,12 @@ npx web-ext build
 
 **Want to make your own version?**
 1. Fork this repo
-2. Update `manifest.json` — change the name, description, and `gecko.id`
+2. Update `manifest.json` -- change the name, description, and `gecko.id`
 3. Swap the icons in `icons/` and the watermark (`argus-bg.png`)
-4. Customize presets, add providers, change the UI — it's all plain JS, no build tools needed
+4. Customize presets, add providers, change the UI -- it's all plain JS, no build tools needed
 5. Submit to [addons.mozilla.org](https://addons.mozilla.org) or distribute the `.zip` directly
 
-The entire extension is vanilla JavaScript with zero dependencies (except `marked.min.js` for Markdown rendering). No frameworks, no bundlers, no transpilers — just open the files and edit.
+The entire extension is vanilla JavaScript with zero dependencies (except `marked.min.js` for Markdown rendering). No frameworks, no bundlers, no transpilers -- just open the files and edit.
 
 ---
 
