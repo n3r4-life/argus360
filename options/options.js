@@ -1651,7 +1651,7 @@ function projRenderSidebar() {
   projects.sort((a, b) => (b.starred ? 1 : 0) - (a.starred ? 1 : 0));
 
   if (projects.length === 0) {
-    projEl.sidebar.innerHTML = `<p class="info-text" style="padding:16px;text-align:center;">${projState.query ? "No matching projects." : "No projects yet. Click \\"+ New Project\\" to get started."}</p>`;
+    projEl.sidebar.innerHTML = `<p class="info-text" style="padding:16px;text-align:center;">${projState.query ? "No matching projects." : 'No projects yet. Click "+ New Project" to get started.'}</p>`;
     return;
   }
 

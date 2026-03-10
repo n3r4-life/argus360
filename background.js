@@ -5,7 +5,7 @@ const ANALYSIS_PRESETS = {
   summary: {
     label: "Summary",
     system: "You are a precise text analyst.",
-    prompt: "Provide a clear, concise summary of the following webpage content. Use markdown formatting. Focus on the main points and key information."
+    prompt: "Provide a clear, concise summary of the following webpage content in flowing prose paragraphs. Do NOT use bullet points or 'Key Points' sections — that is a separate analysis type. Summarize the full substance of the content: what it covers, the arguments or information presented, and any conclusions. Use markdown formatting for headings only where needed to separate major topics."
   },
   sentiment: {
     label: "Sentiment Analysis",
@@ -185,21 +185,43 @@ async function createContextMenus() {
     contexts: ["page", "frame", "selection"]
   });
 
-  // Bookmark option
+  // ── Quick Actions ──
   browser.contextMenus.create({
     id: "argus-bookmark",
     parentId: "argus-parent",
-    title: "Bookmark with AI Tags",
+    title: "\uD83D\uDD16 Bookmark with AI Tags",
     contexts: ["page", "frame"]
   });
 
   browser.contextMenus.create({
-    id: "argus-separator",
+    id: "argus-monitor",
+    parentId: "argus-parent",
+    title: "\uD83D\uDC41\uFE0F Monitor This Page",
+    contexts: ["page", "frame"]
+  });
+
+  browser.contextMenus.create({
+    id: "argus-redirect",
+    parentId: "argus-parent",
+    title: "\uD83D\uDD00 Redirect via Archive",
+    contexts: ["page", "frame"]
+  });
+
+  browser.contextMenus.create({
+    id: "argus-add-feed",
+    parentId: "argus-parent",
+    title: "\uD83D\uDCE1 Subscribe to Feed",
+    contexts: ["page", "frame"]
+  });
+
+  browser.contextMenus.create({
+    id: "argus-separator-actions",
     parentId: "argus-parent",
     type: "separator",
     contexts: ["page", "frame", "selection"]
   });
 
+  // ── Analysis Presets ──
   // Default presets
   for (const [key, preset] of Object.entries(ANALYSIS_PRESETS)) {
     browser.contextMenus.create({
@@ -244,12 +266,30 @@ async function extractFrameContent(tabId, frameId) {
         const url = window.location.href;
         const meta = document.querySelector('meta[name="description"]');
         const description = meta ? meta.content : "";
-        const article = document.querySelector("article") ||
-                        document.querySelector("main") ||
-                        document.querySelector('[role="main"]');
-        const textSource = article || document.body;
-        const text = textSource.innerText;
-        return { title, url, description, text };
+
+        // Try multiple selectors and pick the longest result
+        const candidates = [
+          "article",
+          "main",
+          '[role="main"]',
+          '[itemprop="articleBody"]',
+          ".article-body", ".article-content", ".article__body", ".article__content",
+          ".post-content", ".post-body", ".entry-content",
+          ".story-body", ".story-content",
+          "#article-body", "#article-content",
+          ".content-body", ".page-content"
+        ];
+        let bestText = "";
+        for (const sel of candidates) {
+          const el = document.querySelector(sel);
+          if (el) {
+            const t = el.innerText || "";
+            if (t.length > bestText.length) bestText = t;
+          }
+        }
+        // Fall back to document.body if no candidate found or too short
+        if (bestText.length < 200) bestText = document.body.innerText || "";
+        return { title, url, description, text: bestText };
       })();
     `
   });
@@ -292,13 +332,31 @@ async function extractPageContent(tabId) {
         const url = window.location.href;
         const meta = document.querySelector('meta[name="description"]');
         const description = meta ? meta.content : "";
-        const article = document.querySelector("article") ||
-                        document.querySelector("main") ||
-                        document.querySelector('[role="main"]');
-        const textSource = article || document.body;
-        const text = textSource.innerText;
         const selection = window.getSelection().toString();
-        return { title, url, description, text, selection };
+
+        // Try multiple selectors and pick the longest result
+        const candidates = [
+          "article",
+          "main",
+          '[role="main"]',
+          '[itemprop="articleBody"]',
+          ".article-body", ".article-content", ".article__body", ".article__content",
+          ".post-content", ".post-body", ".entry-content",
+          ".story-body", ".story-content",
+          "#article-body", "#article-content",
+          ".content-body", ".page-content"
+        ];
+        let bestText = "";
+        for (const sel of candidates) {
+          const el = document.querySelector(sel);
+          if (el) {
+            const t = el.innerText || "";
+            if (t.length > bestText.length) bestText = t;
+          }
+        }
+        // Fall back to document.body if no candidate found or too short
+        if (bestText.length < 200) bestText = document.body.innerText || "";
+        return { title, url, description, text: bestText, selection };
       })();
     `
   });
@@ -1453,6 +1511,93 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
         iconUrl: "icons/icon-96.png",
         title: "Argus — Error",
         message: `Failed to bookmark: ${err.message}`
+      });
+    }
+    return;
+  }
+
+  // Handle monitor context menu
+  if (info.menuItemId === "argus-monitor") {
+    try {
+      const result = await handleAddMonitor({
+        url: tab.url,
+        title: tab.title || tab.url,
+        intervalMinutes: 60,
+        aiAnalysis: true,
+        autoBookmark: true,
+        autoOpen: false,
+        analysisPreset: "",
+        duration: 0
+      });
+      browser.notifications.create({
+        type: "basic",
+        iconUrl: "icons/icon-96.png",
+        title: "Argus",
+        message: result.success
+          ? `Now monitoring: ${tab.title || tab.url}`
+          : `Monitor: ${result.error}`
+      });
+    } catch (err) {
+      browser.notifications.create({
+        type: "basic",
+        iconUrl: "icons/icon-96.png",
+        title: "Argus — Error",
+        message: `Failed to add monitor: ${err.message}`
+      });
+    }
+    return;
+  }
+
+  // Handle redirect/archive context menu
+  if (info.menuItemId === "argus-redirect") {
+    try {
+      const providerUrl = archiveProviderUrl || "https://archive.is/";
+      await browser.tabs.update(tab.id, { url: providerUrl + tab.url });
+    } catch (err) {
+      browser.notifications.create({
+        type: "basic",
+        iconUrl: "icons/icon-96.png",
+        title: "Argus — Error",
+        message: `Failed to redirect: ${err.message}`
+      });
+    }
+    return;
+  }
+
+  // Handle subscribe to feed context menu
+  if (info.menuItemId === "argus-add-feed") {
+    try {
+      // Try to detect a feed URL from the page's <link> tags
+      const feedResults = await browser.tabs.executeScript(tab.id, {
+        code: `
+          (function() {
+            const link = document.querySelector('link[type="application/rss+xml"], link[type="application/atom+xml"], link[type="application/feed+json"]');
+            return link ? link.href : null;
+          })();
+        `
+      });
+      const feedUrl = (feedResults && feedResults[0]) || tab.url;
+      const result = await handleAddFeed({
+        url: feedUrl,
+        title: tab.title || feedUrl,
+        intervalMinutes: 60,
+        aiSummarize: false,
+        monitorBridge: false
+      });
+      browser.notifications.create({
+        type: "basic",
+        iconUrl: "icons/icon-96.png",
+        title: "Argus",
+        message: result.success
+          ? `Subscribed to feed: ${result.feed?.title || tab.title || feedUrl}`
+          : `Feed: ${result.error}`
+      });
+    } catch (err) {
+      browser.notifications.create({
+        type: "basic",
+        iconUrl: "icons/icon-96.png",
+        title: "Argus — Error",
+        message: `Failed to subscribe: ${err.message}`
       });
     }
     return;
