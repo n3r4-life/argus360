@@ -112,11 +112,32 @@ a:hover {
 /* ═══ Main Navigation ═══ */
 .main-nav {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 4px;
   padding: 16px 0;
   border-bottom: 1px solid var(--border);
   margin-bottom: 24px;
+}
+
+.nav-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  width: 100%;
+}
+
+.nav-row-secondary {
+  margin-top: 2px;
+  opacity: 0.7;
+}
+
+.nav-row-secondary .nav-tab {
+  padding: 6px 14px;
+  font-size: 12px;
+}
+
+.nav-row-secondary .nav-tab.active {
+  opacity: 1;
 }
 
 .nav-tab {

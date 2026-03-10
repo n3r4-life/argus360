@@ -64,8 +64,38 @@ Actionable recommendations based on the synthesized findings.
 Brief assessment of each source's reliability, bias, and contribution.
 
 Use markdown formatting. Be specific and cite sources throughout.`
+  },
+  latenight: {
+    label: "Late Night Recap",
+    system: "You are a sharp-witted comedic editorial writer. Your style is punchy, irreverent, and conversational — like a late-night monologue meets a newspaper column. Use sarcasm, wit, and strong opinions. Never reference your style, influences, or that you're an AI. Just deliver the content.",
+    prompt: "Recap the following page content as if you're writing your editorial column. Hit the key points but make it entertaining. Be sharp, punchy, and opinionated. Use markdown formatting."
   }
 };
+
+// ──────────────────────────────────────────────
+// Language preference
+// ──────────────────────────────────────────────
+const BROWSER_LANG_MAP = {
+  en: "English", es: "Spanish", fr: "French", de: "German", pt: "Portuguese",
+  it: "Italian", nl: "Dutch", ru: "Russian", ja: "Japanese", ko: "Korean",
+  zh: "Chinese", ar: "Arabic", hi: "Hindi", tr: "Turkish", pl: "Polish",
+  uk: "Ukrainian", vi: "Vietnamese", th: "Thai", id: "Indonesian", sv: "Swedish",
+  cs: "Czech", ro: "Romanian", hu: "Hungarian", el: "Greek", he: "Hebrew",
+  fil: "Filipino", tl: "Filipino"
+};
+
+async function getLanguageInstruction() {
+  const { responseLanguage } = await browser.storage.local.get({ responseLanguage: "auto" });
+  if (!responseLanguage || responseLanguage === "") return ""; // English — no instruction needed
+  if (responseLanguage === "auto") {
+    const browserLang = (navigator.language || "en").split("-")[0].toLowerCase();
+    if (browserLang === "en") return "";
+    const langName = BROWSER_LANG_MAP[browserLang];
+    if (!langName) return "";
+    return ` Respond entirely in ${langName}.`;
+  }
+  return ` Respond entirely in ${responseLanguage}.`;
+}
 
 // ──────────────────────────────────────────────
 // Provider definitions
@@ -199,6 +229,7 @@ createContextMenus();
 // Rebuild context menus when custom presets change
 browser.storage.onChanged.addListener((changes) => {
   if (changes.customPresets) createContextMenus();
+  if (changes.showBadge) updateBadge();
 });
 
 // ──────────────────────────────────────────────
@@ -764,13 +795,14 @@ function buildMessages(systemPrompt, userPrompt) {
   ];
 }
 
-function buildAnalysisPrompts(page, analysisType, customPrompt, settings) {
+async function buildAnalysisPrompts(page, analysisType, customPrompt, settings) {
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const defaultPreset = ANALYSIS_PRESETS[analysisType];
   const customPreset = settings.customPresets[analysisType];
 
   const baseSystem = customPreset?.system || defaultPreset?.system || "You are a helpful assistant that analyzes web content.";
-  const systemPrompt = `Today's date is ${today}. ${baseSystem}`;
+  const langInstruction = await getLanguageInstruction();
+  const systemPrompt = `Today's date is ${today}. ${baseSystem}${langInstruction}`;
 
   const analysisInstruction = customPrompt
     ? customPrompt
@@ -876,7 +908,7 @@ async function handleAnalyzeStream(port, message) {
       page = await extractPageContent();
     }
 
-    const { systemPrompt, userPrompt } = buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings);
+    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings);
     const messages = buildMessages(systemPrompt, userPrompt);
 
     port.postMessage({ type: "start", provider: settings.provider, model: settings.model, pageTitle: page.title });
@@ -972,7 +1004,7 @@ async function handleCompareStream(port, message) {
     for (const providerKey of providers) {
       try {
         const settings = await getProviderSettings(providerKey);
-        const { systemPrompt, userPrompt } = buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings);
+        const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings);
         const msgs = buildMessages(systemPrompt, userPrompt);
 
         port.postMessage({ type: "compareStart", provider: providerKey, model: settings.model });
@@ -1034,6 +1066,19 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "getMonitorUnreads") return browser.storage.local.get({ monitorUnreads: {} }).then(r => ({ success: true, unreads: r.monitorUnreads }));
   if (message.action === "getMonitorSnapshots") return handleGetMonitorSnapshots(message);
   if (message.action === "getMonitorStorageUsage") return handleGetMonitorStorageUsage();
+  if (message.action === "getArchiveSettings") return browser.storage.local.get({ archiveRedirect: { enabled: false, domains: DEFAULT_ARCHIVE_DOMAINS, providerUrl: "https://archive.is/" } }).then(r => ({ success: true, ...r.archiveRedirect }));
+  if (message.action === "saveArchiveSettings") return browser.storage.local.set({ archiveRedirect: { enabled: message.enabled, domains: message.domains, providerUrl: message.providerUrl || "https://archive.is/" } }).then(() => ({ success: true }));
+  // RSS Feeds
+  if (message.action === "addFeed") return handleAddFeed(message);
+  if (message.action === "getFeeds") return handleGetFeeds();
+  if (message.action === "getFeedEntries") return handleGetFeedEntries(message);
+  if (message.action === "deleteFeed") return handleDeleteFeed(message);
+  if (message.action === "updateFeed") return handleUpdateFeed(message);
+  if (message.action === "markFeedEntryRead") return handleMarkFeedEntryRead(message);
+  if (message.action === "markAllFeedRead") return handleMarkAllFeedRead(message);
+  if (message.action === "refreshFeed") return handleRefreshFeed(message);
+  if (message.action === "summarizeFeedEntry") return handleSummarizeFeedEntry(message);
+  if (message.action === "discoverFeed") return handleDiscoverFeed(message);
   if (message.action === "analyzeBookmarks") return handleAnalyzeBookmarks(message);
   return false;
 });
@@ -1130,7 +1175,7 @@ async function handleAnalyze(message) {
   try {
     const settings = await getProviderSettings(message.provider, message.analysisType);
     const page = await extractPageContent();
-    const { systemPrompt, userPrompt } = buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings);
+    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings);
     const messages = buildMessages(systemPrompt, userPrompt);
 
     const result = await callProvider(
@@ -1264,7 +1309,7 @@ async function handleCompareInTab(message) {
 
 async function streamAnalysisToStorage(resultId, page, message, settings, presetLabel) {
   try {
-    const { systemPrompt, userPrompt } = buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings);
+    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings);
     const messages = buildMessages(systemPrompt, userPrompt);
 
     let streamedContent = "";
@@ -1441,7 +1486,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
       page = await extractFrameContent(tab.id, info.frameId);
     }
 
-    const { systemPrompt, userPrompt } = buildAnalysisPrompts(page, presetKey, null, settings);
+    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, presetKey, null, settings);
     const messages = buildMessages(systemPrompt, userPrompt);
 
     // Stream to storage for results page
@@ -1526,7 +1571,7 @@ browser.commands.onCommand.addListener(async (command) => {
     try {
       const settings = await getProviderSettings();
       const page = await extractPageContent(tab.id);
-      const { systemPrompt, userPrompt } = buildAnalysisPrompts(page, "summary", null, settings);
+      const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, "summary", null, settings);
       const messages = buildMessages(systemPrompt, userPrompt);
 
       let streamedContent = "";
@@ -1574,7 +1619,7 @@ browser.commands.onCommand.addListener(async (command) => {
     try {
       const settings = await getProviderSettings();
       const page = { title: tab.title, url: tab.url, description: "", text: selection };
-      const { systemPrompt, userPrompt } = buildAnalysisPrompts(page, "summary", null, settings);
+      const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, "summary", null, settings);
       const messages = buildMessages(systemPrompt, userPrompt);
 
       let streamedContent = "";
@@ -1660,7 +1705,7 @@ browser.webNavigation.onCompleted.addListener(async (details) => {
     try {
       const settings = await getProviderSettings(rule.provider || null);
       const page = await extractPageContent(details.tabId);
-      const { systemPrompt, userPrompt } = buildAnalysisPrompts(page, presetKey, null, settings);
+      const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, presetKey, null, settings);
       const messages = buildMessages(systemPrompt, userPrompt);
 
       let streamedContent = "";
@@ -1976,7 +2021,11 @@ async function clearMonitorUnread(monitorId) {
 }
 
 async function updateBadge() {
-  const { monitorUnreads } = await browser.storage.local.get({ monitorUnreads: {} });
+  const { monitorUnreads, showBadge } = await browser.storage.local.get({ monitorUnreads: {}, showBadge: true });
+  if (showBadge === false) {
+    browser.browserAction.setBadgeText({ text: "" });
+    return;
+  }
   const total = Object.values(monitorUnreads).reduce((sum, n) => sum + n, 0);
   if (total > 0) {
     browser.browserAction.setBadgeText({ text: String(total) });
@@ -2030,6 +2079,7 @@ async function handleAddMonitor(message) {
       aiAnalysis: message.aiAnalysis !== false,
       autoOpen: message.autoOpen || false,
       autoBookmark: message.autoBookmark !== false,
+      analysisPreset: message.analysisPreset || "",
       duration: message.duration || 0,
       expiresAt: message.duration ? new Date(Date.now() + message.duration * 3600000).toISOString() : null
     };
@@ -2083,6 +2133,7 @@ async function handleUpdateMonitor(message) {
   if (message.aiAnalysis !== undefined) pageMonitors[idx].aiAnalysis = message.aiAnalysis;
   if (message.autoOpen !== undefined) pageMonitors[idx].autoOpen = message.autoOpen;
   if (message.autoBookmark !== undefined) pageMonitors[idx].autoBookmark = message.autoBookmark;
+  if (message.analysisPreset !== undefined) pageMonitors[idx].analysisPreset = message.analysisPreset;
   if (message.duration !== undefined) {
     pageMonitors[idx].duration = message.duration;
     pageMonitors[idx].expiresAt = message.duration ? new Date(Date.now() + message.duration * 3600000).toISOString() : null;
@@ -2099,6 +2150,22 @@ async function handleUpdateMonitor(message) {
       delayInMinutes: pageMonitors[idx].intervalMinutes,
       periodInMinutes: pageMonitors[idx].intervalMinutes
     });
+  }
+
+  // Sync linked bookmark summary with current monitor settings
+  const mon = pageMonitors[idx];
+  if (mon.autoBookmark) {
+    const { smartBookmarks } = await browser.storage.local.get({ smartBookmarks: [] });
+    const bmIdx = smartBookmarks.findIndex(b => b.url === mon.url);
+    if (bmIdx >= 0) {
+      const interval = mon.intervalMinutes >= 60 ? `${mon.intervalMinutes / 60}h` : `${mon.intervalMinutes}min`;
+      const presetStr = mon.analysisPreset ? ` | preset: ${mon.analysisPreset}` : "";
+      smartBookmarks[bmIdx].summary = mon.lastChangeSummary
+        ? `${mon.lastChangeSummary.slice(0, 200)} — monitored every ${interval}${presetStr}`
+        : `Auto-bookmarked — monitored every ${interval}${presetStr}`;
+      smartBookmarks[bmIdx].updatedAt = new Date().toISOString();
+      await browser.storage.local.set({ smartBookmarks });
+    }
   }
 
   return { success: true, monitor: pageMonitors[idx] };
@@ -2239,8 +2306,9 @@ ${newText.slice(0, 3000)}
 
 Summarize the key differences in 2-4 bullet points.`;
 
+          const langInst = await getLanguageInstruction();
           const messages = buildMessages(
-            "You are a change detection analyst. Summarize webpage differences concisely.",
+            `You are a change detection analyst. Summarize webpage differences concisely.${langInst}`,
             diffPrompt
           );
 
@@ -2257,6 +2325,10 @@ Summarize the key differences in 2-4 bullet points.`;
       history.unshift(changeEntry);
       if (history.length > 50) history.length = 50;
       await browser.storage.local.set({ [historyKey]: history });
+
+      // Store last change summary on the monitor for quick display
+      monitor.lastChangeSummary = changeEntry.aiSummary || `Content changed (${new Date(now).toLocaleString()})`;
+      monitor.lastChangeAt = now;
 
       // Increment badge count
       await incrementMonitorBadge(monitor.id);
@@ -2291,6 +2363,46 @@ Summarize the key differences in 2-4 bullet points.`;
             summary: changeEntry.aiSummary || `Content changed — ${monitor.changeCount} total changes detected`
           });
         } catch { /* non-critical */ }
+      }
+
+      // Auto-analyze with preset if configured
+      if (monitor.analysisPreset) {
+        try {
+          const settings = await getProviderSettings(null, monitor.analysisPreset);
+          const page = { url: monitor.url, title: monitor.title, text: newText.slice(0, settings.maxInputChars || 100000) };
+          const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, monitor.analysisPreset, null, settings);
+          const msgs = buildMessages(systemPrompt, userPrompt);
+          const result = await callProvider(settings.provider, settings.apiKey, settings.model, msgs, { maxTokens: settings.maxTokens || 2048, temperature: settings.temperature || 0.3 });
+
+          // Store the analysis result
+          const resultId = `monitor-analysis-${monitor.id}-${Date.now()}`;
+          await browser.storage.local.set({
+            [resultId]: {
+              content: result.content,
+              preset: monitor.analysisPreset,
+              url: monitor.url,
+              title: monitor.title,
+              timestamp: now,
+              provider: settings.provider
+            }
+          });
+
+          // Open the result in a tab
+          const presetLabel = ANALYSIS_PRESETS[monitor.analysisPreset]?.label || settings.customPresets[monitor.analysisPreset]?.label || monitor.analysisPreset;
+          await browser.storage.local.set({
+            pendingResult: {
+              content: result.content,
+              title: `${presetLabel}: ${monitor.title}`,
+              url: monitor.url,
+              provider: settings.provider,
+              preset: monitor.analysisPreset,
+              timestamp: now
+            }
+          });
+          browser.tabs.create({ url: browser.runtime.getURL("results/results.html"), active: false });
+        } catch (err) {
+          console.warn(`[Monitor] Auto-analysis failed for "${monitor.title}":`, err.message);
+        }
       }
     } else {
       console.log(`[Monitor] ${monitor.title}: no changes detected`);
@@ -2395,8 +2507,9 @@ ${newText.slice(0, 3000)}
 
 Summarize the key differences in 2-4 bullet points.`;
 
+              const langInst2 = await getLanguageInstruction();
               const messages = buildMessages(
-                "You are a change detection analyst. Summarize webpage differences concisely.",
+                `You are a change detection analyst. Summarize webpage differences concisely.${langInst2}`,
                 diffPrompt
               );
 
@@ -2413,6 +2526,9 @@ Summarize the key differences in 2-4 bullet points.`;
           history.unshift(changeEntry);
           if (history.length > 50) history.length = 50;
           await browser.storage.local.set({ [historyKey]: history });
+
+          monitor.lastChangeSummary = changeEntry.aiSummary || `Content changed (${new Date(catchupNow).toLocaleString()})`;
+          monitor.lastChangeAt = catchupNow;
 
           await incrementMonitorBadge(monitor.id);
 
@@ -2448,4 +2564,411 @@ Summarize the key differences in 2-4 bullet points.`;
 
   // Restore badge count on startup
   await updateBadge();
+})();
+
+// ══════════════════════════════════════════════════════════════
+// Archive Redirect — bypass paywalls/annoying sites via archive.is
+// ══════════════════════════════════════════════════════════════
+
+const DEFAULT_ARCHIVE_DOMAINS = [
+  "cnn.com", "nytimes.com", "washingtonpost.com", "wsj.com",
+  "bloomberg.com", "reuters.com", "bbc.com", "theguardian.com",
+  "forbes.com", "businessinsider.com", "wired.com", "townhall.com",
+  "theatlantic.com", "newyorker.com", "theepochtimes.com",
+  "latimes.com", "usatoday.com", "politico.com", "thedailybeast.com",
+  "vanityfair.com", "ft.com", "economist.com", "newsweek.com", "time.com"
+];
+
+let archiveRedirectEnabled = false;
+let archiveRedirectDomains = [];
+let archiveProviderUrl = "https://archive.is/";
+
+async function loadArchiveSettings() {
+  const { archiveRedirect } = await browser.storage.local.get({
+    archiveRedirect: { enabled: false, domains: DEFAULT_ARCHIVE_DOMAINS, providerUrl: "https://archive.is/" }
+  });
+  archiveRedirectEnabled = archiveRedirect.enabled;
+  archiveRedirectDomains = archiveRedirect.domains || [];
+  archiveProviderUrl = archiveRedirect.providerUrl || "https://archive.is/";
+}
+
+loadArchiveSettings();
+
+// Reload settings when they change
+browser.storage.onChanged.addListener((changes) => {
+  if (changes.archiveRedirect) {
+    const val = changes.archiveRedirect.newValue;
+    archiveRedirectEnabled = val.enabled;
+    archiveRedirectDomains = val.domains || [];
+    archiveProviderUrl = val.providerUrl || "https://archive.is/";
+  }
+});
+
+// Intercept requests before they load
+browser.webRequest.onBeforeRequest.addListener(
+  (details) => {
+    if (!archiveRedirectEnabled) return;
+    if (details.type !== "main_frame") return;
+
+    try {
+      const url = new URL(details.url);
+      const host = url.hostname.replace(/^www\./, "");
+
+      // Don't redirect archive/cache sites themselves
+      if (host.includes("archive.is") || host.includes("archive.ph") || host.includes("archive.today") || host.includes("webcache.googleusercontent.com")) return;
+
+      const matched = archiveRedirectDomains.some(
+        d => host === d || host.endsWith("." + d)
+      );
+
+      if (matched) {
+        return { redirectUrl: archiveProviderUrl + details.url };
+      }
+    } catch { /* invalid URL, skip */ }
+  },
+  { urls: ["<all_urls>"] },
+  ["blocking"]
+);
+
+// ══════════════════════════════════════════════════════════════
+// RSS Feeds — lightweight feed reader + monitor bridge
+// ══════════════════════════════════════════════════════════════
+
+const RSS_ALARM_PREFIX = "tl-rss-";
+
+function parseRSSFeed(xmlText) {
+  const doc = new DOMParser().parseFromString(xmlText, "text/xml");
+  const entries = [];
+  let feedTitle = "";
+  let feedSiteUrl = "";
+
+  // Try RSS 2.0
+  const channel = doc.querySelector("channel");
+  if (channel) {
+    feedTitle = channel.querySelector(":scope > title")?.textContent || "";
+    feedSiteUrl = channel.querySelector(":scope > link")?.textContent || "";
+    for (const item of channel.querySelectorAll("item")) {
+      entries.push({
+        id: item.querySelector("guid")?.textContent || item.querySelector("link")?.textContent || `entry-${Date.now()}-${Math.random()}`,
+        title: item.querySelector("title")?.textContent || "Untitled",
+        link: item.querySelector("link")?.textContent || "",
+        description: (item.querySelector("description")?.textContent || "").slice(0, 1000),
+        pubDate: item.querySelector("pubDate")?.textContent || "",
+        read: false
+      });
+    }
+  }
+
+  // Try Atom
+  if (!entries.length) {
+    const feed = doc.querySelector("feed");
+    if (feed) {
+      feedTitle = feed.querySelector(":scope > title")?.textContent || "";
+      const siteLink = feed.querySelector(':scope > link[rel="alternate"]') || feed.querySelector(":scope > link");
+      feedSiteUrl = siteLink?.getAttribute("href") || "";
+      for (const entry of feed.querySelectorAll("entry")) {
+        const link = entry.querySelector('link[rel="alternate"]') || entry.querySelector("link");
+        entries.push({
+          id: entry.querySelector("id")?.textContent || link?.getAttribute("href") || `entry-${Date.now()}-${Math.random()}`,
+          title: entry.querySelector("title")?.textContent || "Untitled",
+          link: link?.getAttribute("href") || "",
+          description: (entry.querySelector("summary")?.textContent || entry.querySelector("content")?.textContent || "").slice(0, 1000),
+          pubDate: entry.querySelector("published")?.textContent || entry.querySelector("updated")?.textContent || "",
+          read: false
+        });
+      }
+    }
+  }
+
+  return { feedTitle, feedSiteUrl, entries };
+}
+
+async function discoverFeedUrl(pageUrl) {
+  try {
+    const resp = await fetch(pageUrl);
+    const html = await resp.text();
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    // Look for <link rel="alternate" type="application/rss+xml"> or atom
+    const feedLink = doc.querySelector('link[type="application/rss+xml"]') ||
+                     doc.querySelector('link[type="application/atom+xml"]');
+    if (feedLink) {
+      const href = feedLink.getAttribute("href");
+      if (href.startsWith("http")) return href;
+      return new URL(href, pageUrl).href;
+    }
+  } catch { /* feed discovery failed */ }
+  return null;
+}
+
+async function handleAddFeed(message) {
+  try {
+    const { rssFeeds } = await browser.storage.local.get({ rssFeeds: [] });
+
+    let feedUrl = message.url.trim();
+
+    // If URL doesn't look like a feed, try to discover one
+    if (!feedUrl.match(/\.(xml|rss|atom|feed)/i) && !feedUrl.includes("/feed")) {
+      const discovered = await discoverFeedUrl(feedUrl);
+      if (discovered) feedUrl = discovered;
+    }
+
+    // Check for duplicate
+    if (rssFeeds.some(f => f.url === feedUrl)) {
+      return { success: false, error: "This feed is already subscribed." };
+    }
+
+    // Fetch and parse to validate
+    const resp = await fetch(feedUrl);
+    const xmlText = await resp.text();
+    const parsed = parseRSSFeed(xmlText);
+
+    if (!parsed.entries.length) {
+      return { success: false, error: "No feed entries found. Check the URL." };
+    }
+
+    const feed = {
+      id: `feed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      url: feedUrl,
+      title: message.title || parsed.feedTitle || feedUrl,
+      siteUrl: parsed.feedSiteUrl || "",
+      createdAt: new Date().toISOString(),
+      lastFetched: new Date().toISOString(),
+      checkIntervalMinutes: message.intervalMinutes || 60,
+      enabled: true,
+      aiSummarize: message.aiSummarize || false,
+      monitorBridge: message.monitorBridge || false
+    };
+
+    rssFeeds.push(feed);
+    await browser.storage.local.set({ rssFeeds });
+
+    // Save initial entries
+    const entryKey = `feed-entries-${feed.id}`;
+    await browser.storage.local.set({ [entryKey]: parsed.entries.slice(0, 100) });
+
+    // Set alarm for periodic checks
+    browser.alarms.create(`${RSS_ALARM_PREFIX}${feed.id}`, {
+      delayInMinutes: feed.checkIntervalMinutes,
+      periodInMinutes: feed.checkIntervalMinutes
+    });
+
+    return { success: true, feed };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+async function handleGetFeeds() {
+  const { rssFeeds } = await browser.storage.local.get({ rssFeeds: [] });
+  // Include unread counts
+  const feeds = [];
+  for (const feed of rssFeeds) {
+    const entryKey = `feed-entries-${feed.id}`;
+    const { [entryKey]: entries } = await browser.storage.local.get({ [entryKey]: [] });
+    feeds.push({ ...feed, unreadCount: entries.filter(e => !e.read).length, totalEntries: entries.length });
+  }
+  return { success: true, feeds };
+}
+
+async function handleGetFeedEntries(message) {
+  if (message.feedId) {
+    const entryKey = `feed-entries-${message.feedId}`;
+    const { [entryKey]: entries } = await browser.storage.local.get({ [entryKey]: [] });
+    return { success: true, entries };
+  }
+  // All feeds — combine and sort by date
+  const { rssFeeds } = await browser.storage.local.get({ rssFeeds: [] });
+  let allEntries = [];
+  for (const feed of rssFeeds) {
+    const entryKey = `feed-entries-${feed.id}`;
+    const { [entryKey]: entries } = await browser.storage.local.get({ [entryKey]: [] });
+    allEntries.push(...entries.map(e => ({ ...e, feedId: feed.id, feedTitle: feed.title })));
+  }
+  allEntries.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));
+  return { success: true, entries: allEntries.slice(0, 200) };
+}
+
+async function handleDeleteFeed(message) {
+  const { rssFeeds } = await browser.storage.local.get({ rssFeeds: [] });
+  const feed = rssFeeds.find(f => f.id === message.id);
+  if (feed) {
+    await browser.alarms.clear(`${RSS_ALARM_PREFIX}${feed.id}`);
+    await browser.storage.local.remove([`feed-entries-${feed.id}`]);
+  }
+  await browser.storage.local.set({ rssFeeds: rssFeeds.filter(f => f.id !== message.id) });
+  return { success: true };
+}
+
+async function handleUpdateFeed(message) {
+  const { rssFeeds } = await browser.storage.local.get({ rssFeeds: [] });
+  const idx = rssFeeds.findIndex(f => f.id === message.id);
+  if (idx < 0) return { success: false, error: "Feed not found." };
+
+  if (message.enabled !== undefined) rssFeeds[idx].enabled = message.enabled;
+  if (message.checkIntervalMinutes !== undefined) rssFeeds[idx].checkIntervalMinutes = message.checkIntervalMinutes;
+  if (message.aiSummarize !== undefined) rssFeeds[idx].aiSummarize = message.aiSummarize;
+  if (message.title !== undefined) rssFeeds[idx].title = message.title;
+
+  await browser.storage.local.set({ rssFeeds });
+
+  // Update alarm
+  const alarmName = `${RSS_ALARM_PREFIX}${rssFeeds[idx].id}`;
+  await browser.alarms.clear(alarmName);
+  if (rssFeeds[idx].enabled) {
+    browser.alarms.create(alarmName, {
+      delayInMinutes: rssFeeds[idx].checkIntervalMinutes,
+      periodInMinutes: rssFeeds[idx].checkIntervalMinutes
+    });
+  }
+
+  return { success: true, feed: rssFeeds[idx] };
+}
+
+async function handleMarkFeedEntryRead(message) {
+  const entryKey = `feed-entries-${message.feedId}`;
+  const { [entryKey]: entries } = await browser.storage.local.get({ [entryKey]: [] });
+  const entry = entries.find(e => e.id === message.entryId);
+  if (entry) entry.read = true;
+  await browser.storage.local.set({ [entryKey]: entries });
+  return { success: true };
+}
+
+async function handleMarkAllFeedRead(message) {
+  const entryKey = `feed-entries-${message.feedId}`;
+  const { [entryKey]: entries } = await browser.storage.local.get({ [entryKey]: [] });
+  entries.forEach(e => { e.read = true; });
+  await browser.storage.local.set({ [entryKey]: entries });
+  return { success: true };
+}
+
+async function handleRefreshFeed(message) {
+  const { rssFeeds } = await browser.storage.local.get({ rssFeeds: [] });
+  const feed = rssFeeds.find(f => f.id === message.id);
+  if (!feed) return { success: false, error: "Feed not found." };
+  await checkFeedForUpdates(feed, rssFeeds);
+  return { success: true };
+}
+
+async function handleSummarizeFeedEntry(message) {
+  try {
+    const settings = await getProviderSettings();
+    const prompt = `Summarize this article concisely in 2-4 bullet points:
+
+Title: ${message.title}
+
+Content:
+${message.content.slice(0, 3000)}`;
+
+    const langInst = await getLanguageInstruction();
+    const messages = buildMessages(
+      `You are a concise news summarizer. Provide clear, informative bullet-point summaries.${langInst}`,
+      prompt
+    );
+
+    const result = await callProvider(
+      settings.provider, settings.apiKey, settings.model, messages,
+      { maxTokens: 500, temperature: 0.3 }
+    );
+    return { success: true, summary: result.content };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+async function handleDiscoverFeed(message) {
+  const feedUrl = await discoverFeedUrl(message.url);
+  return { success: true, feedUrl };
+}
+
+async function checkFeedForUpdates(feed, allFeeds) {
+  try {
+    const resp = await fetch(feed.url);
+    const xmlText = await resp.text();
+    const parsed = parseRSSFeed(xmlText);
+
+    const entryKey = `feed-entries-${feed.id}`;
+    const { [entryKey]: existingEntries } = await browser.storage.local.get({ [entryKey]: [] });
+    const existingIds = new Set(existingEntries.map(e => e.id));
+
+    const newEntries = parsed.entries.filter(e => !existingIds.has(e.id));
+
+    if (newEntries.length > 0) {
+      // AI summarize new entries if enabled
+      if (feed.aiSummarize) {
+        const settings = await getProviderSettings();
+        for (const entry of newEntries.slice(0, 5)) {
+          try {
+            const prompt = `Summarize concisely in 1-2 sentences:\n\nTitle: ${entry.title}\n${entry.description.slice(0, 2000)}`;
+            const msgs = buildMessages("You are a concise news summarizer.", prompt);
+            const result = await callProvider(settings.provider, settings.apiKey, settings.model, msgs, { maxTokens: 200, temperature: 0.3 });
+            entry.aiSummary = result.content;
+          } catch { /* non-critical */ }
+        }
+      }
+
+      const merged = [...newEntries, ...existingEntries].slice(0, 200);
+      await browser.storage.local.set({ [entryKey]: merged });
+
+      // Notification for new entries
+      if (newEntries.length > 0) {
+        browser.notifications.create(`rss-${feed.id}-${Date.now()}`, {
+          type: "basic",
+          iconUrl: "icons/icon-96.png",
+          title: `${feed.title}: ${newEntries.length} new`,
+          message: newEntries.slice(0, 3).map(e => e.title).join(" | ")
+        });
+      }
+
+      // Monitor bridge — if enabled, create a change entry on the linked monitor
+      if (feed.monitorBridge) {
+        const { pageMonitors } = await browser.storage.local.get({ pageMonitors: [] });
+        const linkedMonitor = pageMonitors.find(m => m.url === feed.siteUrl || m.url === feed.url);
+        if (linkedMonitor) {
+          linkedMonitor.changeCount += newEntries.length;
+          linkedMonitor.lastChangeSummary = `${newEntries.length} new RSS entries: ${newEntries.slice(0, 2).map(e => e.title).join(", ")}`;
+          linkedMonitor.lastChangeAt = new Date().toISOString();
+          await browser.storage.local.set({ pageMonitors });
+        }
+      }
+    }
+
+    // Update feed metadata
+    feed.lastFetched = new Date().toISOString();
+    const feedIdx = allFeeds.findIndex(f => f.id === feed.id);
+    if (feedIdx >= 0) {
+      allFeeds[feedIdx] = feed;
+      await browser.storage.local.set({ rssFeeds: allFeeds });
+    }
+  } catch (err) {
+    console.warn(`[RSS] Failed to check feed "${feed.title}":`, err.message);
+  }
+}
+
+// RSS alarm handler — hook into existing alarm listener
+const origAlarmHandler = browser.alarms.onAlarm.hasListener;
+browser.alarms.onAlarm.addListener(async (alarm) => {
+  if (!alarm.name.startsWith(RSS_ALARM_PREFIX)) return;
+
+  const feedId = alarm.name.slice(RSS_ALARM_PREFIX.length);
+  const { rssFeeds } = await browser.storage.local.get({ rssFeeds: [] });
+  const feed = rssFeeds.find(f => f.id === feedId);
+  if (!feed || !feed.enabled) return;
+
+  await checkFeedForUpdates(feed, rssFeeds);
+});
+
+// Restore RSS alarms on startup
+(async () => {
+  const { rssFeeds } = await browser.storage.local.get({ rssFeeds: [] });
+  for (const feed of rssFeeds) {
+    if (!feed.enabled) continue;
+    const alarmName = `${RSS_ALARM_PREFIX}${feed.id}`;
+    const existing = await browser.alarms.get(alarmName);
+    if (!existing) {
+      browser.alarms.create(alarmName, {
+        delayInMinutes: feed.checkIntervalMinutes,
+        periodInMinutes: feed.checkIntervalMinutes
+      });
+    }
+  }
 })();

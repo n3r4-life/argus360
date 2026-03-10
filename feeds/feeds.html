@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RSS Feeds - Argus</title>
+  <link rel="stylesheet" href="feeds.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-left">
+      <img src="../icons/icon-32.png" alt="" class="header-icon">
+      <h1 class="header-title">RSS Feeds</h1>
+    </div>
+    <div class="header-right">
+      <button id="mark-all-read" class="btn btn-secondary btn-small">Mark All Read</button>
+      <button id="refresh-feeds" class="btn btn-secondary btn-small">Refresh</button>
+      <a href="../options/options.html" class="btn btn-secondary btn-small back-link">Settings</a>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="feed-list-header">
+        <h3 class="sidebar-heading">Feeds</h3>
+      </div>
+      <div id="feed-list" class="feed-list">
+        <div class="loading-text">Loading feeds...</div>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div id="entries-header" class="entries-header">
+        <h2 id="current-feed-title" class="current-feed-title">All Feeds</h2>
+        <span id="entry-count" class="entry-count"></span>
+      </div>
+      <div id="entry-list" class="entry-list">
+        <div class="loading-text">Loading entries...</div>
+      </div>
+      <div id="empty-state" class="empty-state hidden">
+        <p>No feed entries yet. Add RSS feeds in <strong>Settings</strong> to get started.</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="feeds.js"></script>
+</body>
+</html>

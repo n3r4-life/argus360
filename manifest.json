@@ -29,6 +29,8 @@
     "contextMenus",
     "tabs",
     "webNavigation",
+    "webRequest",
+    "webRequestBlocking",
     "downloads",
     "alarms",
     "notifications",

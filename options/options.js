@@ -36,6 +36,16 @@ const DEFAULT_PRESETS = {
     label: "Action Items",
     system: "You extract actionable tasks and next steps from text.",
     prompt: "Extract all actionable items, recommendations, and next steps from this webpage content. Present them as a clear checklist. Use markdown formatting."
+  },
+  research: {
+    label: "Research Report",
+    system: "You are a research analyst who synthesizes information from multiple sources into comprehensive, well-structured reports. Always cite sources by their number (e.g., [Source 1], [Source 2]).",
+    prompt: "Analyze the following sources and produce a structured research report with an executive summary, key findings with source citations, areas of agreement, contradictions, gaps in coverage, recommendations, and source assessment. Use markdown formatting. Be specific and cite sources throughout."
+  },
+  latenight: {
+    label: "Late Night Recap",
+    system: "You are a sharp-witted comedic editorial writer. Your style is punchy, irreverent, and conversational — like a late-night monologue meets a newspaper column. Use sarcasm, wit, and strong opinions. Never reference your style, influences, or that you're an AI. Just deliver the content.",
+    prompt: "Recap the following page content as if you're writing your editorial column. Hit the key points but make it entertaining. Be sharp, punchy, and opinionated. Use markdown formatting."
   }
 };
 
@@ -118,6 +128,8 @@ const el = {
   maxInputChars: document.getElementById("max-input-chars"),
   temperature: document.getElementById("temperature"),
   tempValue: document.getElementById("temp-value"),
+  showBadge: document.getElementById("show-badge"),
+  responseLanguage: document.getElementById("response-language"),
   reasoningEffort: document.getElementById("reasoning-effort"),
   multiAgentCard: document.getElementById("multi-agent-card"),
   tabList: document.getElementById("prompt-tab-list"),
@@ -158,11 +170,31 @@ const el = {
   monitorAutoOpen: document.getElementById("monitor-auto-open"),
   monitorAutoBookmark: document.getElementById("monitor-auto-bookmark"),
   monitorDuration: document.getElementById("monitor-duration"),
+  monitorPreset: document.getElementById("monitor-preset"),
   addMonitor: document.getElementById("add-monitor"),
   monitorStatus: document.getElementById("monitor-status"),
   monitorStorageBar: document.getElementById("monitor-storage-bar"),
   monitorStorageLabel: document.getElementById("monitor-storage-label"),
   monitorStorageFill: document.getElementById("monitor-storage-fill"),
+  // RSS Feeds
+  feedList: document.getElementById("feed-list"),
+  feedUrl: document.getElementById("feed-url"),
+  feedInterval: document.getElementById("feed-interval"),
+  feedTitle: document.getElementById("feed-title"),
+  feedAiSummarize: document.getElementById("feed-ai-summarize"),
+  feedMonitorBridge: document.getElementById("feed-monitor-bridge"),
+  addFeed: document.getElementById("add-feed"),
+  openFeedReader: document.getElementById("open-feed-reader"),
+  feedStatus: document.getElementById("feed-status"),
+  // Archive Redirect
+  archiveEnabled: document.getElementById("archive-enabled"),
+  archiveProvider: document.getElementById("archive-provider"),
+  archiveCustomGroup: document.getElementById("archive-custom-group"),
+  archiveCustomUrl: document.getElementById("archive-custom-url"),
+  archiveDomains: document.getElementById("archive-domains"),
+  archiveSave: document.getElementById("archive-save"),
+  archiveReset: document.getElementById("archive-reset"),
+  archiveStatus: document.getElementById("archive-status"),
 };
 
 // ──────────────────────────────────────────────
@@ -206,6 +238,8 @@ async function loadAllSettings() {
     extendedThinking: { enabled: false, budgetTokens: 10000 },
     autoAnalyzeRules: [],
     maxHistorySize: 200,
+    showBadge: true,
+    responseLanguage: "auto",
     apiKey: ""
   });
 
@@ -220,6 +254,8 @@ async function loadAllSettings() {
   el.maxInputChars.value = settings.maxInputChars;
   el.temperature.value = settings.temperature;
   el.tempValue.textContent = settings.temperature;
+  el.showBadge.checked = settings.showBadge !== false;
+  el.responseLanguage.value = settings.responseLanguage || "auto";
   el.reasoningEffort.value = settings.reasoningEffort;
   el.extendedThinkingEnabled.checked = settings.extendedThinking.enabled;
   el.thinkingBudget.value = settings.extendedThinking.budgetTokens || 10000;
@@ -359,7 +395,9 @@ async function saveAllSettings() {
       budgetTokens: parseInt(el.thinkingBudget.value, 10) || 10000
     },
     autoAnalyzeRules,
-    maxHistorySize: parseInt(el.maxHistory.value, 10) || 200
+    maxHistorySize: parseInt(el.maxHistory.value, 10) || 200,
+    showBadge: el.showBadge.checked,
+    responseLanguage: el.responseLanguage.value
   });
   flashSaved();
 }
@@ -605,7 +643,20 @@ function attachListeners() {
   });
 
   // Monitors
+  populateMonitorPresetDropdown();
   el.addMonitor.addEventListener("click", addMonitor);
+
+  // RSS Feeds
+  renderFeeds();
+  el.addFeed.addEventListener("click", addFeedHandler);
+  el.openFeedReader.addEventListener("click", () => {
+    browser.tabs.create({ url: browser.runtime.getURL("feeds/feeds.html") });
+  });
+
+  // Archive Redirect
+  loadArchiveSettings();
+  el.archiveSave.addEventListener("click", saveArchiveSettings);
+  el.archiveReset.addEventListener("click", resetArchiveSettings);
 
   // Import/Export
   el.exportSettings.addEventListener("click", exportSettingsToFile);
@@ -668,6 +719,32 @@ async function importSettingsFromFile(event) {
 // ──────────────────────────────────────────────
 // Page Monitors
 // ──────────────────────────────────────────────
+async function populateMonitorPresetDropdown() {
+  // Clear existing options except "None"
+  while (el.monitorPreset.options.length > 1) el.monitorPreset.remove(1);
+  // Built-in presets
+  const builtIn = [
+    { key: "summary", label: "Summary" }, { key: "sentiment", label: "Sentiment" },
+    { key: "factcheck", label: "Fact-Check" }, { key: "keypoints", label: "Key Points" },
+    { key: "eli5", label: "ELI5" }, { key: "critique", label: "Critical Analysis" },
+    { key: "actions", label: "Action Items" }, { key: "research", label: "Research Report" }
+  ];
+  builtIn.forEach(p => {
+    const opt = document.createElement("option");
+    opt.value = p.key;
+    opt.textContent = p.label;
+    el.monitorPreset.appendChild(opt);
+  });
+  // Custom presets
+  const { customPresets } = await browser.storage.local.get({ customPresets: {} });
+  for (const [key, preset] of Object.entries(customPresets)) {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = preset.label || key;
+    el.monitorPreset.appendChild(opt);
+  }
+}
+
 async function renderMonitors() {
   const response = await browser.runtime.sendMessage({ action: "getMonitors" });
   if (!response || !response.success) return;
@@ -702,6 +779,7 @@ async function renderMonitors() {
     const flags = [];
     if (monitor.autoOpen) flags.push("auto-open");
     if (monitor.autoBookmark) flags.push("bookmarked");
+    if (monitor.analysisPreset) flags.push(`preset: ${monitor.analysisPreset}`);
     const flagStr = flags.length ? ` | ${flags.join(", ")}` : "";
     let durationStr = "";
     if (monitor.expired) {
@@ -717,6 +795,20 @@ async function renderMonitors() {
     }
     meta.textContent = ` — ${interval} interval | ${monitor.changeCount} changes | Last: ${new Date(monitor.lastChecked).toLocaleString()}${flagStr}${durationStr}`;
     info.appendChild(meta);
+
+    if (monitor.lastChangeSummary) {
+      const summary = document.createElement("span");
+      summary.className = "rule-meta";
+      summary.style.display = "block";
+      summary.style.marginTop = "4px";
+      summary.style.color = "var(--accent)";
+      summary.style.fontStyle = "italic";
+      const text = monitor.lastChangeSummary.length > 150
+        ? monitor.lastChangeSummary.slice(0, 150) + "..."
+        : monitor.lastChangeSummary;
+      summary.textContent = `Latest: ${text}`;
+      info.appendChild(summary);
+    }
 
     const actions = document.createElement("div");
     actions.className = "rule-actions";
@@ -751,6 +843,9 @@ async function renderMonitors() {
     const intervalSelect = document.createElement("select");
     intervalSelect.className = "btn btn-sm btn-secondary";
     intervalSelect.style.cursor = "pointer";
+    intervalSelect.style.width = "auto";
+    intervalSelect.style.minWidth = "0";
+    intervalSelect.style.maxWidth = "70px";
     [15, 30, 60, 360, 1440].forEach(mins => {
       const opt = document.createElement("option");
       opt.value = mins;
@@ -825,6 +920,194 @@ async function updateMonitorStorageUsage() {
   } catch { /* non-critical */ }
 }
 
+// ──────────────────────────────────────────────
+// RSS Feeds
+// ──────────────────────────────────────────────
+
+async function renderFeeds() {
+  const resp = await browser.runtime.sendMessage({ action: "getFeeds" });
+  if (!resp || !resp.success) return;
+
+  el.feedList.replaceChildren();
+
+  if (!resp.feeds.length) {
+    const empty = document.createElement("p");
+    empty.className = "info-text";
+    empty.textContent = "No RSS feeds subscribed.";
+    el.feedList.appendChild(empty);
+    return;
+  }
+
+  resp.feeds.forEach(feed => {
+    const row = document.createElement("div");
+    row.className = "rule-item";
+    row.style.flexWrap = "wrap";
+
+    const info = document.createElement("div");
+    info.className = "rule-info";
+
+    const title = document.createElement("strong");
+    title.textContent = feed.title || feed.url;
+    info.appendChild(title);
+
+    const meta = document.createElement("span");
+    meta.className = "rule-meta";
+    const interval = feed.checkIntervalMinutes >= 60
+      ? `${feed.checkIntervalMinutes / 60}h`
+      : `${feed.checkIntervalMinutes}m`;
+    const flags = [];
+    if (feed.aiSummarize) flags.push("AI summaries");
+    if (feed.monitorBridge) flags.push("monitor bridge");
+    const flagStr = flags.length ? ` | ${flags.join(", ")}` : "";
+    meta.textContent = ` — ${interval} interval | ${feed.unreadCount} unread / ${feed.totalEntries} total | Last: ${new Date(feed.lastFetched).toLocaleString()}${flagStr}`;
+    info.appendChild(meta);
+
+    const actions = document.createElement("div");
+    actions.className = "rule-actions";
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.className = "btn btn-sm btn-secondary";
+    toggleBtn.textContent = feed.enabled ? "Pause" : "Resume";
+    toggleBtn.addEventListener("click", async () => {
+      await browser.runtime.sendMessage({ action: "updateFeed", id: feed.id, enabled: !feed.enabled });
+      renderFeeds();
+    });
+
+    const refreshBtn = document.createElement("button");
+    refreshBtn.className = "btn btn-sm btn-secondary";
+    refreshBtn.textContent = "Refresh";
+    refreshBtn.addEventListener("click", async () => {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = "...";
+      await browser.runtime.sendMessage({ action: "refreshFeed", id: feed.id });
+      renderFeeds();
+    });
+
+    const readBtn = document.createElement("button");
+    readBtn.className = "btn btn-sm btn-secondary";
+    readBtn.textContent = "Open Reader";
+    readBtn.addEventListener("click", () => {
+      browser.tabs.create({ url: browser.runtime.getURL(`feeds/feeds.html?feedId=${encodeURIComponent(feed.id)}`) });
+    });
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "btn btn-sm btn-secondary";
+    deleteBtn.style.color = "var(--error)";
+    deleteBtn.textContent = "Delete";
+    deleteBtn.addEventListener("click", async () => {
+      await browser.runtime.sendMessage({ action: "deleteFeed", id: feed.id });
+      renderFeeds();
+    });
+
+    actions.appendChild(toggleBtn);
+    actions.appendChild(refreshBtn);
+    actions.appendChild(readBtn);
+    actions.appendChild(deleteBtn);
+
+    row.appendChild(info);
+    row.appendChild(actions);
+    el.feedList.appendChild(row);
+  });
+}
+
+async function addFeedHandler() {
+  const url = el.feedUrl.value.trim();
+  if (!url) return;
+
+  el.addFeed.disabled = true;
+  el.feedStatus.textContent = "Discovering feed...";
+  el.feedStatus.style.color = "var(--text-muted)";
+
+  const resp = await browser.runtime.sendMessage({
+    action: "addFeed",
+    url,
+    title: el.feedTitle.value.trim() || "",
+    intervalMinutes: parseInt(el.feedInterval.value, 10) || 60,
+    aiSummarize: el.feedAiSummarize.checked,
+    monitorBridge: el.feedMonitorBridge.checked
+  });
+
+  el.addFeed.disabled = false;
+
+  if (resp && resp.success) {
+    el.feedUrl.value = "";
+    el.feedTitle.value = "";
+    el.feedStatus.textContent = `Subscribed to "${resp.feed.title}"!`;
+    el.feedStatus.style.color = "var(--success)";
+    renderFeeds();
+  } else {
+    el.feedStatus.textContent = resp?.error || "Failed to add feed.";
+    el.feedStatus.style.color = "var(--error)";
+  }
+
+  setTimeout(() => { el.feedStatus.textContent = ""; }, 3000);
+}
+
+// ──────────────────────────────────────────────
+// Archive Redirect
+// ──────────────────────────────────────────────
+
+async function loadArchiveSettings() {
+  const resp = await browser.runtime.sendMessage({ action: "getArchiveSettings" });
+  if (!resp || !resp.success) return;
+  el.archiveEnabled.checked = resp.enabled;
+  el.archiveDomains.value = (resp.domains || []).join("\n");
+  // Set provider dropdown
+  const providerUrl = resp.providerUrl || "https://archive.is/";
+  const knownOptions = [...el.archiveProvider.options].map(o => o.value);
+  if (knownOptions.includes(providerUrl)) {
+    el.archiveProvider.value = providerUrl;
+  } else {
+    el.archiveProvider.value = "custom";
+    el.archiveCustomUrl.value = providerUrl;
+    el.archiveCustomGroup.style.display = "";
+  }
+  // Toggle custom field visibility
+  el.archiveProvider.addEventListener("change", () => {
+    el.archiveCustomGroup.style.display = el.archiveProvider.value === "custom" ? "" : "none";
+  });
+}
+
+async function saveArchiveSettings() {
+  const domains = el.archiveDomains.value
+    .split("\n")
+    .map(d => d.trim().toLowerCase().replace(/^www\./, ""))
+    .filter(Boolean);
+  const providerUrl = el.archiveProvider.value === "custom"
+    ? el.archiveCustomUrl.value.trim()
+    : el.archiveProvider.value;
+  await browser.runtime.sendMessage({
+    action: "saveArchiveSettings",
+    enabled: el.archiveEnabled.checked,
+    domains,
+    providerUrl
+  });
+  el.archiveStatus.textContent = "Saved!";
+  el.archiveStatus.style.color = "var(--success)";
+  setTimeout(() => { el.archiveStatus.textContent = ""; }, 2000);
+}
+
+async function resetArchiveSettings() {
+  el.archiveDomains.value = [
+    "cnn.com", "nytimes.com", "washingtonpost.com", "wsj.com",
+    "bloomberg.com", "reuters.com", "bbc.com", "theguardian.com",
+    "forbes.com", "businessinsider.com", "wired.com", "townhall.com",
+    "theatlantic.com", "newyorker.com", "theepochtimes.com",
+    "latimes.com", "usatoday.com", "politico.com", "thedailybeast.com",
+    "vanityfair.com", "ft.com", "economist.com", "newsweek.com", "time.com"
+  ].join("\n");
+  el.archiveEnabled.checked = false;
+  el.archiveProvider.value = "https://archive.is/";
+  el.archiveCustomGroup.style.display = "none";
+  el.archiveStatus.textContent = "Reset to defaults (not saved yet)";
+  el.archiveStatus.style.color = "var(--text-muted)";
+  setTimeout(() => { el.archiveStatus.textContent = ""; }, 3000);
+}
+
+// ──────────────────────────────────────────────
+// Monitor Add
+// ──────────────────────────────────────────────
+
 async function addMonitor() {
   const url = el.monitorUrl.value.trim();
   if (!url) return;
@@ -840,7 +1123,8 @@ async function addMonitor() {
     duration: parseInt(el.monitorDuration.value, 10) || 0,
     aiAnalysis: el.monitorAi.checked,
     autoOpen: el.monitorAutoOpen.checked,
-    autoBookmark: el.monitorAutoBookmark.checked
+    autoBookmark: el.monitorAutoBookmark.checked,
+    analysisPreset: el.monitorPreset.value || ""
   });
 
   el.addMonitor.disabled = false;
@@ -876,7 +1160,7 @@ function initMainTabs() {
 
   // Restore last active tab from URL hash or sessionStorage
   const hash = window.location.hash.replace("#", "");
-  const savedTab = hash || sessionStorage.getItem("argus-activeTab") || "providers";
+  const savedTab = hash || sessionStorage.getItem("argus-activeTab") || "analysis";
 
   switchMainTab(savedTab, tabs, panels);
 

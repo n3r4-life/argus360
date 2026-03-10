@@ -12,8 +12,8 @@
       <div class="header-left">
         <img src="../icons/icon-48.png" alt="Argus" class="logo">
         <div>
-          <h1>Argus</h1>
-          <p class="subtitle">Console</p>
+          <h1>Argus <span style="font-size:14px;font-weight:400;color:var(--text-muted);">360</span></h1>
+          <p class="subtitle" style="line-height:1.4;">AI-powered web analysis, monitoring, feeds &amp; tools<br><span style="color:var(--text-muted);font-size:11px;">See every angle. Analyze any page. Monitor changes. Read feeds. Bypass paywalls.</span></p>
         </div>
       </div>
       <span id="save-indicator" class="save-indicator hidden">Saved</span>
@@ -21,40 +21,52 @@
 
     <!-- ═══ Main Navigation ═══ -->
     <nav class="main-nav" id="main-nav">
-      <button class="nav-tab active" data-tab="providers">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-        <span>Providers</span>
-      </button>
-      <button class="nav-tab" data-tab="analysis">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-        <span>Analysis</span>
-      </button>
-      <button class="nav-tab" data-tab="automation">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        <span>Automation</span>
-      </button>
-      <button class="nav-tab" data-tab="bookmarks">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-        <span>Bookmarks</span>
-      </button>
-      <button class="nav-tab" data-tab="monitors">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-        <span>Monitors</span>
-      </button>
-      <button class="nav-tab" data-tab="settings">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-        <span>Settings</span>
-      </button>
-      <button class="nav-tab" data-tab="help">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        <span>Help</span>
-      </button>
+      <div class="nav-row">
+        <button class="nav-tab active" data-tab="analysis">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <span>Analysis</span>
+        </button>
+        <button class="nav-tab" data-tab="bookmarks">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+          <span>Bookmarks</span>
+        </button>
+        <button class="nav-tab" data-tab="monitors">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>Monitors</span>
+        </button>
+        <button class="nav-tab" data-tab="feeds">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+          <span>Feeds</span>
+        </button>
+        <button class="nav-tab" data-tab="automation">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Automation</span>
+        </button>
+        <button class="nav-tab" data-tab="archive">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+          <span>Archive</span>
+        </button>
+      </div>
+      <div class="nav-row nav-row-secondary">
+        <button class="nav-tab" data-tab="providers">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          <span>Providers</span>
+        </button>
+        <button class="nav-tab" data-tab="settings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          <span>Settings</span>
+        </button>
+        <button class="nav-tab" data-tab="help">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span>Help</span>
+        </button>
+      </div>
     </nav>
 
     <!-- ═══════════════════════════════════════════ -->
     <!-- TAB: Providers                              -->
     <!-- ═══════════════════════════════════════════ -->
-    <div class="tab-panel active" data-panel="providers">
+    <div class="tab-panel" data-panel="providers">
 
       <!-- Default Provider -->
       <section class="card">
@@ -122,7 +134,49 @@
     <!-- ═══════════════════════════════════════════ -->
     <!-- TAB: Analysis                               -->
     <!-- ═══════════════════════════════════════════ -->
-    <div class="tab-panel" data-panel="analysis">
+    <div class="tab-panel active" data-panel="analysis">
+
+      <!-- Prompt Editor -->
+      <section class="card">
+        <h2 class="card-title">Analysis Prompts</h2>
+        <div class="card-body">
+          <p class="info-text">Customize the system and user prompts for each analysis type. Changes are saved automatically. Click "Reset" to restore defaults.</p>
+          <p class="info-text">Available variables: <code>{title}</code> <code>{url}</code> <code>{domain}</code> <code>{date}</code> <code>{wordcount}</code></p>
+
+          <div class="prompt-tabs">
+            <div id="prompt-tab-list" class="tab-list"></div>
+            <button id="add-preset" class="btn btn-sm btn-secondary" style="margin-left:8px;">+ New Preset</button>
+          </div>
+
+          <div id="prompt-editor" class="prompt-editor">
+            <div class="form-group">
+              <label for="prompt-provider">Preferred Provider <span class="hint" style="display:inline;margin:0;">(optional — overrides default when using this preset)</span></label>
+              <select id="prompt-provider">
+                <option value="">Use Default Provider</option>
+                <option value="xai">xAI (Grok)</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="gemini">Google (Gemini)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="prompt-system">System Prompt</label>
+              <textarea id="prompt-system" rows="2" placeholder="System role instruction..."></textarea>
+            </div>
+            <div class="form-group">
+              <label for="prompt-user">User Prompt</label>
+              <textarea id="prompt-user" rows="4" placeholder="Analysis instruction sent with page content..."></textarea>
+            </div>
+            <div class="prompt-actions">
+              <div style="display:flex;gap:8px;">
+                <button id="reset-prompt" class="btn btn-secondary btn-sm">Reset to Default</button>
+                <button id="delete-preset" class="btn btn-secondary btn-sm hidden">Delete Preset</button>
+              </div>
+              <span id="prompt-status" class="prompt-status"></span>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <!-- General Settings -->
       <section class="card">
@@ -146,6 +200,49 @@
                 <span id="temp-value" class="range-value">0.3</span>
               </div>
               <span class="hint">Lower = more focused, higher = more creative</span>
+            </div>
+          </div>
+          <div class="form-row" style="margin-top:8px;">
+            <div class="form-group flex-1">
+              <label for="response-language">Response Language</label>
+              <select id="response-language">
+                <option value="auto">Auto-detect (browser language)</option>
+                <option value="">English</option>
+                <option value="Spanish">Spanish</option>
+                <option value="French">French</option>
+                <option value="German">German</option>
+                <option value="Portuguese">Portuguese</option>
+                <option value="Italian">Italian</option>
+                <option value="Dutch">Dutch</option>
+                <option value="Russian">Russian</option>
+                <option value="Japanese">Japanese</option>
+                <option value="Korean">Korean</option>
+                <option value="Chinese (Simplified)">Chinese (Simplified)</option>
+                <option value="Chinese (Traditional)">Chinese (Traditional)</option>
+                <option value="Arabic">Arabic</option>
+                <option value="Hindi">Hindi</option>
+                <option value="Turkish">Turkish</option>
+                <option value="Polish">Polish</option>
+                <option value="Ukrainian">Ukrainian</option>
+                <option value="Vietnamese">Vietnamese</option>
+                <option value="Thai">Thai</option>
+                <option value="Indonesian">Indonesian</option>
+                <option value="Swedish">Swedish</option>
+                <option value="Czech">Czech</option>
+                <option value="Romanian">Romanian</option>
+                <option value="Hungarian">Hungarian</option>
+                <option value="Greek">Greek</option>
+                <option value="Hebrew">Hebrew</option>
+                <option value="Filipino">Filipino</option>
+              </select>
+              <span class="hint">Language for AI responses — "Auto" uses your browser's language setting</span>
+            </div>
+            <div class="form-group flex-1">
+              <label class="toggle-label">
+                <input type="checkbox" id="show-badge" checked>
+                <span>Show badge count on toolbar icon</span>
+              </label>
+              <span class="hint">Show unread monitor change count on the Argus icon</span>
             </div>
           </div>
         </div>
@@ -193,48 +290,6 @@
             </div>
           </div>
           <p class="info-text">Multi-agent mode dispatches your query to multiple agents in parallel. Higher effort = more agents and deeper research, but higher cost.</p>
-        </div>
-      </section>
-
-      <!-- Prompt Editor -->
-      <section class="card">
-        <h2 class="card-title">Analysis Prompts</h2>
-        <div class="card-body">
-          <p class="info-text">Customize the system and user prompts for each analysis type. Changes are saved automatically. Click "Reset" to restore defaults.</p>
-          <p class="info-text">Available variables: <code>{title}</code> <code>{url}</code> <code>{domain}</code> <code>{date}</code> <code>{wordcount}</code></p>
-
-          <div class="prompt-tabs">
-            <div id="prompt-tab-list" class="tab-list"></div>
-            <button id="add-preset" class="btn btn-sm btn-secondary" style="margin-left:8px;">+ New Preset</button>
-          </div>
-
-          <div id="prompt-editor" class="prompt-editor">
-            <div class="form-group">
-              <label for="prompt-provider">Preferred Provider <span class="hint" style="display:inline;margin:0;">(optional — overrides default when using this preset)</span></label>
-              <select id="prompt-provider">
-                <option value="">Use Default Provider</option>
-                <option value="xai">xAI (Grok)</option>
-                <option value="openai">OpenAI</option>
-                <option value="anthropic">Anthropic (Claude)</option>
-                <option value="gemini">Google (Gemini)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="prompt-system">System Prompt</label>
-              <textarea id="prompt-system" rows="2" placeholder="System role instruction..."></textarea>
-            </div>
-            <div class="form-group">
-              <label for="prompt-user">User Prompt</label>
-              <textarea id="prompt-user" rows="4" placeholder="Analysis instruction sent with page content..."></textarea>
-            </div>
-            <div class="prompt-actions">
-              <div style="display:flex;gap:8px;">
-                <button id="reset-prompt" class="btn btn-secondary btn-sm">Reset to Default</button>
-                <button id="delete-preset" class="btn btn-secondary btn-sm hidden">Delete Preset</button>
-              </div>
-              <span id="prompt-status" class="prompt-status"></span>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -403,6 +458,12 @@
                 <input type="text" id="monitor-title" placeholder="My Monitored Page">
               </div>
               <div class="form-group flex-1">
+                <label for="monitor-preset">Auto-Analyze Preset</label>
+                <select id="monitor-preset">
+                  <option value="">None</option>
+                </select>
+              </div>
+              <div class="form-group flex-1">
                 <label class="toggle-label">
                   <input type="checkbox" id="monitor-ai" checked>
                   <span>AI Change Analysis</span>
@@ -435,6 +496,118 @@
             <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;">
               <div id="monitor-storage-fill" style="height:100%;border-radius:3px;transition:width .3s;"></div>
             </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- TAB: Feeds                                   -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="feeds">
+
+      <section class="card">
+        <h2 class="card-title">RSS Feeds
+          <span class="badge">Reader</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Subscribe to RSS/Atom feeds for lightweight content monitoring. Argus auto-discovers feeds from page URLs. Optionally use AI to summarize new entries.</p>
+
+          <div id="feed-list" class="rules-list"></div>
+
+          <div class="rule-form">
+            <div class="form-row">
+              <div class="form-group flex-2">
+                <label for="feed-url">Feed or Page URL</label>
+                <input type="text" id="feed-url" placeholder="https://example.com or https://example.com/feed.xml">
+              </div>
+              <div class="form-group flex-1">
+                <label for="feed-interval">Check Interval</label>
+                <select id="feed-interval">
+                  <option value="15">Every 15 min</option>
+                  <option value="30">Every 30 min</option>
+                  <option value="60" selected>Every hour</option>
+                  <option value="360">Every 6 hours</option>
+                  <option value="1440">Daily</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="feed-title">Label (optional)</label>
+                <input type="text" id="feed-title" placeholder="My Feed">
+              </div>
+              <div class="form-group flex-1">
+                <label class="toggle-label">
+                  <input type="checkbox" id="feed-ai-summarize">
+                  <span>AI Summarize new entries</span>
+                </label>
+              </div>
+              <div class="form-group flex-1">
+                <label class="toggle-label">
+                  <input type="checkbox" id="feed-monitor-bridge">
+                  <span>Bridge to Page Monitor</span>
+                </label>
+              </div>
+              <div class="form-group flex-1" style="justify-content:flex-end;">
+                <button id="add-feed" class="btn btn-secondary btn-sm">Add Feed</button>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:8px;">
+            <button id="open-feed-reader" class="btn btn-secondary btn-sm">Open Feed Reader</button>
+            <span id="feed-status" class="prompt-status" style="margin-left:12px;"></span>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- TAB: Archive                                 -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="archive">
+
+      <section class="card">
+        <h2 class="card-title">Archive Redirect
+          <span class="badge">Bypass</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Automatically redirect paywalled or annoying news sites through an archive service for clean, ad-free reading. Manage your blocked domain list below.</p>
+
+          <div class="form-row" style="margin-bottom:12px;">
+            <div class="form-group flex-1">
+              <label class="toggle-label">
+                <input type="checkbox" id="archive-enabled">
+                <span>Enable Archive Redirect</span>
+              </label>
+            </div>
+            <div class="form-group flex-1">
+              <label for="archive-provider">Archive Provider</label>
+              <select id="archive-provider">
+                <option value="https://archive.is/">archive.is</option>
+                <option value="https://archive.ph/">archive.ph</option>
+                <option value="https://webcache.googleusercontent.com/search?q=cache:">Google Cache</option>
+                <option value="custom">Custom...</option>
+              </select>
+            </div>
+            <div class="form-group flex-1" id="archive-custom-group" style="display:none;">
+              <label for="archive-custom-url">Custom URL Prefix</label>
+              <input type="text" id="archive-custom-url" placeholder="https://example.com/?url=">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="archive-domains">Blocked Domains <span class="rule-meta">(one per line — e.g. nytimes.com)</span></label>
+            <textarea id="archive-domains" rows="12" style="width:100%;font-family:monospace;font-size:13px;background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius);padding:10px;resize:vertical;"></textarea>
+          </div>
+
+          <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
+            <button id="archive-save" class="btn btn-secondary btn-sm" style="padding:4px 14px;font-size:12px;">Save</button>
+            <button id="archive-reset" class="btn btn-secondary btn-sm" style="padding:4px 14px;font-size:12px;">Reset to Defaults</button>
+            <span id="archive-status" class="prompt-status" style="margin-left:4px;"></span>
           </div>
         </div>
       </section>
@@ -596,12 +769,14 @@
           </ol>
           <p>Or use <kbd>Ctrl+Shift+A</kbd> to instantly analyze selected text without opening the popup.</p>
 
-          <h3>Context Menu</h3>
-          <p>Right-click any page (or selected text) and choose <strong>Argus</strong> from the context menu to:</p>
+          <h3>Context Menu (Right-Click)</h3>
+          <p>Right-click anywhere on a page to access Argus directly — no popup needed.</p>
           <ul>
-            <li><strong>Bookmark with AI Tags</strong> — instant smart bookmark</li>
-            <li>Run any analysis preset directly on the page or selection</li>
+            <li><strong>Bookmark with AI Tags</strong> — instant smart bookmark with AI-generated tags, category, and summary</li>
+            <li>Run any built-in or custom analysis preset directly (Summary, Fact-Check, Late Night Recap, etc.)</li>
           </ul>
+          <p><strong>Selected text:</strong> Highlight text on any page, then right-click &rarr; <strong>Argus</strong> &rarr; choose a preset. Only the selected text is analyzed, not the full page — perfect for checking a specific quote, claim, or paragraph.</p>
+          <p>All presets you create automatically appear in the context menu.</p>
         </div>
       </section>
 
@@ -669,6 +844,7 @@
                 <tr><td><strong>Critical Analysis</strong></td><td>Examines arguments, strengths, weaknesses, fallacies</td></tr>
                 <tr><td><strong>Action Items</strong></td><td>Extracts tasks and next steps as a checklist</td></tr>
                 <tr><td><strong>Research Report</strong></td><td>Multi-source synthesis with citations and cross-references</td></tr>
+                <tr><td><strong>Late Night Recap</strong></td><td>Sharp, witty comedic editorial recap of the page content</td></tr>
               </tbody>
             </table>
           </div>
@@ -751,6 +927,49 @@
 
           <h3>Viewing Changes</h3>
           <p>When a change is detected, you'll get a browser notification. Click any monitor's <strong>"History"</strong> button to see a timeline of all detected changes with before/after comparisons.</p>
+
+          <h3>Monitor Duration</h3>
+          <p>Set an auto-expiry so monitors don't run indefinitely. Options: 12 hours, 1 day, 3 days (default for quick-monitor), 7 days, 30 days, or indefinite. Expired monitors auto-stop and show "EXPIRED" in the list.</p>
+
+          <h3>Storage</h3>
+          <p>The storage usage bar at the bottom of the Monitors tab shows how much space your monitors are using. Snapshots are automatically capped and kept lightweight to avoid bloating your browser storage.</p>
+        </div>
+      </section>
+
+      <!-- RSS Feeds -->
+      <section class="card">
+        <h2 class="card-title">RSS Feeds</h2>
+        <div class="card-body help-content">
+          <p>Subscribe to RSS/Atom feeds for lightweight content monitoring without scraping entire pages.</p>
+
+          <h3>Adding Feeds</h3>
+          <ol>
+            <li>Go to the <strong>Feeds</strong> tab in this console</li>
+            <li>Paste a feed URL — or paste any page URL and Argus will try to auto-discover the feed</li>
+            <li>Set the check interval and optionally enable <strong>AI Summarize</strong> for automatic summaries of new entries</li>
+            <li>Enable <strong>Bridge to Page Monitor</strong> to link feed updates to your monitor dashboard</li>
+          </ol>
+
+          <h3>Feed Reader</h3>
+          <p>Click <strong>"Open Feed Reader"</strong> or click <strong>"Open Reader"</strong> on any feed to open the dedicated reading view. Browse entries by feed or see all feeds combined, mark entries as read, and use AI to summarize individual articles.</p>
+
+          <h3>Monitor Bridge</h3>
+          <p>When enabled, new RSS entries are reflected as changes on linked page monitors. This is lighter than page scraping and works well for news sites that publish via RSS.</p>
+        </div>
+      </section>
+
+      <!-- Archive Redirect -->
+      <section class="card">
+        <h2 class="card-title">Archive Redirect</h2>
+        <div class="card-body help-content">
+          <p>Automatically redirect paywalled or annoying news sites through <strong>archive.is</strong> for clean, ad-free reading.</p>
+          <ol>
+            <li>Go to the <strong>Archive</strong> tab in this console</li>
+            <li>Toggle <strong>Enable Archive Redirect</strong></li>
+            <li>Edit the domain list — add or remove sites (one per line)</li>
+            <li>Click <strong>Save</strong></li>
+          </ol>
+          <p>When enabled, navigating to any listed domain will instantly redirect through archive.is. This is off by default. A default list of 24 common paywalled sites is included.</p>
         </div>
       </section>
 
@@ -807,6 +1026,8 @@
                 <tr><td>Extended Thinking</td><td>Off</td><td>Show Claude's reasoning process (Claude only)</td></tr>
                 <tr><td>Thinking Budget</td><td>10,000</td><td>Tokens allocated for Claude's thinking (1,000–100,000)</td></tr>
                 <tr><td>Reasoning Effort</td><td>Medium</td><td>Swarm agent count and depth (Grok 4.20 only)</td></tr>
+                <tr><td>Response Language</td><td>Auto-detect</td><td>Language for AI responses — "Auto" uses your browser's locale. Set manually to override.</td></tr>
+                <tr><td>Show Badge Count</td><td>On</td><td>Show unread monitor change count on the toolbar icon</td></tr>
               </tbody>
             </table>
           </div>
@@ -817,13 +1038,18 @@
       <section class="card">
         <h2 class="card-title">Privacy &amp; Security</h2>
         <div class="card-body help-content">
+          <div class="help-callout">
+            <strong>Nothing is sent to the developer. Ever.</strong> Argus has no server, no backend, no accounts, and no way to collect your data. Everything — your API keys, bookmarks, monitors, settings, and analysis history — lives entirely in your browser's local storage and never leaves your machine.
+          </div>
           <ul>
-            <li><strong>API keys are stored locally</strong> in your browser's extension storage — they are never transmitted anywhere except directly to the AI provider you select</li>
-            <li><strong>No telemetry or analytics</strong> — Argus does not phone home or track usage</li>
-            <li><strong>No data collection</strong> — declared in the extension manifest</li>
-            <li><strong>Page content</strong> is sent only to the AI provider you choose for each analysis</li>
-            <li><strong>No accounts required</strong> — Argus has no server, no backend, no sign-up</li>
+            <li><strong>API keys are stored locally</strong> in your browser's extension storage — they are never transmitted anywhere except directly to the AI provider you select for each analysis</li>
+            <li><strong>No telemetry or analytics</strong> — Argus does not phone home, track usage, or report anything back to anyone</li>
+            <li><strong>No data collection</strong> — explicitly declared in the extension manifest under <code>data_collection_permissions</code></li>
+            <li><strong>Page content</strong> is sent only to the AI provider you choose, only when you initiate an analysis (or when a monitor/feed triggers one)</li>
+            <li><strong>No accounts required</strong> — there is nothing to sign up for because there is no service behind this extension</li>
+            <li><strong>Fully auditable</strong> — Argus is open source. Every line of code is available for you to read, verify, and modify</li>
           </ul>
+          <p>The only network requests Argus makes are to the AI provider APIs you configure (xAI, OpenAI, Anthropic, Google), RSS feed URLs you subscribe to, and archive redirect URLs if you enable that feature. That's it.</p>
         </div>
       </section>
 
@@ -851,6 +1077,28 @@
 
           <h3>Extension shortcuts not working</h3>
           <p>Another extension may be using the same shortcut. Go to <strong>about:addons</strong> &rarr; Gear icon &rarr; <strong>Manage Extension Shortcuts</strong> to check for conflicts and reassign.</p>
+        </div>
+      </section>
+
+      <!-- Open Source -->
+      <section class="card">
+        <h2 class="card-title">Open Source</h2>
+        <div class="card-body help-content">
+          <p>Argus is fully open source under the MIT license. The entire extension is vanilla JavaScript with zero dependencies (except <code>marked.min.js</code> for Markdown rendering) — no frameworks, no bundlers, no transpilers. Just open the files and read them.</p>
+
+          <p><strong>Check out the code, report issues, or contribute:</strong></p>
+          <p style="margin:8px 0 16px;"><a href="https://github.com/n3r4-life/argus360" target="_blank" style="color:var(--accent);font-size:15px;font-weight:600;">github.com/n3r4-life/argus360</a></p>
+
+          <ul>
+            <li><strong>Review the code</strong> — verify for yourself that nothing shady is happening. It's all there in plain JS.</li>
+            <li><strong>Report bugs or request features</strong> — open an issue on GitHub</li>
+            <li><strong>Fork it and make it yours</strong> — rename it, swap the icons, add providers, change the UI. No restrictions.</li>
+            <li><strong>Contribute</strong> — PRs are welcome. If you build something cool with it, let us know.</li>
+          </ul>
+
+          <div class="help-callout">
+            <strong>Why open source matters here:</strong> You're handing this extension your API keys and your browsing content. You <em>should</em> be able to see exactly what it does with them. Argus is transparent by design — no obfuscated code, no minified bundles, no hidden network calls. What you see in the repo is exactly what runs in your browser.
+          </div>
         </div>
       </section>
 

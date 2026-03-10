@@ -27,6 +27,7 @@
 | **Critical Analysis** | Examines arguments, strengths, weaknesses, fallacies |
 | **Action Items** | Extracts tasks and next steps as a checklist |
 | **Research Report** | Multi-source synthesis with citations and cross-references |
+| **Late Night Recap** | Sharp, witty comedic editorial recap of the page content |
 
 ### Custom Presets & Provider Binding
 - Create your own analysis presets with custom system and user prompts
@@ -46,6 +47,18 @@
 - Full diff history with side-by-side comparison
 - **Storage-aware** — built-in usage indicator, automatic snapshot limits, and lightweight data storage
 
+### RSS Feed Reader
+- Built-in **RSS/Atom feed reader** — subscribe to any feed or paste a page URL and Argus auto-discovers the feed
+- Configurable check intervals per feed
+- **AI-summarized entries** — new articles are summarized automatically using your configured provider
+- **Monitor bridge** — link feeds to page monitors so RSS updates show as monitor changes
+- Unread counts, mark-as-read, and a dedicated feed reader page
+
+### Archive Redirect
+- Automatically redirect paywalled or annoying news sites through **archive.is**
+- Manage a customizable domain blocklist (24 common sites pre-loaded)
+- Toggle on/off from the **Archive** tab — off by default
+
 ### Auto-Analyze
 - Set up rules to automatically analyze pages matching URL patterns
 - Configure per-domain with custom presets and providers
@@ -57,6 +70,7 @@
 - **Extended thinking** — see Claude's reasoning process
 - **Multi-agent mode** — use Grok 4.20 Swarm with configurable agent count
 - **Export results** as Markdown, HTML, or plain text
+- **Response language** — auto-detects your browser language or set manually; AI responds in your language
 - **Context menu integration** — right-click any page to analyze
 - **Keyboard shortcuts** for quick access
 - **Analysis history** — searchable log of all past analyses
@@ -69,7 +83,7 @@
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/ndemiduk/argus360.git
+   git clone https://github.com/n3r4-life/argus360.git
    cd argus360
    ```
 
@@ -199,6 +213,24 @@ Selecting the **Research Report** preset automatically activates multi-page mode
 5. Write your system prompt and user prompt
 6. The preset now always uses that provider — shown as `Preset Name → Provider` in the popup
 
+**Example: "Late Night Recap" preset**
+
+> Want the news delivered with personality? Create a preset that recites page content in a comedic editorial style — sharp, punchy, and opinionated — without naming the style or breaking character. Great for making dry news actually fun to read.
+
+```
+System prompt:
+You are a sharp-witted comedic editorial writer. Your style is punchy,
+irreverent, and conversational — like a late-night monologue meets a
+newspaper column. Use sarcasm, wit, and strong opinions. Never reference
+your style, influences, or that you're an AI. Just deliver the content.
+
+User prompt:
+Recap the following page content as if you're writing your editorial column.
+Hit the key points but make it entertaining. Use markdown formatting.
+```
+
+You can bind this to any provider and even attach it to a monitored page — so every time the page changes, Argus auto-runs your preset and delivers the update in your preferred style.
+
 ### Page Monitoring
 
 **From the popup:**
@@ -226,13 +258,35 @@ Selecting the **Research Report** preset automatically activates multi-page mode
 3. Choose an analysis type, provider, and delay
 4. Toggle rules on/off as needed
 
-### Context Menu
+### RSS Feeds
 
-Right-click any page and select **Argus** to:
-- **Bookmark with AI Tags** — instant smart bookmark
-- Run any analysis preset directly
+1. Open Settings → **Feeds** tab
+2. Paste a feed URL (or any page URL — Argus will try to find the feed automatically)
+3. Set check interval and optionally enable **AI Summarize** for auto-summaries
+4. Enable **Bridge to Page Monitor** to link feed updates to your monitor dashboard
+5. Click **Open Feed Reader** for a dedicated reading view with unread counts
 
-Works on selected text too — right-click a selection to analyze just that text.
+### Archive Redirect
+
+1. Open Settings → **Archive** tab
+2. Toggle **Enable Archive Redirect**
+3. Edit the domain list (one per line) — add or remove sites as needed
+4. Click **Save** — any matching site will redirect through archive.is automatically
+
+### Context Menu (Right-Click)
+
+Right-click anywhere on a page to access Argus directly — no need to open the popup first.
+
+**On any page:**
+- **Bookmark with AI Tags** — instant smart bookmark with AI-generated tags, category, and summary
+- Run any built-in or custom analysis preset directly from the menu (Summary, Fact-Check, Late Night Recap, etc.)
+
+**On selected text:**
+- Highlight any text on a page, then right-click → **Argus** → choose a preset
+- Only the selected text is sent for analysis, not the entire page
+- Great for analyzing a specific paragraph, quote, or claim without the noise of the full page
+
+All presets — including any custom presets you've created — appear in the context menu automatically.
 
 ### Exporting Results
 
@@ -253,6 +307,7 @@ From any results page, use the toolbar to:
 | Max Response Tokens | 2048 | Maximum tokens in AI response (256–16,384) |
 | Max Input Characters | 100,000 | How much page text to send (1,000–500,000) |
 | Temperature | 0.3 | Creativity level (0 = focused, 1 = creative) |
+| Response Language | Auto-detect | Language for AI responses — auto uses browser locale |
 
 ### Extended Thinking (Claude)
 
@@ -310,6 +365,10 @@ Argus/
 │   ├── monitor-history.html
 │   ├── monitor-history.js
 │   └── monitor-history.css
+├── feeds/                 # RSS feed reader
+│   ├── feeds.html
+│   ├── feeds.js
+│   └── feeds.css
 ├── lib/
 │   ├── marked.min.js      # Markdown rendering
 │   └── export-utils.js    # Shared export functions
@@ -340,7 +399,7 @@ Argus is fully open source. Clone it, rename it, rip it apart and build somethin
 
 ```bash
 # Clone the repo
-git clone https://github.com/ndemiduk/argus360.git
+git clone https://github.com/n3r4-life/argus360.git
 cd argus360
 
 # Load in Firefox for development
