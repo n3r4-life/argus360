@@ -3,7 +3,7 @@
 **Analyze any webpage with any AI.** Argus is a Firefox extension that lets you run AI-powered analysis on any page using Grok, ChatGPT, Claude, Gemini, or any OpenAI-compatible provider -- with OSINT tools, custom prompts, streaming responses, follow-up questions, multi-provider comparison, smart bookmarks, page monitoring, and more.
 
 ![Firefox](https://img.shields.io/badge/Firefox-142%2B-orange)
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-360.1.0.1-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ---

@@ -235,6 +235,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   initMainTabs();
   initHelpBackToTop();
   initWatchlist();
+  initStorageManagement();
 });
 
 function loadVersion() {
@@ -1719,6 +1720,7 @@ function initProjects() {
   projEl.itemNotes = document.getElementById("proj-item-notes");
 
   document.getElementById("proj-new").addEventListener("click", () => projOpenModal());
+  document.getElementById("proj-import").addEventListener("click", projImport);
   document.getElementById("proj-export-all").addEventListener("click", projExportAll);
   document.getElementById("proj-add-note").addEventListener("click", () => projAddItem("note"));
   document.getElementById("proj-add-url").addEventListener("click", () => projAddItem("url"));
@@ -2131,28 +2133,69 @@ async function projAddItem(type) {
   }
 }
 
-async function projExportOne(id) {
-  const resp = await browser.runtime.sendMessage({ action: "exportProject", projectId: id });
-  if (!resp || !resp.success) return;
-  const blob = new Blob([JSON.stringify(resp.project, null, 2)], { type: "application/json" });
+function downloadBundle(bundle, filename) {
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${resp.project.name.replace(/[^a-z0-9]/gi, "_")}.json`;
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
 }
 
+async function projExportOne(id) {
+  const resp = await browser.runtime.sendMessage({ action: "exportProject", projectId: id });
+  if (!resp || !resp.success) return;
+  const name = (resp.bundle.projects[0].name || "project").replace(/[^a-z0-9]/gi, "_");
+  downloadBundle(resp.bundle, `${name}.argusproj`);
+}
+
 async function projExportAll() {
-  const resp = await browser.runtime.sendMessage({ action: "getProjects" });
-  if (!resp || !resp.success || resp.projects.length === 0) return;
-  const blob = new Blob([JSON.stringify(resp.projects, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "argus-projects.json";
-  a.click();
-  URL.revokeObjectURL(url);
+  const resp = await browser.runtime.sendMessage({ action: "exportAllProjects" });
+  if (!resp || !resp.success) return;
+  downloadBundle(resp.bundle, "argus-projects.argusproj");
+}
+
+function projImport() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".argusproj,.json";
+  input.addEventListener("change", async () => {
+    const file = input.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      let bundle = JSON.parse(text);
+
+      // Support importing old-format single project JSON
+      if (!bundle.manifest && bundle.id && bundle.items) {
+        bundle = {
+          manifest: { format: "argusproj", version: 1, exportedAt: new Date().toISOString(), projectCount: 1, historyCount: 0 },
+          projects: [bundle],
+          history: [],
+        };
+      }
+      // Support importing old-format array of projects
+      if (Array.isArray(bundle)) {
+        bundle = {
+          manifest: { format: "argusproj", version: 1, exportedAt: new Date().toISOString(), projectCount: bundle.length, historyCount: 0 },
+          projects: bundle,
+          history: [],
+        };
+      }
+
+      const resp = await browser.runtime.sendMessage({ action: "importProject", bundle });
+      if (resp && resp.success) {
+        alert(`Imported ${resp.projectsImported} project(s) and ${resp.historyImported} history item(s).`);
+        projLoadList();
+      } else {
+        alert("Import failed: " + (resp ? resp.error : "Unknown error"));
+      }
+    } catch (e) {
+      alert("Failed to read file: " + e.message);
+    }
+  });
+  input.click();
 }
 
 let batchPollTimer = null;
@@ -2520,4 +2563,66 @@ async function loadWatchlistMatches() {
     div.appendChild(matchInfo);
     container.appendChild(div);
   }
+}
+
+// ──────────────────────────────────────────────
+// Storage Management
+// ──────────────────────────────────────────────
+function initStorageManagement() {
+  updateStorageUsage();
+
+  document.getElementById("purge-history-btn").addEventListener("click", purgeOldHistory);
+  document.getElementById("purge-snapshots-btn").addEventListener("click", purgeMonitorSnapshots);
+  document.getElementById("purge-cached-btn").addEventListener("click", purgeAllCachedData);
+}
+
+async function updateStorageUsage() {
+  const display = document.getElementById("storage-usage-display");
+  try {
+    // Combine browser.storage.local (settings/ephemeral) + IndexedDB (heavy data)
+    const all = await browser.storage.local.get(null);
+    const localBytes = new Blob([JSON.stringify(all)]).size;
+    const idbSizes = await ArgusDB.estimateSize();
+    const totalBytes = localBytes + (idbSizes._total || 0);
+    if (totalBytes < 1024) display.textContent = totalBytes + " B";
+    else if (totalBytes < 1048576) display.textContent = (totalBytes / 1024).toFixed(1) + " KB";
+    else display.textContent = (totalBytes / 1048576).toFixed(1) + " MB";
+  } catch {
+    display.textContent = "Unable to calculate";
+  }
+}
+
+function showPurgeStatus(msg) {
+  const status = document.getElementById("storage-purge-status");
+  status.textContent = msg;
+  status.classList.remove("hidden");
+  setTimeout(() => status.classList.add("hidden"), 3000);
+}
+
+async function purgeOldHistory() {
+  const days = parseInt(document.getElementById("purge-history-age").value, 10);
+  const count = await ArgusDB.History.purgeOlderThan(days);
+  showPurgeStatus(`Purged ${count} history entries`);
+  updateStorageUsage();
+}
+
+async function purgeMonitorSnapshots() {
+  const keep = parseInt(document.getElementById("purge-snapshots-keep").value, 10);
+  const monitors = await ArgusDB.Monitors.getAll();
+  let trimmed = 0;
+  for (const mon of monitors) {
+    trimmed += await ArgusDB.Snapshots.pruneForMonitor(mon.id, keep);
+  }
+  showPurgeStatus(`Trimmed ${trimmed} snapshots`);
+  updateStorageUsage();
+}
+
+async function purgeAllCachedData() {
+  // Ephemeral result keys stay in browser.storage.local
+  const all = await browser.storage.local.get(null);
+  const prefixes = ["tl-result-", "techstack-", "metadata-", "linkmap-", "whois-", "result-"];
+  const keysToRemove = Object.keys(all).filter(k => prefixes.some(p => k.startsWith(p)));
+  if (keysToRemove.length) await browser.storage.local.remove(keysToRemove);
+  showPurgeStatus(`Removed ${keysToRemove.length} cached entries`);
+  updateStorageUsage();
 }

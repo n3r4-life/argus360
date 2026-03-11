@@ -37,6 +37,26 @@ let analysisProvider = "";
 let analysisModel = "";
 let shareline = "";
 
+// Unified viewer instance
+const viewer = IntelligenceViewer.create({
+  contentEl: elements.resultContent,
+  metaEl: elements.resultMeta,
+  thinkingSection: elements.thinkingSection,
+  thinkingToggle: elements.thinkingToggle,
+  thinkingContent: elements.thinkingContent,
+  errorContainer: elements.errorContainer,
+  errorMessage: elements.errorMessage,
+  loadingContainer: elements.loadingContainer,
+  resultsContainer: elements.resultsContainer,
+  sourcesPanel: elements.sourcesPanel,
+  sourcesList: elements.sourcesList,
+  copyBtn: elements.copyResult,
+  mdBtn: elements.exportMd,
+  htmlBtn: elements.exportHtml,
+  txtBtn: elements.exportTxt,
+  printBtn: elements.printResult,
+});
+
 document.addEventListener("DOMContentLoaded", () => {
   const params = new URLSearchParams(window.location.search);
   resultId = params.get("id");
@@ -56,34 +76,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (!resultId) {
-    showError("No result ID provided. This page must be opened by the extension.");
+    viewer.showError("No result ID provided. This page must be opened by the extension.");
     return;
   }
 
   pollForResult(resultId);
-
-  elements.copyResult.addEventListener("click", () => {
-    navigator.clipboard.writeText(rawMarkdown).then(() => {
-      elements.copyResult.textContent = "Copied!";
-      setTimeout(() => { elements.copyResult.textContent = "Copy Markdown"; }, 1500);
-    });
-  });
-
-  elements.exportMd.addEventListener("click", () => {
-    exportAsMarkdown(rawMarkdown, (pageTitle || "analysis") + ".md");
-  });
-
-  elements.exportHtml.addEventListener("click", () => {
-    exportAsHTML(rawMarkdown, pageTitle || "analysis");
-  });
-
-  elements.exportTxt.addEventListener("click", () => {
-    exportAsText(rawMarkdown, (pageTitle || "analysis") + ".txt");
-  });
-
-  elements.printResult.addEventListener("click", () => {
-    window.print();
-  });
+  // Export/copy/print buttons are wired by the viewer instance
 
   // Share buttons
   function getShareSnippet() {
@@ -104,9 +102,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function getShareAttrib() {
-    const prov = analysisProvider || "";
-    const provNames = { xai: "Grok", openai: "ChatGPT", anthropic: "Claude", gemini: "Gemini" };
-    const name = provNames[prov] || prov;
+    const name = IntelligenceViewer.providerLabel(analysisProvider);
     return name ? `Argus w/ ${name}` : "Argus";
   }
 
@@ -298,17 +294,18 @@ async function pollForResult(id) {
     }
 
     if (data.status === "streaming") {
-      elements.loadingContainer.classList.add("hidden");
-      elements.resultsContainer.classList.remove("hidden");
-      elements.resultContent.classList.add("streaming");
+      viewer.showLoading(false);
+      viewer.showResults(true);
+      viewer.setStreaming(true);
 
       // Strip shareline from streaming display so it doesn't flash
       const streamContent = (data.content || "").replace(/\n?SHARELINE:\s*.+$/m, "");
       rawMarkdown = streamContent;
-      renderMarkdown(streamContent, elements.resultContent);
+      viewer.setRawMarkdown(rawMarkdown);
+      IntelligenceViewer.renderMarkdown(streamContent, elements.resultContent);
 
       if (data.provider && data.model) {
-        elements.resultMeta.textContent = `${data.provider} | ${data.model} | Streaming...`;
+        viewer.setMetaText(`${IntelligenceViewer.providerLabel(data.provider)} | ${data.model} | Streaming...`);
       }
 
       await sleep(POLL_INTERVAL);
@@ -316,20 +313,20 @@ async function pollForResult(id) {
     }
 
     if (data.status === "done") {
-      elements.resultContent.classList.remove("streaming");
+      viewer.setStreaming(false);
       showResult(data);
       browser.storage.local.remove(id);
       return;
     }
 
     if (data.status === "error") {
-      showError(data.error);
+      viewer.showError(data.error);
       browser.storage.local.remove(id);
       return;
     }
   }
 
-  showError("Analysis timed out. Please try again.");
+  viewer.showError("Analysis timed out. Please try again.");
   browser.storage.local.remove(id);
 }
 
@@ -362,33 +359,25 @@ function showResult(data) {
   rawMarkdown = extracted.cleaned;
   pageTitle = data.pageTitle || pageTitle;
 
-  renderMarkdown(rawMarkdown, elements.resultContent);
+  viewer.setTitle(pageTitle);
+  viewer.setContent(rawMarkdown);
 
   // Research mode: show sources panel and enhance content
   if (data.isResearch && data.sources) {
-    renderSourcesPanel(data.sources);
-    makeCitationsClickable(elements.resultContent);
+    viewer.setSources(data.sources);
+    viewer.makeCitationsClickable(data.sources);
     makeCollapsibleSections(elements.resultContent);
   }
 
-  if (data.thinking) {
-    elements.thinkingSection.classList.remove("hidden");
-    elements.thinkingContent.textContent = data.thinking;
-  }
+  viewer.setThinking(data.thinking);
 
   if (data.provider) analysisProvider = data.provider;
   if (data.model) analysisModel = data.model;
 
-  let meta = "";
-  if (data.provider) meta += data.provider;
-  if (data.model) meta += ` | ${data.model}`;
-  if (data.usage) {
-    meta += ` | Tokens: ${data.usage.prompt_tokens || "?"} in / ${data.usage.completion_tokens || "?"} out`;
-  }
-  elements.resultMeta.textContent = meta;
+  viewer.setMeta({ provider: data.provider, model: data.model, usage: data.usage });
 
-  elements.loadingContainer.classList.add("hidden");
-  elements.resultsContainer.classList.remove("hidden");
+  viewer.showLoading(false);
+  viewer.showResults(true);
 
   // Show follow-up input
   elements.followupContainer.classList.remove("hidden");
@@ -493,7 +482,6 @@ async function sendFollowUp() {
   if (!question) return;
 
   const providerOverride = elements.followupProvider.value || null;
-  const provNames = { xai: "Grok", openai: "OpenAI", anthropic: "Claude", gemini: "Gemini", custom: "Custom" };
 
   elements.followupInput.value = "";
   elements.followupSend.disabled = true;
@@ -503,7 +491,7 @@ async function sendFollowUp() {
   questionDiv.className = "followup-question";
   const strong = document.createElement("strong");
   strong.textContent = providerOverride
-    ? `Follow-up (${provNames[providerOverride] || providerOverride}):`
+    ? `Follow-up (${IntelligenceViewer.providerLabel(providerOverride)}):`
     : "Follow-up:";
   questionDiv.appendChild(strong);
   questionDiv.appendChild(document.createTextNode(" " + question));
@@ -552,42 +540,24 @@ async function pollForFollowUp(followupId, answerDiv) {
     }
 
     if (data.status === "streaming") {
-      renderMarkdown(data.content || "", answerDiv);
+      IntelligenceViewer.renderMarkdown(data.content || "", answerDiv);
       elements.resultContent.scrollTop = elements.resultContent.scrollHeight;
       await sleep(POLL_INTERVAL);
       continue;
     }
 
     if (data.status === "done") {
-      answerDiv.classList.remove("streaming");
-      renderMarkdown(data.content, answerDiv);
+      IntelligenceViewer.renderMarkdown(data.content, answerDiv);
       rawMarkdown += `\n\n---\n\n**Follow-up:** ${elements.followupInput.value || ""}\n\n${data.content}`;
+      viewer.setRawMarkdown(rawMarkdown);
 
-      // Show per-answer attribution
-      if (data.provider || data.model) {
-        const attrDiv = document.createElement("div");
-        attrDiv.className = "followup-meta";
-        const provNames = { xai: "Grok", openai: "OpenAI", anthropic: "Claude", gemini: "Gemini", custom: "Custom" };
-        let attrText = provNames[data.provider] || data.provider || "";
-        if (data.model) attrText += attrText ? ` (${data.model})` : data.model;
-        attrDiv.textContent = attrText;
-        answerDiv.appendChild(attrDiv);
+      IntelligenceViewer.finalizeAnswerBlock(answerDiv, data);
 
-        // Update footer if provider changed
-        if (data.provider) analysisProvider = data.provider;
-        if (data.model) analysisModel = data.model;
-        let meta = data.provider || "";
-        if (data.model) meta += ` | ${data.model}`;
-        if (data.usage) {
-          meta += ` | Tokens: ${data.usage.prompt_tokens || "?"} in / ${data.usage.completion_tokens || "?"} out`;
-        }
-        elements.resultMeta.textContent = meta;
-      }
+      if (data.provider) analysisProvider = data.provider;
+      if (data.model) analysisModel = data.model;
+      viewer.setMeta({ provider: data.provider, model: data.model, usage: data.usage });
 
-      if (data.thinking) {
-        elements.thinkingSection.classList.remove("hidden");
-        elements.thinkingContent.textContent += "\n---\n" + data.thinking;
-      }
+      viewer.appendThinking(data.thinking);
 
       browser.storage.local.remove(followupId);
       return;
@@ -697,31 +667,19 @@ async function pollForReAnalyze(reId, answerDiv, presetLabel) {
     }
 
     if (data.status === "streaming") {
-      renderMarkdown(data.content || "", answerDiv);
+      IntelligenceViewer.renderMarkdown(data.content || "", answerDiv);
       elements.resultContent.scrollTop = elements.resultContent.scrollHeight;
       await sleep(POLL_INTERVAL);
       continue;
     }
 
     if (data.status === "done") {
-      answerDiv.classList.remove("streaming");
-      renderMarkdown(data.content, answerDiv);
+      IntelligenceViewer.renderMarkdown(data.content, answerDiv);
       rawMarkdown += `\n\n---\n\n**Re-Analysis (${presetLabel}):**\n\n${data.content}`;
+      viewer.setRawMarkdown(rawMarkdown);
 
-      if (data.provider || data.model) {
-        const attrDiv = document.createElement("div");
-        attrDiv.className = "followup-meta";
-        const provNames = { xai: "Grok", openai: "OpenAI", anthropic: "Claude", gemini: "Gemini", custom: "Custom" };
-        let attrText = provNames[data.provider] || data.provider || "";
-        if (data.model) attrText += attrText ? ` (${data.model})` : data.model;
-        attrDiv.textContent = attrText;
-        answerDiv.appendChild(attrDiv);
-      }
-
-      if (data.thinking) {
-        elements.thinkingSection.classList.remove("hidden");
-        elements.thinkingContent.textContent += "\n---\n" + data.thinking;
-      }
+      IntelligenceViewer.finalizeAnswerBlock(answerDiv, data);
+      viewer.appendThinking(data.thinking);
 
       browser.storage.local.remove(reId);
       return;
@@ -739,22 +697,6 @@ async function pollForReAnalyze(reId, answerDiv, presetLabel) {
   }
 }
 
-// ──────────────────────────────────────────────
-// Helpers
-// ──────────────────────────────────────────────
-function renderMarkdown(md, container) {
-  const parsed = new DOMParser().parseFromString(marked.parse(md), "text/html");
-  const wasStreaming = container.classList.contains("streaming");
-  container.replaceChildren(...parsed.body.childNodes);
-  if (wasStreaming) container.classList.add("streaming");
-}
-
-function showError(message) {
-  elements.errorMessage.textContent = message;
-  elements.loadingContainer.classList.add("hidden");
-  elements.errorContainer.classList.remove("hidden");
-}
-
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -764,7 +706,7 @@ function sleep(ms) {
 // ──────────────────────────────────────────────
 async function displayMetadata(storeKey) {
   const data = (await browser.storage.local.get(storeKey))[storeKey];
-  if (!data) { showError("Metadata not found."); return; }
+  if (!data) { viewer.showError("Metadata not found."); return; }
 
   elements.presetLabel.textContent = "Page Metadata";
   elements.pageTitle.textContent = data.pageTitle || "Unknown";
@@ -821,8 +763,9 @@ async function displayMetadata(storeKey) {
   }
 
   rawMarkdown = md;
-  renderMarkdown(md, elements.resultContent);
-  elements.resultMeta.textContent = "Extracted from page DOM";
+  viewer.setRawMarkdown(rawMarkdown);
+  IntelligenceViewer.renderMarkdown(md, elements.resultContent);
+  viewer.setMetaText("Extracted from page DOM");
 
   // Clean up stored data
   browser.storage.local.remove(storeKey);
@@ -833,7 +776,7 @@ async function displayMetadata(storeKey) {
 // ──────────────────────────────────────────────
 async function displayWhois(storeKey) {
   const data = (await browser.storage.local.get(storeKey))[storeKey];
-  if (!data) { showError("Whois data not found."); return; }
+  if (!data) { viewer.showError("Whois data not found."); return; }
 
   elements.presetLabel.textContent = "Whois / DNS Lookup";
   elements.pageTitle.textContent = data.whois?.domain || data.pageTitle || "Unknown";
@@ -884,8 +827,9 @@ async function displayWhois(storeKey) {
   }
 
   rawMarkdown = md;
-  renderMarkdown(md, elements.resultContent);
-  elements.resultMeta.textContent = "RDAP/DNS lookup";
+  viewer.setRawMarkdown(rawMarkdown);
+  IntelligenceViewer.renderMarkdown(md, elements.resultContent);
+  viewer.setMetaText("RDAP/DNS lookup");
 
   browser.storage.local.remove(storeKey);
 }

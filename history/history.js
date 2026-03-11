@@ -48,22 +48,12 @@ function attachListeners() {
     if (e.target === elements.detailOverlay) closeDetail();
   });
 
-  elements.detailCopy.addEventListener("click", () => {
-    if (!currentItem) return;
-    navigator.clipboard.writeText(currentItem.content).then(() => {
-      elements.detailCopy.textContent = "Copied!";
-      setTimeout(() => { elements.detailCopy.textContent = "Copy Markdown"; }, 1500);
-    });
-  });
-
-  elements.detailExportMd.addEventListener("click", () => {
-    if (!currentItem) return;
-    exportAsMarkdown(currentItem.content, (currentItem.pageTitle || "analysis") + ".md");
-  });
-
-  elements.detailExportHtml.addEventListener("click", () => {
-    if (!currentItem) return;
-    exportAsHTML(currentItem.content, currentItem.pageTitle || "analysis");
+  IntelligenceViewer.initExportButtons({
+    copyBtn: elements.detailCopy,
+    mdBtn: elements.detailExportMd,
+    htmlBtn: elements.detailExportHtml,
+    getMarkdown: () => currentItem ? currentItem.content : "",
+    getTitle: () => currentItem ? (currentItem.pageTitle || "analysis") : "analysis",
   });
 
   elements.detailDelete.addEventListener("click", async () => {
@@ -170,7 +160,7 @@ function renderHistory(items, total) {
     const timeSpan = document.createElement("span");
     timeSpan.textContent = timeStr;
     const provSpan = document.createElement("span");
-    provSpan.textContent = item.provider || "";
+    provSpan.textContent = IntelligenceViewer.providerLabel(item.provider);
     const modelSpan = document.createElement("span");
     modelSpan.textContent = item.model || "";
     metaDiv.appendChild(timeSpan);
@@ -220,23 +210,16 @@ function openDetail(item) {
   elements.detailUrl.textContent = item.pageUrl || "";
   elements.detailUrl.href = item.pageUrl || "#";
 
-  const date = new Date(item.timestamp);
-  const timeStr = date.toLocaleString();
-  let meta = `${timeStr} | ${item.provider || "?"} | ${item.model || "?"} | ${item.presetLabel || item.preset || "?"}`;
-  if (item.usage) {
-    meta += ` | Tokens: ${item.usage.prompt_tokens || "?"} in / ${item.usage.completion_tokens || "?"} out`;
-  }
-  elements.detailMeta.textContent = meta;
+  elements.detailMeta.textContent = IntelligenceViewer.formatMeta({
+    timestamp: item.timestamp,
+    provider: item.provider,
+    model: item.model,
+    presetLabel: item.presetLabel || item.preset,
+    usage: item.usage,
+  });
 
-  if (item.thinking) {
-    elements.detailThinking.classList.remove("hidden");
-    elements.detailThinkingContent.textContent = item.thinking;
-  } else {
-    elements.detailThinking.classList.add("hidden");
-  }
-
-  const parsed = new DOMParser().parseFromString(marked.parse(item.content || ""), "text/html");
-  elements.detailContent.replaceChildren(...parsed.body.childNodes);
+  IntelligenceViewer.updateThinking(elements.detailThinking, elements.detailThinkingContent, item.thinking);
+  IntelligenceViewer.renderMarkdown(item.content, elements.detailContent);
 
   elements.detailOverlay.classList.remove("hidden");
 }
@@ -244,8 +227,4 @@ function openDetail(item) {
 function closeDetail() {
   elements.detailOverlay.classList.add("hidden");
   currentItem = null;
-}
-
-function escapeHtml(s) {
-  return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }

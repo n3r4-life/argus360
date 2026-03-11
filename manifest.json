@@ -28,12 +28,7 @@
     "unlimitedStorage",
     "contextMenus",
     "tabs",
-    "webNavigation",
-    "webRequest",
-    "webRequestBlocking",
-    "downloads",
     "alarms",
-    "notifications",
     "<all_urls>",
     "https://api.x.ai/*",
     "https://api.openai.com/*",
@@ -41,8 +36,22 @@
     "https://generativelanguage.googleapis.com/*"
   ],
 
+  "optional_permissions": [
+    "webRequest",
+    "webRequestBlocking",
+    "webNavigation",
+    "notifications"
+  ],
+
   "background": {
-    "scripts": ["background.js", "background-osint.js"],
+    "scripts": [
+      "lib/storage-db.js",
+      "background-permissions.js",
+      "background-presets.js",
+      "background-providers.js",
+      "background.js",
+      "background-osint.js"
+    ],
     "persistent": true
   },
 
