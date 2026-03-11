@@ -95,6 +95,13 @@ async function createContextMenus() {
   });
 
   browser.contextMenus.create({
+    id: "argus-open-reader",
+    parentId: "argus-parent",
+    title: "\uD83D\uDCF0 Open Feed Reader",
+    contexts: ["page", "frame"]
+  });
+
+  browser.contextMenus.create({
     id: "argus-techstack",
     parentId: "argus-parent",
     title: "\uD83D\uDD27 Detect Tech Stack",
@@ -1116,8 +1123,13 @@ async function handleReAnalyze(message) {
 browser.contextMenus.onClicked.addListener(async (info, tab) => {
   // Open Argus Console
   if (info.menuItemId === "argus-console") {
-    const consoleUrl = browser.runtime.getURL("options/options.html");
-    browser.tabs.create({ url: consoleUrl });
+    browser.tabs.create({ url: browser.runtime.getURL("options/options.html") });
+    return;
+  }
+
+  // Open Feed Reader
+  if (info.menuItemId === "argus-open-reader") {
+    browser.tabs.create({ url: browser.runtime.getURL("feeds/feeds.html") });
     return;
   }
 

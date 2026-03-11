@@ -42,6 +42,10 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
           <span>Feeds</span>
         </button>
+        <button class="nav-tab" data-tab="osint">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span>OSINT</span>
+        </button>
         <button class="nav-tab" data-tab="automation">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           <span>Automation</span>
@@ -641,42 +645,6 @@
         </div>
       </section>
 
-      <!-- Keyword Watchlist -->
-      <section class="card">
-        <h2 class="card-title">Keyword Watchlist
-          <span class="badge">OSINT</span>
-        </h2>
-        <div class="card-body">
-          <p class="info-text">Track keywords across monitored pages and RSS feeds. Get notified when a keyword appears.</p>
-          <div id="watchlist-items" class="rules-list"></div>
-          <div class="rule-form">
-            <div class="form-row">
-              <div class="form-group flex-2">
-                <label for="watchword-term">Keyword or Phrase</label>
-                <input type="text" id="watchword-term" placeholder="e.g. merger, data breach, John Smith">
-              </div>
-              <div class="form-group flex-1">
-                <label class="toggle-label">
-                  <input type="checkbox" id="watchword-case">
-                  <span>Case Sensitive</span>
-                </label>
-              </div>
-              <div class="form-group flex-1">
-                <label class="toggle-label">
-                  <input type="checkbox" id="watchword-regex">
-                  <span>Regex</span>
-                </label>
-              </div>
-              <div class="form-group flex-1" style="justify-content:flex-end;">
-                <button id="add-watchword" class="btn btn-secondary btn-sm">Add Keyword</button>
-              </div>
-            </div>
-          </div>
-          <span id="watchlist-status" class="prompt-status"></span>
-          <div id="watchlist-matches" class="rules-list" style="margin-top:12px;"></div>
-        </div>
-      </section>
-
     </div>
 
     <!-- ═══════════════════════════════════════════ -->
@@ -737,6 +705,92 @@
             <button id="open-feed-reader" class="btn btn-secondary btn-sm">Open Feed Reader</button>
             <button id="delete-all-feeds" class="btn btn-secondary btn-sm" style="color:var(--error);">Delete All Feeds</button>
             <span id="feed-status" class="prompt-status" style="margin-left:12px;"></span>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- TAB: OSINT                                    -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="osint">
+
+      <!-- Knowledge Graph -->
+      <section class="card">
+        <h2 class="card-title">Knowledge Graph
+          <span class="badge">Intelligence</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Argus automatically builds a knowledge graph from your analyses, bookmarks, and monitored pages. Entities (people, organizations, locations) are extracted and connected across all your research.</p>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>Graph Stats</label>
+              <span id="kg-stats-display" style="font-size:13px;color:var(--text-secondary);">Loading...</span>
+            </div>
+          </div>
+          <div class="form-row" style="gap:8px;">
+            <button id="kg-open-graph" class="btn btn-secondary">Open Global Graph</button>
+            <button id="kg-run-inference" class="btn btn-secondary">Run Inference</button>
+            <button id="kg-clear" class="btn btn-secondary" style="color:var(--error);">Clear Graph</button>
+          </div>
+          <div id="kg-pending-merges" class="hidden" style="margin-top:12px;">
+            <label>Pending Entity Merges</label>
+            <p class="info-text" style="margin:0 0 6px;">Argus found entities that might be the same. Review and merge or dismiss.</p>
+            <div id="kg-merge-list"></div>
+          </div>
+          <span id="kg-status" class="save-indicator hidden" style="color:var(--success);">Done</span>
+        </div>
+      </section>
+
+      <!-- Keyword Watchlist -->
+      <section class="card">
+        <h2 class="card-title">Keyword Watchlist
+          <span class="badge">Tracking</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Track keywords across monitored pages and RSS feeds. Get notified when a keyword appears.</p>
+          <div id="watchlist-items" class="rules-list"></div>
+          <div class="rule-form">
+            <div class="form-row">
+              <div class="form-group flex-2">
+                <label for="watchword-term">Keyword or Phrase</label>
+                <input type="text" id="watchword-term" placeholder="e.g. merger, data breach, John Smith">
+              </div>
+              <div class="form-group flex-1">
+                <label class="toggle-label">
+                  <input type="checkbox" id="watchword-case">
+                  <span>Case Sensitive</span>
+                </label>
+              </div>
+              <div class="form-group flex-1">
+                <label class="toggle-label">
+                  <input type="checkbox" id="watchword-regex">
+                  <span>Regex</span>
+                </label>
+              </div>
+              <div class="form-group flex-1" style="justify-content:flex-end;">
+                <button id="add-watchword" class="btn btn-secondary btn-sm">Add Keyword</button>
+              </div>
+            </div>
+          </div>
+          <span id="watchlist-status" class="prompt-status"></span>
+          <div id="watchlist-matches" class="rules-list" style="margin-top:12px;"></div>
+        </div>
+      </section>
+
+      <!-- OSINT Quick Tools -->
+      <section class="card">
+        <h2 class="card-title">Quick Tools
+          <span class="badge">OSINT</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Launch OSINT analysis tools on the current page or from project data.</p>
+          <div class="form-row" style="gap:8px;flex-wrap:wrap;">
+            <button id="osint-launch-metadata" class="btn btn-secondary">Extract Metadata</button>
+            <button id="osint-launch-links" class="btn btn-secondary">Map Links</button>
+            <button id="osint-launch-whois" class="btn btn-secondary">Whois / DNS</button>
+            <button id="osint-launch-techstack" class="btn btn-secondary">Tech Stack</button>
           </div>
         </div>
       </section>
@@ -906,31 +960,6 @@
         </div>
       </section>
 
-      <!-- Knowledge Graph -->
-      <section class="card">
-        <h2 class="card-title">Knowledge Graph</h2>
-        <div class="card-body">
-          <p class="info-text">Argus automatically builds a knowledge graph from your analyses, bookmarks, and monitored pages. Entities (people, organizations, locations) are extracted and connected across all your research.</p>
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label>Graph Stats</label>
-              <span id="kg-stats-display" style="font-size:13px;color:var(--text-secondary);">Loading...</span>
-            </div>
-          </div>
-          <div class="form-row" style="gap:8px;">
-            <button id="kg-open-graph" class="btn btn-secondary">Open Global Graph</button>
-            <button id="kg-run-inference" class="btn btn-secondary">Run Inference</button>
-            <button id="kg-clear" class="btn btn-secondary" style="color:var(--error);">Clear Graph</button>
-          </div>
-          <div id="kg-pending-merges" class="hidden" style="margin-top:12px;">
-            <label>Pending Entity Merges</label>
-            <p class="info-text" style="margin:0 0 6px;">Argus found entities that might be the same. Review and merge or dismiss.</p>
-            <div id="kg-merge-list"></div>
-          </div>
-          <span id="kg-status" class="save-indicator hidden" style="color:var(--success);">Done</span>
-        </div>
-      </section>
-
       <!-- Keyboard Shortcuts -->
       <section class="card">
         <h2 class="card-title">Keyboard Shortcuts</h2>
@@ -959,7 +988,7 @@
         <h2 class="card-title">About</h2>
         <div class="card-body">
           <p class="info-text">
-            Argus is an AI-powered web analysis toolkit with OSINT capabilities. Supports Grok, OpenAI, Claude, Gemini, and any OpenAI-compatible endpoint. Features streaming responses, custom editable prompts, multi-provider comparison, page monitoring, RSS feeds, smart bookmarks, project-based investigations, entity extraction, connection graphing, and more. Your API keys are stored locally and never shared.
+            Argus is an AI-powered web analysis toolkit with OSINT capabilities. Supports Grok, OpenAI, Claude, Gemini, and any OpenAI-compatible endpoint. Features streaming responses, custom editable prompts, multi-provider comparison, page monitoring, RSS feeds, smart bookmarks, project-based investigations, entity extraction, knowledge graph, source-aware pipelines, project dashboards with auto-digests, and more. Your API keys are stored locally and never shared.
           </p>
           <div class="about-meta">
             <span>Version <strong id="version-number"></strong></span>
@@ -986,6 +1015,9 @@
         <a href="#help-feeds">RSS Feeds</a>
         <a href="#help-archive">Redirects</a>
         <a href="#help-osint">OSINT Tools</a>
+        <a href="#help-kg">Knowledge Graph</a>
+        <a href="#help-pipelines">Source Pipelines</a>
+        <a href="#help-dashboard">Dashboard &amp; Digests</a>
         <a href="#help-providers">Provider Features</a>
         <a href="#help-export">Exporting</a>
         <a href="#help-config">Config Reference</a>
@@ -1163,6 +1195,15 @@
             <li>The preset appears in the popup dropdown, shown as <code>Preset Name &rarr; Provider</code> if bound</li>
           </ol>
 
+          <h3>Sharing Preset Packs</h3>
+          <p>Custom presets are stored in <code>browser.storage.local</code> under the <code>customPresets</code> key. To share a pack of presets:</p>
+          <ol>
+            <li>Export your presets from the <strong>Analysis</strong> tab using the <strong>Export Presets</strong> button (if available), or use the browser console: <code>browser.storage.local.get("customPresets")</code></li>
+            <li>Save the JSON object to a <code>.json</code> file (e.g., <code>argus-presets-osint.json</code>)</li>
+            <li>Share the file — recipients can import it via <strong>Import Presets</strong> or paste the JSON into their storage</li>
+          </ol>
+          <p>Each preset in the JSON has a <code>label</code>, <code>system</code> (system prompt), <code>prompt</code> (user prompt), and optional <code>provider</code> (preferred provider key). You can create specialized packs — e.g., an OSINT pack, a journalism pack, a research pack — and share them with your team.</p>
+
           <h3>Prompt Variables</h3>
           <p>Use these placeholders in custom presets — they're replaced with actual values at analysis time:</p>
           <div class="help-table-wrap">
@@ -1237,6 +1278,7 @@
             <li><strong>Connection Graph</strong> — force-directed graph showing entity relationships across your project, with drag/zoom/pan interaction and PNG export</li>
             <li><strong>Timeline</strong> — chronological event timeline assembled from project data, with date range filters and markdown export</li>
             <li><strong>Investigation Report</strong> — AI-generated report synthesizing all project data into a structured intelligence brief</li>
+            <li><strong>Dashboard</strong> — at-a-glance project intelligence with activity charts, entity breakdown, co-occurrence heatmap, trend alerts, and auto-generated digests</li>
           </ul>
           <p>Batch analysis runs in the background, so you can navigate away from the project while it processes.</p>
         </div>
@@ -1317,7 +1359,7 @@
       <section class="card" id="help-osint">
         <h2 class="card-title">OSINT Tools</h2>
         <div class="card-body help-content">
-          <p>Argus includes a suite of open-source intelligence tools that work without an AI provider. These are available from the popup quick tools, the context menu, or as project tools.</p>
+          <p>Argus includes a suite of open-source intelligence tools available from the popup, the right-click context menu, the <strong>OSINT</strong> tab in the console, and as project tools.</p>
 
           <h3>Metadata Extraction</h3>
           <p>Extracts meta tags, Open Graph data, Twitter Cards, JSON-LD structured data, publication dates, and author information from the current page.</p>
@@ -1328,6 +1370,9 @@
           <h3>Whois / DNS Lookup</h3>
           <p>Performs RDAP whois lookups and DNS record queries (via Google DNS) for the current page's domain. View registration details, nameservers, and DNS records without leaving the browser.</p>
 
+          <h3>Tech Stack Detection</h3>
+          <p>Identifies website technologies, frameworks, analytics tools, CDNs, and CMS platforms from page headers, scripts, and meta tags.</p>
+
           <h3>Wayback Machine</h3>
           <p>Automatically checks the Wayback Machine (archive.org) for availability of visited pages. See when a page was last archived and jump directly to the archived version.</p>
 
@@ -1335,7 +1380,84 @@
           <p>Automatically checks for archived versions of visited pages on archive.is. Quickly access clean, cached copies of articles.</p>
 
           <h3>Keyword Watchlist</h3>
-          <p>Watch for specific keywords across your monitors and feeds. Supports regular expressions for advanced pattern matching. When a watched keyword is detected, Argus sends a browser notification so you never miss a relevant update.</p>
+          <p>Track specific keywords across your monitors and RSS feeds (now on the <strong>OSINT</strong> tab). Supports regular expressions for advanced pattern matching. When a watched keyword is detected, Argus sends a browser notification so you never miss a relevant update.</p>
+        </div>
+      </section>
+
+      <!-- Knowledge Graph -->
+      <section class="card" id="help-kg">
+        <h2 class="card-title">Knowledge Graph</h2>
+        <div class="card-body help-content">
+          <p>Argus automatically builds a persistent knowledge graph from every analysis, bookmark, and monitored page. Entities (people, organizations, locations, dates) are extracted and connected across all your research.</p>
+
+          <h3>How It Works</h3>
+          <ul>
+            <li>Entities are extracted automatically whenever you run an analysis, save a bookmark, or get a monitor change notification</li>
+            <li>Fuzzy matching (Levenshtein distance + token overlap) prevents duplicate entries for the same entity</li>
+            <li>Co-occurrence edges are created between entities that appear together in the same content</li>
+            <li>Inference rules run periodically to discover implicit relationships (e.g., person + organization mentioned together 3+ times &rarr; affiliated-with)</li>
+          </ul>
+
+          <h3>Managing the Graph</h3>
+          <p>The Knowledge Graph card is on the <strong>OSINT</strong> tab. From there you can:</p>
+          <ul>
+            <li><strong>Open Global Graph</strong> — interactive force-directed visualization of all entities and connections</li>
+            <li><strong>Run Inference</strong> — manually trigger inference rules to discover new relationships</li>
+            <li><strong>Pending Merges</strong> — review ambiguous entity matches that Argus flagged for human review</li>
+            <li><strong>Clear Graph</strong> — reset the knowledge graph entirely</li>
+          </ul>
+          <p>Project-level graphs are also available from each project's toolbar (Graph button).</p>
+        </div>
+      </section>
+
+      <!-- Source Pipelines -->
+      <section class="card" id="help-pipelines">
+        <h2 class="card-title">Source-Aware Pipelines</h2>
+        <div class="card-body help-content">
+          <p>Argus detects the type of page you're analyzing and automatically runs a specialized pipeline to extract structured intelligence. This runs in the background after your main analysis.</p>
+
+          <h3>Detected Source Types</h3>
+          <div class="help-table-wrap">
+            <table class="help-table">
+              <thead><tr><th>Type</th><th>Detection</th><th>What It Extracts</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Wikipedia</strong></td><td>Wikipedia URLs</td><td>Structured profile, infobox data, related entities, categories, key facts</td></tr>
+                <tr><td><strong>News Article</strong></td><td>Major news domains + byline/dateline heuristics</td><td>Claims with evidence levels, bias indicators, source quality score, related stories</td></tr>
+                <tr><td><strong>Classifieds</strong></td><td>Marketplace URLs + price/listing heuristics</td><td>Listing data, seller info, scam risk analysis, price tracking over time</td></tr>
+                <tr><td><strong>Research</strong></td><td>Academic/wiki URLs (arxiv, scholar, etc.)</td><td>Claims analysis, knowledge coverage, methodology notes, suggested follow-ups</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Pipeline results appear in a collapsible <strong>"Source Insights"</strong> panel below your analysis results. All extracted entities are fed into the Knowledge Graph automatically.</p>
+        </div>
+      </section>
+
+      <!-- Dashboard & Digests -->
+      <section class="card" id="help-dashboard">
+        <h2 class="card-title">Dashboard &amp; Digests</h2>
+        <div class="card-body help-content">
+          <p>Each project has an interactive dashboard providing at-a-glance intelligence about your research progress.</p>
+
+          <h3>Dashboard Widgets</h3>
+          <ul>
+            <li><strong>Stats Overview</strong> — total items, entities, relationships, and recent changes</li>
+            <li><strong>Activity Chart</strong> — 30-day item collection histogram</li>
+            <li><strong>Entity Breakdown</strong> — visual bars showing entity types (people, orgs, locations)</li>
+            <li><strong>Co-occurrence Heatmap</strong> — matrix showing which top entities appear together</li>
+            <li><strong>Trend Alerts</strong> — mention spikes, new entities, and graph growth indicators</li>
+          </ul>
+
+          <h3>Auto-Report Sections</h3>
+          <p>Generate AI-powered report sections on demand from the dashboard:</p>
+          <ul>
+            <li><strong>Executive Summary</strong> — key findings, patterns, and recommended next steps</li>
+            <li><strong>Knowledge Gaps</strong> — what's missing from your research, prioritized collection targets</li>
+            <li><strong>Contradictions</strong> — conflicting claims across sources, reliability assessment</li>
+            <li><strong>Timeline Highlights</strong> — chronological narrative from collected data</li>
+          </ul>
+
+          <h3>Scheduled Digests</h3>
+          <p>Set a digest schedule (Daily, Weekly, or Disabled) per project. Argus generates AI briefings summarizing new items, key findings, and suggested actions. Digests are checked every 6 hours and generated when the schedule interval has elapsed.</p>
         </div>
       </section>
 

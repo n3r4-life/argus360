@@ -858,17 +858,44 @@ async function renderMonitors() {
     info.appendChild(meta);
 
     if (monitor.lastChangeSummary) {
-      const summary = document.createElement("span");
-      summary.className = "rule-meta";
-      summary.style.display = "block";
-      summary.style.marginTop = "4px";
-      summary.style.color = "var(--accent)";
-      summary.style.fontStyle = "italic";
-      const text = monitor.lastChangeSummary.length > 150
-        ? monitor.lastChangeSummary.slice(0, 150) + "..."
-        : monitor.lastChangeSummary;
-      summary.textContent = `Latest: ${text}`;
-      info.appendChild(summary);
+      const summaryWrap = document.createElement("div");
+      summaryWrap.style.marginTop = "4px";
+
+      const isLong = monitor.lastChangeSummary.length > 150;
+      const summaryPreview = document.createElement("span");
+      summaryPreview.className = "rule-meta";
+      summaryPreview.style.display = "block";
+      summaryPreview.style.color = "var(--accent)";
+      summaryPreview.style.fontStyle = "italic";
+      summaryPreview.textContent = isLong
+        ? `Latest: ${monitor.lastChangeSummary.slice(0, 150)}...`
+        : `Latest: ${monitor.lastChangeSummary}`;
+      summaryWrap.appendChild(summaryPreview);
+
+      if (isLong) {
+        const summaryFull = document.createElement("span");
+        summaryFull.className = "rule-meta hidden";
+        summaryFull.style.display = "none";
+        summaryFull.style.color = "var(--accent)";
+        summaryFull.style.fontStyle = "italic";
+        summaryFull.style.whiteSpace = "pre-wrap";
+        summaryFull.textContent = `Latest: ${monitor.lastChangeSummary}`;
+        summaryWrap.appendChild(summaryFull);
+
+        const expandBtn = document.createElement("button");
+        expandBtn.className = "btn btn-sm";
+        expandBtn.style.cssText = "background:none;border:none;color:var(--text-secondary);font-size:11px;padding:2px 0;cursor:pointer;text-decoration:underline;";
+        expandBtn.textContent = "Show full analysis";
+        expandBtn.addEventListener("click", () => {
+          const isExpanded = summaryFull.style.display !== "none";
+          summaryPreview.style.display = isExpanded ? "block" : "none";
+          summaryFull.style.display = isExpanded ? "none" : "block";
+          expandBtn.textContent = isExpanded ? "Show full analysis" : "Collapse";
+        });
+        summaryWrap.appendChild(expandBtn);
+      }
+
+      info.appendChild(summaryWrap);
     }
 
     const actions = document.createElement("div");
@@ -1060,6 +1087,26 @@ async function renderFeeds() {
       renderFeeds();
     });
 
+    const intervalSelect = document.createElement("select");
+    intervalSelect.className = "btn btn-sm btn-secondary";
+    intervalSelect.style.cssText = "padding:4px 6px;font-size:11px;cursor:pointer;";
+    intervalSelect.title = "Change check interval";
+    for (const [val, label] of [["15","15m"],["30","30m"],["60","1h"],["360","6h"],["1440","24h"]]) {
+      const opt = document.createElement("option");
+      opt.value = val;
+      opt.textContent = label;
+      if (parseInt(val) === feed.checkIntervalMinutes) opt.selected = true;
+      intervalSelect.appendChild(opt);
+    }
+    intervalSelect.addEventListener("change", async () => {
+      await browser.runtime.sendMessage({
+        action: "updateFeed", id: feed.id,
+        checkIntervalMinutes: parseInt(intervalSelect.value)
+      });
+      renderFeeds();
+    });
+
+    actions.appendChild(intervalSelect);
     actions.appendChild(toggleBtn);
     actions.appendChild(refreshBtn);
     actions.appendChild(readBtn);
@@ -2597,6 +2644,25 @@ function initStorageManagement() {
   });
   updateKGStats();
   loadPendingMerges();
+
+  // OSINT Quick Tools (on OSINT tab)
+  const osintLaunch = (tool) => async () => {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+    if (!tab || !tab.url || tab.url.startsWith("about:") || tab.url.startsWith("moz-extension:")) {
+      alert("Open a web page first, then use this tool.");
+      return;
+    }
+    browser.runtime.sendMessage({ action: tool, tabId: tab.id });
+  };
+  const osintMetaBtn = document.getElementById("osint-launch-metadata");
+  const osintLinksBtn = document.getElementById("osint-launch-links");
+  const osintWhoisBtn = document.getElementById("osint-launch-whois");
+  const osintTechBtn = document.getElementById("osint-launch-techstack");
+  if (osintMetaBtn) osintMetaBtn.addEventListener("click", osintLaunch("extractMetadata"));
+  if (osintLinksBtn) osintLinksBtn.addEventListener("click", osintLaunch("mapLinks"));
+  if (osintWhoisBtn) osintWhoisBtn.addEventListener("click", osintLaunch("whoisLookup"));
+  if (osintTechBtn) osintTechBtn.addEventListener("click", osintLaunch("detectTechStack"));
 }
 
 async function updateStorageUsage() {

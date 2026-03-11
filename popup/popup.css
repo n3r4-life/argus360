@@ -93,6 +93,16 @@ body {
   background: var(--border);
 }
 
+.icon-btn-accent {
+  color: var(--accent);
+  background: rgba(233, 69, 96, 0.1);
+  border: 1px solid rgba(233, 69, 96, 0.3);
+}
+.icon-btn-accent:hover {
+  color: var(--accent-hover);
+  background: rgba(233, 69, 96, 0.2);
+}
+
 /* Forms */
 .form-group {
   padding: 8px 16px;
