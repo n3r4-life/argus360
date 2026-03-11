@@ -271,6 +271,21 @@ async function createContextMenus() {
     contexts: ["page", "frame", "selection"]
   });
 
+  // ── Console ──
+  browser.contextMenus.create({
+    id: "argus-console",
+    parentId: "argus-parent",
+    title: "\uD83D\uDDA5\uFE0F Argus Console",
+    contexts: ["page", "frame", "selection"]
+  });
+
+  browser.contextMenus.create({
+    id: "argus-sep-console",
+    parentId: "argus-parent",
+    type: "separator",
+    contexts: ["page", "frame", "selection"]
+  });
+
   // ── Quick Actions ──
   browser.contextMenus.create({
     id: "argus-bookmark",
@@ -304,6 +319,13 @@ async function createContextMenus() {
     id: "argus-add-feed",
     parentId: "argus-parent",
     title: "\uD83D\uDCE1 Subscribe to Feed",
+    contexts: ["page", "frame"]
+  });
+
+  browser.contextMenus.create({
+    id: "argus-techstack",
+    parentId: "argus-parent",
+    title: "\uD83D\uDD27 Detect Tech Stack",
     contexts: ["page", "frame"]
   });
 
@@ -1443,6 +1465,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "getConversationState") return handleGetConversationState(message);
   if (message.action === "analyzeInTab") return handleAnalyzeInTab(message);
   if (message.action === "followUp") return handleFollowUp(message);
+  if (message.action === "reAnalyze") return handleReAnalyze(message);
   if (message.action === "bookmarkPage") return handleBookmarkPage(message);
   if (message.action === "getBookmarks") return handleGetBookmarks(message);
   if (message.action === "updateBookmark") return handleUpdateBookmark(message);
@@ -1700,11 +1723,14 @@ async function handleCompareInTab(message) {
     page = await extractPageContent(message.tabId);
   }
 
-  for (const providerKey of message.providers) {
+  const totalProviders = message.providers.length;
+  for (let pi = 0; pi < totalProviders; pi++) {
+    const providerKey = message.providers[pi];
     const settings = await getProviderSettings(providerKey);
     const baseLabel = ANALYSIS_PRESETS[message.analysisType]?.label ||
       settings.customPresets?.[message.analysisType]?.label || message.analysisType;
-    const presetLabel = `${baseLabel} (${PROVIDERS[providerKey]?.label || providerKey})`;
+    const provLabel = PROVIDERS[providerKey]?.label || providerKey;
+    const presetLabel = `Compare ${pi + 1}: ${baseLabel} (${provLabel})`;
     const resultId = `tl-result-${Date.now()}-${providerKey}`;
 
     await browser.storage.local.set({
@@ -1832,9 +1858,93 @@ async function handleFollowUp(message) {
 }
 
 // ──────────────────────────────────────────────
+// Re-analyze (same page, different preset, same tab)
+// ──────────────────────────────────────────────
+async function handleReAnalyze(message) {
+  try {
+    const { pageUrl, analysisType, provider: providerOverride, customPrompt } = message;
+    if (!pageUrl) return { success: false, error: "No page URL available for re-analysis." };
+
+    const settings = await getProviderSettings(providerOverride, analysisType);
+
+    // Try to find the original tab by URL and extract content from it
+    let page;
+    try {
+      const tabs = await browser.tabs.query({ url: pageUrl });
+      if (tabs.length > 0) {
+        page = await extractPageContent(tabs[0].id);
+      }
+    } catch { /* tab not found or can't inject */ }
+
+    // Fallback: fetch page content by URL
+    if (!page || !page.text) {
+      const text = await fetchPageText(pageUrl);
+      page = { title: message.pageTitle || pageUrl, url: pageUrl, description: "", text };
+    }
+
+    const presetLabel = ANALYSIS_PRESETS[analysisType]?.label ||
+      settings.customPresets?.[analysisType]?.label || analysisType;
+    const reResultId = `reanalyze-${Date.now()}`;
+
+    await browser.storage.local.set({
+      [reResultId]: { status: "loading" }
+    });
+
+    // Stream in background
+    (async () => {
+      try {
+        const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
+        const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, analysisType, customPrompt, settings);
+        const messages = buildMessages(systemPrompt, userPrompt);
+
+        let streamedContent = "";
+        const result = await callProviderStream(
+          settings.provider, settings.apiKey, settings.model, messages, opts,
+          async (chunk) => {
+            streamedContent += chunk;
+            await browser.storage.local.set({
+              [reResultId]: { status: "streaming", content: streamedContent, provider: settings.provider, model: settings.model, presetLabel }
+            });
+          },
+          null
+        );
+
+        await saveToHistory({
+          pageTitle: page.title, pageUrl: page.url, provider: settings.provider,
+          model: result.model, preset: analysisType, presetLabel,
+          content: result.content, thinking: result.thinking, usage: result.usage
+        });
+
+        await browser.storage.local.set({
+          [reResultId]: {
+            status: "done", content: result.content, thinking: result.thinking,
+            model: result.model, usage: result.usage, provider: settings.provider, presetLabel
+          }
+        });
+      } catch (err) {
+        await browser.storage.local.set({
+          [reResultId]: { status: "error", error: err.message }
+        });
+      }
+    })();
+
+    return { success: true, reResultId, presetLabel };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ──────────────────────────────────────────────
 // Context menu click handler
 // ──────────────────────────────────────────────
 browser.contextMenus.onClicked.addListener(async (info, tab) => {
+  // Open Argus Console
+  if (info.menuItemId === "argus-console") {
+    const consoleUrl = browser.runtime.getURL("options/options.html");
+    browser.tabs.create({ url: consoleUrl });
+    return;
+  }
+
   // Handle bookmark context menu
   if (info.menuItemId === "argus-bookmark") {
     try {
@@ -1954,6 +2064,31 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
         iconUrl: "icons/icon-96.png",
         title: "Argus — Error",
         message: `Failed to save to archive: ${err.message}`
+      });
+    }
+    return;
+  }
+
+  // Handle tech stack detection
+  if (info.menuItemId === "argus-techstack") {
+    try {
+      const resp = await handleDetectTechStack({ tabId: tab.id });
+      if (resp && resp.success) {
+        const storeKey = `techstack-${Date.now()}`;
+        await browser.storage.local.set({ [storeKey]: { pageUrl: tab.url, pageTitle: tab.title, technologies: resp.technologies } });
+        await browser.tabs.create({ url: browser.runtime.getURL(`osint/techstack.html?id=${encodeURIComponent(storeKey)}`) });
+      } else {
+        browser.notifications.create({
+          type: "basic", iconUrl: "icons/icon-96.png",
+          title: "Argus — Error",
+          message: resp?.error || "Tech stack detection failed"
+        });
+      }
+    } catch (err) {
+      browser.notifications.create({
+        type: "basic", iconUrl: "icons/icon-96.png",
+        title: "Argus — Error",
+        message: `Tech stack detection failed: ${err.message}`
       });
     }
     return;

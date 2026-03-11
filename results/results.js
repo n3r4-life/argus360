@@ -24,6 +24,10 @@ const elements = {
   sourcesList: document.getElementById("sources-list"),
   bookmarkPage: document.getElementById("bookmark-page"),
   monitorPage: document.getElementById("monitor-page"),
+  printResult: document.getElementById("print-result"),
+  reanalyzePreset: document.getElementById("reanalyze-preset"),
+  reanalyzeProvider: document.getElementById("reanalyze-provider"),
+  reanalyzeBtn: document.getElementById("reanalyze-btn"),
 };
 
 let rawMarkdown = "";
@@ -75,6 +79,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   elements.exportTxt.addEventListener("click", () => {
     exportAsText(rawMarkdown, (pageTitle || "analysis") + ".txt");
+  });
+
+  elements.printResult.addEventListener("click", () => {
+    window.print();
   });
 
   // Share buttons
@@ -255,6 +263,11 @@ document.addEventListener("DOMContentLoaded", () => {
       sendFollowUp();
     }
   });
+
+  // Re-analyze: load presets into dropdown
+  loadReanalyzePresets();
+
+  elements.reanalyzeBtn.addEventListener("click", sendReAnalyze);
 });
 
 async function pollForResult(id) {
@@ -473,7 +486,7 @@ async function sendFollowUp() {
   if (!question) return;
 
   const providerOverride = elements.followupProvider.value || null;
-  const provNames = { xai: "Grok", openai: "OpenAI", anthropic: "Claude", gemini: "Gemini" };
+  const provNames = { xai: "Grok", openai: "OpenAI", anthropic: "Claude", gemini: "Gemini", custom: "Custom" };
 
   elements.followupInput.value = "";
   elements.followupSend.disabled = true;
@@ -547,7 +560,7 @@ async function pollForFollowUp(followupId, answerDiv) {
       if (data.provider || data.model) {
         const attrDiv = document.createElement("div");
         attrDiv.className = "followup-meta";
-        const provNames = { xai: "Grok", openai: "OpenAI", anthropic: "Claude", gemini: "Gemini" };
+        const provNames = { xai: "Grok", openai: "OpenAI", anthropic: "Claude", gemini: "Gemini", custom: "Custom" };
         let attrText = provNames[data.provider] || data.provider || "";
         if (data.model) attrText += attrText ? ` (${data.model})` : data.model;
         attrDiv.textContent = attrText;
@@ -578,6 +591,140 @@ async function pollForFollowUp(followupId, answerDiv) {
       answerDiv.textContent = `Error: ${data.error}`;
       answerDiv.style.color = "var(--error)";
       browser.storage.local.remove(followupId);
+      return;
+    }
+
+    await sleep(POLL_INTERVAL);
+  }
+}
+
+// ──────────────────────────────────────────────
+// Re-analyze (same page, different preset)
+// ──────────────────────────────────────────────
+async function loadReanalyzePresets() {
+  try {
+    const resp = await browser.runtime.sendMessage({ action: "getPresets" });
+    if (!resp || !resp.presets) return;
+
+    elements.reanalyzePreset.innerHTML = "";
+    for (const preset of resp.presets) {
+      const opt = document.createElement("option");
+      opt.value = preset.key;
+      opt.textContent = preset.label + (preset.provider ? ` → ${preset.provider}` : "");
+      elements.reanalyzePreset.appendChild(opt);
+    }
+  } catch { /* presets unavailable */ }
+}
+
+async function sendReAnalyze() {
+  const preset = elements.reanalyzePreset.value;
+  if (!preset) return;
+
+  const pageUrl = elements.pageUrl.href;
+  if (!pageUrl || pageUrl === "#") {
+    elements.reanalyzeBtn.textContent = "No URL";
+    setTimeout(() => { elements.reanalyzeBtn.textContent = "Re-Analyze"; }, 1500);
+    return;
+  }
+
+  const providerOverride = elements.reanalyzeProvider.value || null;
+  const presetLabel = elements.reanalyzePreset.selectedOptions[0]?.textContent || preset;
+
+  elements.reanalyzeBtn.disabled = true;
+  elements.reanalyzeBtn.textContent = "Analyzing...";
+
+  // Add a divider and heading to result area
+  const divider = document.createElement("hr");
+  divider.style.borderColor = "var(--border)";
+  divider.style.margin = "24px 0";
+  elements.resultContent.appendChild(divider);
+
+  const heading = document.createElement("div");
+  heading.className = "followup-question";
+  const badge = document.createElement("strong");
+  badge.textContent = `Re-Analysis: ${presetLabel}`;
+  heading.appendChild(badge);
+  elements.resultContent.appendChild(heading);
+
+  const answerDiv = document.createElement("div");
+  answerDiv.className = "followup-answer streaming";
+  elements.resultContent.appendChild(answerDiv);
+  elements.resultContent.scrollTop = elements.resultContent.scrollHeight;
+
+  const response = await browser.runtime.sendMessage({
+    action: "reAnalyze",
+    pageUrl,
+    pageTitle,
+    analysisType: preset,
+    provider: providerOverride
+  });
+
+  if (!response || !response.success) {
+    answerDiv.classList.remove("streaming");
+    answerDiv.textContent = `Error: ${response?.error || "Re-analysis failed."}`;
+    answerDiv.style.color = "var(--error)";
+    elements.reanalyzeBtn.disabled = false;
+    elements.reanalyzeBtn.textContent = "Re-Analyze";
+    return;
+  }
+
+  // Poll for result (reuse follow-up poller)
+  await pollForReAnalyze(response.reResultId, answerDiv, response.presetLabel);
+  elements.reanalyzeBtn.disabled = false;
+  elements.reanalyzeBtn.textContent = "Re-Analyze";
+}
+
+async function pollForReAnalyze(reId, answerDiv, presetLabel) {
+  const POLL_INTERVAL = 300;
+  const MAX_POLLS = 1000;
+
+  for (let i = 0; i < MAX_POLLS; i++) {
+    const stored = await browser.storage.local.get(reId);
+    const data = stored[reId];
+
+    if (!data) { await sleep(POLL_INTERVAL); continue; }
+
+    if (data.status === "loading") {
+      await sleep(POLL_INTERVAL);
+      continue;
+    }
+
+    if (data.status === "streaming") {
+      renderMarkdown(data.content || "", answerDiv);
+      elements.resultContent.scrollTop = elements.resultContent.scrollHeight;
+      await sleep(POLL_INTERVAL);
+      continue;
+    }
+
+    if (data.status === "done") {
+      answerDiv.classList.remove("streaming");
+      renderMarkdown(data.content, answerDiv);
+      rawMarkdown += `\n\n---\n\n**Re-Analysis (${presetLabel}):**\n\n${data.content}`;
+
+      if (data.provider || data.model) {
+        const attrDiv = document.createElement("div");
+        attrDiv.className = "followup-meta";
+        const provNames = { xai: "Grok", openai: "OpenAI", anthropic: "Claude", gemini: "Gemini", custom: "Custom" };
+        let attrText = provNames[data.provider] || data.provider || "";
+        if (data.model) attrText += attrText ? ` (${data.model})` : data.model;
+        attrDiv.textContent = attrText;
+        answerDiv.appendChild(attrDiv);
+      }
+
+      if (data.thinking) {
+        elements.thinkingSection.classList.remove("hidden");
+        elements.thinkingContent.textContent += "\n---\n" + data.thinking;
+      }
+
+      browser.storage.local.remove(reId);
+      return;
+    }
+
+    if (data.status === "error") {
+      answerDiv.classList.remove("streaming");
+      answerDiv.textContent = `Error: ${data.error}`;
+      answerDiv.style.color = "var(--error)";
+      browser.storage.local.remove(reId);
       return;
     }
 

@@ -593,5 +593,55 @@ body {
   color: var(--accent-hover);
 }
 
+/* Re-analyze row */
+.reanalyze-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.reanalyze-row select {
+  flex: 1;
+}
+
+/* Print styles */
+@media print {
+  body {
+    background: #fff;
+    color: #111;
+    font-size: 12pt;
+  }
+  .header, .results-toolbar, .followup-container, .loading-container,
+  .error-container, .ribbon, .toolbar-row-share {
+    display: none !important;
+  }
+  .results-container {
+    max-width: 100%;
+    padding: 0;
+  }
+  .result-content {
+    color: #111;
+  }
+  .markdown-body h1, .markdown-body h2, .markdown-body h3 {
+    color: #111;
+  }
+  .markdown-body a {
+    color: #333;
+    text-decoration: underline;
+  }
+  .result-meta {
+    color: #666;
+  }
+  .page-info {
+    background: none;
+    border-bottom: 1px solid #ccc;
+  }
+  .preset-badge {
+    background: #333;
+  }
+}
+
 /* Utilities */
 .hidden { display: none !important; }

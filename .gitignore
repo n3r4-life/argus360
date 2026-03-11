@@ -4,3 +4,4 @@ web-ext-artifacts/
 *.zip
 node_modules/
 .DS_Store
+.local-archive/

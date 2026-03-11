@@ -40,6 +40,7 @@
         <button id="export-html" class="btn btn-secondary btn-small">Export .html</button>
         <button id="export-txt" class="btn btn-secondary btn-small">Export .txt</button>
         <button id="copy-result" class="btn btn-secondary btn-small">Copy Markdown</button>
+        <button id="print-result" class="btn btn-secondary btn-small" title="Print or save as PDF">Print</button>
         <button id="save-archive" class="btn btn-secondary btn-small" title="Save this page to archive.is">Archive</button>
       </div>
       <div class="toolbar-row toolbar-row-share">
@@ -73,9 +74,22 @@
         <option value="openai">OpenAI</option>
         <option value="anthropic">Claude</option>
         <option value="gemini">Gemini</option>
+        <option value="custom">Custom</option>
       </select>
       <input type="text" id="followup-input" placeholder="Ask a follow-up question..." class="followup-input">
       <button id="followup-send" class="btn btn-primary btn-small followup-btn">Send</button>
+    </div>
+    <div class="reanalyze-row">
+      <select id="reanalyze-preset" class="followup-provider" title="Choose a different analysis preset"></select>
+      <select id="reanalyze-provider" class="followup-provider" title="Choose provider for re-analysis">
+        <option value="">Default</option>
+        <option value="xai">Grok</option>
+        <option value="openai">OpenAI</option>
+        <option value="anthropic">Claude</option>
+        <option value="gemini">Gemini</option>
+        <option value="custom">Custom</option>
+      </select>
+      <button id="reanalyze-btn" class="btn btn-secondary btn-small followup-btn">Re-Analyze</button>
     </div>
   </div>
 

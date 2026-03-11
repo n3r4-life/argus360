@@ -10,12 +10,28 @@
   /* ── Bootstrap ── */
 
   async function init() {
-    try {
-      const result = await browser.storage.local.get('linkMapData');
-      linkData = result.linkMapData;
-    } catch {
+    // Read the storage key from the URL parameter
+    const params = new URLSearchParams(window.location.search);
+    const storeKey = params.get('id');
+
+    if (storeKey) {
       try {
-        const result = await chrome.storage.local.get('linkMapData');
+        const result = await browser.storage.local.get(storeKey);
+        linkData = result[storeKey];
+      } catch {
+        try {
+          const result = await chrome.storage.local.get(storeKey);
+          linkData = result[storeKey];
+        } catch {
+          linkData = null;
+        }
+      }
+    }
+
+    // Fallback: try legacy key
+    if (!linkData) {
+      try {
+        const result = await browser.storage.local.get('linkMapData');
         linkData = result.linkMapData;
       } catch {
         linkData = null;
@@ -27,11 +43,48 @@
       return;
     }
 
+    // Normalize field names from extraction format
+    normalizeLinkData(linkData.links);
+
+    // Clean up storage after loading
+    if (storeKey) {
+      try { browser.storage.local.remove(storeKey); } catch {}
+    }
+
     renderHeader();
     renderStats();
     renderLinks();
     bindTabs();
     bindActions();
+  }
+
+  /* ── Normalize extraction data ── */
+
+  function normalizeLinkData(links) {
+    // External links: add domain field from URL
+    (links.external || []).forEach((link) => {
+      if (!link.domain && link.url) {
+        try { link.domain = new URL(link.url).hostname.replace(/^www\./, ''); } catch {}
+      }
+    });
+
+    // Emails: extraction returns { email, text, href }, display expects { address }
+    (links.emails || []).forEach((item) => {
+      if (!item.address && item.email) item.address = item.email;
+    });
+
+    // Phones: extraction returns { phone, text, href }, display expects { number }
+    (links.phones || []).forEach((item) => {
+      if (!item.number && item.phone) item.number = item.phone;
+    });
+
+    // Files: add extension from URL
+    (links.files || []).forEach((link) => {
+      if (!link.extension && link.url) {
+        const match = link.url.match(/\.([a-zA-Z0-9]+)(?:\?|#|$)/);
+        if (match) link.extension = match[1].toLowerCase();
+      }
+    });
   }
 
   /* ── Header ── */

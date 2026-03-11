@@ -12,8 +12,8 @@
       <div class="header-left">
         <img src="../icons/icon-48.png" alt="Argus" class="logo">
         <div>
-          <h1 style="display:flex;align-items:baseline;gap:10px;">Argus <span style="font-size:13px;font-weight:400;color:var(--text-secondary);">AI-powered web analysis, monitoring, feeds &amp; tools</span></h1>
-          <p class="subtitle" style="line-height:1.4;"><span style="color:var(--text-muted);font-size:11px;">See every angle. See any page. See any changes. Read the feeds. Any AI. Prompts fully editable &amp; fully addable.</span></p>
+          <h1 style="display:flex;align-items:baseline;gap:10px;">Argus <span style="font-size:13px;font-weight:400;color:var(--text-secondary);">AI-powered browser-extension for web analysis, monitoring, feeds &amp; research tools</span></h1>
+          <p class="subtitle" style="line-height:1.4;"><span style="color:var(--text-muted);font-size:11px;">See every angle. See any page. See any changes. Read the feeds. Use any AI. Prompts fully editable &amp; fully customizable.</span></p>
         </div>
       </div>
       <span id="save-indicator" class="save-indicator hidden">Saved</span>
@@ -494,8 +494,11 @@
                   <span style="flex:1;"></span>
                   <button id="proj-entity-extract" class="btn btn-secondary btn-sm" title="Run entity extraction on all project items">Entities</button>
                   <button id="proj-connection-graph" class="btn btn-secondary btn-sm" title="Build connection graph from entities">Graph</button>
+                  <button id="proj-heatmap" class="btn btn-secondary btn-sm" title="Entity mention heatmap">Heatmap</button>
+                  <button id="proj-geomap" class="btn btn-secondary btn-sm" title="Geolocation map of entities">Geomap</button>
                   <button id="proj-timeline" class="btn btn-secondary btn-sm" title="Build timeline from dates">Timeline</button>
                   <button id="proj-report" class="btn btn-secondary btn-sm" title="Generate investigation report">Report</button>
+                  <button id="proj-anomaly" class="btn btn-secondary btn-sm" title="AI anomaly &amp; outlier detection">Anomaly Scan</button>
                 </div>
                 <div id="proj-osint-status" class="prompt-status" style="padding:4px 0;font-size:12px;"></div>
                 <div class="proj-items-list" id="proj-items-list"></div>
@@ -921,7 +924,7 @@
         <h2 class="card-title">Getting Started</h2>
         <div class="card-body help-content">
           <h3>What is Argus?</h3>
-          <p>Argus is a Firefox extension that lets you run AI-powered analysis on any webpage using your choice of provider — xAI (Grok), OpenAI (GPT), Anthropic (Claude), Google (Gemini), or any custom OpenAI-compatible endpoint. Beyond analysis, Argus includes built-in OSINT tools (metadata extraction, link mapping, whois/DNS lookups, Wayback Machine checks), fully customizable prompts, and support for custom providers like Ollama, LM Studio, and vLLM. Results stream in real-time, and you can ask follow-up questions, compare providers, bookmark pages with AI tags, monitor pages for changes, and more.</p>
+          <p>Argus is a browser extension that lets you run AI-powered analysis on any webpage using your choice of provider — xAI (Grok), OpenAI (GPT), Anthropic (Claude), Google (Gemini), or any custom OpenAI-compatible endpoint. Beyond analysis, Argus includes built-in OSINT tools (metadata extraction, link mapping, whois/DNS lookups, Wayback Machine checks), fully customizable prompts, and support for custom providers like Ollama, LM Studio, and vLLM. Results stream in real-time, and you can ask follow-up questions, compare providers, bookmark pages with AI tags, monitor pages for changes, and more. Or clone our repo at <a href="https://github.com/n3r4-life/argus360.git" target="_blank">Github</a> and add your own new functionality.</p>
 
           <h3>Step 1: Get an API Key</h3>
           <p>Argus connects directly to AI providers using <strong>your own API keys</strong>. This means no middleman, no subscription, and you only pay for what you use. Most providers offer generous free tiers — many users spend less than $1/month.</p>

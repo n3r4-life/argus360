@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Argus - Tech Stack</title>
+  <link rel="stylesheet" href="techstack.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+</head>
+<body>
+  <script src="../shared/ribbon.js"></script>
+  <header class="header">
+    <div class="header-left">
+      <img src="../icons/icon-32.png" alt="" class="header-icon">
+      <h1 class="header-title">Tech Stack</h1>
+    </div>
+    <a id="page-url" class="page-url" href="#" target="_blank" title="Open analyzed page"></a>
+  </header>
+
+  <section id="stats-bar" class="stats-bar">
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-total">0</span>
+      <span class="stat-label">Technologies</span>
+    </div>
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-categories">0</span>
+      <span class="stat-label">Categories</span>
+    </div>
+  </section>
+
+  <nav class="filter-tabs">
+    <button class="tab active" data-filter="all">All</button>
+    <button class="tab" data-filter="Server">Server</button>
+    <button class="tab" data-filter="Framework">Framework</button>
+    <button class="tab" data-filter="CMS">CMS</button>
+    <button class="tab" data-filter="JS Library">JS Library</button>
+    <button class="tab" data-filter="Analytics">Analytics</button>
+    <button class="tab" data-filter="CDN">CDN</button>
+    <button class="tab" data-filter="Security">Security</button>
+    <button class="tab" data-filter="Other">Other</button>
+  </nav>
+
+  <div class="actions-bar">
+    <div class="actions-left">
+      <button id="export-csv" class="btn btn-secondary">Export CSV</button>
+    </div>
+  </div>
+
+  <main id="tech-grid" class="tech-grid">
+    <div class="empty-state" id="empty-state">
+      <p>Loading tech stack data...</p>
+    </div>
+  </main>
+
+  <script src="techstack.js"></script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Geolocation Map - Argus OSINT</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="geomap.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+</head>
+<body>
+  <script src="../shared/ribbon.js"></script>
+  <header class="geomap-header">
+    <div class="header-left">
+      <img src="../icons/icon-32.png" alt="Argus" class="header-icon">
+      <h1 class="project-title">Geolocation Map</h1>
+      <span class="project-name" id="projectName">Loading...</span>
+    </div>
+    <div class="header-controls">
+      <div class="filter-group">
+        <label class="filter-checkbox">
+          <input type="checkbox" data-type="location" checked>
+          <span class="filter-dot" style="background:#4caf50"></span>
+          Locations
+        </label>
+        <label class="filter-checkbox">
+          <input type="checkbox" data-type="organization" checked>
+          <span class="filter-dot" style="background:#64b5f6"></span>
+          Organizations
+        </label>
+        <label class="filter-checkbox">
+          <input type="checkbox" data-type="ip" checked>
+          <span class="filter-dot" style="background:#ffb74d"></span>
+          IP Addresses
+        </label>
+      </div>
+      <div class="geocode-status" id="geocodeStatus">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Ready</span>
+      </div>
+      <button id="togglePanel" class="btn-secondary" title="Toggle location panel">Panel</button>
+      <button id="exportCsv" class="btn-export">Export CSV</button>
+    </div>
+  </header>
+
+  <div class="stats-bar" id="statsBar">
+    <span class="stat-item"><strong id="statFound">0</strong> locations found</span>
+    <span class="stat-sep"></span>
+    <span class="stat-item"><strong id="statGeocoded">0</strong> geocoded</span>
+    <span class="stat-sep"></span>
+    <span class="stat-item"><strong id="statSources">0</strong> sources</span>
+  </div>
+
+  <main class="geomap-main">
+    <div class="map-container" id="mapContainer">
+      <div id="map"></div>
+      <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <p id="loadingText">Loading location data...</p>
+      </div>
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+            <circle cx="12" cy="10" r="3"/>
+          </svg>
+        </div>
+        <h2>No Location Data</h2>
+        <p>No geocodable locations were found in this project's analysis data.</p>
+        <p class="empty-hint">Analyze pages containing geographic references (cities, countries, addresses) to populate this map.</p>
+      </div>
+    </div>
+    <aside class="side-panel open" id="sidePanel">
+      <div class="panel-header">
+        <h2>Locations</h2>
+        <button id="panelClose" class="panel-close">&times;</button>
+      </div>
+      <div class="panel-body" id="panelBody">
+        <ul class="location-list" id="locationList"></ul>
+      </div>
+    </aside>
+  </main>
+
+  <script src="geomap.js"></script>
+</body>
+</html>

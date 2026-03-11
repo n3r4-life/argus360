@@ -1743,8 +1743,11 @@ function initProjects() {
   // OSINT project tool buttons
   document.getElementById("proj-entity-extract").addEventListener("click", projRunEntityExtraction);
   document.getElementById("proj-connection-graph").addEventListener("click", projOpenConnectionGraph);
+  document.getElementById("proj-heatmap").addEventListener("click", projOpenHeatmap);
+  document.getElementById("proj-geomap").addEventListener("click", projOpenGeomap);
   document.getElementById("proj-timeline").addEventListener("click", projOpenTimeline);
   document.getElementById("proj-report").addEventListener("click", projGenerateReport);
+  document.getElementById("proj-anomaly").addEventListener("click", projAnomalyScan);
 
   projLoadProjects();
   checkRunningBatch();
@@ -2225,6 +2228,16 @@ async function projOpenTimeline() {
   }
 }
 
+function projOpenHeatmap() {
+  if (!projState.activeProjectId) return;
+  browser.tabs.create({ url: browser.runtime.getURL(`osint/heatmap.html?project=${encodeURIComponent(projState.activeProjectId)}`) });
+}
+
+function projOpenGeomap() {
+  if (!projState.activeProjectId) return;
+  browser.tabs.create({ url: browser.runtime.getURL(`osint/geomap.html?project=${encodeURIComponent(projState.activeProjectId)}`) });
+}
+
 async function projGenerateReport() {
   if (!projState.activeProjectId) return;
   const statusEl = document.getElementById("proj-osint-status");
@@ -2253,6 +2266,37 @@ async function projGenerateReport() {
     statusEl.textContent = "";
   } else {
     statusEl.textContent = resp?.error || "Failed to generate report.";
+    setTimeout(() => { statusEl.textContent = ""; }, 5000);
+  }
+}
+
+async function projAnomalyScan() {
+  if (!projState.activeProjectId) return;
+  const statusEl = document.getElementById("proj-osint-status");
+  statusEl.textContent = "Running anomaly scan (this may take a minute)...";
+
+  const resp = await browser.runtime.sendMessage({
+    action: "anomalyScan",
+    projectId: projState.activeProjectId
+  });
+
+  if (resp && resp.success) {
+    const storeKey = `anomaly-${Date.now()}`;
+    await browser.storage.local.set({
+      [storeKey]: {
+        status: "done",
+        content: resp.content,
+        pageTitle: "Anomaly Scan",
+        pageUrl: "",
+        presetLabel: "Anomaly Scan",
+        provider: resp.provider,
+        model: resp.model
+      }
+    });
+    browser.tabs.create({ url: browser.runtime.getURL(`results/results.html?id=${encodeURIComponent(storeKey)}`) });
+    statusEl.textContent = "";
+  } else {
+    statusEl.textContent = resp?.error || "Failed to run anomaly scan.";
     setTimeout(() => { statusEl.textContent = ""; }, 5000);
   }
 }

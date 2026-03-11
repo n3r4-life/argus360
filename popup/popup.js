@@ -548,6 +548,20 @@ function attachEventListeners() {
       showToast(err.message, "error");
     }
   });
+
+  document.getElementById("osint-techstack").addEventListener("click", async () => {
+    showToast("Detecting tech stack...", "loading");
+    const resp = await browser.runtime.sendMessage({ action: "detectTechStack", tabId: currentTabId });
+    if (resp && resp.success) {
+      const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+      const storeKey = `techstack-${Date.now()}`;
+      await browser.storage.local.set({ [storeKey]: { pageUrl: tabs[0]?.url, pageTitle: tabs[0]?.title, technologies: resp.technologies } });
+      browser.tabs.create({ url: browser.runtime.getURL(`osint/techstack.html?id=${encodeURIComponent(storeKey)}`) });
+      window.close();
+    } else {
+      showToast(resp?.error || "Tech stack detection failed.", "error");
+    }
+  });
 }
 
 // ──────────────────────────────────────────────

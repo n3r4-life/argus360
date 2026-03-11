@@ -1147,6 +1147,728 @@ Produce the report now. Be thorough but concise. Use markdown headings, bullets,
 
 
 // ──────────────────────────────────────────────
+// 10. Anomaly / Outlier Scan
+// ──────────────────────────────────────────────
+
+async function handleAnomalyScan(message) {
+  try {
+    const { projectId } = message;
+    if (!projectId) return { success: false, error: "projectId is required" };
+
+    const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+    const project = argusProjects.find(p => p.id === projectId);
+    if (!project) return { success: false, error: "Project not found" };
+    if (!project.items || project.items.length === 0) {
+      return { success: false, error: "Project has no items to scan" };
+    }
+
+    const { analysisHistory } = await browser.storage.local.get({ analysisHistory: [] });
+
+    // Gather item data with entity info
+    const itemSummaries = [];
+    const allDomains = new Set();
+    const allEntities = new Map(); // name → { type, sources: Set, count }
+
+    for (const item of project.items) {
+      const entry = {
+        title: item.title || item.url || "Untitled",
+        url: item.url || "",
+        tags: item.tags || [],
+        notes: item.notes || ""
+      };
+
+      if (item.url) {
+        try { allDomains.add(new URL(item.url).hostname.replace(/^www\./, "")); } catch {}
+      }
+
+      if (item.analysisContent) {
+        entry.analysis = item.analysisContent.slice(0, 2000);
+      }
+
+      const relatedAnalyses = analysisHistory.filter(h => h.url === item.url);
+      const entities = [];
+      for (const analysis of relatedAnalyses) {
+        if (analysis.entities && Array.isArray(analysis.entities)) {
+          entities.push(...analysis.entities);
+        }
+      }
+      if (entities.length > 0) {
+        entry.entities = entities.slice(0, 40);
+        for (const e of entities) {
+          const key = (e.name || "").toLowerCase().trim();
+          if (!key) continue;
+          if (!allEntities.has(key)) {
+            allEntities.set(key, { name: e.name, type: e.type, sources: new Set(), count: 0 });
+          }
+          const rec = allEntities.get(key);
+          rec.count += e.mentions || 1;
+          rec.sources.add(item.url || item.title);
+        }
+      }
+
+      itemSummaries.push(entry);
+    }
+
+    // Find entities appearing in only one source
+    const singleSourceEntities = [];
+    for (const [, rec] of allEntities) {
+      if (rec.sources.size === 1) {
+        singleSourceEntities.push({ name: rec.name, type: rec.type, count: rec.count, source: [...rec.sources][0] });
+      }
+    }
+    singleSourceEntities.sort((a, b) => b.count - a.count);
+
+    // Optional: get graph data for relationship anomalies
+    let graphSummary = "";
+    try {
+      const graphResult = await handleBuildConnectionGraph({ projectId });
+      if (graphResult.success && graphResult.nodes.length > 0) {
+        const isolatedNodes = graphResult.nodes.filter(n => {
+          return !graphResult.edges.some(e => e.source === n.id || e.target === n.id);
+        });
+        const topConnected = graphResult.nodes
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 10)
+          .map(n => `${n.label} (${n.type}, ${n.count}x)`);
+        graphSummary = `\n### Network Summary\n- ${graphResult.nodes.length} entities, ${graphResult.edges.length} connections\n- Top connected: ${topConnected.join(", ")}\n- Isolated entities (no connections): ${isolatedNodes.length > 0 ? isolatedNodes.map(n => n.label).slice(0, 15).join(", ") : "none"}`;
+      }
+    } catch { /* graph optional */ }
+
+    // Build the prompt
+    const systemPrompt = `You are an expert OSINT analyst specializing in anomaly detection, pattern analysis, and investigative intelligence. Your job is to examine a collection of sources and their extracted data, then identify anything unusual, unexpected, or worth investigating further. Be specific, cite sources, and explain WHY something is anomalous. Use markdown formatting.`;
+
+    const userPrompt = `Perform an anomaly and outlier scan on the project "${project.name}"${project.description ? ` (${project.description})` : ""}.
+
+## Project Data
+
+### Sources (${itemSummaries.length} items)
+${itemSummaries.map((item, i) => `
+**Source ${i + 1}: ${item.title}**
+URL: ${item.url}
+Tags: ${item.tags.join(", ") || "none"}
+Notes: ${item.notes || "none"}
+${item.analysis ? `Analysis excerpt:\n${item.analysis}` : ""}
+${item.entities ? `Entities: ${item.entities.map(e => `${e.name} (${e.type})`).join(", ")}` : ""}
+`).join("\n---\n")}
+
+### Domains Referenced
+${[...allDomains].join(", ") || "none"}
+
+### Entities Appearing in Only One Source (potential outliers)
+${singleSourceEntities.slice(0, 30).map(e => `- ${e.name} (${e.type}, ${e.count} mentions) — only in: ${e.source}`).join("\n") || "none"}
+${graphSummary}
+
+## Your Analysis Should Cover
+
+1. **Data Anomalies** — Entities, claims, or data points that appear in only one source or contradict the pattern of the other sources. New or unfamiliar domains/entities that stand out.
+
+2. **Pattern Breaks** — Sources or entities that don't fit the overall theme. Unexpected connections or missing expected connections.
+
+3. **Temporal Anomalies** — Date references that are out of sequence, unusual timing patterns, or suspicious chronological gaps.
+
+4. **Source Credibility Flags** — Domains or sources that seem inconsistent with the rest of the collection. Any signs of bias clustering or information monoculture.
+
+5. **Entity Behavior** — Entities with unusually high or low mention counts relative to their apparent importance. Entities that appear across many sources vs. isolated ones.
+
+6. **Investigative Leads** — Based on the anomalies found, suggest specific follow-up actions or searches that could resolve the unknowns.
+
+Rate each finding as: 🔴 High (definitely unusual), 🟡 Medium (worth noting), 🟢 Low (minor observation).
+
+Produce your anomaly report now.`;
+
+    const settings = await getProviderSettings(message.provider);
+    const messages = buildMessages(systemPrompt, userPrompt);
+
+    const result = await callProvider(
+      settings.provider,
+      settings.apiKey,
+      settings.model,
+      messages,
+      { maxTokens: settings.maxTokens, temperature: settings.temperature }
+    );
+
+    if (!result || !result.content) {
+      return { success: false, error: "No response from AI provider" };
+    }
+
+    await saveToHistory({
+      type: "anomaly-scan",
+      title: `Anomaly Scan: ${project.name}`,
+      url: "",
+      provider: settings.provider,
+      model: settings.model,
+      preset: "anomaly-scan",
+      content: result.content
+    });
+
+    return {
+      success: true,
+      content: result.content,
+      provider: settings.provider,
+      model: settings.model
+    };
+  } catch (err) {
+    return { success: false, error: err.message || "Failed to run anomaly scan" };
+  }
+}
+
+
+// ──────────────────────────────────────────────
+// 11. Tech Stack Detector
+// ──────────────────────────────────────────────
+
+const TECH_SIGNATURES = {
+  // CMS
+  meta: [
+    { pattern: /wordpress/i, name: "WordPress", category: "CMS" },
+    { pattern: /drupal/i, name: "Drupal", category: "CMS" },
+    { pattern: /joomla/i, name: "Joomla", category: "CMS" },
+    { pattern: /ghost/i, name: "Ghost", category: "CMS" },
+    { pattern: /hugo/i, name: "Hugo", category: "CMS" },
+    { pattern: /jekyll/i, name: "Jekyll", category: "CMS" },
+    { pattern: /typo3/i, name: "TYPO3", category: "CMS" },
+    { pattern: /contentful/i, name: "Contentful", category: "CMS" },
+    { pattern: /webflow/i, name: "Webflow", category: "CMS" },
+    { pattern: /squarespace/i, name: "Squarespace", category: "CMS" },
+    { pattern: /wix\.com/i, name: "Wix", category: "CMS" },
+    { pattern: /blogger/i, name: "Blogger", category: "CMS" },
+    { pattern: /medium/i, name: "Medium", category: "CMS" },
+    { pattern: /shopify/i, name: "Shopify", category: "E-commerce" },
+  ],
+  paths: [
+    { pattern: /\/wp-content\//i, name: "WordPress", category: "CMS" },
+    { pattern: /\/wp-includes\//i, name: "WordPress", category: "CMS" },
+    { pattern: /\/sites\/default\/files/i, name: "Drupal", category: "CMS" },
+    { pattern: /\/media\/jui\//i, name: "Joomla", category: "CMS" },
+    { pattern: /cdn\.shopify\.com/i, name: "Shopify", category: "E-commerce" },
+    { pattern: /static\.squarespace\.com/i, name: "Squarespace", category: "CMS" },
+    { pattern: /static\.wixstatic\.com/i, name: "Wix", category: "CMS" },
+    { pattern: /\/ghost\//i, name: "Ghost", category: "CMS" },
+    // JS Frameworks & Libraries
+    { pattern: /react(?:\.production|\.development|dom)/i, name: "React", category: "Framework" },
+    { pattern: /vue(?:\.runtime|\.global|\.esm)/i, name: "Vue.js", category: "Framework" },
+    { pattern: /angular(?:\.min)?\.js/i, name: "Angular", category: "Framework" },
+    { pattern: /svelte/i, name: "Svelte", category: "Framework" },
+    { pattern: /next[\/-]/, name: "Next.js", category: "Framework" },
+    { pattern: /_next\/static/i, name: "Next.js", category: "Framework" },
+    { pattern: /__nuxt/i, name: "Nuxt.js", category: "Framework" },
+    { pattern: /gatsby/i, name: "Gatsby", category: "Framework" },
+    { pattern: /remix/i, name: "Remix", category: "Framework" },
+    { pattern: /astro/i, name: "Astro", category: "Framework" },
+    { pattern: /ember(?:\.min)?\.js/i, name: "Ember.js", category: "Framework" },
+    { pattern: /backbone(?:\.min)?\.js/i, name: "Backbone.js", category: "JS Library" },
+    { pattern: /jquery(?:\.min)?\.js/i, name: "jQuery", category: "JS Library" },
+    { pattern: /lodash(?:\.min)?\.js/i, name: "Lodash", category: "JS Library" },
+    { pattern: /moment(?:\.min)?\.js/i, name: "Moment.js", category: "JS Library" },
+    { pattern: /axios(?:\.min)?\.js/i, name: "Axios", category: "JS Library" },
+    { pattern: /d3(?:\.min)?\.js/i, name: "D3.js", category: "JS Library" },
+    { pattern: /three(?:\.min)?\.js/i, name: "Three.js", category: "JS Library" },
+    { pattern: /gsap/i, name: "GSAP", category: "JS Library" },
+    { pattern: /swiper/i, name: "Swiper", category: "JS Library" },
+    { pattern: /alpine(?:\.min)?\.js/i, name: "Alpine.js", category: "JS Library" },
+    { pattern: /htmx(?:\.min)?\.js/i, name: "htmx", category: "JS Library" },
+    { pattern: /turbo/i, name: "Turbo", category: "JS Library" },
+    { pattern: /stimulus/i, name: "Stimulus", category: "JS Library" },
+    // CSS Frameworks
+    { pattern: /bootstrap(?:\.min)?\.(?:css|js)/i, name: "Bootstrap", category: "CSS" },
+    { pattern: /tailwind/i, name: "Tailwind CSS", category: "CSS" },
+    { pattern: /bulma(?:\.min)?\.css/i, name: "Bulma", category: "CSS" },
+    { pattern: /foundation(?:\.min)?\.css/i, name: "Foundation", category: "CSS" },
+    { pattern: /materialize(?:\.min)?\.css/i, name: "Materialize", category: "CSS" },
+    { pattern: /material[\/-]ui/i, name: "Material UI", category: "CSS" },
+    { pattern: /semantic(?:\.min)?\.css/i, name: "Semantic UI", category: "CSS" },
+    { pattern: /animate(?:\.min)?\.css/i, name: "Animate.css", category: "CSS" },
+    // Analytics
+    { pattern: /google-analytics\.com\/analytics/i, name: "Google Analytics", category: "Analytics" },
+    { pattern: /googletagmanager\.com/i, name: "Google Tag Manager", category: "Analytics" },
+    { pattern: /gtag\/js/i, name: "Google Analytics (gtag)", category: "Analytics" },
+    { pattern: /connect\.facebook\.net/i, name: "Facebook Pixel", category: "Analytics" },
+    { pattern: /static\.hotjar\.com/i, name: "Hotjar", category: "Analytics" },
+    { pattern: /cdn\.mxpnl\.com|api\.mixpanel\.com/i, name: "Mixpanel", category: "Analytics" },
+    { pattern: /cdn\.segment\.com|api\.segment\.io/i, name: "Segment", category: "Analytics" },
+    { pattern: /plausible\.io/i, name: "Plausible", category: "Analytics" },
+    { pattern: /matomo/i, name: "Matomo", category: "Analytics" },
+    { pattern: /clarity\.ms/i, name: "Microsoft Clarity", category: "Analytics" },
+    { pattern: /amplitude/i, name: "Amplitude", category: "Analytics" },
+    { pattern: /heap-\d+\.js|heapanalytics/i, name: "Heap", category: "Analytics" },
+    // CDN
+    { pattern: /cdnjs\.cloudflare\.com/i, name: "cdnjs", category: "CDN" },
+    { pattern: /unpkg\.com/i, name: "unpkg", category: "CDN" },
+    { pattern: /cdn\.jsdelivr\.net/i, name: "jsDelivr", category: "CDN" },
+    { pattern: /ajax\.googleapis\.com/i, name: "Google CDN", category: "CDN" },
+    { pattern: /stackpath\.bootstrapcdn\.com/i, name: "BootstrapCDN", category: "CDN" },
+    // Fonts
+    { pattern: /fonts\.googleapis\.com/i, name: "Google Fonts", category: "Other" },
+    { pattern: /use\.typekit\.net/i, name: "Adobe Fonts (TypeKit)", category: "Other" },
+    { pattern: /kit\.fontawesome\.com|fontawesome/i, name: "Font Awesome", category: "Other" },
+    // Security
+    { pattern: /recaptcha/i, name: "reCAPTCHA", category: "Security" },
+    { pattern: /hcaptcha/i, name: "hCaptcha", category: "Security" },
+    { pattern: /challenges\.cloudflare\.com/i, name: "Cloudflare Turnstile", category: "Security" },
+    // Payments
+    { pattern: /js\.stripe\.com/i, name: "Stripe", category: "Other" },
+    { pattern: /paypal\.com\/sdk/i, name: "PayPal", category: "Other" },
+    // E-commerce
+    { pattern: /magento/i, name: "Magento", category: "E-commerce" },
+    { pattern: /bigcommerce/i, name: "BigCommerce", category: "E-commerce" },
+    { pattern: /woocommerce/i, name: "WooCommerce", category: "E-commerce" },
+    // Chat / Support
+    { pattern: /widget\.intercom\.io/i, name: "Intercom", category: "Other" },
+    { pattern: /embed\.tawk\.to/i, name: "Tawk.to", category: "Other" },
+    { pattern: /js\.driftt\.com/i, name: "Drift", category: "Other" },
+    { pattern: /crisp\.chat/i, name: "Crisp", category: "Other" },
+    { pattern: /livechatinc\.com/i, name: "LiveChat", category: "Other" },
+    // Video
+    { pattern: /player\.vimeo\.com/i, name: "Vimeo", category: "Other" },
+    { pattern: /youtube\.com\/iframe_api/i, name: "YouTube Embed", category: "Other" },
+  ],
+  globals: [
+    { check: "typeof React !== 'undefined'", name: "React", category: "Framework" },
+    { check: "typeof Vue !== 'undefined'", name: "Vue.js", category: "Framework" },
+    { check: "typeof angular !== 'undefined'", name: "AngularJS", category: "Framework" },
+    { check: "typeof ng !== 'undefined' && typeof ng.getComponent === 'function'", name: "Angular", category: "Framework" },
+    { check: "typeof jQuery !== 'undefined' || typeof $ === 'function' && $.fn && $.fn.jquery", name: "jQuery", category: "JS Library", version: "typeof jQuery !== 'undefined' ? jQuery.fn.jquery : (typeof $ === 'function' && $.fn ? $.fn.jquery : '')" },
+    { check: "typeof _ !== 'undefined' && typeof _.VERSION === 'string'", name: "Lodash/Underscore", category: "JS Library", version: "typeof _ !== 'undefined' ? _.VERSION : ''" },
+    { check: "typeof __NEXT_DATA__ !== 'undefined'", name: "Next.js", category: "Framework" },
+    { check: "typeof __NUXT__ !== 'undefined'", name: "Nuxt.js", category: "Framework" },
+    { check: "typeof Shopify !== 'undefined'", name: "Shopify", category: "E-commerce" },
+    { check: "typeof wp !== 'undefined' && typeof wp.customize !== 'undefined'", name: "WordPress", category: "CMS" },
+    { check: "typeof Drupal !== 'undefined'", name: "Drupal", category: "CMS" },
+    { check: "typeof ga !== 'undefined' || typeof gtag !== 'undefined'", name: "Google Analytics", category: "Analytics" },
+    { check: "typeof dataLayer !== 'undefined' && Array.isArray(dataLayer)", name: "Google Tag Manager", category: "Analytics" },
+    { check: "typeof fbq !== 'undefined'", name: "Facebook Pixel", category: "Analytics" },
+    { check: "typeof Stripe !== 'undefined'", name: "Stripe", category: "Other" },
+    { check: "typeof Sentry !== 'undefined'", name: "Sentry", category: "Other" },
+    { check: "typeof twemoji !== 'undefined'", name: "Twemoji", category: "Other" },
+    { check: "typeof Turbo !== 'undefined'", name: "Turbo", category: "JS Library" },
+    { check: "typeof htmx !== 'undefined'", name: "htmx", category: "JS Library" },
+    { check: "typeof Alpine !== 'undefined'", name: "Alpine.js", category: "JS Library" },
+    { check: "typeof gsap !== 'undefined'", name: "GSAP", category: "JS Library" },
+  ],
+  headers: [
+    { header: "server", patterns: [
+      { pattern: /apache/i, name: "Apache", category: "Server" },
+      { pattern: /nginx/i, name: "Nginx", category: "Server" },
+      { pattern: /microsoft-iis/i, name: "IIS", category: "Server" },
+      { pattern: /cloudflare/i, name: "Cloudflare", category: "Server" },
+      { pattern: /litespeed/i, name: "LiteSpeed", category: "Server" },
+      { pattern: /openresty/i, name: "OpenResty", category: "Server" },
+      { pattern: /envoy/i, name: "Envoy", category: "Server" },
+      { pattern: /caddy/i, name: "Caddy", category: "Server" },
+    ]},
+    { header: "x-powered-by", patterns: [
+      { pattern: /php/i, name: "PHP", category: "Server" },
+      { pattern: /asp\.net/i, name: "ASP.NET", category: "Server" },
+      { pattern: /express/i, name: "Express.js", category: "Framework" },
+      { pattern: /next\.js/i, name: "Next.js", category: "Framework" },
+      { pattern: /nuxt/i, name: "Nuxt.js", category: "Framework" },
+      { pattern: /rails/i, name: "Ruby on Rails", category: "Framework" },
+      { pattern: /django/i, name: "Django", category: "Framework" },
+      { pattern: /flask/i, name: "Flask", category: "Framework" },
+      { pattern: /laravel/i, name: "Laravel", category: "Framework" },
+    ]},
+    { header: "x-generator", patterns: [
+      { pattern: /drupal/i, name: "Drupal", category: "CMS" },
+      { pattern: /wordpress/i, name: "WordPress", category: "CMS" },
+      { pattern: /joomla/i, name: "Joomla", category: "CMS" },
+    ]},
+  ],
+  cookies: [
+    { pattern: /PHPSESSID/i, name: "PHP", category: "Server" },
+    { pattern: /ASP\.NET_SessionId/i, name: "ASP.NET", category: "Server" },
+    { pattern: /JSESSIONID/i, name: "Java (Servlet)", category: "Server" },
+    { pattern: /laravel_session/i, name: "Laravel", category: "Framework" },
+    { pattern: /rack\.session/i, name: "Ruby/Rack", category: "Framework" },
+    { pattern: /connect\.sid/i, name: "Express.js", category: "Framework" },
+    { pattern: /_shopify/i, name: "Shopify", category: "E-commerce" },
+    { pattern: /wp-settings/i, name: "WordPress", category: "CMS" },
+  ]
+};
+
+async function handleDetectTechStack(message) {
+  try {
+    const tabId = message.tabId;
+    const detected = new Map(); // name -> tech object (deduplication)
+
+    function addTech(name, category, conf, method, version) {
+      const key = name.toLowerCase();
+      if (detected.has(key)) {
+        const existing = detected.get(key);
+        // Upgrade confidence
+        const confOrder = { high: 3, medium: 2, low: 1 };
+        if ((confOrder[conf] || 0) > (confOrder[existing.confidence] || 0)) {
+          existing.confidence = conf;
+        }
+        if (version && !existing.version) existing.version = version;
+        if (!existing.methods.includes(method)) existing.methods.push(method);
+      } else {
+        detected.set(key, { name, category, confidence: conf, version: version || "", methods: [method] });
+      }
+    }
+
+    // 1. Inject content script for DOM + JS global detection
+    const results = await browser.tabs.executeScript(tabId, {
+      code: `(function() {
+        const techs = [];
+
+        // Meta generator
+        const gen = document.querySelector('meta[name="generator"]');
+        if (gen) techs.push({ source: 'meta', value: gen.getAttribute('content') || '' });
+
+        // All script srcs
+        const scripts = Array.from(document.querySelectorAll('script[src]')).map(s => s.src);
+        techs.push({ source: 'scripts', value: scripts });
+
+        // All link hrefs (stylesheets, preloads)
+        const links = Array.from(document.querySelectorAll('link[href]')).map(l => l.href);
+        techs.push({ source: 'links', value: links });
+
+        // HTML comments (first 50)
+        const comments = [];
+        const walker = document.createTreeWalker(document, NodeFilter.SHOW_COMMENT);
+        let commentCount = 0;
+        while (walker.nextNode() && commentCount < 50) {
+          comments.push(walker.currentNode.textContent.trim().slice(0, 200));
+          commentCount++;
+        }
+        techs.push({ source: 'comments', value: comments });
+
+        // JS globals
+        const globals = [];
+        ${TECH_SIGNATURES.globals.map(g =>
+          `try { if (${g.check}) globals.push({ name: ${JSON.stringify(g.name)}, category: ${JSON.stringify(g.category)}, version: ${g.version ? `(function(){ try { return ${g.version}; } catch { return ''; } })()` : "''"} }); } catch {}`
+        ).join('\n        ')}
+
+        techs.push({ source: 'globals', value: globals });
+
+        return techs;
+      })()`
+    });
+
+    const domData = results[0] || [];
+
+    // Process meta generator
+    const metaEntry = domData.find(d => d.source === "meta");
+    if (metaEntry && metaEntry.value) {
+      const genValue = metaEntry.value;
+      for (const sig of TECH_SIGNATURES.meta) {
+        if (sig.pattern.test(genValue)) {
+          const vMatch = genValue.match(/[\d]+(?:\.[\d]+)*/);
+          addTech(sig.name, sig.category, "high", "meta", vMatch ? vMatch[0] : "");
+        }
+      }
+    }
+
+    // Process script/link paths
+    const scriptEntry = domData.find(d => d.source === "scripts");
+    const linkEntry = domData.find(d => d.source === "links");
+    const allPaths = [...(scriptEntry?.value || []), ...(linkEntry?.value || [])];
+
+    for (const path of allPaths) {
+      for (const sig of TECH_SIGNATURES.paths) {
+        if (sig.pattern.test(path)) {
+          const vMatch = path.match(/[\/@-]([\d]+(?:\.[\d]+)*)/);
+          addTech(sig.name, sig.category, "medium", "path", vMatch ? vMatch[1] : "");
+        }
+      }
+    }
+
+    // Process comments
+    const commentEntry = domData.find(d => d.source === "comments");
+    if (commentEntry && commentEntry.value) {
+      for (const comment of commentEntry.value) {
+        for (const sig of TECH_SIGNATURES.meta) {
+          if (sig.pattern.test(comment)) {
+            addTech(sig.name, sig.category, "low", "comment", "");
+          }
+        }
+      }
+    }
+
+    // Process JS globals
+    const globalEntry = domData.find(d => d.source === "globals");
+    if (globalEntry && globalEntry.value) {
+      for (const g of globalEntry.value) {
+        addTech(g.name, g.category, "high", "global", g.version || "");
+      }
+    }
+
+    // 2. Fetch response headers
+    try {
+      const tab = await browser.tabs.get(tabId);
+      if (tab.url && !tab.url.startsWith("about:") && !tab.url.startsWith("moz-extension:")) {
+        const resp = await fetch(tab.url, { method: "HEAD", redirect: "follow" });
+        const headers = {};
+        resp.headers.forEach((val, key) => { headers[key.toLowerCase()] = val; });
+
+        // Match header patterns
+        for (const hSpec of TECH_SIGNATURES.headers) {
+          const hVal = headers[hSpec.header];
+          if (!hVal) continue;
+          for (const p of hSpec.patterns) {
+            if (p.pattern.test(hVal)) {
+              const vMatch = hVal.match(/[\d]+(?:\.[\d]+)*/);
+              addTech(p.name, p.category, "high", "header", vMatch ? vMatch[0] : "");
+            }
+          }
+        }
+
+        // Special headers
+        if (headers["x-drupal-cache"] !== undefined) addTech("Drupal", "CMS", "high", "header", "");
+        if (headers["x-varnish"] !== undefined) addTech("Varnish", "Server", "medium", "header", "");
+        if (headers["x-cache"]) {
+          if (/cloudfront/i.test(headers["x-cache"])) addTech("AWS CloudFront", "CDN", "high", "header", "");
+        }
+        if (/cloudflare/i.test(headers["cf-ray"] || headers["server"] || "")) {
+          addTech("Cloudflare", "CDN", "high", "header", "");
+        }
+        if (headers["x-vercel-id"] !== undefined) addTech("Vercel", "Server", "high", "header", "");
+        if (headers["x-netlify"] !== undefined || headers["x-nf-request-id"] !== undefined) addTech("Netlify", "Server", "high", "header", "");
+        if (headers["x-amz-cf-id"] !== undefined) addTech("AWS CloudFront", "CDN", "high", "header", "");
+        if (headers["x-fastly-request-id"] !== undefined) addTech("Fastly", "CDN", "high", "header", "");
+        if (headers["x-cdn"] && /akamai/i.test(headers["x-cdn"])) addTech("Akamai", "CDN", "high", "header", "");
+        if (headers["x-served-by"] && /cache/i.test(headers["x-served-by"])) addTech("Fastly", "CDN", "low", "header", "");
+
+        // Cookie-based detection
+        const cookies = headers["set-cookie"] || "";
+        for (const cSig of TECH_SIGNATURES.cookies) {
+          if (cSig.pattern.test(cookies)) {
+            addTech(cSig.name, cSig.category, "medium", "cookie", "");
+          }
+        }
+      }
+    } catch { /* header fetch failed — continue with DOM-only results */ }
+
+    // Build final array
+    const technologies = Array.from(detected.values()).map(t => ({
+      name: t.name,
+      category: t.category,
+      version: t.version,
+      confidence: t.confidence,
+      method: t.methods.join(", ")
+    }));
+
+    // Sort: high confidence first, then by category
+    const confOrder = { high: 0, medium: 1, low: 2 };
+    technologies.sort((a, b) => (confOrder[a.confidence] || 9) - (confOrder[b.confidence] || 9) || a.category.localeCompare(b.category));
+
+    return { success: true, technologies };
+  } catch (err) {
+    return { success: false, error: err.message || "Tech stack detection failed" };
+  }
+}
+
+
+// ──────────────────────────────────────────────
+// 11. Entity Mention Heatmap
+// ──────────────────────────────────────────────
+
+async function handleBuildHeatmap(message) {
+  try {
+    const { projectId } = message;
+    if (!projectId) return { success: false, error: "projectId is required" };
+
+    const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+    const project = argusProjects.find(p => p.id === projectId);
+    if (!project) return { success: false, error: "Project not found" };
+
+    const { analysisHistory } = await browser.storage.local.get({ analysisHistory: [] });
+
+    // Collect entity data per page
+    const pageMap = new Map(); // url -> { title, url, index }
+    const entityMap = new Map(); // "type::name" -> { name, type, totalMentions, pageCounts: Map<url, count> }
+
+    for (const item of project.items) {
+      if (!item.url) continue;
+
+      const pageKey = item.url;
+      if (!pageMap.has(pageKey)) {
+        pageMap.set(pageKey, { title: item.title || item.url, url: item.url });
+      }
+
+      // Find entity extraction results for this URL
+      const analyses = analysisHistory.filter(h =>
+        h.url === item.url && h.entities && Array.isArray(h.entities)
+      );
+
+      for (const analysis of analyses) {
+        for (const entity of analysis.entities) {
+          const key = `${(entity.type || "other").toLowerCase()}::${entity.name}`;
+
+          if (!entityMap.has(key)) {
+            entityMap.set(key, {
+              name: entity.name,
+              type: (entity.type || "other").toLowerCase(),
+              totalMentions: 0,
+              pageCounts: new Map()
+            });
+          }
+
+          const entry = entityMap.get(key);
+          entry.totalMentions++;
+          entry.pageCounts.set(pageKey, (entry.pageCounts.get(pageKey) || 0) + 1);
+        }
+      }
+    }
+
+    // Build matrix
+    const pages = Array.from(pageMap.values());
+    const entities = Array.from(entityMap.values())
+      .sort((a, b) => b.totalMentions - a.totalMentions)
+      .slice(0, 100) // Cap at 100 entities
+      .map(e => ({ name: e.name, type: e.type, totalMentions: e.totalMentions }));
+
+    const cells = [];
+    for (const entityEntry of Array.from(entityMap.values()).sort((a, b) => b.totalMentions - a.totalMentions).slice(0, 100)) {
+      const row = [];
+      for (const page of pages) {
+        row.push(entityEntry.pageCounts.get(page.url) || 0);
+      }
+      cells.push(row);
+    }
+
+    return {
+      success: true,
+      matrix: { entities, pages, cells },
+      projectName: project.name
+    };
+  } catch (err) {
+    return { success: false, error: err.message || "Failed to build heatmap" };
+  }
+}
+
+
+// ──────────────────────────────────────────────
+// 12. Geolocation Map
+// ──────────────────────────────────────────────
+
+const GEOCODE_CACHE_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
+const GEOCODE_SKIP_WORDS = new Set(["the", "this", "that", "and", "for", "not", "but", "are", "was", "has", "its", "all", "any", "our", "can", "had", "her", "him", "his", "how", "its", "may", "new", "now", "old", "one", "our", "own", "two", "way", "who", "why", "yes"]);
+
+async function geocodeLocation(name) {
+  // Skip very short or generic terms
+  if (!name || name.length < 3) return null;
+  const lower = name.toLowerCase().trim();
+  if (GEOCODE_SKIP_WORDS.has(lower)) return null;
+  if (/^\d+$/.test(lower)) return null;
+
+  // Check cache
+  const { geocodeCache } = await browser.storage.local.get({ geocodeCache: {} });
+  const cached = geocodeCache[lower];
+  if (cached) {
+    if (Date.now() - cached.timestamp < GEOCODE_CACHE_TTL) {
+      return cached.lat !== null ? { lat: cached.lat, lng: cached.lng } : null;
+    }
+  }
+
+  // Rate limit: wait 1 second
+  await new Promise(r => setTimeout(r, 1100));
+
+  try {
+    const resp = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)}&format=json&limit=1`,
+      { headers: { "User-Agent": "Argus-Extension/1.0" } }
+    );
+
+    if (!resp.ok) return null;
+    const data = await resp.json();
+
+    let result = null;
+    if (data && data.length > 0) {
+      result = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    }
+
+    // Cache result (including null for "not found")
+    geocodeCache[lower] = {
+      lat: result ? result.lat : null,
+      lng: result ? result.lng : null,
+      timestamp: Date.now()
+    };
+    await browser.storage.local.set({ geocodeCache });
+
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+async function handleBuildGeomap(message) {
+  try {
+    const { projectId } = message;
+    if (!projectId) return { success: false, error: "projectId is required" };
+
+    const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+    const project = argusProjects.find(p => p.id === projectId);
+    if (!project) return { success: false, error: "Project not found" };
+
+    const { analysisHistory } = await browser.storage.local.get({ analysisHistory: [] });
+
+    // Collect location entities
+    const locationMap = new Map(); // name -> { name, type, mentions, sources: [{title, url}] }
+
+    const locationTypes = new Set(["location", "city", "country", "address", "place", "geo", "state", "region", "continent"]);
+
+    for (const item of project.items) {
+      if (!item.url) continue;
+
+      const analyses = analysisHistory.filter(h =>
+        h.url === item.url && h.entities && Array.isArray(h.entities)
+      );
+
+      for (const analysis of analyses) {
+        for (const entity of analysis.entities) {
+          const type = (entity.type || "").toLowerCase();
+          if (!locationTypes.has(type)) continue;
+
+          const key = entity.name.toLowerCase().trim();
+          if (!locationMap.has(key)) {
+            locationMap.set(key, {
+              name: entity.name,
+              type: type,
+              mentions: 0,
+              sources: []
+            });
+          }
+
+          const entry = locationMap.get(key);
+          entry.mentions++;
+          if (!entry.sources.some(s => s.url === item.url)) {
+            entry.sources.push({ title: item.title || item.url, url: item.url });
+          }
+        }
+      }
+    }
+
+    // Geocode all locations (with rate limiting built into geocodeLocation)
+    const locations = [];
+    for (const [, loc] of locationMap) {
+      const coords = await geocodeLocation(loc.name);
+      if (coords) {
+        locations.push({
+          name: loc.name,
+          type: loc.type,
+          lat: coords.lat,
+          lng: coords.lng,
+          mentions: loc.mentions,
+          sources: loc.sources
+        });
+      }
+    }
+
+    return {
+      success: true,
+      locations,
+      projectName: project.name,
+      totalEntities: locationMap.size,
+      geocoded: locations.length
+    };
+  } catch (err) {
+    return { success: false, error: err.message || "Failed to build geomap" };
+  }
+}
+
+
+// ──────────────────────────────────────────────
 // Message handler registration
 // ──────────────────────────────────────────────
 // Extends the existing browser.runtime.onMessage — MV2 supports
@@ -1181,6 +1903,18 @@ browser.runtime.onMessage.addListener((message, sender) => {
 
     // Investigation Report
     case "generateReport":      return handleGenerateReport(message);
+
+    // Tech Stack
+    case "detectTechStack":     return handleDetectTechStack(message);
+
+    // Heatmap
+    case "buildHeatmap":        return handleBuildHeatmap(message);
+
+    // Geomap
+    case "buildGeomap":         return handleBuildGeomap(message);
+
+    // Anomaly Scan
+    case "anomalyScan":         return handleAnomalyScan(message);
   }
 
   // Not our message — return undefined so other listeners can handle it
