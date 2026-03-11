@@ -168,6 +168,18 @@ function renderEntries() {
 
     card.appendChild(meta);
 
+    // Keyword route badge
+    if (entry.routedTo && entry.routedTo.length > 0) {
+      card.classList.add("routed");
+      const badge = document.createElement("div");
+      badge.className = "entry-route-badge";
+      const matchedKw = entry.routeKeywords && entry.routeKeywords.length
+        ? entry.routeKeywords.join(", ")
+        : "keyword match";
+      badge.textContent = `Auto-routed to project — ${matchedKw}`;
+      card.appendChild(badge);
+    }
+
     // Description / snippet
     if (entry.description) {
       const desc = document.createElement("div");

@@ -255,6 +255,20 @@ body {
   opacity: 0.85;
 }
 
+.entry-card.routed {
+  border-left: 3px solid var(--accent);
+}
+
+.entry-route-badge {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--accent);
+  background: rgba(233, 69, 96, 0.12);
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
 .entry-header {
   margin-bottom: 8px;
 }

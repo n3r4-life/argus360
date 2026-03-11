@@ -128,6 +128,7 @@ let currentProviderKey = "xai";
 let customPresets = {};
 let providers = {};
 let autoAnalyzeRules = [];
+let feedKeywordRoutes = [];
 let saveTimeout = null;
 
 // ──────────────────────────────────────────────
@@ -336,6 +337,13 @@ const el = {
   addFeed: document.getElementById("add-feed"),
   openFeedReader: document.getElementById("open-feed-reader"),
   feedStatus: document.getElementById("feed-status"),
+  // Feed Keyword Routes
+  feedRouteList: document.getElementById("feed-route-list"),
+  routeKeywords: document.getElementById("route-keywords"),
+  routeProject: document.getElementById("route-project"),
+  routeFeed: document.getElementById("route-feed"),
+  routeNotify: document.getElementById("route-notify"),
+  addFeedRoute: document.getElementById("add-feed-route"),
   // Archive Redirect
   archiveEnabled: document.getElementById("archive-enabled"),
   archiveProvider: document.getElementById("archive-provider"),
@@ -398,6 +406,7 @@ async function loadAllSettings() {
     bookmarkTagPrompt: "",
     extendedThinking: { enabled: false, budgetTokens: 10000 },
     autoAnalyzeRules: [],
+    feedKeywordRoutes: [],
     maxHistorySize: 200,
     showBadge: true,
     responseLanguage: "auto",
@@ -424,6 +433,7 @@ async function loadAllSettings() {
   el.maxHistory.value = settings.maxHistorySize;
   customPresets = settings.customPresets || {};
   autoAnalyzeRules = settings.autoAnalyzeRules || [];
+  feedKeywordRoutes = settings.feedKeywordRoutes || [];
 
   populateDefaultPresetDropdown();
   el.defaultPreset.value = settings.defaultPreset || "summary";
@@ -605,6 +615,7 @@ async function saveAllSettings() {
       budgetTokens: parseInt(el.thinkingBudget.value, 10) || 10000
     },
     autoAnalyzeRules,
+    feedKeywordRoutes,
     maxHistorySize: parseInt(el.maxHistory.value, 10) || 200,
     showBadge: el.showBadge.checked,
     responseLanguage: el.responseLanguage.value
@@ -911,6 +922,10 @@ function attachListeners() {
     await browser.runtime.sendMessage({ action: "deleteAllFeeds" });
     renderFeeds();
   });
+
+  // Feed Keyword Routes
+  renderFeedRoutes();
+  el.addFeedRoute.addEventListener("click", addFeedRoute);
 
   // Archive Redirect
   loadArchiveSettings();
@@ -1318,6 +1333,133 @@ async function addFeedHandler() {
   }
 
   setTimeout(() => { el.feedStatus.textContent = ""; }, 3000);
+}
+
+// ──────────────────────────────────────────────
+// Feed Keyword Routes
+// ──────────────────────────────────────────────
+
+async function renderFeedRoutes() {
+  el.feedRouteList.replaceChildren();
+
+  // Populate project and feed dropdowns
+  const [projResp, feedResp] = await Promise.all([
+    browser.runtime.sendMessage({ action: "getProjects" }),
+    browser.runtime.sendMessage({ action: "getFeeds" })
+  ]);
+
+  const projects = projResp?.projects || [];
+  const rssFeeds = feedResp?.feeds || [];
+
+  // Populate project dropdown
+  el.routeProject.replaceChildren();
+  const defOpt = document.createElement("option");
+  defOpt.value = "";
+  defOpt.textContent = "Select project...";
+  el.routeProject.appendChild(defOpt);
+  projects.forEach(p => {
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = p.name;
+    el.routeProject.appendChild(opt);
+  });
+
+  // Populate feed dropdown
+  el.routeFeed.replaceChildren();
+  const allOpt = document.createElement("option");
+  allOpt.value = "";
+  allOpt.textContent = "All feeds";
+  el.routeFeed.appendChild(allOpt);
+  rssFeeds.forEach(f => {
+    const opt = document.createElement("option");
+    opt.value = f.id;
+    opt.textContent = f.title || f.url;
+    el.routeFeed.appendChild(opt);
+  });
+
+  if (!feedKeywordRoutes.length) {
+    const empty = document.createElement("p");
+    empty.className = "info-text";
+    empty.textContent = "No keyword routes configured.";
+    el.feedRouteList.appendChild(empty);
+    return;
+  }
+
+  feedKeywordRoutes.forEach((route, idx) => {
+    const row = document.createElement("div");
+    row.className = "rule-item";
+
+    const info = document.createElement("div");
+    info.className = "rule-info";
+
+    const keywords = document.createElement("strong");
+    keywords.textContent = route.keywords.join(", ");
+    info.appendChild(keywords);
+
+    const meta = document.createElement("span");
+    meta.className = "rule-meta";
+    const projName = projects.find(p => p.id === route.projectId)?.name || "Unknown project";
+    const feedName = route.feedId
+      ? (rssFeeds.find(f => f.id === route.feedId)?.title || "Specific feed")
+      : "All feeds";
+    const flags = [];
+    if (route.notify) flags.push("notify");
+    meta.textContent = ` → ${projName} | ${feedName}${flags.length ? " | " + flags.join(", ") : ""}`;
+    info.appendChild(meta);
+
+    const actions = document.createElement("div");
+    actions.className = "rule-actions";
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.className = "btn btn-sm btn-secondary";
+    toggleBtn.textContent = route.enabled !== false ? "Pause" : "Resume";
+    toggleBtn.addEventListener("click", () => {
+      route.enabled = route.enabled === false ? true : false;
+      renderFeedRoutes();
+      scheduleSave();
+    });
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "btn btn-sm btn-secondary";
+    deleteBtn.style.color = "var(--error)";
+    deleteBtn.textContent = "Delete";
+    deleteBtn.addEventListener("click", () => {
+      feedKeywordRoutes.splice(idx, 1);
+      renderFeedRoutes();
+      scheduleSave();
+    });
+
+    actions.appendChild(toggleBtn);
+    actions.appendChild(deleteBtn);
+
+    row.appendChild(info);
+    row.appendChild(actions);
+    if (route.enabled === false) row.style.opacity = "0.5";
+    el.feedRouteList.appendChild(row);
+  });
+}
+
+function addFeedRoute() {
+  const keywordsRaw = el.routeKeywords.value.trim();
+  const projectId = el.routeProject.value;
+
+  if (!keywordsRaw) return;
+  if (!projectId) { alert("Select a target project."); return; }
+
+  const keywords = keywordsRaw.split(",").map(k => k.trim()).filter(Boolean);
+
+  feedKeywordRoutes.push({
+    id: `fkr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    keywords,
+    projectId,
+    feedId: el.routeFeed.value || "",
+    notify: el.routeNotify.checked,
+    enabled: true
+  });
+
+  el.routeKeywords.value = "";
+  renderFeedRoutes();
+  scheduleSave();
 }
 
 // ──────────────────────────────────────────────

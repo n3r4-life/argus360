@@ -3357,6 +3357,64 @@ async function checkFeedForUpdates(feed, allFeeds) {
         }
       } catch (e) { console.warn("[KG] feed entry extraction failed:", e); }
 
+      // Keyword route matching — auto-add to projects
+      try {
+        const { feedKeywordRoutes: routes } = await browser.storage.local.get({ feedKeywordRoutes: [] });
+        const activeRoutes = (routes || []).filter(r => r.enabled !== false && (!r.feedId || r.feedId === feed.id));
+        if (activeRoutes.length > 0) {
+          for (const entry of newTagged) {
+            const scanText = ((entry.title || "") + " " + (entry.description || "")).toLowerCase();
+            for (const route of activeRoutes) {
+              const matched = route.keywords.some(kw => {
+                // Support regex patterns wrapped in /pattern/flags
+                const rxMatch = kw.match(/^\/(.+)\/([gimsuy]*)$/);
+                if (rxMatch) {
+                  try { return new RegExp(rxMatch[1], rxMatch[2]).test(scanText); } catch { return false; }
+                }
+                return scanText.includes(kw.toLowerCase());
+              });
+              if (matched) {
+                // Mark entry as routed
+                entry.routedTo = entry.routedTo || [];
+                entry.routedTo.push(route.projectId);
+                entry.routeKeywords = entry.routeKeywords || [];
+                entry.routeKeywords.push(...route.keywords.filter(kw => {
+                  const rxMatch = kw.match(/^\/(.+)\/([gimsuy]*)$/);
+                  if (rxMatch) { try { return new RegExp(rxMatch[1], rxMatch[2]).test(scanText); } catch { return false; } }
+                  return scanText.includes(kw.toLowerCase());
+                }));
+                // Add to project (dedup by URL)
+                const proj = await ArgusDB.Projects.get(route.projectId);
+                if (proj && !proj.items.some(i => i.url === entry.link)) {
+                  await handleAddProjectItem({
+                    projectId: route.projectId,
+                    item: {
+                      type: "feed",
+                      url: entry.link || "",
+                      title: entry.title || "Feed Entry",
+                      summary: (entry.description || "").slice(0, 500),
+                      tags: ["feed", "auto-routed", ...route.keywords.slice(0, 3).map(k => k.replace(/^\/|\/[gimsuy]*$/g, ""))]
+                    }
+                  });
+                }
+                // Notify if enabled
+                if (route.notify) {
+                  const projName = proj?.name || "project";
+                  safeNotify(`fkr-${entry.id}-${Date.now()}`, {
+                    type: "basic",
+                    iconUrl: "icons/icon-96.png",
+                    title: `Feed match → ${projName}`,
+                    message: entry.title || "New matching entry"
+                  });
+                }
+              }
+            }
+          }
+          // Re-save entries with route metadata
+          await ArgusDB.FeedEntries.saveMany(newTagged);
+        }
+      } catch (e) { console.warn("[RSS] Keyword route matching failed:", e); }
+
       // Notification for new entries
       if (newEntries.length > 0) {
         safeNotify(`rss-${feed.id}-${Date.now()}`, {
