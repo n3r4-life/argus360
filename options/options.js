@@ -188,10 +188,15 @@ function initIntervalStepper(containerId, hiddenId, displayId, initialMins) {
 }
 
 function createInlineIntervalStepper(currentMins, onChange) {
+  const outer = document.createElement("div");
+  outer.style.cssText = "display:inline-flex;flex-direction:column;align-items:center;gap:2px;";
+
   const wrap = document.createElement("div");
   wrap.className = "interval-stepper";
+  wrap.title = "Pause & resume for new interval to take effect";
 
   let idx = nearestStepIndex(currentMins || 60);
+  const origIdx = idx;
 
   const downBtn = document.createElement("button");
   downBtn.type = "button";
@@ -207,10 +212,16 @@ function createInlineIntervalStepper(currentMins, onChange) {
   upBtn.className = "interval-step-btn";
   upBtn.textContent = "\u25B4";
 
+  const hint = document.createElement("span");
+  hint.style.cssText = "font-size:10px;color:var(--accent);opacity:0;transition:opacity 0.3s;white-space:nowrap;";
+  hint.textContent = "pause & resume to apply";
+
   function step(dir) {
     idx = Math.max(0, Math.min(INTERVAL_STEPS.length - 1, idx + dir));
     display.textContent = formatInterval(INTERVAL_STEPS[idx]);
     if (onChange) onChange(INTERVAL_STEPS[idx]);
+    // Show hint when interval changed from original
+    hint.style.opacity = idx !== origIdx ? "1" : "0";
   }
 
   downBtn.addEventListener("click", () => step(-1));
@@ -219,7 +230,9 @@ function createInlineIntervalStepper(currentMins, onChange) {
   wrap.appendChild(downBtn);
   wrap.appendChild(display);
   wrap.appendChild(upBtn);
-  return wrap;
+  outer.appendChild(wrap);
+  outer.appendChild(hint);
+  return outer;
 }
 
 // ──────────────────────────────────────────────
