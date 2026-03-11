@@ -43,11 +43,30 @@ async function createContextMenus() {
     contexts: ["page", "frame", "selection"]
   });
 
-  // ── Console ──
+  // ── Console & OSINT ──
   browser.contextMenus.create({
     id: "argus-console",
     parentId: "argus-parent",
     title: "\uD83D\uDDA5\uFE0F Argus Console",
+    contexts: ["page", "frame", "selection"]
+  });
+
+  browser.contextMenus.create({
+    id: "argus-osint-quick",
+    parentId: "argus-parent",
+    title: "\uD83D\uDD0D OSINT",
+    contexts: ["page", "frame", "selection"]
+  });
+  browser.contextMenus.create({
+    id: "argus-osint-dashboard",
+    parentId: "argus-osint-quick",
+    title: "OSINT Dashboard",
+    contexts: ["page", "frame", "selection"]
+  });
+  browser.contextMenus.create({
+    id: "argus-osint-global-graph",
+    parentId: "argus-osint-quick",
+    title: "Global Knowledge Graph",
     contexts: ["page", "frame", "selection"]
   });
 
@@ -1309,6 +1328,18 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
   // Open Argus Console
   if (info.menuItemId === "argus-console") {
     browser.tabs.create({ url: browser.runtime.getURL("options/options.html") });
+    return;
+  }
+
+  // Open OSINT Dashboard
+  if (info.menuItemId === "argus-osint-dashboard") {
+    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#osint") });
+    return;
+  }
+
+  // Open Global Knowledge Graph
+  if (info.menuItemId === "argus-osint-global-graph") {
+    browser.tabs.create({ url: browser.runtime.getURL("osint/graph.html?mode=global") });
     return;
   }
 
