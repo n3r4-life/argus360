@@ -329,6 +329,108 @@
         </div>
       </section>
 
+      <!-- Named Automations -->
+      <section class="card" id="named-automations-card">
+        <h2 class="card-title">Named Automations
+          <span class="badge">Multi-Step</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Build reusable multi-step analysis workflows. Chain analysis presets, custom prompts, entity extraction, pipelines, and project routing into named scripts.</p>
+
+          <div id="automations-list" class="rules-list"></div>
+
+          <button id="new-automation-btn" class="btn btn-secondary btn-sm" style="margin-top:8px;">+ New Automation</button>
+        </div>
+      </section>
+
+      <!-- Automation Editor (inline, hidden until editing) -->
+      <section class="card hidden" id="automation-editor-card">
+        <h2 class="card-title" id="automation-editor-title">New Automation</h2>
+        <div class="card-body">
+          <!-- Name -->
+          <div class="form-group">
+            <label for="auto-name">Automation Name</label>
+            <input type="text" id="auto-name" placeholder="e.g. News Intel Pipeline">
+          </div>
+
+          <!-- Triggers -->
+          <fieldset class="form-fieldset">
+            <legend>Triggers</legend>
+            <div class="form-group">
+              <label for="auto-url-patterns">URL Patterns <span class="hint">(one per line, use * as wildcard)</span></label>
+              <textarea id="auto-url-patterns" rows="3" placeholder="*://reuters.com/*&#10;*://apnews.com/*"></textarea>
+            </div>
+            <div class="form-row">
+              <label class="checkbox-label">
+                <input type="checkbox" id="auto-manual" checked> Allow manual run
+              </label>
+              <div class="form-group flex-1">
+                <label for="auto-project-trigger">Linked Project</label>
+                <select id="auto-project-trigger">
+                  <option value="">None</option>
+                </select>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- Steps -->
+          <fieldset class="form-fieldset">
+            <legend>Steps <span id="auto-step-count" class="hint"></span></legend>
+            <div id="auto-steps-list" class="auto-steps-list"></div>
+            <div class="form-row" style="margin-top:8px;gap:8px;">
+              <select id="auto-add-step-type">
+                <option value="analyze">Analyze (Preset)</option>
+                <option value="prompt">Custom Prompt</option>
+                <option value="extractEntities">Extract Entities</option>
+                <option value="runPipeline">Run Pipeline</option>
+                <option value="addToProject">Add to Project</option>
+              </select>
+              <button id="auto-add-step-btn" class="btn btn-secondary btn-sm">+ Add Step</button>
+            </div>
+          </fieldset>
+
+          <!-- Options -->
+          <fieldset class="form-fieldset">
+            <legend>Options</legend>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="auto-cooldown">Cooldown (ms)</label>
+                <input type="number" id="auto-cooldown" value="60000" min="5000" max="600000" step="5000">
+              </div>
+              <div class="form-group flex-1">
+                <label for="auto-delay">Delay After Load (ms)</label>
+                <input type="number" id="auto-delay" value="2000" min="500" max="30000" step="500">
+              </div>
+            </div>
+            <div class="form-row">
+              <label class="checkbox-label">
+                <input type="checkbox" id="auto-notify" checked> Notify on complete
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="auto-continue-error"> Continue on step error
+              </label>
+            </div>
+          </fieldset>
+
+          <!-- Actions -->
+          <div class="form-row" style="margin-top:12px;gap:8px;">
+            <button id="auto-save-btn" class="btn btn-accent btn-sm">Save Automation</button>
+            <button id="auto-cancel-btn" class="btn btn-secondary btn-sm">Cancel</button>
+            <button id="auto-delete-btn" class="btn btn-danger btn-sm hidden">Delete</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Automation Run Log -->
+      <section class="card" id="automation-log-card">
+        <h2 class="card-title">Run Log</h2>
+        <div class="card-body">
+          <div id="automation-log-list" class="rules-list">
+            <span class="hint">No runs yet.</span>
+          </div>
+        </div>
+      </section>
+
     </div>
 
     <!-- ═══════════════════════════════════════════ -->
@@ -449,6 +551,17 @@
                   <button id="proj-anomaly" class="btn btn-secondary btn-sm" title="AI anomaly &amp; outlier detection">Anomaly Scan</button>
                   <button id="proj-dashboard" class="btn btn-primary btn-sm" title="Open project dashboard with at-a-glance widgets">Dashboard</button>
                 </div>
+                <!-- Automation toolbar -->
+                <div class="proj-items-toolbar hidden" id="proj-automation-toolbar" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;">
+                  <span style="font-size:12px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Automations</span>
+                  <span style="flex:1;"></span>
+                  <select id="proj-automation-select" class="btn btn-secondary btn-sm" style="min-width:160px;">
+                    <option value="">Select automation...</option>
+                  </select>
+                  <button id="proj-automation-run" class="btn btn-accent btn-sm" title="Run selected automation on all project items with URLs">Run on All</button>
+                  <button id="proj-automation-run-selected" class="btn btn-secondary btn-sm" title="Run on a single item (select from items list)">Run on Item</button>
+                </div>
+                <div id="proj-automation-status" class="prompt-status" style="padding:4px 0;font-size:12px;"></div>
                 <div id="proj-osint-status" class="prompt-status" style="padding:4px 0;font-size:12px;"></div>
                 <div class="proj-items-list" id="proj-items-list"></div>
               </div>
@@ -1435,6 +1548,62 @@ Rules:
 
           <h3>Storage</h3>
           <p>The storage usage bar at the bottom of the Monitors tab shows how much space your monitors are using. Snapshots are automatically capped and kept lightweight to avoid bloating your browser storage.</p>
+        </div>
+      </section>
+
+      <!-- Named Automations -->
+      <section class="card" id="help-automations">
+        <h2 class="card-title">Named Automations</h2>
+        <div class="card-body help-content">
+          <p>Automations are reusable, multi-step analysis workflows. Chain multiple operations into a named script that runs automatically or on demand.</p>
+
+          <h3>Creating an Automation</h3>
+          <ol>
+            <li>Go to the <strong>Automation</strong> tab and click <strong>"+ New Automation"</strong></li>
+            <li>Give it a name (e.g., "News Intel Pipeline")</li>
+            <li>Add <strong>triggers</strong> — URL patterns that auto-fire the automation on page load</li>
+            <li>Add <strong>steps</strong> — each step runs in sequence, passing output forward</li>
+            <li>Click <strong>Save Automation</strong></li>
+          </ol>
+
+          <h3>Step Types</h3>
+          <ul>
+            <li><strong>Analyze (Preset)</strong> — runs any analysis preset (Summary, OSINT, Technical, etc.) on the page</li>
+            <li><strong>Custom Prompt</strong> — runs your own system/user prompt. Input can be the original page or the previous step's output, enabling chained re-analysis</li>
+            <li><strong>Extract Entities</strong> — extracts people, orgs, locations, dates and adds them to the Knowledge Graph</li>
+            <li><strong>Run Pipeline</strong> — runs a source pipeline (Wikipedia, News, Classifieds, Research) for structured data extraction</li>
+            <li><strong>Add to Project</strong> — saves the accumulated results to a project with custom tags</li>
+          </ul>
+
+          <h3>Triggers</h3>
+          <ul>
+            <li><strong>URL Patterns</strong> — auto-fires when you visit a matching page (uses * wildcards)</li>
+            <li><strong>Manual</strong> — run from the automation list or from a project</li>
+            <li><strong>Linked Project</strong> — appears in that project's automation toolbar</li>
+          </ul>
+
+          <h3>Project Integration</h3>
+          <p>Automations and projects work bidirectionally:</p>
+          <ul>
+            <li><strong>Automations &rarr; Projects:</strong> Use an "Add to Project" step to route results into a project automatically</li>
+            <li><strong>Projects &rarr; Automations:</strong> Select an automation in the project toolbar and run it on all items or a single item. The automation fetches each URL and runs the full step chain.</li>
+          </ul>
+
+          <h3>Example: OSINT News Pipeline</h3>
+          <pre class="help-code">Name: "OSINT News Pipeline"
+Triggers: *://reuters.com/*, *://apnews.com/*
+
+Steps:
+1. Analyze (Preset: summary)
+2. Custom Prompt:
+   System: "You are an OSINT analyst."
+   Prompt: "Given this analysis, extract intelligence
+   indicators: named sources, unverified claims,
+   geopolitical signals, and follow-up leads."
+   Input: Previous step output
+3. Extract Entities
+4. Add to Project: "News Intel"
+   Tags: auto, news, {automationName}</pre>
         </div>
       </section>
 

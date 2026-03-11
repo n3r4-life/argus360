@@ -845,6 +845,483 @@ function renderAutoRules() {
   });
 }
 
+// ──────────────────────────────────────────────
+// Named Automations UI
+// ──────────────────────────────────────────────
+let automations = [];
+let editingAutomation = null; // null = new, object = editing existing
+let editorSteps = []; // in-flight step list while editing
+
+async function loadAutomations() {
+  const resp = await browser.runtime.sendMessage({ action: "getAutomations" });
+  automations = (resp && resp.success) ? resp.automations : [];
+  renderAutomationList();
+  loadAutomationLog();
+}
+
+function renderAutomationList() {
+  const list = document.getElementById("automations-list");
+  list.replaceChildren();
+
+  if (!automations.length) {
+    const p = document.createElement("p");
+    p.className = "info-text";
+    p.style.margin = "0";
+    p.textContent = "No automations created yet.";
+    list.appendChild(p);
+    return;
+  }
+
+  automations.forEach(auto => {
+    const div = document.createElement("div");
+    div.className = "rule-item";
+
+    const info = document.createElement("div");
+    info.className = "rule-info";
+    const strong = document.createElement("strong");
+    strong.textContent = auto.name || "Untitled";
+    const span = document.createElement("span");
+    const triggers = (auto.triggers?.urlPatterns || []).length;
+    const stepTypes = (auto.steps || []).map(s => s.type).join(" → ");
+    span.textContent = `${auto.steps?.length || 0} steps: ${stepTypes}${triggers ? ` | ${triggers} URL pattern${triggers > 1 ? "s" : ""}` : ""}`;
+    info.appendChild(strong);
+    info.appendChild(span);
+
+    const actions = document.createElement("div");
+    actions.className = "rule-actions";
+
+    // Run button
+    const runBtn = document.createElement("button");
+    runBtn.className = "btn btn-sm btn-accent";
+    runBtn.textContent = "Run";
+    runBtn.title = "Run on current tab";
+    runBtn.addEventListener("click", async () => {
+      const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+      if (!tab) { alert("No active tab"); return; }
+      runBtn.disabled = true;
+      runBtn.textContent = "Running...";
+      try {
+        const resp = await browser.runtime.sendMessage({ action: "runAutomation", automationId: auto.id, tabId: tab.id });
+        runBtn.textContent = resp.success ? "Done!" : "Failed";
+        loadAutomationLog();
+      } catch (e) {
+        runBtn.textContent = "Error";
+      }
+      setTimeout(() => { runBtn.textContent = "Run"; runBtn.disabled = false; }, 2000);
+    });
+
+    // Edit button
+    const editBtn = document.createElement("button");
+    editBtn.className = "btn btn-sm btn-secondary";
+    editBtn.textContent = "Edit";
+    editBtn.addEventListener("click", () => openAutomationEditor(auto));
+
+    // Toggle
+    const toggleLabel = document.createElement("label");
+    toggleLabel.className = "toggle-label small";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = auto.enabled;
+    cb.addEventListener("change", async () => {
+      auto.enabled = cb.checked;
+      await browser.runtime.sendMessage({ action: "saveAutomation", automation: auto });
+    });
+    const toggleText = document.createElement("span");
+    toggleText.textContent = auto.enabled ? "On" : "Off";
+    cb.addEventListener("change", () => { toggleText.textContent = cb.checked ? "On" : "Off"; });
+    toggleLabel.appendChild(cb);
+    toggleLabel.appendChild(toggleText);
+
+    actions.appendChild(runBtn);
+    actions.appendChild(editBtn);
+    actions.appendChild(toggleLabel);
+    div.appendChild(info);
+    div.appendChild(actions);
+    list.appendChild(div);
+  });
+}
+
+async function openAutomationEditor(auto) {
+  editingAutomation = auto || null;
+  editorSteps = auto ? JSON.parse(JSON.stringify(auto.steps || [])) : [];
+
+  const card = document.getElementById("automation-editor-card");
+  card.classList.remove("hidden");
+  document.getElementById("automation-editor-title").textContent = auto ? `Edit: ${auto.name}` : "New Automation";
+
+  document.getElementById("auto-name").value = auto?.name || "";
+  document.getElementById("auto-url-patterns").value = (auto?.triggers?.urlPatterns || []).join("\n");
+  document.getElementById("auto-manual").checked = auto?.triggers?.manual !== false;
+  document.getElementById("auto-cooldown").value = auto?.cooldownMs || 60000;
+  document.getElementById("auto-delay").value = auto?.delay || 2000;
+  document.getElementById("auto-notify").checked = auto?.notifyOnComplete !== false;
+  document.getElementById("auto-continue-error").checked = !!auto?.continueOnError;
+  document.getElementById("auto-delete-btn").classList.toggle("hidden", !auto);
+
+  // Populate project dropdown
+  const projSelect = document.getElementById("auto-project-trigger");
+  projSelect.replaceChildren();
+  const noneOpt = document.createElement("option");
+  noneOpt.value = "";
+  noneOpt.textContent = "None";
+  projSelect.appendChild(noneOpt);
+  try {
+    const resp = await browser.runtime.sendMessage({ action: "getProjects" });
+    if (resp?.success) {
+      for (const p of resp.projects) {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.name;
+        projSelect.appendChild(opt);
+      }
+    }
+  } catch { /* ok */ }
+  projSelect.value = auto?.triggers?.projectId || "";
+
+  renderEditorSteps();
+  card.scrollIntoView({ behavior: "smooth" });
+}
+
+function renderEditorSteps() {
+  const list = document.getElementById("auto-steps-list");
+  list.replaceChildren();
+  document.getElementById("auto-step-count").textContent = editorSteps.length ? `(${editorSteps.length})` : "";
+
+  editorSteps.forEach((step, i) => {
+    const div = document.createElement("div");
+    div.className = "auto-step-item";
+
+    const header = document.createElement("div");
+    header.className = "auto-step-header";
+    const label = document.createElement("strong");
+    label.textContent = `${i + 1}. ${stepTypeLabel(step.type)}`;
+    header.appendChild(label);
+
+    const btns = document.createElement("div");
+    btns.className = "auto-step-btns";
+    if (i > 0) {
+      const upBtn = document.createElement("button");
+      upBtn.className = "btn btn-sm btn-secondary";
+      upBtn.textContent = "\u2191";
+      upBtn.title = "Move up";
+      upBtn.addEventListener("click", () => { [editorSteps[i - 1], editorSteps[i]] = [editorSteps[i], editorSteps[i - 1]]; renderEditorSteps(); });
+      btns.appendChild(upBtn);
+    }
+    if (i < editorSteps.length - 1) {
+      const downBtn = document.createElement("button");
+      downBtn.className = "btn btn-sm btn-secondary";
+      downBtn.textContent = "\u2193";
+      downBtn.title = "Move down";
+      downBtn.addEventListener("click", () => { [editorSteps[i], editorSteps[i + 1]] = [editorSteps[i + 1], editorSteps[i]]; renderEditorSteps(); });
+      btns.appendChild(downBtn);
+    }
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "btn btn-sm btn-secondary";
+    removeBtn.style.color = "var(--error)";
+    removeBtn.textContent = "\u2715";
+    removeBtn.title = "Remove step";
+    removeBtn.addEventListener("click", () => { editorSteps.splice(i, 1); renderEditorSteps(); });
+    btns.appendChild(removeBtn);
+    header.appendChild(btns);
+    div.appendChild(header);
+
+    // Step-specific config
+    const config = document.createElement("div");
+    config.className = "auto-step-config";
+    buildStepConfig(step, config, i);
+    div.appendChild(config);
+
+    list.appendChild(div);
+  });
+}
+
+function buildStepConfig(step, container, idx) {
+  switch (step.type) {
+    case "analyze": {
+      const sel = document.createElement("select");
+      sel.className = "auto-step-select";
+      for (const [key, preset] of Object.entries(DEFAULT_PRESETS)) {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = preset.label;
+        sel.appendChild(opt);
+      }
+      sel.value = step.preset || "summary";
+      sel.addEventListener("change", () => { step.preset = sel.value; });
+      const lbl = document.createElement("label");
+      lbl.textContent = "Preset: ";
+      lbl.appendChild(sel);
+      container.appendChild(lbl);
+      break;
+    }
+    case "prompt": {
+      // System prompt
+      const sysLabel = document.createElement("label");
+      sysLabel.textContent = "System prompt:";
+      const sysArea = document.createElement("textarea");
+      sysArea.rows = 2;
+      sysArea.className = "auto-step-textarea";
+      sysArea.value = step.system || "";
+      sysArea.placeholder = "You are a helpful analyst.";
+      sysArea.addEventListener("input", () => { step.system = sysArea.value; });
+      container.appendChild(sysLabel);
+      container.appendChild(sysArea);
+
+      // User prompt
+      const usrLabel = document.createElement("label");
+      usrLabel.textContent = "Prompt:";
+      const usrArea = document.createElement("textarea");
+      usrArea.rows = 3;
+      usrArea.className = "auto-step-textarea";
+      usrArea.value = step.prompt || "";
+      usrArea.placeholder = "Analyze the following and extract...";
+      usrArea.addEventListener("input", () => { step.prompt = usrArea.value; });
+      container.appendChild(usrLabel);
+      container.appendChild(usrArea);
+
+      // Input mode
+      const modeLabel = document.createElement("label");
+      modeLabel.textContent = "Input: ";
+      const modeSel = document.createElement("select");
+      modeSel.className = "auto-step-select";
+      const opt1 = document.createElement("option");
+      opt1.value = "page";
+      opt1.textContent = "Original page content";
+      const opt2 = document.createElement("option");
+      opt2.value = "previous";
+      opt2.textContent = "Previous step output";
+      modeSel.appendChild(opt1);
+      modeSel.appendChild(opt2);
+      modeSel.value = step.inputMode || "page";
+      modeSel.addEventListener("change", () => { step.inputMode = modeSel.value; });
+      modeLabel.appendChild(modeSel);
+      container.appendChild(modeLabel);
+      break;
+    }
+    case "extractEntities": {
+      const note = document.createElement("span");
+      note.className = "hint";
+      note.textContent = "Extracts entities from the page and adds them to the Knowledge Graph.";
+      container.appendChild(note);
+      break;
+    }
+    case "runPipeline": {
+      const sel = document.createElement("select");
+      sel.className = "auto-step-select";
+      const autoOpt = document.createElement("option");
+      autoOpt.value = "";
+      autoOpt.textContent = "Auto-detect";
+      sel.appendChild(autoOpt);
+      for (const pid of ["wikipedia", "classifieds", "news", "research"]) {
+        const opt = document.createElement("option");
+        opt.value = pid;
+        opt.textContent = pid.charAt(0).toUpperCase() + pid.slice(1);
+        sel.appendChild(opt);
+      }
+      sel.value = step.pipelineId || "";
+      sel.addEventListener("change", () => { step.pipelineId = sel.value; });
+      const lbl = document.createElement("label");
+      lbl.textContent = "Pipeline: ";
+      lbl.appendChild(sel);
+      container.appendChild(lbl);
+      break;
+    }
+    case "addToProject": {
+      const sel = document.createElement("select");
+      sel.className = "auto-step-select";
+      // Copy options from the project trigger dropdown
+      const projTrigger = document.getElementById("auto-project-trigger");
+      for (const opt of projTrigger.options) {
+        if (!opt.value) continue; // skip "None"
+        const newOpt = document.createElement("option");
+        newOpt.value = opt.value;
+        newOpt.textContent = opt.textContent;
+        sel.appendChild(newOpt);
+      }
+      sel.value = step.projectId || "";
+      sel.addEventListener("change", () => { step.projectId = sel.value; });
+      const lbl = document.createElement("label");
+      lbl.textContent = "Target project: ";
+      lbl.appendChild(sel);
+      container.appendChild(lbl);
+
+      // Tags
+      const tagLabel = document.createElement("label");
+      tagLabel.textContent = "Tags (comma-separated): ";
+      const tagInput = document.createElement("input");
+      tagInput.type = "text";
+      tagInput.className = "auto-step-input";
+      tagInput.value = (step.tagsWith || []).join(", ");
+      tagInput.placeholder = "auto, intel, {automationName}";
+      tagInput.addEventListener("input", () => {
+        step.tagsWith = tagInput.value.split(",").map(t => t.trim()).filter(Boolean);
+      });
+      tagLabel.appendChild(tagInput);
+      container.appendChild(tagLabel);
+
+      // Summary source
+      const sumLabel = document.createElement("label");
+      sumLabel.textContent = "Summary from: ";
+      const sumSel = document.createElement("select");
+      sumSel.className = "auto-step-select";
+      const lastOpt = document.createElement("option");
+      lastOpt.value = "last";
+      lastOpt.textContent = "Last step output";
+      sumSel.appendChild(lastOpt);
+      editorSteps.forEach((s, si) => {
+        if (si >= idx) return;
+        const sOpt = document.createElement("option");
+        sOpt.value = si;
+        sOpt.textContent = `Step ${si + 1} (${stepTypeLabel(s.type)})`;
+        sumSel.appendChild(sOpt);
+      });
+      sumSel.value = step.summaryFrom ?? "last";
+      sumSel.addEventListener("change", () => {
+        step.summaryFrom = sumSel.value === "last" ? "last" : parseInt(sumSel.value);
+      });
+      sumLabel.appendChild(sumSel);
+      container.appendChild(sumLabel);
+      break;
+    }
+  }
+}
+
+function stepTypeLabel(type) {
+  const labels = {
+    analyze: "Analyze (Preset)",
+    prompt: "Custom Prompt",
+    extractEntities: "Extract Entities",
+    addToProject: "Add to Project",
+    runPipeline: "Run Pipeline",
+  };
+  return labels[type] || type;
+}
+
+function addEditorStep() {
+  const type = document.getElementById("auto-add-step-type").value;
+  const step = { type };
+  if (type === "analyze") step.preset = "summary";
+  if (type === "prompt") { step.system = ""; step.prompt = ""; step.inputMode = "page"; }
+  if (type === "runPipeline") step.pipelineId = "";
+  if (type === "addToProject") { step.projectId = ""; step.tagsWith = ["automation"]; step.summaryFrom = "last"; }
+  editorSteps.push(step);
+  renderEditorSteps();
+}
+
+async function saveAutomation() {
+  const name = document.getElementById("auto-name").value.trim();
+  if (!name) { alert("Enter an automation name."); return; }
+  if (!editorSteps.length) { alert("Add at least one step."); return; }
+
+  const urlPatterns = document.getElementById("auto-url-patterns").value
+    .split("\n").map(l => l.trim()).filter(Boolean);
+
+  // If URL patterns are specified, request webNavigation
+  if (urlPatterns.length) {
+    try {
+      const has = await browser.permissions.contains({ permissions: ["webNavigation"] });
+      if (!has) {
+        const granted = await browser.permissions.request({ permissions: ["webNavigation"] });
+        if (!granted) {
+          alert("URL triggers require the webNavigation permission.");
+          return;
+        }
+        browser.runtime.sendMessage({ action: "initAutoAnalyze" });
+      }
+    } catch { /* ok */ }
+  }
+
+  const auto = editingAutomation ? { ...editingAutomation } : {};
+  auto.name = name;
+  auto.enabled = editingAutomation ? editingAutomation.enabled : true;
+  auto.triggers = {
+    urlPatterns,
+    manual: document.getElementById("auto-manual").checked,
+    projectId: document.getElementById("auto-project-trigger").value || null,
+  };
+  auto.steps = editorSteps;
+  auto.cooldownMs = parseInt(document.getElementById("auto-cooldown").value) || 60000;
+  auto.delay = parseInt(document.getElementById("auto-delay").value) || 2000;
+  auto.notifyOnComplete = document.getElementById("auto-notify").checked;
+  auto.continueOnError = document.getElementById("auto-continue-error").checked;
+
+  await browser.runtime.sendMessage({ action: "saveAutomation", automation: auto });
+  closeAutomationEditor();
+  await loadAutomations();
+}
+
+async function deleteAutomation() {
+  if (!editingAutomation) return;
+  if (!confirm(`Delete automation "${editingAutomation.name}"?`)) return;
+  await browser.runtime.sendMessage({ action: "deleteAutomation", automationId: editingAutomation.id });
+  closeAutomationEditor();
+  await loadAutomations();
+}
+
+function closeAutomationEditor() {
+  document.getElementById("automation-editor-card").classList.add("hidden");
+  editingAutomation = null;
+  editorSteps = [];
+}
+
+async function loadAutomationLog() {
+  const resp = await browser.runtime.sendMessage({ action: "getAutomationLog" });
+  const logs = (resp?.success ? resp.logs : []).slice(0, 20);
+  const list = document.getElementById("automation-log-list");
+  list.replaceChildren();
+
+  if (!logs.length) {
+    const hint = document.createElement("span");
+    hint.className = "hint";
+    hint.textContent = "No runs yet.";
+    list.appendChild(hint);
+    return;
+  }
+
+  for (const log of logs) {
+    const div = document.createElement("div");
+    div.className = "rule-item";
+
+    const info = document.createElement("div");
+    info.className = "rule-info";
+    const strong = document.createElement("strong");
+    strong.textContent = log.automationName || log.automationId;
+    const span = document.createElement("span");
+    const stepsOk = log.steps.filter(s => s.status === "done").length;
+    const statusText = log.status === "done" ? `${stepsOk}/${log.steps.length} steps` : log.status;
+    const timeAgo = formatTimeAgo(new Date(log.startedAt));
+    span.textContent = `${statusText} | ${truncateUrl(log.url)} | ${timeAgo}`;
+    info.appendChild(strong);
+    info.appendChild(span);
+
+    const badge = document.createElement("span");
+    badge.className = `auto-log-badge auto-log-${log.status}`;
+    badge.textContent = log.status;
+
+    div.appendChild(info);
+    div.appendChild(badge);
+    list.appendChild(div);
+  }
+}
+
+function formatTimeAgo(date) {
+  const diff = Date.now() - date.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function truncateUrl(url) {
+  if (!url) return "";
+  try {
+    const u = new URL(url);
+    return u.hostname + (u.pathname.length > 20 ? u.pathname.slice(0, 20) + "..." : u.pathname);
+  } catch { return url.slice(0, 40); }
+}
+
 function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -1000,6 +1477,14 @@ function attachListeners() {
     renderAutoRules();
     scheduleSave();
   });
+
+  // Named Automations
+  loadAutomations();
+  document.getElementById("new-automation-btn").addEventListener("click", () => openAutomationEditor(null));
+  document.getElementById("auto-add-step-btn").addEventListener("click", addEditorStep);
+  document.getElementById("auto-save-btn").addEventListener("click", saveAutomation);
+  document.getElementById("auto-cancel-btn").addEventListener("click", closeAutomationEditor);
+  document.getElementById("auto-delete-btn").addEventListener("click", deleteAutomation);
 
   // Monitors
   populateMonitorPresetDropdown();
@@ -2484,7 +2969,67 @@ function projRenderDetail() {
   document.getElementById("proj-edit-btn").addEventListener("click", () => projOpenModal(proj));
   document.getElementById("proj-delete-btn").addEventListener("click", () => projDelete(proj.id));
 
+  // Populate automation toolbar for this project
+  projPopulateAutomations(proj.id);
+
   projRenderItems(proj);
+}
+
+async function projPopulateAutomations(projectId) {
+  const toolbar = document.getElementById("proj-automation-toolbar");
+  const select = document.getElementById("proj-automation-select");
+  const statusEl = document.getElementById("proj-automation-status");
+
+  // Get all automations — show ones linked to this project + manual ones
+  const resp = await browser.runtime.sendMessage({ action: "getAutomations" });
+  const allAutos = (resp?.success ? resp.automations : []).filter(a => a.enabled);
+  const relevant = allAutos.filter(a =>
+    a.triggers?.manual || a.triggers?.projectId === projectId
+  );
+
+  if (!relevant.length) {
+    toolbar.classList.add("hidden");
+    return;
+  }
+
+  toolbar.classList.remove("hidden");
+  select.replaceChildren();
+  const defaultOpt = document.createElement("option");
+  defaultOpt.value = "";
+  defaultOpt.textContent = "Select automation...";
+  select.appendChild(defaultOpt);
+
+  for (const auto of relevant) {
+    const opt = document.createElement("option");
+    opt.value = auto.id;
+    opt.textContent = auto.name + (auto.triggers?.projectId === projectId ? " (linked)" : "");
+    select.appendChild(opt);
+  }
+
+  // Run on All handler
+  const runAllBtn = document.getElementById("proj-automation-run");
+  const newRunAllBtn = runAllBtn.cloneNode(true);
+  runAllBtn.parentNode.replaceChild(newRunAllBtn, runAllBtn);
+  newRunAllBtn.addEventListener("click", async () => {
+    const autoId = select.value;
+    if (!autoId) { alert("Select an automation first."); return; }
+    newRunAllBtn.disabled = true;
+    newRunAllBtn.textContent = "Running...";
+    statusEl.textContent = "Running automation on all project items...";
+    try {
+      const result = await browser.runtime.sendMessage({
+        action: "runAutomationOnProject", automationId: autoId, projectId
+      });
+      statusEl.textContent = result.success
+        ? `Done: ${result.succeeded}/${result.total} items succeeded.`
+        : `Error: ${result.error}`;
+    } catch (e) {
+      statusEl.textContent = `Error: ${e.message}`;
+    }
+    newRunAllBtn.textContent = "Run on All";
+    newRunAllBtn.disabled = false;
+    loadAutomationLog();
+  });
 }
 
 function projRenderItems(proj) {
@@ -2569,6 +3114,32 @@ function projRenderItems(proj) {
     removeBtn.className = "proj-item-remove-btn";
     removeBtn.title = "Remove from project";
     removeBtn.textContent = "Remove";
+    if (item.url) {
+      const autoBtn = document.createElement("button");
+      autoBtn.className = "proj-item-auto-btn";
+      autoBtn.title = "Run automation on this item";
+      autoBtn.textContent = "Automate";
+      autoBtn.addEventListener("click", async () => {
+        const autoId = document.getElementById("proj-automation-select")?.value;
+        if (!autoId) { alert("Select an automation from the toolbar above."); return; }
+        autoBtn.disabled = true;
+        autoBtn.textContent = "Running...";
+        const statusEl = document.getElementById("proj-automation-status");
+        statusEl.textContent = `Running on: ${item.title || item.url}`;
+        try {
+          const result = await browser.runtime.sendMessage({
+            action: "runAutomationOnItem", automationId: autoId, projectId: proj.id,
+            url: item.url, title: item.title
+          });
+          autoBtn.textContent = result.success ? "Done!" : "Failed";
+          statusEl.textContent = result.success ? "Automation complete." : `Error: ${result.error}`;
+        } catch (e) {
+          autoBtn.textContent = "Error";
+        }
+        setTimeout(() => { autoBtn.textContent = "Automate"; autoBtn.disabled = false; }, 2000);
+      });
+      actionsDiv2.appendChild(autoBtn);
+    }
     actionsDiv2.appendChild(noteBtn);
     actionsDiv2.appendChild(removeBtn);
     card.appendChild(actionsDiv2);
