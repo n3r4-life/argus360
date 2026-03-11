@@ -29,7 +29,10 @@ function attachListeners() {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
       const query = elements.searchInput.value.trim();
-      if (query) {
+      const activeTab = document.querySelector(".history-tab.active");
+      if (activeTab && activeTab.dataset.tab === "monitors") {
+        loadMonitorChanges(query);
+      } else if (query) {
         searchHistory(query);
       } else {
         loadHistory();
@@ -146,7 +149,7 @@ function renderHistory(items, total) {
     const timeStr = date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) +
       " " + date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 
-    const preview = (item.content || "").substring(0, 120).replace(/[#*_`]/g, "");
+    const preview = (item.content || "").substring(0, 280).replace(/[#*_`]/g, "");
 
     const info = document.createElement("div");
     info.className = "history-item-info";
@@ -227,4 +230,151 @@ function openDetail(item) {
 function closeDetail() {
   elements.detailOverlay.classList.add("hidden");
   currentItem = null;
+}
+
+// ── Tab switching ──
+const monitorList = document.getElementById("monitor-changes-list");
+let monitorChangesLoaded = false;
+
+document.querySelectorAll(".history-tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".history-tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    const which = tab.dataset.tab;
+    if (which === "analysis") {
+      elements.historyList.style.display = "";
+      monitorList.style.display = "none";
+      elements.searchInput.placeholder = "Search history...";
+      elements.clearAll.style.display = "";
+    } else {
+      elements.historyList.style.display = "none";
+      monitorList.style.display = "";
+      elements.searchInput.placeholder = "Search monitor changes...";
+      elements.clearAll.style.display = "none";
+      if (!monitorChangesLoaded) {
+        monitorChangesLoaded = true;
+        loadMonitorChanges();
+      }
+    }
+  });
+});
+
+let allMonitorChanges = null;
+
+async function loadMonitorChanges(query) {
+  if (!allMonitorChanges) {
+    const resp = await browser.runtime.sendMessage({ action: "getAllMonitorChanges" });
+    if (!resp || !resp.success) {
+      monitorList.replaceChildren();
+      const errDiv = document.createElement("div");
+      errDiv.className = "empty-text";
+      errDiv.textContent = "Failed to load monitor changes.";
+      monitorList.appendChild(errDiv);
+      return;
+    }
+    allMonitorChanges = resp.changes;
+  }
+  let filtered = allMonitorChanges;
+  if (query) {
+    const q = query.toLowerCase();
+    filtered = allMonitorChanges.filter(c =>
+      (c.monitorTitle || "").toLowerCase().includes(q) ||
+      (c.monitorUrl || "").toLowerCase().includes(q) ||
+      (c.aiSummary || "").toLowerCase().includes(q) ||
+      (c.newTextSnippet || "").toLowerCase().includes(q)
+    );
+  }
+  renderMonitorChanges(filtered);
+}
+
+function renderMonitorChanges(changes) {
+  monitorList.replaceChildren();
+
+  if (!changes.length) {
+    const emptyDiv = document.createElement("div");
+    emptyDiv.className = "empty-text";
+    emptyDiv.textContent = "No monitor changes detected yet.";
+    monitorList.appendChild(emptyDiv);
+    return;
+  }
+
+  changes.forEach(change => {
+    const div = document.createElement("div");
+    div.className = "history-item";
+    div.addEventListener("click", () => openMonitorChangeDetail(change));
+
+    const date = new Date(change.detectedAt);
+    const timeStr = date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) +
+      " " + date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+
+    const info = document.createElement("div");
+    info.className = "history-item-info";
+
+    const titleDiv = document.createElement("div");
+    titleDiv.className = "history-item-title";
+    titleDiv.textContent = change.monitorTitle || "Unknown monitor";
+
+    const metaDiv = document.createElement("div");
+    metaDiv.className = "history-item-meta";
+    const timeSpan = document.createElement("span");
+    timeSpan.textContent = timeStr;
+    metaDiv.appendChild(timeSpan);
+
+    if (change.monitorUrl) {
+      const urlSpan = document.createElement("span");
+      urlSpan.textContent = change.monitorUrl.replace(/^https?:\/\//, "").substring(0, 50);
+      urlSpan.style.opacity = "0.7";
+      metaDiv.appendChild(urlSpan);
+    }
+
+    const badge = document.createElement("span");
+    badge.className = "history-badge monitor";
+    badge.textContent = "Monitor Change";
+    metaDiv.appendChild(badge);
+
+    const previewDiv = document.createElement("div");
+    previewDiv.className = "change-summary";
+    previewDiv.textContent = change.aiSummary
+      ? change.aiSummary.substring(0, 280)
+      : (change.newTextSnippet || "").substring(0, 280).replace(/\s+/g, " ");
+
+    info.appendChild(titleDiv);
+    info.appendChild(metaDiv);
+    info.appendChild(previewDiv);
+    div.appendChild(info);
+    monitorList.appendChild(div);
+  });
+}
+
+function openMonitorChangeDetail(change) {
+  currentItem = {
+    content: buildMonitorChangeMarkdown(change),
+    pageTitle: change.monitorTitle || "Monitor Change",
+    pageUrl: change.monitorUrl || "",
+  };
+  elements.detailTitle.textContent = change.monitorTitle || "Monitor Change";
+  elements.detailUrl.textContent = change.monitorUrl || "";
+  elements.detailUrl.href = change.monitorUrl || "#";
+
+  const date = new Date(change.detectedAt);
+  elements.detailMeta.textContent = `Detected: ${date.toLocaleString()} | Monitor ID: ${change.monitorId}`;
+
+  IntelligenceViewer.updateThinking(elements.detailThinking, elements.detailThinkingContent, null);
+  IntelligenceViewer.renderMarkdown(currentItem.content, elements.detailContent);
+  elements.detailOverlay.classList.remove("hidden");
+}
+
+function buildMonitorChangeMarkdown(change) {
+  let md = "";
+  if (change.aiSummary) {
+    md += `## AI Summary\n\n${change.aiSummary}\n\n`;
+  }
+  md += `## Change Details\n\n`;
+  md += `- **Detected:** ${new Date(change.detectedAt).toLocaleString()}\n`;
+  md += `- **URL:** ${change.monitorUrl || "N/A"}\n\n`;
+  if (change.oldTextSnippet && change.newTextSnippet) {
+    md += `### Previous Content\n\n\`\`\`\n${change.oldTextSnippet.substring(0, 2000)}\n\`\`\`\n\n`;
+    md += `### Current Content\n\n\`\`\`\n${change.newTextSnippet.substring(0, 2000)}\n\`\`\`\n`;
+  }
+  return md;
 }

@@ -228,11 +228,11 @@ function renderTimeline(snapshots) {
     // Collapsible snapshot text
     const preview = document.createElement("div");
     preview.className = "timeline-preview";
-    preview.textContent = (snap.text || "").slice(0, 500) + (snap.text && snap.text.length > 500 ? "..." : "");
+    preview.textContent = (snap.text || "").slice(0, 1000) + (snap.text && snap.text.length > 1000 ? "..." : "");
     content.appendChild(preview);
 
     // Expand button for full text
-    if (snap.text && snap.text.length > 500) {
+    if (snap.text && snap.text.length > 1000) {
       const expandBtn = document.createElement("button");
       expandBtn.className = "btn btn-sm btn-secondary timeline-expand";
       expandBtn.textContent = "Show full snapshot";
@@ -244,7 +244,7 @@ function renderTimeline(snapshots) {
           preview.classList.add("expanded");
           expandBtn.textContent = "Collapse";
         } else {
-          preview.textContent = snap.text.slice(0, 500) + "...";
+          preview.textContent = snap.text.slice(0, 1000) + "...";
           preview.classList.remove("expanded");
           expandBtn.textContent = "Show full snapshot";
         }

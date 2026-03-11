@@ -90,6 +90,32 @@ body {
   font-size: 13px;
 }
 
+/* Tabs */
+.history-tabs {
+  display: flex;
+  gap: 0;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px 24px 0;
+}
+
+.history-tab {
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--font);
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.history-tab:hover { color: var(--text-primary); background: var(--bg-card); }
+.history-tab.active { color: var(--text-primary); background: var(--bg-card); border-color: var(--accent); border-bottom: 2px solid var(--bg-card); }
+
 /* History list */
 .history-list {
   max-width: 900px;
@@ -281,5 +307,21 @@ body {
 .markdown-body a { color: var(--accent-hover); text-decoration: none; }
 .markdown-body a:hover { text-decoration: underline; }
 .markdown-body strong { color: var(--text-primary); }
+
+/* Monitor change items */
+.history-badge.monitor {
+  background: #2196f3;
+}
+
+.change-summary {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 
 .hidden { display: none !important; }

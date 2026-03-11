@@ -861,14 +861,14 @@ async function renderMonitors() {
       const summaryWrap = document.createElement("div");
       summaryWrap.style.marginTop = "4px";
 
-      const isLong = monitor.lastChangeSummary.length > 150;
+      const isLong = monitor.lastChangeSummary.length > 280;
       const summaryPreview = document.createElement("span");
       summaryPreview.className = "rule-meta";
       summaryPreview.style.display = "block";
       summaryPreview.style.color = "var(--accent)";
       summaryPreview.style.fontStyle = "italic";
       summaryPreview.textContent = isLong
-        ? `Latest: ${monitor.lastChangeSummary.slice(0, 150)}...`
+        ? `Latest: ${monitor.lastChangeSummary.slice(0, 280)}...`
         : `Latest: ${monitor.lastChangeSummary}`;
       summaryWrap.appendChild(summaryPreview);
 

@@ -12,7 +12,7 @@
   <header class="header">
     <div class="header-left">
       <img src="../icons/icon-32.png" alt="" class="header-icon">
-      <h1 class="header-title">Analysis History</h1>
+      <h1 class="header-title">History</h1>
     </div>
     <div class="header-actions">
       <input type="text" id="search-input" placeholder="Search history..." class="search-input">
@@ -20,8 +20,17 @@
     </div>
   </header>
 
+  <div class="history-tabs">
+    <button class="history-tab active" data-tab="analysis">Analysis</button>
+    <button class="history-tab" data-tab="monitors">Monitor Changes</button>
+  </div>
+
   <div id="history-list" class="history-list">
     <div class="loading-text">Loading history...</div>
+  </div>
+
+  <div id="monitor-changes-list" class="history-list" style="display:none;">
+    <div class="loading-text">Loading monitor changes...</div>
   </div>
 
   <div id="detail-overlay" class="detail-overlay hidden">

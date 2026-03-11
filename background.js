@@ -829,6 +829,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "updateMonitor") return handleUpdateMonitor(message);
   if (message.action === "deleteMonitor") return handleDeleteMonitor(message);
   if (message.action === "getMonitorHistory") return handleGetMonitorHistory(message);
+  if (message.action === "getAllMonitorChanges") return handleGetAllMonitorChanges();
   if (message.action === "clearMonitorUnread") return clearMonitorUnread(message.monitorId).then(() => ({ success: true }));
   if (message.action === "getMonitorUnreads") return browser.storage.local.get({ monitorUnreads: {} }).then(r => ({ success: true, unreads: r.monitorUnreads }));
   if (message.action === "getMonitorSnapshots") return handleGetMonitorSnapshots(message);
@@ -2486,7 +2487,7 @@ async function handleUpdateMonitor(message) {
       const interval = monitor.intervalMinutes >= 60 ? `${monitor.intervalMinutes / 60}h` : `${monitor.intervalMinutes}min`;
       const presetStr = monitor.analysisPreset ? ` | preset: ${monitor.analysisPreset}` : "";
       bm.summary = monitor.lastChangeSummary
-        ? `${monitor.lastChangeSummary.slice(0, 200)} — monitored every ${interval}${presetStr}`
+        ? `${monitor.lastChangeSummary.slice(0, 400)} — monitored every ${interval}${presetStr}`
         : `Auto-bookmarked — monitored every ${interval}${presetStr}`;
       bm.updatedAt = new Date().toISOString();
       await ArgusDB.Bookmarks.add(bm);
@@ -2510,6 +2511,22 @@ async function handleDeleteMonitor(message) {
 async function handleGetMonitorHistory(message) {
   const changes = await ArgusDB.Changes.getByMonitor(message.monitorId);
   return { success: true, history: changes };
+}
+
+async function handleGetAllMonitorChanges() {
+  const [changes, monitors] = await Promise.all([
+    ArgusDB.Changes.getAll(),
+    ArgusDB.Monitors.getAll()
+  ]);
+  const monitorMap = {};
+  for (const m of monitors) monitorMap[m.id] = { title: m.title || m.url, url: m.url };
+  // Attach monitor info to each change
+  for (const c of changes) {
+    const m = monitorMap[c.monitorId];
+    if (m) { c.monitorTitle = m.title; c.monitorUrl = m.url; }
+    else { c.monitorTitle = "Deleted monitor"; c.monitorUrl = ""; }
+  }
+  return { success: true, changes: changes.slice(0, 500) };
 }
 
 async function handleGetMonitorSnapshots(message) {
