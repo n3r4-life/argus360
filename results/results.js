@@ -165,12 +165,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
     projPicker.innerHTML = "";
     if (resp.projects.length === 0) {
-      projPicker.innerHTML = `<div class="proj-picker-empty">No projects yet. Create one in the Console.</div>`;
+      const emptyEl = document.createElement("div");
+      emptyEl.className = "proj-picker-empty";
+      emptyEl.textContent = "No projects yet. Create one in the Console.";
+      projPicker.appendChild(emptyEl);
     } else {
       for (const proj of resp.projects) {
         const btn = document.createElement("button");
         btn.className = "proj-picker-item";
-        btn.innerHTML = `<span class="proj-color-dot" style="background:${proj.color || '#e94560'};width:8px;height:8px;border-radius:50%;display:inline-block;"></span> ${proj.name}`;
+        const colorDot = document.createElement("span");
+        colorDot.className = "proj-color-dot";
+        colorDot.style.cssText = `background:${proj.color || '#e94560'};width:8px;height:8px;border-radius:50%;display:inline-block;`;
+        btn.appendChild(colorDot);
+        btn.append(" " + proj.name);
         btn.addEventListener("click", async () => {
           const url = elements.pageUrl.href !== "#" ? elements.pageUrl.href : "";
           await browser.runtime.sendMessage({

@@ -87,7 +87,13 @@
       : techs.filter((t) => t.category === activeFilter);
 
     if (filtered.length === 0) {
-      container.innerHTML = '<div class="empty-state"><p>No technologies found for this filter.</p></div>';
+      container.textContent = "";
+      const emptyDiv = document.createElement("div");
+      emptyDiv.className = "empty-state";
+      const emptyP = document.createElement("p");
+      emptyP.textContent = "No technologies found for this filter.";
+      emptyDiv.appendChild(emptyP);
+      container.appendChild(emptyDiv);
       return;
     }
 
@@ -115,8 +121,11 @@
 
       const header = document.createElement('div');
       header.className = 'category-header';
-      header.innerHTML = escapeHTML(category) +
-        '<span class="category-count">(' + items.length + ')</span>';
+      header.appendChild(document.createTextNode(category));
+      const countSpan = document.createElement('span');
+      countSpan.className = 'category-count';
+      countSpan.textContent = '(' + items.length + ')';
+      header.appendChild(countSpan);
       sectionEl.appendChild(header);
 
       const cardsContainer = document.createElement('div');

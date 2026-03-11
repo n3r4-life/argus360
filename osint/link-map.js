@@ -163,8 +163,11 @@
 
       const header = document.createElement('div');
       header.className = 'category-header';
-      header.innerHTML = escapeHTML(section.label) +
-        '<span class="category-count">(' + section.items.length + ')</span>';
+      header.appendChild(document.createTextNode(section.label));
+      const countSpan = document.createElement('span');
+      countSpan.className = 'category-count';
+      countSpan.textContent = '(' + section.items.length + ')';
+      header.appendChild(countSpan);
       sectionEl.appendChild(header);
 
       if (key === 'external') {
@@ -185,7 +188,13 @@
     });
 
     if (!hasContent) {
-      container.innerHTML = '<div class="empty-state"><p>No links found for this filter.</p></div>';
+      container.textContent = "";
+      const emptyDiv = document.createElement("div");
+      emptyDiv.className = "empty-state";
+      const emptyP = document.createElement("p");
+      emptyP.textContent = "No links found for this filter.";
+      emptyDiv.appendChild(emptyP);
+      container.appendChild(emptyDiv);
     }
   }
 
@@ -207,10 +216,18 @@
 
       const header = document.createElement('div');
       header.className = 'domain-header';
-      header.innerHTML =
-        '<span class="domain-chevron">&#9660;</span>' +
-        '<span class="domain-name">' + escapeHTML(domain) + '</span>' +
-        '<span class="domain-count">' + grouped[domain].length + '</span>';
+      const chevronSpan = document.createElement('span');
+      chevronSpan.className = 'domain-chevron';
+      chevronSpan.textContent = '\u25BC';
+      header.appendChild(chevronSpan);
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'domain-name';
+      nameSpan.textContent = domain;
+      header.appendChild(nameSpan);
+      const domainCountSpan = document.createElement('span');
+      domainCountSpan.className = 'domain-count';
+      domainCountSpan.textContent = grouped[domain].length;
+      header.appendChild(domainCountSpan);
       header.addEventListener('click', () => group.classList.toggle('collapsed'));
       group.appendChild(header);
 
@@ -367,7 +384,10 @@
     } catch {}
 
     if (projects.length === 0) {
-      picker.innerHTML = '<div class="project-picker-empty">No projects found</div>';
+      const emptyEl = document.createElement("div");
+      emptyEl.className = "project-picker-empty";
+      emptyEl.textContent = "No projects found";
+      picker.appendChild(emptyEl);
     } else {
       projects.forEach((proj) => {
         const item = document.createElement('div');

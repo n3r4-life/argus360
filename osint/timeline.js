@@ -115,9 +115,16 @@
         currentGroup = key;
         const groupEl = document.createElement('div');
         groupEl.className = 'tl-date-group';
-        groupEl.innerHTML =
-          '<div class="tl-date-marker"><div class="tl-date-marker-dot"></div></div>' +
-          '<div class="tl-date-group-label">' + escapeHtml(formatDateGroup(evt.dateObj)) + '</div>';
+        const marker = document.createElement('div');
+        marker.className = 'tl-date-marker';
+        const markerDot = document.createElement('div');
+        markerDot.className = 'tl-date-marker-dot';
+        marker.appendChild(markerDot);
+        const groupLabel = document.createElement('div');
+        groupLabel.className = 'tl-date-group-label';
+        groupLabel.textContent = formatDateGroup(evt.dateObj);
+        groupEl.appendChild(marker);
+        groupEl.appendChild(groupLabel);
         container.appendChild(groupEl);
       }
 
@@ -128,20 +135,38 @@
       el.className = 'tl-event';
       el.style.animationDelay = (i * 0.05) + 's';
 
-      el.innerHTML =
-        '<div class="tl-dot" style="background:' + color + '"></div>' +
-        '<div class="tl-card">' +
-          '<div class="tl-card-header">' +
-            '<span class="tl-date">' + escapeHtml(formatDate(evt.dateObj)) + '</span>' +
-            '<span class="tl-type-badge" style="background:' + color + '">' + escapeHtml(label) + '</span>' +
-          '</div>' +
-          '<div class="tl-description">' + escapeHtml(evt.event) + '</div>' +
-          (evt.source || evt.url
-            ? '<a class="tl-source" href="' + escapeAttr(evt.url || '#') + '" target="_blank" rel="noopener">' +
-                escapeHtml(evt.source || evt.url) +
-              '</a>'
-            : '') +
-        '</div>';
+      const dot = document.createElement('div');
+      dot.className = 'tl-dot';
+      dot.style.background = color;
+      el.appendChild(dot);
+      const card = document.createElement('div');
+      card.className = 'tl-card';
+      const cardHeader = document.createElement('div');
+      cardHeader.className = 'tl-card-header';
+      const dateSpan = document.createElement('span');
+      dateSpan.className = 'tl-date';
+      dateSpan.textContent = formatDate(evt.dateObj);
+      cardHeader.appendChild(dateSpan);
+      const badge = document.createElement('span');
+      badge.className = 'tl-type-badge';
+      badge.style.background = color;
+      badge.textContent = label;
+      cardHeader.appendChild(badge);
+      card.appendChild(cardHeader);
+      const desc = document.createElement('div');
+      desc.className = 'tl-description';
+      desc.textContent = evt.event;
+      card.appendChild(desc);
+      if (evt.source || evt.url) {
+        const source = document.createElement('a');
+        source.className = 'tl-source';
+        source.href = evt.url || '#';
+        source.target = '_blank';
+        source.rel = 'noopener';
+        source.textContent = evt.source || evt.url;
+        card.appendChild(source);
+      }
+      el.appendChild(card);
 
       container.appendChild(el);
     });

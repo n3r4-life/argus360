@@ -171,11 +171,17 @@ async function checkPreviousAnalysis() {
     const timeAgo = getTimeAgo(new Date(latest.timestamp || latest.createdAt));
     const presetLabel = latest.presetLabel || "Analysis";
 
-    prevEl.innerHTML = `
-      <span class="prev-dot"></span>
-      <span>Previously analyzed${count > 1 ? ` (${count}x)` : ""} — ${presetLabel} ${timeAgo}</span>
-      <a id="prev-view-link">View</a>
-    `;
+    prevEl.textContent = '';
+    const dot = document.createElement("span");
+    dot.className = "prev-dot";
+    const info = document.createElement("span");
+    info.textContent = `Previously analyzed${count > 1 ? ` (${count}x)` : ""} — ${presetLabel} ${timeAgo}`;
+    const viewLink = document.createElement("a");
+    viewLink.id = "prev-view-link";
+    viewLink.textContent = "View";
+    prevEl.appendChild(dot);
+    prevEl.appendChild(info);
+    prevEl.appendChild(viewLink);
     prevEl.classList.remove("hidden");
 
     document.getElementById("prev-view-link").addEventListener("click", () => {
@@ -221,17 +227,20 @@ async function checkArchiveAvailability() {
     if (!resp || !resp.archiveUrl) return;
 
     const archiveEl = document.getElementById("archive-available");
-    archiveEl.innerHTML = `
-      <span class="archive-dot"></span>
-      <span>Archived version available</span>
-      <a id="archive-view-link">View</a>
-    `;
-    archiveEl.classList.remove("hidden");
-
-    document.getElementById("archive-view-link").addEventListener("click", () => {
+    archiveEl.textContent = "";
+    const aDot = document.createElement("span");
+    aDot.className = "archive-dot";
+    const aText = document.createElement("span");
+    aText.textContent = "Archived version available";
+    const aLink = document.createElement("a");
+    aLink.id = "archive-view-link";
+    aLink.textContent = "View";
+    aLink.addEventListener("click", () => {
       browser.tabs.create({ url: resp.archiveUrl });
       window.close();
     });
+    archiveEl.append(aDot, aText, aLink);
+    archiveEl.classList.remove("hidden");
   } catch { /* ignore */ }
 }
 
@@ -245,17 +254,21 @@ async function checkWaybackAvailability() {
     if (!resp || !resp.waybackUrl) return;
 
     const wbEl = document.getElementById("wayback-available");
-    wbEl.innerHTML = `
-      <span class="archive-dot" style="background:#ffb74d"></span>
-      <span>Wayback Machine snapshot available</span>
-      <a id="wayback-view-link">View</a>
-    `;
-    wbEl.classList.remove("hidden");
-
-    document.getElementById("wayback-view-link").addEventListener("click", () => {
+    wbEl.textContent = "";
+    const wDot = document.createElement("span");
+    wDot.className = "archive-dot";
+    wDot.style.background = "#ffb74d";
+    const wText = document.createElement("span");
+    wText.textContent = "Wayback Machine snapshot available";
+    const wLink = document.createElement("a");
+    wLink.id = "wayback-view-link";
+    wLink.textContent = "View";
+    wLink.addEventListener("click", () => {
       browser.tabs.create({ url: resp.waybackUrl });
       window.close();
     });
+    wbEl.append(wDot, wText, wLink);
+    wbEl.classList.remove("hidden");
   } catch { /* ignore */ }
 }
 

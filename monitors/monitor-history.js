@@ -270,7 +270,11 @@ async function loadDiffSnapshots() {
   elements.diffSnapshotB.replaceChildren();
 
   if (snapshots.length < 2) {
-    elements.diffOutput.innerHTML = '<p style="color:var(--text-secondary);padding:16px;">Need at least 2 snapshots to compare. Wait for the monitor to capture more.</p>';
+    elements.diffOutput.textContent = "";
+    const needMore = document.createElement("p");
+    needMore.style.cssText = "color:var(--text-secondary);padding:16px;";
+    needMore.textContent = "Need at least 2 snapshots to compare. Wait for the monitor to capture more.";
+    elements.diffOutput.appendChild(needMore);
     return;
   }
 
@@ -293,11 +297,19 @@ async function runDiff() {
   const idxA = parseInt(elements.diffSnapshotA.value);
   const idxB = parseInt(elements.diffSnapshotB.value);
   if (isNaN(idxA) || isNaN(idxB) || idxA === idxB) {
-    elements.diffOutput.innerHTML = '<p style="color:var(--error);">Select two different snapshots.</p>';
+    elements.diffOutput.textContent = "";
+    const selErr = document.createElement("p");
+    selErr.style.color = "var(--error)";
+    selErr.textContent = "Select two different snapshots.";
+    elements.diffOutput.appendChild(selErr);
     return;
   }
 
-  elements.diffOutput.innerHTML = '<p style="color:var(--text-secondary);">Computing diff...</p>';
+  elements.diffOutput.textContent = "";
+  const computing = document.createElement("p");
+  computing.style.color = "var(--text-secondary)";
+  computing.textContent = "Computing diff...";
+  elements.diffOutput.appendChild(computing);
 
   const resp = await browser.runtime.sendMessage({
     action: "getMonitorDiff",
@@ -307,7 +319,11 @@ async function runDiff() {
   });
 
   if (!resp || !resp.success) {
-    elements.diffOutput.innerHTML = `<p style="color:var(--error);">${resp?.error || "Failed to compute diff."}</p>`;
+    const p = document.createElement("p");
+    p.style.color = "var(--error)";
+    p.textContent = resp?.error || "Failed to compute diff.";
+    elements.diffOutput.textContent = "";
+    elements.diffOutput.appendChild(p);
     return;
   }
 
@@ -334,6 +350,15 @@ async function runDiff() {
   // Summary at top
   const summary = document.createElement("div");
   summary.style.cssText = "padding:8px 12px;margin-bottom:8px;font-size:12px;color:var(--text-secondary);border-bottom:1px solid var(--border);";
-  summary.innerHTML = `<span style="color:var(--success);">+${addCount} additions</span> &nbsp; <span style="color:var(--error);">-${removeCount} removals</span>`;
+  const addSpan = document.createElement("span");
+  addSpan.style.color = "var(--success)";
+  addSpan.textContent = `+${addCount} additions`;
+  const space = document.createTextNode(" \u00a0 ");
+  const removeSpan = document.createElement("span");
+  removeSpan.style.color = "var(--error)";
+  removeSpan.textContent = `-${removeCount} removals`;
+  summary.appendChild(addSpan);
+  summary.appendChild(space);
+  summary.appendChild(removeSpan);
   elements.diffOutput.insertBefore(summary, elements.diffOutput.firstChild);
 }

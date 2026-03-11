@@ -1511,7 +1511,10 @@ function bmRenderBookmarks(bookmarks, total) {
       for (const proj of resp.projects) {
         const opt = document.createElement("button");
         opt.style.cssText = "display:flex;align-items:center;gap:6px;width:100%;padding:8px 12px;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text-primary);font-size:12px;cursor:pointer;text-align:left;";
-        opt.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:${proj.color || '#e94560'};display:inline-block;"></span>${proj.name}`;
+        const optDot = document.createElement("span");
+        optDot.setAttribute("style", "width:8px;height:8px;border-radius:50%;background:" + (proj.color || '#e94560') + ";display:inline-block;");
+        opt.appendChild(optDot);
+        opt.appendChild(document.createTextNode(proj.name));
         opt.addEventListener("click", async () => {
           await browser.runtime.sendMessage({
             action: "addProjectItem",
@@ -1792,7 +1795,12 @@ function projRenderSidebar() {
   projects.sort((a, b) => (b.starred ? 1 : 0) - (a.starred ? 1 : 0));
 
   if (projects.length === 0) {
-    projEl.sidebar.innerHTML = `<p class="info-text" style="padding:16px;text-align:center;">${projState.query ? "No matching projects." : 'No projects yet. Click "+ New Project" to get started.'}</p>`;
+    projEl.sidebar.innerHTML = "";
+    const emptyP = document.createElement("p");
+    emptyP.className = "info-text";
+    emptyP.setAttribute("style", "padding:16px;text-align:center;");
+    emptyP.textContent = projState.query ? "No matching projects." : 'No projects yet. Click "+ New Project" to get started.';
+    projEl.sidebar.appendChild(emptyP);
     return;
   }
 
@@ -1800,17 +1808,29 @@ function projRenderSidebar() {
   for (const proj of projects) {
     const item = document.createElement("div");
     item.className = "proj-list-item" + (proj.id === projState.activeProjectId ? " active" : "");
-    item.innerHTML = `
-      <span class="proj-color-dot" style="background:${proj.color || '#e94560'}"></span>
-      <span class="proj-list-name">${escHtml(proj.name)}</span>
-      <span class="proj-list-count">${proj.items.length}</span>
-      <button class="proj-star-btn ${proj.starred ? 'starred' : ''}" data-id="${proj.id}" title="Star">${proj.starred ? '\u2605' : '\u2606'}</button>
-    `;
+    const dotSpan = document.createElement("span");
+    dotSpan.className = "proj-color-dot";
+    dotSpan.setAttribute("style", "background:" + (proj.color || '#e94560'));
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "proj-list-name";
+    nameSpan.textContent = proj.name;
+    const countSpan = document.createElement("span");
+    countSpan.className = "proj-list-count";
+    countSpan.textContent = proj.items.length;
+    const starBtn = document.createElement("button");
+    starBtn.className = "proj-star-btn" + (proj.starred ? " starred" : "");
+    starBtn.dataset.id = proj.id;
+    starBtn.title = "Star";
+    starBtn.textContent = proj.starred ? '\u2605' : '\u2606';
+    item.appendChild(dotSpan);
+    item.appendChild(nameSpan);
+    item.appendChild(countSpan);
+    item.appendChild(starBtn);
     item.addEventListener("click", (e) => {
       if (e.target.classList.contains("proj-star-btn")) return;
       projSelectProject(proj.id);
     });
-    item.querySelector(".proj-star-btn").addEventListener("click", () => projToggleStar(proj.id));
+    starBtn.addEventListener("click", () => projToggleStar(proj.id));
     projEl.sidebar.appendChild(item);
   }
 }
@@ -1839,19 +1859,46 @@ function projRenderDetail() {
   const proj = projState.projects.find(p => p.id === projState.activeProjectId);
   if (!proj) return projShowEmpty();
 
-  projEl.detailHeader.innerHTML = `
-    <div class="proj-detail-title">
-      <span class="proj-color-dot" style="background:${proj.color || '#e94560'};width:14px;height:14px;"></span>
-      <h3>${escHtml(proj.name)}</h3>
-      <button class="proj-star-btn ${proj.starred ? 'starred' : ''}" id="proj-detail-star" title="Star">${proj.starred ? '\u2605' : '\u2606'}</button>
-    </div>
-    ${proj.description ? `<p class="proj-detail-desc">${escHtml(proj.description)}</p>` : ""}
-    <div class="proj-detail-actions">
-      <button class="btn btn-secondary btn-sm" id="proj-edit-btn">Edit</button>
-      <button class="btn btn-secondary btn-sm" id="proj-delete-btn">Delete</button>
-      <span style="font-size:11px;color:var(--text-muted);margin-left:auto;">${proj.items.length} items &middot; Updated ${new Date(proj.updatedAt).toLocaleDateString()}</span>
-    </div>
-  `;
+  projEl.detailHeader.innerHTML = "";
+  const titleDiv = document.createElement("div");
+  titleDiv.className = "proj-detail-title";
+  const detDot = document.createElement("span");
+  detDot.className = "proj-color-dot";
+  detDot.setAttribute("style", "background:" + (proj.color || '#e94560') + ";width:14px;height:14px;");
+  const detH3 = document.createElement("h3");
+  detH3.textContent = proj.name;
+  const detStarBtn = document.createElement("button");
+  detStarBtn.className = "proj-star-btn" + (proj.starred ? " starred" : "");
+  detStarBtn.id = "proj-detail-star";
+  detStarBtn.title = "Star";
+  detStarBtn.textContent = proj.starred ? '\u2605' : '\u2606';
+  titleDiv.appendChild(detDot);
+  titleDiv.appendChild(detH3);
+  titleDiv.appendChild(detStarBtn);
+  projEl.detailHeader.appendChild(titleDiv);
+  if (proj.description) {
+    const descP = document.createElement("p");
+    descP.className = "proj-detail-desc";
+    descP.textContent = proj.description;
+    projEl.detailHeader.appendChild(descP);
+  }
+  const actionsDiv = document.createElement("div");
+  actionsDiv.className = "proj-detail-actions";
+  const editBtn2 = document.createElement("button");
+  editBtn2.className = "btn btn-secondary btn-sm";
+  editBtn2.id = "proj-edit-btn";
+  editBtn2.textContent = "Edit";
+  const deleteBtn2 = document.createElement("button");
+  deleteBtn2.className = "btn btn-secondary btn-sm";
+  deleteBtn2.id = "proj-delete-btn";
+  deleteBtn2.textContent = "Delete";
+  const metaSpan = document.createElement("span");
+  metaSpan.setAttribute("style", "font-size:11px;color:var(--text-muted);margin-left:auto;");
+  metaSpan.textContent = proj.items.length + " items \u00B7 Updated " + new Date(proj.updatedAt).toLocaleDateString();
+  actionsDiv.appendChild(editBtn2);
+  actionsDiv.appendChild(deleteBtn2);
+  actionsDiv.appendChild(metaSpan);
+  projEl.detailHeader.appendChild(actionsDiv);
 
   document.getElementById("proj-detail-star").addEventListener("click", () => projToggleStar(proj.id));
   document.getElementById("proj-edit-btn").addEventListener("click", () => projOpenModal(proj));
@@ -1862,7 +1909,12 @@ function projRenderDetail() {
 
 function projRenderItems(proj) {
   if (proj.items.length === 0) {
-    projEl.itemsList.innerHTML = `<p class="info-text" style="text-align:center;padding:32px;">No items in this project yet. Add analyses from results pages, bookmarks, notes, or URLs.</p>`;
+    projEl.itemsList.textContent = "";
+    const noItems = document.createElement("p");
+    noItems.className = "info-text";
+    noItems.style.cssText = "text-align:center;padding:32px;";
+    noItems.textContent = "No items in this project yet. Add analyses from results pages, bookmarks, notes, or URLs.";
+    projEl.itemsList.appendChild(noItems);
     return;
   }
 
@@ -1870,32 +1922,76 @@ function projRenderItems(proj) {
   for (const item of proj.items) {
     const card = document.createElement("div");
     card.className = "proj-item-card";
-    const titleHtml = item.url
-      ? `<a href="${escHtml(item.url)}" target="_blank">${escHtml(item.title || item.url)}</a>`
-      : escHtml(item.title || "Untitled");
-
-    const analyzedBadge = item.analysisPreset
-      ? `<span class="proj-type-badge analysis" title="Analyzed with ${escHtml(item.analysisPreset)}">analyzed</span>`
-      : "";
-
-    card.innerHTML = `
-      <div class="proj-item-body">
-        <div class="proj-item-title">${titleHtml}</div>
-        ${item.url ? `<div class="proj-item-url">${escHtml(item.url)}</div>` : ""}
-        ${item.summary ? `<div class="proj-item-summary">${escHtml(item.summary.slice(0, 200))}</div>` : ""}
-        ${item.notes ? `<div class="proj-item-notes">${escHtml(item.notes)}</div>` : ""}
-        <div class="proj-item-meta">
-          <span class="proj-type-badge ${item.type}">${item.type}</span>
-          ${analyzedBadge}
-          <span>${new Date(item.addedAt).toLocaleDateString()}</span>
-        </div>
-      </div>
-      <div class="proj-item-actions">
-        ${item.analysisContent ? `<button class="proj-item-view-btn" title="View analysis">View</button>` : ""}
-        <button class="proj-item-note-btn" title="Edit notes">Notes</button>
-        <button class="proj-item-remove-btn" title="Remove from project">Remove</button>
-      </div>
-    `;
+    const bodyDiv = document.createElement("div");
+    bodyDiv.className = "proj-item-body";
+    const titleDiv2 = document.createElement("div");
+    titleDiv2.className = "proj-item-title";
+    if (item.url) {
+      const titleLink = document.createElement("a");
+      titleLink.href = item.url;
+      titleLink.target = "_blank";
+      titleLink.textContent = item.title || item.url;
+      titleDiv2.appendChild(titleLink);
+    } else {
+      titleDiv2.textContent = item.title || "Untitled";
+    }
+    bodyDiv.appendChild(titleDiv2);
+    if (item.url) {
+      const urlDiv = document.createElement("div");
+      urlDiv.className = "proj-item-url";
+      urlDiv.textContent = item.url;
+      bodyDiv.appendChild(urlDiv);
+    }
+    if (item.summary) {
+      const summDiv = document.createElement("div");
+      summDiv.className = "proj-item-summary";
+      summDiv.textContent = item.summary.slice(0, 200);
+      bodyDiv.appendChild(summDiv);
+    }
+    if (item.notes) {
+      const notesDiv = document.createElement("div");
+      notesDiv.className = "proj-item-notes";
+      notesDiv.textContent = item.notes;
+      bodyDiv.appendChild(notesDiv);
+    }
+    const metaDiv = document.createElement("div");
+    metaDiv.className = "proj-item-meta";
+    const typeBadge = document.createElement("span");
+    typeBadge.className = "proj-type-badge " + item.type;
+    typeBadge.textContent = item.type;
+    metaDiv.appendChild(typeBadge);
+    if (item.analysisPreset) {
+      const analyzedSpan = document.createElement("span");
+      analyzedSpan.className = "proj-type-badge analysis";
+      analyzedSpan.title = "Analyzed with " + item.analysisPreset;
+      analyzedSpan.textContent = "analyzed";
+      metaDiv.appendChild(analyzedSpan);
+    }
+    const dateSpan = document.createElement("span");
+    dateSpan.textContent = new Date(item.addedAt).toLocaleDateString();
+    metaDiv.appendChild(dateSpan);
+    bodyDiv.appendChild(metaDiv);
+    card.appendChild(bodyDiv);
+    const actionsDiv2 = document.createElement("div");
+    actionsDiv2.className = "proj-item-actions";
+    if (item.analysisContent) {
+      const viewBtn2 = document.createElement("button");
+      viewBtn2.className = "proj-item-view-btn";
+      viewBtn2.title = "View analysis";
+      viewBtn2.textContent = "View";
+      actionsDiv2.appendChild(viewBtn2);
+    }
+    const noteBtn = document.createElement("button");
+    noteBtn.className = "proj-item-note-btn";
+    noteBtn.title = "Edit notes";
+    noteBtn.textContent = "Notes";
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "proj-item-remove-btn";
+    removeBtn.title = "Remove from project";
+    removeBtn.textContent = "Remove";
+    actionsDiv2.appendChild(noteBtn);
+    actionsDiv2.appendChild(removeBtn);
+    card.appendChild(actionsDiv2);
 
     const viewBtn = card.querySelector(".proj-item-view-btn");
     if (viewBtn) {
@@ -2315,22 +2411,47 @@ async function loadWatchlist() {
   const list = document.getElementById("watchlist-items");
   list.innerHTML = "";
   if (!resp || !resp.success || !resp.watchlist.length) {
-    list.innerHTML = '<p class="info-text" style="padding:8px 0;">No keywords tracked yet.</p>';
+    const noKw = document.createElement("p");
+    noKw.className = "info-text";
+    noKw.style.cssText = "padding:8px 0;";
+    noKw.textContent = "No keywords tracked yet.";
+    list.appendChild(noKw);
     return;
   }
   for (const w of resp.watchlist) {
     const div = document.createElement("div");
     div.className = "rule-item";
-    div.innerHTML = `
-      <div class="rule-info">
-        <span class="rule-label">${w.term}</span>
-        <span class="rule-meta">${w.caseSensitive ? "Case sensitive" : "Case insensitive"}${w.regex ? " | Regex" : ""} | ${w.matchCount || 0} matches</span>
-      </div>
-      <div class="rule-actions">
-        <label class="toggle-label"><input type="checkbox" ${w.enabled ? "checked" : ""} data-id="${w.id}" class="watchword-toggle"><span>Active</span></label>
-        <button class="btn btn-secondary btn-sm watchword-delete" data-id="${w.id}">Delete</button>
-      </div>
-    `;
+    const ruleInfo = document.createElement("div");
+    ruleInfo.className = "rule-info";
+    const ruleLabel = document.createElement("span");
+    ruleLabel.className = "rule-label";
+    ruleLabel.textContent = w.term;
+    const ruleMeta = document.createElement("span");
+    ruleMeta.className = "rule-meta";
+    ruleMeta.textContent = (w.caseSensitive ? "Case sensitive" : "Case insensitive") + (w.regex ? " | Regex" : "") + " | " + (w.matchCount || 0) + " matches";
+    ruleInfo.appendChild(ruleLabel);
+    ruleInfo.appendChild(ruleMeta);
+    const ruleActions = document.createElement("div");
+    ruleActions.className = "rule-actions";
+    const toggleLabel = document.createElement("label");
+    toggleLabel.className = "toggle-label";
+    const toggleInput = document.createElement("input");
+    toggleInput.type = "checkbox";
+    if (w.enabled) toggleInput.checked = true;
+    toggleInput.dataset.id = w.id;
+    toggleInput.className = "watchword-toggle";
+    const activeSpan = document.createElement("span");
+    activeSpan.textContent = "Active";
+    toggleLabel.appendChild(toggleInput);
+    toggleLabel.appendChild(activeSpan);
+    const delBtn = document.createElement("button");
+    delBtn.className = "btn btn-secondary btn-sm watchword-delete";
+    delBtn.dataset.id = w.id;
+    delBtn.textContent = "Delete";
+    ruleActions.appendChild(toggleLabel);
+    ruleActions.appendChild(delBtn);
+    div.appendChild(ruleInfo);
+    div.appendChild(ruleActions);
     list.appendChild(div);
   }
 
@@ -2377,17 +2498,26 @@ async function loadWatchlistMatches() {
     container.innerHTML = "";
     return;
   }
-  container.innerHTML = `<h4 style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">Recent Matches</h4>`;
+  container.innerHTML = "";
+  const matchesH4 = document.createElement("h4");
+  matchesH4.setAttribute("style", "font-size:13px;color:var(--text-secondary);margin-bottom:8px;");
+  matchesH4.textContent = "Recent Matches";
+  container.appendChild(matchesH4);
   const recent = watchlistMatches.slice(-20).reverse();
   for (const m of recent) {
     const div = document.createElement("div");
     div.className = "rule-item";
-    div.innerHTML = `
-      <div class="rule-info">
-        <span class="rule-label">"${m.term}" found in ${m.sourceType}</span>
-        <span class="rule-meta">${m.sourceTitle || m.sourceUrl} - ${new Date(m.matchedAt).toLocaleString()}</span>
-      </div>
-    `;
+    const matchInfo = document.createElement("div");
+    matchInfo.className = "rule-info";
+    const matchLabel = document.createElement("span");
+    matchLabel.className = "rule-label";
+    matchLabel.textContent = '"' + m.term + '" found in ' + m.sourceType;
+    const matchMeta = document.createElement("span");
+    matchMeta.className = "rule-meta";
+    matchMeta.textContent = (m.sourceTitle || m.sourceUrl) + " - " + new Date(m.matchedAt).toLocaleString();
+    matchInfo.appendChild(matchLabel);
+    matchInfo.appendChild(matchMeta);
+    div.appendChild(matchInfo);
     container.appendChild(div);
   }
 }

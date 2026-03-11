@@ -183,7 +183,11 @@
       .sort((a, b) => (b.mentions || 0) - (a.mentions || 0));
 
     if (filtered.length === 0) {
-      list.innerHTML = '<li style="padding:16px;color:var(--text-secondary);font-size:13px;text-align:center;">No locations match the current filter.</li>';
+      list.textContent = "";
+      const noMatch = document.createElement("li");
+      noMatch.style.cssText = "padding:16px;color:var(--text-secondary);font-size:13px;text-align:center;";
+      noMatch.textContent = "No locations match the current filter.";
+      list.appendChild(noMatch);
       return;
     }
 
@@ -191,19 +195,45 @@
       const li = document.createElement('li');
       li.className = 'location-item' + (activeLocationName === loc.name ? ' active' : '');
 
-      const sourcesHtml = (loc.sources || []).slice(0, 3).map(s =>
-        '<a class="location-source-link" href="' + escapeAttr(s.url) + '" target="_blank" rel="noopener" title="' + escapeAttr(s.title || s.url) + '">' +
-        escapeHtml(s.title || s.url) + '</a>'
-      ).join('');
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'location-name';
+      nameDiv.textContent = loc.name;
+      li.appendChild(nameDiv);
 
-      li.innerHTML =
-        '<div class="location-name">' + escapeHtml(loc.name) + '</div>' +
-        '<div class="location-meta">' +
-          '<span class="location-type-badge type-' + escapeAttr(loc.type) + '">' + escapeHtml(loc.type) + '</span>' +
-          '<span>' + (loc.mentions || 0) + ' mentions</span>' +
-          '<span>' + (loc.lat || 0).toFixed(2) + ', ' + (loc.lng || 0).toFixed(2) + '</span>' +
-        '</div>' +
-        (sourcesHtml ? '<div class="location-sources">' + sourcesHtml + '</div>' : '');
+      const metaDiv = document.createElement('div');
+      metaDiv.className = 'location-meta';
+
+      const typeBadge = document.createElement('span');
+      typeBadge.className = 'location-type-badge type-' + loc.type;
+      typeBadge.textContent = loc.type;
+      metaDiv.appendChild(typeBadge);
+
+      const mentionsSpan = document.createElement('span');
+      mentionsSpan.textContent = (loc.mentions || 0) + ' mentions';
+      metaDiv.appendChild(mentionsSpan);
+
+      const coordsSpan = document.createElement('span');
+      coordsSpan.textContent = (loc.lat || 0).toFixed(2) + ', ' + (loc.lng || 0).toFixed(2);
+      metaDiv.appendChild(coordsSpan);
+
+      li.appendChild(metaDiv);
+
+      const sources = (loc.sources || []).slice(0, 3);
+      if (sources.length > 0) {
+        const sourcesDiv = document.createElement('div');
+        sourcesDiv.className = 'location-sources';
+        sources.forEach(s => {
+          const a = document.createElement('a');
+          a.className = 'location-source-link';
+          a.setAttribute('href', s.url);
+          a.setAttribute('target', '_blank');
+          a.setAttribute('rel', 'noopener');
+          a.setAttribute('title', s.title || s.url);
+          a.textContent = s.title || s.url;
+          sourcesDiv.appendChild(a);
+        });
+        li.appendChild(sourcesDiv);
+      }
 
       li.addEventListener('click', (e) => {
         if (e.target.tagName === 'A') return; // let link clicks pass through

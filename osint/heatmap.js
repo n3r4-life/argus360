@@ -264,12 +264,12 @@
   }
 
   /* ── Canvas Interaction ── */
-  function onMouseMove(e) {
+  function onPointerEvent(clientX, clientY) {
     if (!filtered) return;
 
     const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
+    const mx = clientX - rect.left;
+    const my = clientY - rect.top;
 
     const col = Math.floor((mx - ROW_LABEL_W) / CELL_SIZE);
     const row = Math.floor((my - COL_LABEL_H) / CELL_SIZE);
@@ -292,22 +292,54 @@
       const page = filtered.pages[col];
       const count = filtered.cells[row][col] || 0;
 
-      tooltip.innerHTML =
-        '<span class="tip-entity">' + escapeHtml(ent.name) + '</span> (' + ent.type + ')<br>' +
-        '<span class="tip-page">' + escapeHtml(page.title || page.url) + '</span><br>' +
-        'Mentions: <span class="tip-count">' + count + '</span>';
+      tooltip.textContent = '';
+      const tipEntity = document.createElement('span');
+      tipEntity.className = 'tip-entity';
+      tipEntity.textContent = ent.name;
+      tooltip.appendChild(tipEntity);
+      tooltip.appendChild(document.createTextNode(' (' + ent.type + ')'));
+      tooltip.appendChild(document.createElement('br'));
+      const tipPage = document.createElement('span');
+      tipPage.className = 'tip-page';
+      tipPage.textContent = page.title || page.url;
+      tooltip.appendChild(tipPage);
+      tooltip.appendChild(document.createElement('br'));
+      tooltip.appendChild(document.createTextNode('Mentions: '));
+      const tipCount = document.createElement('span');
+      tipCount.className = 'tip-count';
+      tipCount.textContent = count;
+      tooltip.appendChild(tipCount);
       tooltip.style.display = 'block';
 
       // Position tooltip
-      let tx = e.clientX + 14;
-      let ty = e.clientY + 14;
-      if (tx + 280 > window.innerWidth) tx = e.clientX - 290;
-      if (ty + 80 > window.innerHeight) ty = e.clientY - 80;
+      let tx = clientX + 14;
+      let ty = clientY + 14;
+      if (tx + 280 > window.innerWidth) tx = clientX - 290;
+      if (ty + 80 > window.innerHeight) ty = clientY - 80;
       tooltip.style.left = tx + 'px';
       tooltip.style.top = ty + 'px';
     } else {
       tooltip.style.display = 'none';
     }
+  }
+
+  function onMouseMove(e) {
+    onPointerEvent(e.clientX, e.clientY);
+  }
+
+  function onTouchStart(e) {
+    const touch = e.touches[0];
+    if (touch) {
+      e.preventDefault();
+      onPointerEvent(touch.clientX, touch.clientY);
+    }
+  }
+
+  function onTouchEnd() {
+    hoveredRow = -1;
+    hoveredCol = -1;
+    tooltip.style.display = 'none';
+    if (filtered) render();
   }
 
   function onMouseLeave() {
@@ -451,6 +483,9 @@
 
     canvas.addEventListener('mousemove', onMouseMove);
     canvas.addEventListener('mouseleave', onMouseLeave);
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd);
+    canvas.addEventListener('touchcancel', onTouchEnd);
     window.addEventListener('resize', onResize);
 
     drawLegend();
