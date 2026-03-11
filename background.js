@@ -903,10 +903,21 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "getDashboardData") return AgentEngine.getDashboardData(message.projectId);
   if (message.action === "generateDigest") return AgentEngine.generateProjectDigest(message.projectId);
   if (message.action === "generateReportSection") return AgentEngine.generateReportSection(message.projectId, message.sectionType);
+  if (message.action === "getCachedReport") return AgentEngine.getCachedReport(message.projectId, message.sectionType).then(s => ({ success: true, section: s }));
   if (message.action === "detectTrends") return AgentEngine.detectTrends(message.projectId);
   if (message.action === "getDigests") return AgentEngine.getDigests(message.projectId).then(d => ({ success: true, digests: d }));
   if (message.action === "setDigestSchedule") return AgentEngine.setDigestSchedule(message.projectId, message.schedule);
   if (message.action === "getDigestSchedule") return AgentEngine.getDigestSchedule(message.projectId).then(s => ({ success: true, schedule: s }));
+  // Automations
+  if (message.action === "getAutomations") return AutomationEngine.getAll().then(a => ({ success: true, automations: a }));
+  if (message.action === "saveAutomation") return AutomationEngine.save(message.automation);
+  if (message.action === "deleteAutomation") return AutomationEngine.remove(message.automationId);
+  if (message.action === "runAutomation") return AutomationEngine.run(message.automationId, { tabId: message.tabId, url: message.url, title: message.title });
+  if (message.action === "runAutomationOnItem") return AutomationEngine.runOnItem(message.automationId, message.projectId, message.url, message.title);
+  if (message.action === "runAutomationOnProject") return AutomationEngine.runOnProject(message.automationId, message.projectId);
+  if (message.action === "getAutomationStatus") return Promise.resolve(AutomationEngine.getRunStatus());
+  if (message.action === "cancelAutomation") return Promise.resolve(AutomationEngine.cancel());
+  if (message.action === "getAutomationLog") return AutomationEngine.getLog(message.automationId).then(l => ({ success: true, logs: l }));
   // OSINT tools are handled by background-osint.js's own message listener
   return false;
 });
@@ -2040,6 +2051,20 @@ const autoAnalyzeCallback = async (details) => {
 
     break; // Only first matching rule
   }
+
+  // Also check named automations
+  try {
+    const matchingAutos = await AutomationEngine.matchUrl(url);
+    for (const auto of matchingAutos) {
+      const delay = auto.delay || 2000;
+      await new Promise(r => setTimeout(r, delay));
+      AutomationEngine.run(auto.id, { tabId: details.tabId }).catch(e =>
+        console.warn(`[Automation] ${auto.name} failed:`, e)
+      );
+    }
+  } catch (e) {
+    console.warn("[Automation] URL trigger check failed:", e);
+  }
 };
 initWebNavigation(autoAnalyzeCallback).then(ok => { autoAnalyzeRegistered = ok; });
 
@@ -2659,8 +2684,10 @@ ${newText.slice(0, 3000)}
 Summarize the key differences in 2-4 bullet points.`;
 
           const langInst = await getLanguageInstruction();
+          const cdDefaults = { system: "You are a change detection analyst. Summarize webpage differences concisely.", prompt: "" };
+          const cdCustom = await getAdvancedPrompt("changeDetection", cdDefaults);
           const messages = buildMessages(
-            `You are a change detection analyst. Summarize webpage differences concisely.${langInst}`,
+            `${cdCustom.system}${langInst}`,
             diffPrompt
           );
 
@@ -2866,8 +2893,10 @@ ${newText.slice(0, 3000)}
 Summarize the key differences in 2-4 bullet points.`;
 
               const langInst2 = await getLanguageInstruction();
+              const cdDefaults2 = { system: "You are a change detection analyst. Summarize webpage differences concisely.", prompt: "" };
+              const cdCustom2 = await getAdvancedPrompt("changeDetection", cdDefaults2);
               const messages = buildMessages(
-                `You are a change detection analyst. Summarize webpage differences concisely.${langInst2}`,
+                `${cdCustom2.system}${langInst2}`,
                 diffPrompt
               );
 
@@ -3291,8 +3320,10 @@ Content:
 ${message.content.slice(0, 3000)}`;
 
     const langInst = await getLanguageInstruction();
+    const fsDefaults = { system: "You are a concise news summarizer. Provide clear, informative bullet-point summaries.", prompt: "" };
+    const fsCustom = await getAdvancedPrompt("feedSummarizer", fsDefaults);
     const messages = buildMessages(
-      `You are a concise news summarizer. Provide clear, informative bullet-point summaries.${langInst}`,
+      `${fsCustom.system}${langInst}`,
       prompt
     );
 
@@ -3329,7 +3360,9 @@ async function checkFeedForUpdates(feed, allFeeds) {
         for (const entry of newEntries.slice(0, 5)) {
           try {
             const prompt = `Summarize concisely in 1-2 sentences:\n\nTitle: ${entry.title}\n${entry.description.slice(0, 2000)}`;
-            const msgs = buildMessages("You are a concise news summarizer.", prompt);
+            const autoFsDefaults = { system: "You are a concise news summarizer.", prompt: "" };
+            const autoFsCustom = await getAdvancedPrompt("feedSummarizer", autoFsDefaults);
+            const msgs = buildMessages(autoFsCustom.system, prompt);
             const result = await callProvider(settings.provider, settings.apiKey, settings.model, msgs, { maxTokens: 200, temperature: 0.3 });
             entry.aiSummary = result.content;
           } catch { /* non-critical */ }

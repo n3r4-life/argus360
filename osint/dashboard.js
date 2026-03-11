@@ -385,16 +385,38 @@ function renderDigest(digest) {
 
 // ── Report Generation ──
 
-async function generateReport(sectionType, btn) {
-  btn.classList.add("loading");
-  btn.disabled = true;
+// Cache of loaded reports so switching between types doesn't re-call the API
+const reportCache = {};
 
+async function generateReport(sectionType, btn) {
   const sectionLabels = {
     executiveSummary: "Executive Summary",
     knowledgeGaps: "Knowledge Gaps",
     contradictions: "Contradictions & Discrepancies",
     timelineHighlights: "Timeline Highlights",
   };
+
+  // Check in-memory cache first, then storage cache
+  if (reportCache[sectionType]) {
+    showReport(sectionType, reportCache[sectionType], sectionLabels);
+    return;
+  }
+
+  // Check persistent cache
+  try {
+    const cached = await browser.runtime.sendMessage({
+      action: "getCachedReport", projectId, sectionType
+    });
+    if (cached?.success && cached.section) {
+      reportCache[sectionType] = cached.section;
+      showReport(sectionType, cached.section, sectionLabels);
+      return;
+    }
+  } catch { /* no cache, generate fresh */ }
+
+  // Generate fresh report
+  btn.classList.add("loading");
+  btn.disabled = true;
 
   try {
     const resp = await browser.runtime.sendMessage({
@@ -403,23 +425,28 @@ async function generateReport(sectionType, btn) {
 
     if (!resp || !resp.success) throw new Error(resp?.error || "Generation failed");
 
-    const output = document.getElementById("reportOutput");
-    output.classList.remove("hidden");
-    document.getElementById("reportTitle").textContent = sectionLabels[sectionType] || sectionType;
-
-    const reportEl = document.getElementById("reportContent");
-    reportEl.textContent = "";
-    reportEl.appendChild(DOMPurify.sanitize(marked.parse(resp.section.content), { RETURN_DOM_FRAGMENT: true }));
-    document.getElementById("reportMeta").textContent =
-      `Generated ${new Date(resp.section.generatedAt).toLocaleString()} | ${resp.section.provider} / ${resp.section.model}`;
-
-    output.scrollIntoView({ behavior: "smooth" });
+    reportCache[sectionType] = resp.section;
+    showReport(sectionType, resp.section, sectionLabels);
   } catch (e) {
     alert("Report generation failed: " + e.message);
   } finally {
     btn.classList.remove("loading");
     btn.disabled = false;
   }
+}
+
+function showReport(sectionType, section, labels) {
+  const output = document.getElementById("reportOutput");
+  output.classList.remove("hidden");
+  document.getElementById("reportTitle").textContent = labels[sectionType] || sectionType;
+
+  const reportEl = document.getElementById("reportContent");
+  reportEl.textContent = "";
+  reportEl.appendChild(DOMPurify.sanitize(marked.parse(section.content), { RETURN_DOM_FRAGMENT: true }));
+  document.getElementById("reportMeta").textContent =
+    `Generated ${new Date(section.generatedAt).toLocaleString()} | ${section.provider} / ${section.model}`;
+
+  output.scrollIntoView({ behavior: "smooth" });
 }
 
 // ── Digest Generation ──

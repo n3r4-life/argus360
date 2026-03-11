@@ -249,6 +249,33 @@
         </div>
       </section>
 
+      <!-- Advanced Prompts -->
+      <section class="card" id="advanced-prompts-card">
+        <h2 class="card-title">Advanced Prompts
+          <span class="badge">All Features</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Customize the AI prompts used across Argus. Select a feature prompt from the dropdown, edit the system and user instructions, and click Reset to restore the default. Changes auto-save.</p>
+
+          <div class="form-group" style="margin-bottom:12px;">
+            <label for="adv-prompt-select">Feature Prompt</label>
+            <select id="adv-prompt-select" style="max-width:360px;"></select>
+          </div>
+          <div class="form-group">
+            <label for="adv-prompt-system">System Prompt <span class="hint">(persona / role)</span></label>
+            <textarea id="adv-prompt-system" rows="3" spellcheck="false" style="font-family:monospace;font-size:12px;"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="adv-prompt-user">User Prompt <span class="hint">(instructions — template variables like {projectName} are filled at runtime)</span></label>
+            <textarea id="adv-prompt-user" rows="12" spellcheck="false" style="font-family:monospace;font-size:12px;"></textarea>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button id="adv-prompt-reset" class="btn btn-secondary btn-sm">Reset to Default</button>
+            <span id="adv-prompt-status" class="prompt-status"></span>
+          </div>
+        </div>
+      </section>
+
     </div>
 
     <!-- ═══════════════════════════════════════════ -->
@@ -1551,6 +1578,67 @@ Rules:
 
           <h3>Scheduled Digests</h3>
           <p>Set a digest schedule (Daily, Weekly, or Disabled) per project. Argus generates AI briefings summarizing new items, key findings, and suggested actions. Digests are checked every 6 hours and generated when the schedule interval has elapsed.</p>
+        </div>
+      </section>
+
+      <!-- Advanced Prompts -->
+      <section class="card" id="help-advanced-prompts">
+        <h2 class="card-title">Advanced Prompts</h2>
+        <div class="card-body help-content">
+          <p>Every AI prompt used across Argus is fully customizable. Open the <strong>Prompts</strong> tab and scroll to <strong>Advanced Prompts</strong> to edit any prompt's system instruction or user prompt.</p>
+
+          <h3>How It Works</h3>
+          <ul>
+            <li>Select a prompt from the dropdown (grouped by feature area)</li>
+            <li>Edit the <strong>System Prompt</strong> to change the AI's persona/tone</li>
+            <li>Edit the <strong>User Prompt</strong> to change what data or instructions are sent</li>
+            <li>Click <strong>Save Prompt</strong> to store your override. Click <strong>Reset</strong> to revert to defaults</li>
+            <li>Modified prompts are marked with an asterisk (*) in the dropdown</li>
+          </ul>
+
+          <h3>Prompt Groups</h3>
+          <ul>
+            <li><strong>Dashboard Reports</strong> &mdash; Executive Summary, Knowledge Gaps, Contradictions, Timeline Highlights, Project Digest</li>
+            <li><strong>Monitors</strong> &mdash; Change Detection Summary (page diff analysis)</li>
+            <li><strong>RSS Feeds</strong> &mdash; Feed Entry Summary (article summarization)</li>
+            <li><strong>Source Pipelines</strong> &mdash; Wikipedia, Classifieds, News, and Research pipeline stages</li>
+          </ul>
+
+          <h3>Template Variables</h3>
+          <p>Dashboard report prompts support template variables that are filled at runtime with your project's data:</p>
+          <pre class="help-code">{projectName}        &mdash; Project name
+{projectDescription} &mdash; Project description
+{itemCount}          &mdash; Number of items collected
+{entityCount}        &mdash; Number of KG entities
+{dateRange}          &mdash; Date range of collected items
+{recentItems}        &mdash; Recent project items list
+{topEntities}        &mdash; Top entities by mention count
+{keyRelationships}   &mdash; Key entity relationships
+{entityCoverage}     &mdash; Entity type breakdown
+{itemSummaries}      &mdash; Items with summaries
+{itemContents}       &mdash; Full analysis content
+{connections}        &mdash; Entity connections
+{entityAttributes}   &mdash; Entity attribute details
+{timelineItems}      &mdash; Timeline data
+{dateEntities}       &mdash; Date/event entities</pre>
+
+          <h3>System-Only Prompts</h3>
+          <p>Some prompts (Digest, Change Detection, Feed Summarizer) have auto-generated user prompts built from live data. For these, only the system prompt is editable &mdash; use it to change the AI's tone, focus, or output format.</p>
+
+          <h3>Example &mdash; Geopolitical Focus for Executive Summary</h3>
+          <p>Change the system prompt to shift the analysis perspective:</p>
+          <pre class="help-code">You are a geopolitical intelligence analyst specializing in
+state actors, alliances, and conflict dynamics. Prioritize
+findings related to power structures, territorial disputes,
+and diplomatic signals. Use formal intelligence briefing
+language. Flag any information that suggests escalation or
+de-escalation patterns.</pre>
+
+          <h3>Example &mdash; Financial Focus for News Pipeline</h3>
+          <pre class="help-code">You are a financial intelligence analyst. When analyzing
+news, prioritize market-moving information, regulatory
+changes, M&amp;A activity, and insider trading signals.
+Flag SEC-relevant disclosures. Respond ONLY with valid JSON.</pre>
         </div>
       </section>
 

@@ -265,7 +265,7 @@ Be specific about why each indicator is concerning or reassuring.`
 
   async function runWikipediaPipeline(page, settings, results) {
     // Stage 1: Extract structured profile
-    const profilePrompt = PIPELINE_PROMPTS.wikipedia.profile;
+    const profilePrompt = await getAdvancedPrompt("pipeline.wikipedia.profile", PIPELINE_PROMPTS.wikipedia.profile);
     const profileResult = await callPipelineAI(page, profilePrompt, settings);
     const profile = parseJSON(profileResult.content);
 
@@ -295,7 +295,7 @@ Be specific about why each indicator is concerning or reassuring.`
     }
 
     // Stage 2: Entity extraction
-    const entityPrompt = PIPELINE_PROMPTS.wikipedia.entities;
+    const entityPrompt = await getAdvancedPrompt("pipeline.wikipedia.entities", PIPELINE_PROMPTS.wikipedia.entities);
     const entityResult = await callPipelineAI(page, entityPrompt, settings);
     const entityData = parseJSON(entityResult.content);
 
@@ -320,7 +320,7 @@ Be specific about why each indicator is concerning or reassuring.`
 
   async function runClassifiedsPipeline(page, settings, results) {
     // Stage 1: Extract listing data
-    const extractPrompt = PIPELINE_PROMPTS.classifieds.extract;
+    const extractPrompt = await getAdvancedPrompt("pipeline.classifieds.extract", PIPELINE_PROMPTS.classifieds.extract);
     const extractResult = await callPipelineAI(page, extractPrompt, settings);
     const listing = parseJSON(extractResult.content);
 
@@ -346,7 +346,7 @@ Be specific about why each indicator is concerning or reassuring.`
     }
 
     // Stage 2: Scam check
-    const scamPrompt = PIPELINE_PROMPTS.classifieds.scamCheck;
+    const scamPrompt = await getAdvancedPrompt("pipeline.classifieds.scamCheck", PIPELINE_PROMPTS.classifieds.scamCheck);
     const scamResult = await callPipelineAI(page, scamPrompt, settings);
     results.stages.push({ name: "Scam Analysis", status: "done" });
 
@@ -356,7 +356,7 @@ Be specific about why each indicator is concerning or reassuring.`
   // ── News Pipeline ──
 
   async function runNewsPipeline(page, settings, results) {
-    const analyzePrompt = PIPELINE_PROMPTS.news.analyze;
+    const analyzePrompt = await getAdvancedPrompt("pipeline.news.analyze", PIPELINE_PROMPTS.news.analyze);
     const analyzeResult = await callPipelineAI(page, analyzePrompt, settings);
     const analysis = parseJSON(analyzeResult.content);
 
@@ -384,7 +384,7 @@ Be specific about why each indicator is concerning or reassuring.`
   // ── Research Pipeline ──
 
   async function runResearchPipeline(page, settings, results) {
-    const analyzePrompt = PIPELINE_PROMPTS.research.analyze;
+    const analyzePrompt = await getAdvancedPrompt("pipeline.research.analyze", PIPELINE_PROMPTS.research.analyze);
     const analyzeResult = await callPipelineAI(page, analyzePrompt, settings);
     const analysis = parseJSON(analyzeResult.content);
 

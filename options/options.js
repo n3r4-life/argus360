@@ -256,6 +256,84 @@ Rules:
 - readingTime: Estimated reading time.`;
 
 // ──────────────────────────────────────────────
+// Advanced prompt definitions (key → { label, group, system, prompt })
+// ──────────────────────────────────────────────
+const ADVANCED_PROMPT_DEFS = {
+  // Dashboard Reports
+  "report.executiveSummary": {
+    label: "Executive Summary", group: "Dashboard Reports",
+    system: "You are an intelligence analyst writing a concise executive summary. Be direct and actionable.",
+    prompt: "Write an executive summary for this OSINT project. You have the following data:\n\n**Project:** {projectName}\n**Description:** {projectDescription}\n**Items collected:** {itemCount}\n**Knowledge Graph entities:** {entityCount}\n**Date range:** {dateRange}\n\n**Recent items:**\n{recentItems}\n\n**Top entities from Knowledge Graph:**\n{topEntities}\n\n**Key relationships:**\n{keyRelationships}\n\nWrite a 3-5 paragraph executive summary covering:\n1. Project scope and focus\n2. Key findings and patterns\n3. Notable entities and connections\n4. Recommended next steps\n\nBe specific \u2014 reference actual entities and findings from the data."
+  },
+  "report.knowledgeGaps": {
+    label: "Knowledge Gaps", group: "Dashboard Reports",
+    system: "You are a research analyst identifying gaps in intelligence collection.",
+    prompt: "Analyze this project's coverage and identify knowledge gaps:\n\n**Project:** {projectName}\n**Items analyzed:** {itemCount}\n**Entities tracked:** {entityCount}\n\n**Current entity coverage by type:**\n{entityCoverage}\n\n**Items with summaries:**\n{itemSummaries}\n\n**Entity connections:**\n{connections}\n\nIdentify:\n## Knowledge Gaps\n- What important topics or entities are mentioned but not well-covered?\n- What relationships are implied but not confirmed?\n- What time periods or geographic areas have sparse coverage?\n\n## Collection Priorities\n- What should be investigated next? (ranked by importance)\n- What sources would fill the biggest gaps?\n\n## Confidence Assessment\n- Which findings are well-supported? Which are speculative?\n\nBe specific \u2014 reference actual data points."
+  },
+  "report.contradictions": {
+    label: "Contradictions & Discrepancies", group: "Dashboard Reports",
+    system: "You are a fact-checking analyst looking for inconsistencies and contradictions across sources.",
+    prompt: "Examine these project items for contradictions and discrepancies:\n\n**Project:** {projectName}\n\n**Items with content:**\n{itemContents}\n\n**Entity attributes from Knowledge Graph:**\n{entityAttributes}\n\nIdentify:\n## Contradictions Found\n- Claims that directly conflict across sources\n- Dates, numbers, or facts that don't align\n\n## Discrepancies\n- Information that is inconsistent but not directly contradictory\n- Different framings or interpretations of the same events\n\n## Reliability Notes\n- Which sources seem most reliable? Why?\n- Where is corroboration strongest/weakest?\n\nIf no contradictions are found, say so \u2014 don't fabricate issues."
+  },
+  "report.timelineHighlights": {
+    label: "Timeline Highlights", group: "Dashboard Reports",
+    system: "You are a chronological analyst constructing timeline narratives from intelligence data.",
+    prompt: "Build a timeline of key events from this project's data:\n\n**Project:** {projectName}\n\n**Items with dates/content:**\n{timelineItems}\n\n**Date-type entities from KG:**\n{dateEntities}\n\nCreate:\n## Timeline Highlights\n- List key events chronologically with dates\n- Note the source for each event\n\n## Narrative Arc\n- What story emerges from the chronological ordering?\n- Are there acceleration patterns or pivotal moments?\n\n## Temporal Gaps\n- Where are there missing time periods?\n- What likely happened during gaps?\n\nUse actual dates and events from the data. Format dates consistently."
+  },
+  // Digest
+  "digest": {
+    label: "Project Digest", group: "Dashboard Reports",
+    system: "You are an intelligence briefing generator. Write a concise daily/weekly digest for an OSINT project. Use markdown formatting.",
+    prompt: "(Auto-generated from project data. Edit only the system prompt to change tone/format.)"
+  },
+  // Change Detection
+  "changeDetection": {
+    label: "Change Detection Summary", group: "Monitors",
+    system: "You are a change detection analyst. Summarize webpage differences concisely.",
+    prompt: "(Auto-generated from page diffs. Edit only the system prompt.)"
+  },
+  // Feed Summarizer
+  "feedSummarizer": {
+    label: "Feed Entry Summary", group: "RSS Feeds",
+    system: "You are a concise news summarizer. Provide clear, informative bullet-point summaries.",
+    prompt: "(Auto-generated from feed content. Edit only the system prompt.)"
+  },
+  // Pipelines
+  "pipeline.wikipedia.profile": {
+    label: "Wikipedia \u2014 Profile Extraction", group: "Source Pipelines",
+    system: "You are a structured data extraction expert. Respond ONLY with valid JSON, no markdown fences, no explanation.",
+    prompt: 'Extract a structured profile from this Wikipedia article. Return JSON:\n{\n  "title": "",\n  "type": "person|organization|place|event|concept|other",\n  "summary": "2-3 sentence summary",\n  "infobox": {\n    "born": "", "died": "", "nationality": "", "occupation": "",\n    "founded": "", "headquarters": "", "industry": "",\n    "population": "", "area": "", "coordinates": ""\n  },\n  "key_facts": ["fact1", "fact2"],\n  "categories": ["cat1", "cat2"],\n  "related_entities": [{"name": "", "type": "person|org|place", "relationship": ""}],\n  "controversies": ["if any"],\n  "references_count": 0,\n  "last_edited": ""\n}\nOnly include fields that have actual data.'
+  },
+  "pipeline.wikipedia.entities": {
+    label: "Wikipedia \u2014 Entity Extraction", group: "Source Pipelines",
+    system: "You are an OSINT analyst specializing in entity extraction. Respond ONLY with valid JSON.",
+    prompt: 'Extract ALL named entities from this Wikipedia content. Return JSON:\n{\n  "people": [{"name": "", "role": "", "context": ""}],\n  "organizations": [{"name": "", "type": "", "context": ""}],\n  "locations": [{"name": "", "type": "", "context": ""}],\n  "dates": [{"date": "", "event": "", "context": ""}]\n}\nBe thorough \u2014 include every entity mentioned.'
+  },
+  "pipeline.classifieds.extract": {
+    label: "Classifieds \u2014 Listing Extraction", group: "Source Pipelines",
+    system: "You are a structured data extraction expert for online listings and classifieds. Respond ONLY with valid JSON.",
+    prompt: 'Extract structured listing data from this page. Return JSON:\n{\n  "title": "",\n  "price": { "amount": 0, "currency": "USD", "negotiable": false },\n  "condition": "",\n  "location": { "city": "", "state": "", "country": "" },\n  "seller": { "name": "", "type": "individual|business", "rating": "" },\n  "description_summary": "1-2 sentences",\n  "category": "",\n  "images_mentioned": 0,\n  "contact_methods": ["email", "phone", "message"],\n  "red_flags": ["list any scam indicators"],\n  "comparable_value_estimate": "if possible, estimate fair market value"\n}\nOnly include fields with actual data.'
+  },
+  "pipeline.classifieds.scamCheck": {
+    label: "Classifieds \u2014 Scam Check", group: "Source Pipelines",
+    system: "You are a fraud detection expert specializing in online marketplace scams.",
+    prompt: "Analyze this listing for scam indicators. Score the risk 1-10 and explain:\n\n## Scam Risk Score: X/10\n\n### Red Flags Found\n- List each suspicious element\n\n### Positive Signals\n- List trustworthy indicators\n\n### Recommendation\nOne sentence: safe to proceed, proceed with caution, or avoid.\n\nBe specific about why each indicator is concerning or reassuring."
+  },
+  "pipeline.news.analyze": {
+    label: "News \u2014 Intelligence Analysis", group: "Source Pipelines",
+    system: "You are an intelligence analyst specializing in news analysis and source evaluation. Respond ONLY with valid JSON.",
+    prompt: 'Analyze this news article. Return JSON:\n{\n  "headline": "",\n  "publication": "",\n  "author": "",\n  "date_published": "",\n  "summary": "2-3 sentence summary",\n  "key_claims": [{"claim": "", "attribution": "", "evidence_level": "strong|moderate|weak|none"}],\n  "entities": {\n    "people": [{"name": "", "role": ""}],\n    "organizations": [{"name": "", "role": ""}],\n    "locations": [{"name": ""}]\n  },\n  "bias_indicators": {\n    "loaded_language": ["examples"],\n    "framing": "",\n    "missing_perspectives": [""],\n    "overall_lean": "left|center-left|center|center-right|right|neutral"\n  },\n  "source_quality": {\n    "named_sources": 0,\n    "anonymous_sources": 0,\n    "primary_documents": 0,\n    "score": "1-10"\n  },\n  "related_stories": ["suggested follow-up topics"]\n}'
+  },
+  "pipeline.research.analyze": {
+    label: "Research \u2014 Claims & Gaps Analysis", group: "Source Pipelines",
+    system: "You are a research analyst specializing in academic and investigative content. Respond ONLY with valid JSON.",
+    prompt: 'Analyze this research/wiki content for claims and knowledge gaps. Return JSON:\n{\n  "title": "",\n  "topic": "",\n  "summary": "2-3 sentences",\n  "key_claims": [\n    {"claim": "", "evidence": "strong|moderate|weak|none", "verifiable": true, "source_cited": true}\n  ],\n  "knowledge_coverage": {\n    "strong_areas": ["topics well-covered"],\n    "weak_areas": ["topics mentioned but not substantiated"],\n    "gaps": ["important related topics not addressed"]\n  },\n  "entities": {\n    "people": [{"name": "", "role": ""}],\n    "organizations": [{"name": ""}],\n    "concepts": [{"name": "", "definition": ""}]\n  },\n  "methodology_notes": "if applicable",\n  "suggested_followup": ["questions or sources to investigate"]\n}'
+  },
+};
+
+let advancedPrompts = {}; // user overrides, keyed by prompt ID
+
+// ──────────────────────────────────────────────
 // DOM refs
 // ──────────────────────────────────────────────
 const el = {
@@ -303,6 +381,12 @@ const el = {
   bookmarkTagPrompt: document.getElementById("bookmark-tag-prompt"),
   resetBookmarkTagPrompt: document.getElementById("reset-bookmark-tag-prompt"),
   bookmarkTagPromptStatus: document.getElementById("bookmark-tag-prompt-status"),
+  // Advanced prompts
+  advPromptSelect: document.getElementById("adv-prompt-select"),
+  advPromptSystem: document.getElementById("adv-prompt-system"),
+  advPromptUser: document.getElementById("adv-prompt-user"),
+  advPromptReset: document.getElementById("adv-prompt-reset"),
+  advPromptStatus: document.getElementById("adv-prompt-status"),
   // Import/Export
   exportSettings: document.getElementById("export-settings"),
   importSettings: document.getElementById("import-settings"),
@@ -407,6 +491,7 @@ async function loadAllSettings() {
     extendedThinking: { enabled: false, budgetTokens: 10000 },
     autoAnalyzeRules: [],
     feedKeywordRoutes: [],
+    advancedPrompts: {},
     maxHistorySize: 200,
     showBadge: true,
     responseLanguage: "auto",
@@ -434,6 +519,7 @@ async function loadAllSettings() {
   customPresets = settings.customPresets || {};
   autoAnalyzeRules = settings.autoAnalyzeRules || [];
   feedKeywordRoutes = settings.feedKeywordRoutes || [];
+  advancedPrompts = settings.advancedPrompts || {};
 
   populateDefaultPresetDropdown();
   el.defaultPreset.value = settings.defaultPreset || "summary";
@@ -616,6 +702,7 @@ async function saveAllSettings() {
     },
     autoAnalyzeRules,
     feedKeywordRoutes,
+    advancedPrompts,
     maxHistorySize: parseInt(el.maxHistory.value, 10) || 200,
     showBadge: el.showBadge.checked,
     responseLanguage: el.responseLanguage.value
@@ -844,6 +931,13 @@ function attachListeners() {
     setTimeout(() => { el.bookmarkTagPromptStatus.textContent = ""; }, 2000);
     scheduleSave();
   });
+
+  // Advanced prompts editor
+  initAdvancedPrompts();
+  el.advPromptSelect.addEventListener("change", loadAdvancedPrompt);
+  el.advPromptSystem.addEventListener("input", saveAdvancedPrompt);
+  el.advPromptUser.addEventListener("input", saveAdvancedPrompt);
+  el.advPromptReset.addEventListener("click", resetAdvancedPrompt);
 
   // Add custom preset
   el.addPreset.addEventListener("click", () => {
@@ -1459,6 +1553,81 @@ function addFeedRoute() {
 
   el.routeKeywords.value = "";
   renderFeedRoutes();
+  scheduleSave();
+}
+
+// ──────────────────────────────────────────────
+// Advanced Prompts Editor
+// ──────────────────────────────────────────────
+
+function initAdvancedPrompts() {
+  el.advPromptSelect.replaceChildren();
+  let lastGroup = "";
+  for (const [key, def] of Object.entries(ADVANCED_PROMPT_DEFS)) {
+    if (def.group !== lastGroup) {
+      const optGroup = document.createElement("optgroup");
+      optGroup.label = def.group;
+      // Add all items in this group
+      for (const [k2, d2] of Object.entries(ADVANCED_PROMPT_DEFS)) {
+        if (d2.group !== def.group) continue;
+        if (document.querySelector(`#adv-prompt-select option[value="${k2}"]`)) continue;
+        const opt = document.createElement("option");
+        opt.value = k2;
+        opt.textContent = d2.label;
+        if (advancedPrompts[k2]) opt.textContent += " *";
+        optGroup.appendChild(opt);
+      }
+      el.advPromptSelect.appendChild(optGroup);
+      lastGroup = def.group;
+    }
+  }
+  loadAdvancedPrompt();
+}
+
+function loadAdvancedPrompt() {
+  const key = el.advPromptSelect.value;
+  const def = ADVANCED_PROMPT_DEFS[key];
+  if (!def) return;
+  const custom = advancedPrompts[key];
+  el.advPromptSystem.value = custom?.system ?? def.system;
+  el.advPromptUser.value = custom?.prompt ?? def.prompt;
+  // Disable user prompt for auto-generated prompts
+  const isAutoGen = def.prompt.startsWith("(Auto-generated");
+  el.advPromptUser.disabled = isAutoGen;
+  el.advPromptUser.style.opacity = isAutoGen ? "0.5" : "1";
+}
+
+function saveAdvancedPrompt() {
+  const key = el.advPromptSelect.value;
+  const def = ADVANCED_PROMPT_DEFS[key];
+  if (!def) return;
+  const systemVal = el.advPromptSystem.value;
+  const promptVal = el.advPromptUser.value;
+  // Only store if different from default
+  if (systemVal === def.system && promptVal === def.prompt) {
+    delete advancedPrompts[key];
+  } else {
+    advancedPrompts[key] = { system: systemVal, prompt: promptVal };
+  }
+  // Update the option label to show * for modified
+  const opt = el.advPromptSelect.querySelector(`option[value="${key}"]`);
+  if (opt) {
+    opt.textContent = advancedPrompts[key] ? def.label + " *" : def.label;
+  }
+  scheduleSave();
+}
+
+function resetAdvancedPrompt() {
+  const key = el.advPromptSelect.value;
+  const def = ADVANCED_PROMPT_DEFS[key];
+  if (!def) return;
+  delete advancedPrompts[key];
+  el.advPromptSystem.value = def.system;
+  el.advPromptUser.value = def.prompt;
+  const opt = el.advPromptSelect.querySelector(`option[value="${key}"]`);
+  if (opt) opt.textContent = def.label;
+  el.advPromptStatus.textContent = "Reset to default";
+  setTimeout(() => { el.advPromptStatus.textContent = ""; }, 2000);
   scheduleSave();
 }
 

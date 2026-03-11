@@ -5,9 +5,23 @@
 // Loaded after background-pipelines.js in background scripts.
 // ──────────────────────────────────────────────
 
+// Shared helper: get a prompt (system + prompt) with user overrides from storage
+async function getAdvancedPrompt(key, defaults) {
+  try {
+    const { advancedPrompts } = await browser.storage.local.get({ advancedPrompts: {} });
+    const custom = advancedPrompts[key];
+    return {
+      system: custom?.system ?? defaults.system,
+      prompt: custom?.prompt ?? defaults.prompt
+    };
+  } catch {
+    return defaults;
+  }
+}
+
 const AgentEngine = (() => {
 
-  // ── Report Section Prompts ──
+  // ── Report Section Prompts (defaults) ──
 
   const REPORT_PROMPTS = {
     executiveSummary: {
@@ -163,10 +177,9 @@ Use actual dates and events from the data. Format dates consistently.`
 
     // Build digest prompt
     const digestPrompt = buildDigestPrompt(proj, items, newItems, kgData, relatedHistory);
-    const messages = buildMessages(
-      "You are an intelligence briefing generator. Write a concise daily/weekly digest for an OSINT project. Use markdown formatting.",
-      digestPrompt
-    );
+    const digestDefaults = { system: "You are an intelligence briefing generator. Write a concise daily/weekly digest for an OSINT project. Use markdown formatting.", prompt: "" };
+    const digestCustom = await getAdvancedPrompt("digest", digestDefaults);
+    const messages = buildMessages(digestCustom.system, digestPrompt);
 
     try {
       const result = await callProvider(
@@ -250,9 +263,10 @@ Use actual dates and events from the data. Format dates consistently.`
     const proj = await ArgusDB.Projects.get(projectId);
     if (!proj) return { success: false, error: "Project not found" };
 
-    const promptConfig = REPORT_PROMPTS[sectionType];
-    if (!promptConfig) return { success: false, error: `Unknown section type: ${sectionType}` };
+    const defaultPromptConfig = REPORT_PROMPTS[sectionType];
+    if (!defaultPromptConfig) return { success: false, error: `Unknown section type: ${sectionType}` };
 
+    const promptConfig = await getAdvancedPrompt(`report.${sectionType}`, defaultPromptConfig);
     const settings = await getProviderSettings();
 
     // Gather data
@@ -274,19 +288,34 @@ Use actual dates and events from the data. Format dates consistently.`
         { maxTokens: 3000, temperature: 0.3 }
       );
 
-      return {
-        success: true,
-        section: {
-          type: sectionType,
-          content: result.content,
-          generatedAt: new Date().toISOString(),
-          provider: settings.provider,
-          model: result.model,
-        }
+      const section = {
+        type: sectionType,
+        content: result.content,
+        generatedAt: new Date().toISOString(),
+        provider: settings.provider,
+        model: result.model,
       };
+
+      // Cache the report section
+      try {
+        const cacheKey = `report-cache-${projectId}`;
+        const { [cacheKey]: cache = {} } = await browser.storage.local.get(cacheKey);
+        cache[sectionType] = section;
+        await browser.storage.local.set({ [cacheKey]: cache });
+      } catch { /* non-critical */ }
+
+      return { success: true, section };
     } catch (e) {
       return { success: false, error: e.message };
     }
+  }
+
+  async function getCachedReport(projectId, sectionType) {
+    try {
+      const cacheKey = `report-cache-${projectId}`;
+      const { [cacheKey]: cache = {} } = await browser.storage.local.get(cacheKey);
+      return cache[sectionType] || null;
+    } catch { return null; }
   }
 
   function buildTemplateVars(proj, items, kgData, history) {
@@ -646,6 +675,7 @@ Use actual dates and events from the data. Format dates consistently.`
   return {
     generateProjectDigest,
     generateReportSection,
+    getCachedReport,
     detectTrends,
     getDashboardData,
     runScheduledDigests,
