@@ -135,8 +135,10 @@ const KnowledgeGraph = (() => {
 
   async function upsertEntity(rawEntity, sourceUrl, sourceTitle) {
     const name = normalizeName(rawEntity.name);
-    const type = normalizeType(rawEntity.type);
+    let type = normalizeType(rawEntity.type);
     if (!name || name.length < 2) return null;
+    // Demote "person" if it doesn't look like a real person name
+    if (type === "person" && !looksLikePersonName(name)) type = "other";
 
     const canon = canonicalize(name);
     const id = nodeId(type, canon);
@@ -147,6 +149,7 @@ const KnowledgeGraph = (() => {
     if (existing) {
       // Merge into existing node
       existing.mentionCount = (existing.mentionCount || 0) + 1;
+      if (!Array.isArray(existing.aliases)) existing.aliases = [];
       if (!existing.aliases.includes(name) && name !== existing.displayName) {
         existing.aliases.push(name);
       }
@@ -442,6 +445,57 @@ const KnowledgeGraph = (() => {
     "deep dive", "fast track", "front page", "front line",
     "ground zero", "prime time", "status quo", "tipping point",
     "turning point", "wake up call", "talking point", "talking points",
+    // Sensationalized / headline phrases that get capitalized
+    "unconditional surrender", "total war", "cold war", "world war",
+    "civil war", "trade war", "class war", "culture war",
+    "regime change", "power struggle", "arms race", "space race",
+    "nuclear deal", "peace deal", "trade deal", "cease fire", "ceasefire",
+    "martial law", "state emergency", "national emergency",
+    "mass shooting", "school shooting", "active shooter",
+    "death toll", "body count", "kill list", "hit list",
+    "red line", "red flag", "green light", "black market",
+    "dark web", "deep state", "shadow government", "lone wolf",
+    "false flag", "inside job", "cover up", "witch hunt",
+    "fake news", "open source", "closed door", "behind closed",
+    "no comment", "last resort", "worst case", "best case",
+    "direct action", "joint statement", "official statement",
+    "public hearing", "closed session", "executive order",
+    "breaking point", "flash point", "focal point", "starting point",
+    "strong hold", "strong man", "front runner", "dark horse",
+    "wild card", "power play", "end game", "zero sum",
+    "collateral damage", "friendly fire", "surgical strike",
+    "shock and awe", "scorched earth", "boots on ground",
+    // Common compound nouns / concepts capitalized in titles
+    "social media", "artificial intelligence", "machine learning",
+    "climate change", "global warming", "mental health", "public health",
+    "real estate", "stock market", "housing market", "job market",
+    "labor market", "free trade", "fair trade", "minimum wage",
+    "living wage", "death penalty", "capital punishment",
+    "gun control", "border control", "birth control", "crowd control",
+    "remote work", "gig economy", "sharing economy",
+    "net worth", "gdp growth", "interest rate", "inflation rate",
+    "unemployment rate", "crime rate", "poverty rate",
+    "data breach", "cyber attack", "identity theft",
+    "human trafficking", "drug trafficking", "money laundering",
+    "insider trading", "price fixing", "market manipulation",
+    "plea deal", "plea bargain", "grand jury", "hung jury",
+    "bail reform", "prison reform", "police reform", "tax reform",
+    "health care", "child care", "elder care",
+    "task force", "work force", "labor force", "air strike",
+    "drone strike", "counter attack", "preemptive strike",
+    "search warrant", "arrest warrant", "travel ban", "import ban",
+    // Tech / product phrases
+    "open source", "user interface", "user experience",
+    "data center", "cloud computing", "block chain", "smart contract",
+    "virtual reality", "augmented reality", "mixed reality",
+    "self driving", "electric vehicle", "autonomous vehicle",
+    // Generic role/title phrases (not person names)
+    "prime minister", "vice president", "chief executive",
+    "secretary state", "attorney general", "surgeon general",
+    "speaker house", "majority leader", "minority leader",
+    "chief staff", "press secretary", "national security",
+    "foreign minister", "defense minister", "finance minister",
+    "head state", "commander chief", "joint chiefs",
   ]);
 
   // Well-known locations without keyword hints (countries, territories, famous places)
@@ -493,6 +547,104 @@ const KnowledgeGraph = (() => {
     "lone star", "blue origin", "space exploration",
   ]);
 
+  // Words that never start a real person's name
+  const NOT_PERSON_FIRST_WORDS = new Set([
+    "big", "small", "long", "short", "old", "young", "good", "bad", "real", "fake",
+    "full", "half", "hard", "soft", "high", "low", "hot", "cold", "dark", "light",
+    "early", "late", "fast", "slow", "open", "close", "top", "main", "key", "raw",
+    "due", "own", "fair", "rare", "wide", "deep", "flat", "thin", "bold", "wild",
+    "pure", "core", "true", "false", "free", "safe", "live", "dead", "rich", "poor",
+    "next", "past", "left", "right", "same", "such", "much", "very", "just", "also",
+    "even", "still", "back", "away", "down", "well", "most", "more", "less", "only",
+    "ever", "each", "both", "sure", "near", "far", "other", "total", "final", "last",
+    "first", "second", "third", "double", "triple", "single", "joint", "global",
+    "local", "national", "international", "federal", "state", "public", "private",
+    "general", "special", "major", "minor", "direct", "mass", "civil", "royal",
+    "nuclear", "solar", "digital", "virtual", "mobile", "social", "fiscal", "legal",
+    "mental", "moral", "vital", "fatal", "mutual", "racial", "rural", "urban",
+    "annual", "daily", "weekly", "monthly", "hostile", "active", "passive", "native",
+    "foreign", "domestic", "internal", "external", "central", "primary", "secondary",
+    "critical", "essential", "potential", "possible", "probable", "apparent", "alleged",
+    "former", "current", "recent", "sudden", "gradual", "complete", "partial",
+    "extreme", "severe", "intense", "massive", "enormous", "record", "historic",
+    "unprecedented", "unconditional", "preemptive", "collateral", "systematic",
+    "ongoing", "emerging", "growing", "rising", "falling", "leading", "breaking",
+    "burning", "running", "working", "living", "moving", "missing", "lasting",
+    "standing", "pending", "remaining", "increasing", "mounting", "looming",
+    "sweeping", "stunning", "shocking", "alarming", "concerning", "devastating",
+    "explosive", "exclusive", "controversial", "bipartisan", "bilateral",
+  ]);
+
+  // Words commonly found in person last names — helps validate person candidates
+  // (Not exhaustive, just used as a positive signal)
+  const COMMON_NAME_SUFFIXES = /^(son|sen|stein|berg|burg|man|mann|ski|sky|ova|eva|ich|ovich|enko|inski|elli|ini|etti|iani|quez|dez|cion|tion|ling|wood|ford|field|well|worth|land|ridge|lake|stone|house|burn|shaw|dale|ham|ley|ton|cock|smith|jones|brown|wilson|taylor|davis|clark|hall|allen|lewis|baker|hill|moore|white|king|wright|green|scott|adams|nelson|carter|mitchell|roberts|turner|phillips|campbell|parker|evans|edwards|collins|stewart|morris|murphy|rogers|reed|cook|morgan|bell|bailey|cooper|richardson|cox|howard|ward|watson|brooks|kelly|sanders|price|bennett|ross|wood|barnes|henderson|coleman|jenkins|perry|powell|long|patterson|hughes|flores|washington|butler|simmons|foster|gonzales|bryant|russell|griffin|hayes|myers|ford|hamilton|graham|sullivan|wallace|woods|cole|west|jordan|owens|reynolds|fisher|ellis|harrison|gibson|mcdonald|cruz|marshall|ortiz|gomez|murray|freeman|wells|webb|simpson|stevens|tucker|porter|hunter|hicks|crawford|henry|boyd|mason|morales|kennedy|warren|dixon|ramos|reyes|burns|gordon|shaw|holmes|rice|robertson|hunt|black|daniels|palmer|mills|nichols|grant|knight|ferguson|rose|stone|hawkins|dunn|perkins|hudson|spencer|gardner|stephens|payne|pierce|berry|matthews|arnold|wagner|willis|ray|watkins|olson|carroll|duncan|snyder|hart|cunningham|bradley|lane|andrews|ruiz|harper|fox|riley|armstrong|carpenter|weaver|greene|lawrence|elliott|chavez|sims|austin|peters|kelley|franklin|lawson|fields|gutierrez|ryan|schmidt|carr|vasquez|castillo|wheeler|chapman|oliver|montgomery|richards|williamson|johnston|banks|meyer|bishop|mccoy|howell|alvarez|morrison|hansen|fernandez|garza|harvey|little|burton|stanley|nguyen|george|jacobs|reid|kim|fuller|lynch|dean|gilbert|garrett|romero|welch|larson|frazier|burke|hanson|mendoza|moreno|bowman|medina|fowler|brewer|hoffman|carlson|silva|pearson|holland|douglas|fleming|jensen|vargas|byrd|davidson|hopkins|may|terry|herrera|wade|soto|walters|curtis|neal|caldwell|lowe|jennings|barnett|graves|jimenez|horton|shelton|barrett|obrien|castro|sutton|gregory|mckinney|lucas|miles|craig|rodriquez|chambers|holt|lambert|fletcher|watts|bates|hale|rhodes|pena|beck|newman|haynes|mcdaniel|mendez|bush|vaughn|parks|dawson|santiago|norris|hardy|love",
+  ]);
+
+  function looksLikePersonName(name) {
+    if (!name) return false;
+    const words = name.split(/\s+/);
+    // Person names are typically 2-3 words
+    if (words.length < 2 || words.length > 4) return false;
+    // Must not start with a known non-name word
+    if (NOT_PERSON_FIRST_WORDS.has(words[0].toLowerCase())) return false;
+    // Must not contain numbers
+    if (/\d/.test(name)) return false;
+    // Must not contain all-caps words (acronyms) unless single letter (middle initial)
+    for (const w of words) {
+      if (w.length > 1 && w === w.toUpperCase()) return false;
+    }
+    // Must not contain common non-name markers
+    if (/\b(of|the|and|for|in|on|at|to|by|from|with|or|vs|de|del|der|von|van|la|le|el|al|bin|ibn|abu|ben|mac|mc)\b/i.test(name)) {
+      // These are OK in real names (von, van, de, mc, mac, bin, al, etc.) — allow them between proper words
+      // But block "of the", "for the", etc.
+      if (/\b(of the|for the|and the|in the|on the|at the|to the|by the|from the|with the|or the)\b/i.test(name)) return false;
+    }
+    // Each word should be capitalized (Title Case)
+    for (const w of words) {
+      // Allow lowercase connectors: de, von, van, al, bin, la, le, el, del, der, di, du, das, dos, ibn, abu, mc, mac, o'
+      if (/^(de|von|van|al|bin|la|le|el|del|der|di|du|das|dos|ibn|abu|mc|mac|o')$/i.test(w)) continue;
+      // Allow single letter initials (J., A, etc.)
+      if (w.length <= 2) continue;
+      // Must start uppercase
+      if (w[0] !== w[0].toUpperCase()) return false;
+    }
+    // Check that the last word looks plausible (not a common noun)
+    const lastWord = words[words.length - 1].toLowerCase();
+    const COMMON_NOUNS = new Set([
+      "war", "deal", "act", "law", "ban", "tax", "aid", "oil", "gas", "gun",
+      "vote", "bill", "plan", "rate", "debt", "cost", "sale", "risk", "loss",
+      "gain", "rise", "fall", "drop", "push", "pull", "move", "step", "turn",
+      "call", "talk", "meet", "fight", "strike", "attack", "threat", "crisis",
+      "reform", "policy", "market", "growth", "change", "control", "power",
+      "force", "order", "state", "system", "media", "trade", "peace", "fire",
+      "alert", "surge", "shift", "clash", "fraud", "abuse", "trial", "crime",
+      "death", "health", "care", "work", "land", "zone", "line", "rule",
+      "code", "case", "unit", "base", "team", "group", "front", "wave",
+      "storm", "flood", "drought", "famine", "plague", "virus", "strain",
+      "variant", "threat", "warning", "impact", "effect", "result", "source",
+      "report", "study", "data", "index", "score", "count", "total", "record",
+      "summit", "debate", "hearing", "session", "term", "era", "age", "period",
+      "phase", "round", "stage", "level", "point", "mark", "target", "goal",
+      "effort", "strategy", "approach", "response", "action", "measure",
+      "sanction", "embargo", "boycott", "protest", "rally", "march",
+      "surrender", "retreat", "defeat", "victory", "triumph",
+      "scandal", "controversy", "backlash", "fallout", "aftermath",
+      "intelligence", "security", "defense", "offense", "resistance",
+      "interference", "influence", "corruption", "conspiracy",
+    ]);
+    if (COMMON_NOUNS.has(lastWord)) return false;
+    // Check first word isn't a common non-name word (broader than the Set check above)
+    const firstLower = words[0].toLowerCase();
+    const COMMON_ADJ_NOUNS = new Set([
+      "super", "ultra", "mega", "mini", "micro", "macro", "multi",
+      "counter", "anti", "pro", "non", "self", "cross", "over", "under",
+      "upper", "lower", "inner", "outer", "after", "before", "post", "pre",
+    ]);
+    if (COMMON_ADJ_NOUNS.has(firstLower)) return false;
+
+    return true;
+  }
+
   function isNoiseEntity(name) {
     const lower = name.toLowerCase().trim();
     if (NOISE_ENTITIES.has(lower)) return true;
@@ -502,8 +654,8 @@ const KnowledgeGraph = (() => {
     const words = lower.split(/\s+/);
     const avgLen = lower.replace(/\s+/g, "").length / words.length;
     if (avgLen < 3) return true;
-    // Phrases that are all-lowercase words just capitalized (common adjective+noun pairs)
-    if (words.length === 2 && /^(big|small|long|short|old|young|good|bad|real|fake|full|half|hard|soft|high|low|hot|cold|dark|light|early|late|fast|slow|open|close|top|main|key|raw|due|own|fair|rare|wide|deep|flat|thin|bold|wild|pure|core|true|false|free|safe|live|dead|rich|poor|next|past|left|right|same|such|much|very|just|also|even|still|back|away|down|well|most|more|less|only|ever|each|both|sure|near|far|other)\b/i.test(words[0])) return true;
+    // Phrases that start with a known non-name adjective/modifier
+    if (words.length >= 2 && NOT_PERSON_FIRST_WORDS.has(words[0])) return true;
     return false;
   }
 
@@ -535,10 +687,9 @@ const KnowledgeGraph = (() => {
       else if (/\b(City|County|State|Province|Region|District|Township|Village|Island|Islands|Mountain|Mountains|River|Lake|Ocean|Sea|Bay|Gulf|Peninsula|Valley|Desert|Forest|Park|Beach|Coast|Harbor|Harbour|Port|Cape|Creek|Falls|Springs|Canyon|Plateau|Basin|Strait|Channel|North|South|East|West|Northern|Southern|Eastern|Western|Central|Republic|Kingdom|Emirates|Federation|Town|Heights|Plains|Hills|Ridge|Crossing|Landing|Point|Cove|Bluff|Bend|Hollow|Grove|Meadow|Manor|Haven|Dale|Glen)\b/i.test(name)) type = "location";
       else if (/\b(War|Battle|Revolution|Crisis|Summit|Conference|Election|Massacre|Uprising|Treaty|Agreement|Act|Amendment|Movement|Campaign|Operation|Scandal|Incident|Attack|Bombing|Siege|Coup|Protest|March|Rally|Festival|Olympics|Championship|Tournament|Award|Prize|Ceremony|Debate|Hearing|Trial|Inquiry|Investigation|Lockdown|Shutdown|Outbreak|Pandemic|Recession|Collapse)\b/i.test(name)) type = "event";
       else {
-        // Default: 2-word phrases starting with capitalized words are likely person names
-        const words = name.split(/\s+/);
-        if (words.length === 2 || words.length === 3) type = "person";
-        // 4+ word capitalized phrases are more likely orgs/other
+        // Only classify as person if it actually looks like a person name
+        if (looksLikePersonName(name)) type = "person";
+        // Otherwise stays "other"
       }
 
       entities.push({ name, type });
@@ -573,7 +724,10 @@ const KnowledgeGraph = (() => {
 
       if (data.people) {
         for (const p of data.people) {
-          if (p.name) entities.push({ name: p.name, type: "person", role: p.role, context: p.context });
+          if (!p.name) continue;
+          // Validate: if the AI says "person" but it doesn't look like one, demote to "other"
+          const pType = looksLikePersonName(p.name) ? "person" : "other";
+          entities.push({ name: p.name, type: pType, role: p.role, context: p.context });
         }
       }
       if (data.organizations) {
@@ -871,9 +1025,8 @@ const KnowledgeGraph = (() => {
       else if (/\b(University|Institute|Foundation|Association|Agency|Department|Ministry|Committee|Commission|Bureau|Council|Board|Party|Union|Bank|Fund|Alliance|Network|Society|Federation|Authority|Office|Service|Corps|Regiment|Brigade|Fleet|Squadron|Church|Temple|Mosque|Synagogue|Cathedral|Hospital|Clinic|School|Academy|College|Library|Museum|Theater|Theatre|Stadium|Center|Centre|Palace|Embassy|Consulate|Court|Police|Guard|Force|Corps|Command|Intelligence|Security|Administration|Commission|Tribunal|Legislature|Parliament|Congress|Senate|Assembly)\b/i.test(name)) newType = "organization";
       else if (/\b(City|County|State|Province|Region|District|Township|Village|Island|Islands|Mountain|Mountains|River|Lake|Ocean|Sea|Bay|Gulf|Peninsula|Valley|Desert|Forest|Park|Beach|Coast|Harbor|Harbour|Port|Cape|Creek|Falls|Springs|Canyon|Plateau|Basin|Strait|Channel|North|South|East|West|Northern|Southern|Eastern|Western|Central|Republic|Kingdom|Emirates|Federation|Town|Heights|Plains|Hills|Ridge|Crossing|Landing|Point|Cove|Bluff|Bend|Hollow|Grove|Meadow|Manor|Haven|Dale|Glen)\b/i.test(name)) newType = "location";
       else if (/\b(War|Battle|Revolution|Crisis|Summit|Conference|Election|Massacre|Uprising|Treaty|Agreement|Act|Amendment|Movement|Campaign|Operation|Scandal|Incident|Attack|Bombing|Siege|Coup|Protest|March|Rally|Festival|Olympics|Championship|Tournament|Award|Prize|Ceremony|Debate|Hearing|Trial|Inquiry|Investigation|Lockdown|Shutdown|Outbreak|Pandemic|Recession|Collapse)\b/i.test(name)) newType = "event";
-      else {
-        const words = name.split(/\s+/);
-        if (words.length === 2 || words.length === 3) newType = "person";
+      else if (looksLikePersonName(name)) {
+        newType = "person";
       }
 
       if (newType !== node.type) {

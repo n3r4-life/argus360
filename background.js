@@ -311,17 +311,27 @@ if (typeof pdfjsLib !== "undefined") {
 function isPdfUrl(url) {
   if (!url) return false;
   try {
-    const pathname = new URL(url).pathname.toLowerCase();
-    return pathname.endsWith(".pdf");
+    const u = new URL(url);
+    const pathname = decodeURIComponent(u.pathname).toLowerCase();
+    // Direct .pdf extension
+    if (pathname.endsWith(".pdf")) return true;
+    // URL query param containing .pdf (some redirects/viewers)
+    if (u.search.toLowerCase().includes(".pdf")) return true;
+    return false;
   } catch { return false; }
 }
 
 async function extractPdfContent(url) {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Failed to fetch PDF: ${response.status}`);
-  const contentType = response.headers.get("content-type") || "";
+  // Some PDF URLs need decoding or have redirects — try fetching with follow
+  const response = await fetch(url, {
+    redirect: "follow",
+    headers: { "Accept": "application/pdf, */*" },
+  });
+  if (!response.ok) throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
 
   const arrayBuffer = await response.arrayBuffer();
+  if (!arrayBuffer || arrayBuffer.byteLength < 100) throw new Error("PDF response was empty or too small");
+
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
   const pages = [];
@@ -359,15 +369,18 @@ async function extractPageContent(tabId) {
     throw new Error("Cannot analyze browser internal pages.");
   }
 
-  // PDF detection: check URL or content-type header
-  // For file:// PDFs, Firefox's built-in viewer renders HTML we can scrape via executeScript
-  const looksLikePdf = isPdfUrl(tab.url) || (tab.url && tab.title && tab.title.endsWith(".pdf"));
+  // PDF detection: check URL, title, or content-type hints
+  const looksLikePdf = isPdfUrl(tab.url)
+    || (tab.url && tab.title && tab.title.toLowerCase().endsWith(".pdf"))
+    || (tab.url && /\.pdf(\?|#|$)/i.test(tab.url));
   if (looksLikePdf && !tab.url.startsWith("file:")) {
     try {
       const pdfResult = await extractPdfContent(tab.url);
       return { ...pdfResult, tabId: tab.id };
     } catch (e) {
-      throw new Error(`PDF extraction failed: ${e.message}`);
+      // Don't give up yet — fall through to try executeScript on the viewer,
+      // then the catch block there will retry PDF extraction too
+      console.warn("[Argus] Direct PDF fetch failed, trying viewer extraction:", e.message);
     }
   }
 
@@ -464,9 +477,15 @@ async function extractPageContent(tabId) {
       try {
         const pdfResult = await extractPdfContent(tab.url);
         return { ...pdfResult, tabId: tab.id };
-      } catch { /* fall through to original error */ }
+      } catch (pdfErr) {
+        // If both executeScript AND PDF fetch failed, give a helpful error
+        if (isPdfUrl(tab.url)) {
+          throw new Error(`Cannot extract PDF content. The server may be blocking direct access. Try downloading the PDF and opening it locally. (${pdfErr.message})`);
+        }
+        /* fall through to original error */
+      }
     }
-    throw new Error("Missing host permission for the tab");
+    throw new Error(`Missing host permission for the tab. Try clicking the Argus icon directly on this page, or refresh the page first. (${scriptError.message})`);
   }
 
   if (!results || !results[0]) throw new Error("Failed to extract page content.");

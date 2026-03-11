@@ -449,6 +449,7 @@ async function callAnthropicStream(apiKey, model, messages, opts, onChunk, onThi
   let fullContent = "";
   let fullThinking = "";
   let modelName = model;
+  let currentBlockType = null;
   const decoder = new TextDecoder();
   const reader = response.body.getReader();
   let buffer = "";

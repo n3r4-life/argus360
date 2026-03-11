@@ -542,6 +542,8 @@ async function sendFollowUp() {
 
   const providerOverride = elements.followupProvider.value || null;
 
+  // Save question text before clearing the input (needed for rawMarkdown later)
+  const savedQuestion = question;
   elements.followupInput.value = "";
   elements.followupSend.disabled = true;
 
@@ -607,7 +609,7 @@ async function pollForFollowUp(followupId, answerDiv) {
 
     if (data.status === "done") {
       IntelligenceViewer.renderMarkdown(data.content, answerDiv);
-      rawMarkdown += `\n\n---\n\n**Follow-up:** ${elements.followupInput.value || ""}\n\n${data.content}`;
+      rawMarkdown += `\n\n---\n\n**Follow-up:** ${savedQuestion}\n\n${data.content}`;
       viewer.setRawMarkdown(rawMarkdown);
 
       IntelligenceViewer.finalizeAnswerBlock(answerDiv, data);
