@@ -219,16 +219,32 @@
     simStep = 0;
     runSimulation();
 
-    const nodeSummary = nodes.slice(0, 50).map(n =>
-      `- ${n.label || n.name} (${n.type || "entity"}, ${n.count || 1} mentions)`
-    ).join("\n");
-    const edgeSummary = edges.slice(0, 30).map(e =>
+    // Build comprehensive graph context for AI chat
+    // Group nodes by type for structured context
+    const byType = {};
+    for (const n of nodes) {
+      const t = n.type || "entity";
+      if (!byType[t]) byType[t] = [];
+      byType[t].push(n);
+    }
+    let nodeSummary = "";
+    for (const [type, items] of Object.entries(byType)) {
+      // Sort by mention count descending within each type
+      items.sort((a, b) => (b.count || 1) - (a.count || 1));
+      nodeSummary += `\n### ${type} (${items.length})\n`;
+      nodeSummary += items.map(n =>
+        `- ${n.label || n.name} (${n.count || 1} mentions)`
+      ).join("\n");
+    }
+    // Include top connections sorted by weight
+    const sortedEdges = [...edges].sort((a, b) => (b.weight || 1) - (a.weight || 1));
+    const edgeSummary = sortedEdges.slice(0, 200).map(e =>
       `- ${e.sourceNode?.label || e.source} ↔ ${e.targetNode?.label || e.target} (weight: ${e.weight || 1})`
     ).join("\n");
     ArgusChat.init({
       container: document.getElementById("argus-chat-container"),
       contextType: "Connection Graph",
-      contextData: `Entity graph for "${data.projectName || "Unknown"}" — ${nodes.length} entities, ${edges.length} connections.\n\nEntities:\n${nodeSummary}\n\nConnections:\n${edgeSummary}`,
+      contextData: `Complete entity graph for "${data.projectName || "Unknown"}" — ${nodes.length} entities, ${edges.length} connections.\n\n## All Entities${nodeSummary}\n\n## Top Connections (by weight)\n${edgeSummary}`,
       pageTitle: data.projectName
     });
   }

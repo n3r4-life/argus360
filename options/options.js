@@ -934,10 +934,10 @@ async function renderMonitors() {
     intervalSelect.style.width = "auto";
     intervalSelect.style.minWidth = "0";
     intervalSelect.style.maxWidth = "70px";
-    [15, 30, 60, 360, 1440].forEach(mins => {
+    [1, 3, 5, 10, 15, 30, 60, 360, 720, 1440, 2160, 2880, 4320].forEach(mins => {
       const opt = document.createElement("option");
       opt.value = mins;
-      opt.textContent = mins >= 60 ? `${mins / 60}h` : `${mins}m`;
+      opt.textContent = mins >= 1440 ? `${mins / 1440}d` : mins >= 60 ? `${mins / 60}h` : `${mins}m`;
       if (mins === monitor.intervalMinutes) opt.selected = true;
       intervalSelect.appendChild(opt);
     });
@@ -1091,7 +1091,7 @@ async function renderFeeds() {
     intervalSelect.className = "btn btn-sm btn-secondary";
     intervalSelect.style.cssText = "padding:4px 6px;font-size:11px;cursor:pointer;";
     intervalSelect.title = "Change check interval";
-    for (const [val, label] of [["15","15m"],["30","30m"],["60","1h"],["360","6h"],["1440","24h"]]) {
+    for (const [val, label] of [["1","1m"],["3","3m"],["5","5m"],["10","10m"],["15","15m"],["30","30m"],["60","1h"],["360","6h"],["720","12h"],["1440","1d"],["2160","36h"],["2880","2d"],["4320","3d"]]) {
       const opt = document.createElement("option");
       opt.value = val;
       opt.textContent = label;
