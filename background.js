@@ -43,7 +43,7 @@ async function createContextMenus() {
     contexts: ["page", "frame", "selection"]
   });
 
-  // ── Console & OSINT ──
+  // ── Console & Help ──
   browser.contextMenus.create({
     id: "argus-console",
     parentId: "argus-parent",
@@ -52,21 +52,9 @@ async function createContextMenus() {
   });
 
   browser.contextMenus.create({
-    id: "argus-osint-quick",
+    id: "argus-help",
     parentId: "argus-parent",
-    title: "\uD83D\uDD0D OSINT",
-    contexts: ["page", "frame", "selection"]
-  });
-  browser.contextMenus.create({
-    id: "argus-osint-dashboard",
-    parentId: "argus-osint-quick",
-    title: "OSINT Dashboard",
-    contexts: ["page", "frame", "selection"]
-  });
-  browser.contextMenus.create({
-    id: "argus-osint-global-graph",
-    parentId: "argus-osint-quick",
-    title: "Global Knowledge Graph",
+    title: "\u2753 Help",
     contexts: ["page", "frame", "selection"]
   });
 
@@ -180,6 +168,24 @@ async function createContextMenus() {
     id: "argus-techstack",
     parentId: "argus-osint-parent",
     title: "Detect Tech Stack",
+    contexts: ["page", "frame"]
+  });
+  browser.contextMenus.create({
+    id: "argus-osint-sep",
+    parentId: "argus-osint-parent",
+    type: "separator",
+    contexts: ["page", "frame"]
+  });
+  browser.contextMenus.create({
+    id: "argus-osint-dashboard",
+    parentId: "argus-osint-parent",
+    title: "OSINT Dashboard",
+    contexts: ["page", "frame"]
+  });
+  browser.contextMenus.create({
+    id: "argus-osint-global-graph",
+    parentId: "argus-osint-parent",
+    title: "Global Knowledge Graph",
     contexts: ["page", "frame"]
   });
 
@@ -1328,6 +1334,12 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
   // Open Argus Console
   if (info.menuItemId === "argus-console") {
     browser.tabs.create({ url: browser.runtime.getURL("options/options.html") });
+    return;
+  }
+
+  // Open Help tab
+  if (info.menuItemId === "argus-help") {
+    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#help") });
     return;
   }
 
