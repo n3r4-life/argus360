@@ -1181,6 +1181,22 @@ async function loadArchiveSettings() {
 }
 
 async function saveArchiveSettings() {
+  const enabled = el.archiveEnabled.checked;
+
+  // Request webRequest permissions when enabling redirect
+  if (enabled) {
+    const granted = await browser.permissions.request({
+      permissions: ["webRequest", "webRequestBlocking"]
+    });
+    if (!granted) {
+      el.archiveStatus.textContent = "Permission denied — redirect requires webRequest permission.";
+      el.archiveStatus.style.color = "var(--error)";
+      el.archiveEnabled.checked = false;
+      setTimeout(() => { el.archiveStatus.textContent = ""; }, 4000);
+      return;
+    }
+  }
+
   const domains = el.archiveDomains.value
     .split("\n")
     .map(d => d.trim().toLowerCase().replace(/^www\./, ""))
@@ -1190,7 +1206,7 @@ async function saveArchiveSettings() {
     : el.archiveProvider.value;
   await browser.runtime.sendMessage({
     action: "saveArchiveSettings",
-    enabled: el.archiveEnabled.checked,
+    enabled,
     domains,
     providerUrl
   });

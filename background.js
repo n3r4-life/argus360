@@ -2682,34 +2682,45 @@ browser.storage.onChanged.addListener((changes) => {
     archiveRedirectEnabled = val.enabled;
     archiveRedirectDomains = val.domains || [];
     archiveProviderUrl = val.providerUrl || "https://archive.is/";
+    if (val.enabled) registerArchiveRedirect();
   }
 });
 
 // Intercept requests before they load (requires optional webRequest permission)
-initWebRequestBlocking(
-  (details) => {
-    if (!archiveRedirectEnabled) return;
-    if (details.type !== "main_frame") return;
+let archiveWebRequestRegistered = false;
 
-    try {
-      const url = new URL(details.url);
-      const host = url.hostname.replace(/^www\./, "");
+function archiveRedirectHandler(details) {
+  if (!archiveRedirectEnabled) return;
+  if (details.type !== "main_frame") return;
 
-      // Don't redirect archive/cache sites themselves
-      if (host.includes("archive.is") || host.includes("archive.ph") || host.includes("archive.today") || host.includes("webcache.googleusercontent.com")) return;
+  try {
+    const url = new URL(details.url);
+    const host = url.hostname.replace(/^www\./, "");
 
-      const matched = archiveRedirectDomains.some(
-        d => host === d || host.endsWith("." + d)
-      );
+    // Don't redirect archive/cache sites themselves
+    if (host.includes("archive.is") || host.includes("archive.ph") || host.includes("archive.today") || host.includes("webcache.googleusercontent.com")) return;
 
-      if (matched) {
-        return { redirectUrl: archiveProviderUrl + details.url };
-      }
-    } catch { /* invalid URL, skip */ }
-  },
-  { urls: ["<all_urls>"] },
-  ["blocking"]
-);
+    const matched = archiveRedirectDomains.some(
+      d => host === d || host.endsWith("." + d)
+    );
+
+    if (matched) {
+      return { redirectUrl: archiveProviderUrl + details.url };
+    }
+  } catch { /* invalid URL, skip */ }
+}
+
+async function registerArchiveRedirect() {
+  if (archiveWebRequestRegistered) return;
+  const registered = await initWebRequestBlocking(
+    archiveRedirectHandler,
+    { urls: ["<all_urls>"] },
+    ["blocking"]
+  );
+  if (registered) archiveWebRequestRegistered = true;
+}
+
+registerArchiveRedirect();
 
 // ══════════════════════════════════════════════════════════════
 // Archive Availability Checker
