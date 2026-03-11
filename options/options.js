@@ -1753,6 +1753,7 @@ function initProjects() {
   document.getElementById("proj-timeline").addEventListener("click", projOpenTimeline);
   document.getElementById("proj-report").addEventListener("click", projGenerateReport);
   document.getElementById("proj-anomaly").addEventListener("click", projAnomalyScan);
+  document.getElementById("proj-dashboard").addEventListener("click", projOpenDashboard);
 
   projLoadProjects();
   checkRunningBatch();
@@ -2375,6 +2376,11 @@ function projOpenHeatmap() {
 function projOpenGeomap() {
   if (!projState.activeProjectId) return;
   browser.tabs.create({ url: browser.runtime.getURL(`osint/geomap.html?project=${encodeURIComponent(projState.activeProjectId)}`) });
+}
+
+function projOpenDashboard() {
+  if (!projState.activeProjectId) return;
+  browser.tabs.create({ url: browser.runtime.getURL(`osint/dashboard.html?projectId=${encodeURIComponent(projState.activeProjectId)}`) });
 }
 
 async function projGenerateReport() {

@@ -670,6 +670,14 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "resolveKGMerge") return KnowledgeGraph.resolvePendingMerge(message.mergeId, message.accept);
   if (message.action === "runKGInference") return KnowledgeGraph.runInferenceRules();
   if (message.action === "clearKG") return ArgusDB.KGNodes.clear().then(() => ArgusDB.KGEdges.clear()).then(() => ({ success: true }));
+  // Agentic Automation
+  if (message.action === "getDashboardData") return AgentEngine.getDashboardData(message.projectId);
+  if (message.action === "generateDigest") return AgentEngine.generateProjectDigest(message.projectId);
+  if (message.action === "generateReportSection") return AgentEngine.generateReportSection(message.projectId, message.sectionType);
+  if (message.action === "detectTrends") return AgentEngine.detectTrends(message.projectId);
+  if (message.action === "getDigests") return AgentEngine.getDigests(message.projectId).then(d => ({ success: true, digests: d }));
+  if (message.action === "setDigestSchedule") return AgentEngine.setDigestSchedule(message.projectId, message.schedule);
+  if (message.action === "getDigestSchedule") return AgentEngine.getDigestSchedule(message.projectId).then(s => ({ success: true, schedule: s }));
   // OSINT tools are handled by background-osint.js's own message listener
   return false;
 });
@@ -2987,6 +2995,16 @@ browser.alarms.onAlarm.addListener(async (alarm) => {
   } catch (e) { console.warn("[KG] Periodic inference error:", e); }
 });
 
+// Scheduled digest alarm handler
+browser.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== "agent-digests") return;
+  try {
+    const results = await AgentEngine.runScheduledDigests();
+    const generated = results.filter(r => r.success).length;
+    if (generated) console.log("[Agent] Scheduled digests generated:", generated);
+  } catch (e) { console.warn("[Agent] Scheduled digest error:", e); }
+});
+
 // Restore RSS alarms on startup
 (async () => {
   const rssFeeds = await ArgusDB.Feeds.getAll();
@@ -3400,4 +3418,7 @@ function handleCancelBatch() {
 
   // Set up periodic inference alarm (every 30 min)
   browser.alarms.create("kg-inference", { delayInMinutes: 30, periodInMinutes: 30 });
+
+  // Set up scheduled digest alarm (every 6 hours — actual digest generation checks per-project schedule)
+  browser.alarms.create("agent-digests", { delayInMinutes: 60, periodInMinutes: 360 });
 })();
