@@ -232,6 +232,23 @@
         </div>
       </section>
 
+      <!-- Bookmark Tagging Prompt -->
+      <section class="card" id="bookmark-tag-card">
+        <h2 class="card-title">Bookmark Tagging Prompt</h2>
+        <div class="card-body">
+          <p class="info-text">Customize how AI tags your bookmarks. Add research focus, domain-specific categories, or bias detection — whatever fits your workflow.</p>
+          <div class="form-group">
+            <label for="bookmark-tag-prompt">Tagging Instructions</label>
+            <textarea id="bookmark-tag-prompt" rows="10" spellcheck="false" style="font-family:monospace;font-size:12px;"></textarea>
+            <span class="hint">Tell the AI what kind of tags, categories, and summaries to generate. Must return JSON with: tags, category, summary, readingTime.</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button id="reset-bookmark-tag-prompt" class="btn btn-secondary btn-sm">Reset to Default</button>
+            <span id="bookmark-tag-prompt-status" class="prompt-status"></span>
+          </div>
+        </div>
+      </section>
+
     </div>
 
     <!-- ═══════════════════════════════════════════ -->
@@ -312,6 +329,9 @@
           <div class="bm-sidebar-section">
             <h3 class="bm-sidebar-heading">Tags</h3>
             <div id="bm-tag-cloud" class="bm-tag-cloud"></div>
+          </div>
+          <div class="bm-sidebar-section">
+            <a href="#" id="bm-customize-tagging" class="bm-sidebar-link">Customize AI tagging &rarr;</a>
           </div>
         </aside>
 
@@ -1254,6 +1274,30 @@
             <li>Click <strong>"Analyze Selected"</strong></li>
             <li>A research report is generated with cross-references and source citations</li>
           </ol>
+
+          <h3>Custom Tagging Prompt</h3>
+          <p>You can customize how AI tags your bookmarks in the <strong>Prompts</strong> tab under <strong>"Bookmark Tagging Prompt"</strong>. This lets you tailor tags to your research focus. The prompt must instruct the AI to return JSON with <code>tags</code>, <code>category</code>, <code>summary</code>, and <code>readingTime</code>.</p>
+          <p><strong>Example &mdash; OSINT &amp; source credibility focus:</strong></p>
+          <pre class="help-code">Analyze this webpage and generate smart metadata for bookmarking.
+
+Return JSON with this exact structure:
+{
+  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
+  "category": "one-word-category",
+  "summary": "One sentence summary of the page content.",
+  "readingTime": "X min"
+}
+
+Rules:
+- tags: 5-10 lowercase tags. Include:
+  - Topic tags (e.g., "surveillance-reform", "supply-chain-attack")
+  - Source-type tags (e.g., "primary-source", "opinion", "press-release", "leaked-document")
+  - Credibility tags (e.g., "verified", "unverified", "anonymous-sources", "single-source")
+  - Bias tags where applicable (e.g., "left-leaning", "right-leaning", "industry-funded")
+  - OSINT relevance (e.g., "osint-lead", "pivot-point", "corroborating")
+- category: One of "intel", "news", "disinfo", "policy", "legal", "finance", "cyber", "geopolitics", "military", "tech", "reference", "other".
+- summary: A concise one-sentence intelligence summary (max 200 chars). Lead with the key finding, not the headline.
+- readingTime: Estimated reading time.</pre>
         </div>
       </section>
 

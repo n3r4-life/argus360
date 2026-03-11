@@ -365,8 +365,17 @@ function attachEventListeners() {
     window.close();
   });
 
-  document.getElementById("open-automation").addEventListener("click", () => {
-    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#automation") });
+  document.getElementById("open-automation").addEventListener("click", async () => {
+    let prefillUrl = "";
+    try {
+      const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+      if (tabs[0]?.url && !tabs[0].url.startsWith("about:") && !tabs[0].url.startsWith("moz-extension:")) {
+        prefillUrl = tabs[0].url;
+      }
+    } catch {}
+    const base = browser.runtime.getURL("options/options.html");
+    const param = prefillUrl ? `?prefillRule=${encodeURIComponent(prefillUrl)}` : "";
+    browser.tabs.create({ url: `${base}${param}#automation` });
     window.close();
   });
 

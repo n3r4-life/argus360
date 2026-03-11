@@ -830,13 +830,34 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "deleteMonitor") return handleDeleteMonitor(message);
   if (message.action === "getMonitorHistory") return handleGetMonitorHistory(message);
   if (message.action === "getAllMonitorChanges") return handleGetAllMonitorChanges();
-  if (message.action === "clearAllMonitorChanges") return ArgusDB.Changes.clear().then(() => ({ success: true }));
+  if (message.action === "clearAllMonitorChanges") {
+    return ArgusDB.Changes.clear().then(async () => {
+      const monitors = await ArgusDB.Monitors.getAll();
+      for (const m of monitors) {
+        m.changeCount = 0;
+        m.lastChangeSummary = "";
+        m.lastChangeAt = null;
+        await ArgusDB.Monitors.save(m);
+      }
+      return { success: true };
+    });
+  }
   if (message.action === "clearMonitorUnread") return clearMonitorUnread(message.monitorId).then(() => ({ success: true }));
   if (message.action === "getMonitorUnreads") return browser.storage.local.get({ monitorUnreads: {} }).then(r => ({ success: true, unreads: r.monitorUnreads }));
   if (message.action === "getMonitorSnapshots") return handleGetMonitorSnapshots(message);
   if (message.action === "getMonitorStorageUsage") return handleGetMonitorStorageUsage();
   if (message.action === "getArchiveSettings") return browser.storage.local.get({ archiveRedirect: { enabled: false, domains: DEFAULT_ARCHIVE_DOMAINS, providerUrl: "https://archive.is/" } }).then(r => ({ success: true, ...r.archiveRedirect }));
   if (message.action === "saveArchiveSettings") return browser.storage.local.set({ archiveRedirect: { enabled: message.enabled, domains: message.domains, providerUrl: message.providerUrl || "https://archive.is/" } }).then(() => ({ success: true }));
+  // Re-init auto-analyze after permission grant
+  if (message.action === "initAutoAnalyze") {
+    if (!autoAnalyzeRegistered) {
+      return initWebNavigation(autoAnalyzeCallback).then(ok => {
+        autoAnalyzeRegistered = ok;
+        return { success: ok };
+      });
+    }
+    return Promise.resolve({ success: true });
+  }
   // RSS Feeds
   if (message.action === "addFeed") return handleAddFeed(message);
   if (message.action === "getFeeds") return handleGetFeeds();
@@ -1947,7 +1968,8 @@ function matchUrlPattern(url, pattern) {
 }
 
 // Auto-analyze requires optional webNavigation permission
-initWebNavigation(async (details) => {
+let autoAnalyzeRegistered = false;
+const autoAnalyzeCallback = async (details) => {
   // Only main frame
   if (details.frameId !== 0) return;
 
@@ -2018,7 +2040,8 @@ initWebNavigation(async (details) => {
 
     break; // Only first matching rule
   }
-});
+};
+initWebNavigation(autoAnalyzeCallback).then(ok => { autoAnalyzeRegistered = ok; });
 
 // ──────────────────────────────────────────────
 // Smart Bookmarking
@@ -2076,7 +2099,10 @@ async function aiTagBookmark(pageData, settings) {
   const textSnippet = (pageData.text || "").slice(0, 3000);
   const userPrompt = `Title: ${pageData.title}\nURL: ${pageData.url}\n\nContent:\n${textSnippet}`;
 
-  const messages = buildMessages(BOOKMARK_TAG_PROMPT.system, BOOKMARK_TAG_PROMPT.prompt + "\n\n" + userPrompt);
+  // Use custom prompt if set, otherwise fall back to default
+  const { bookmarkTagPrompt: customPrompt } = await browser.storage.local.get({ bookmarkTagPrompt: "" });
+  const promptText = customPrompt || BOOKMARK_TAG_PROMPT.prompt;
+  const messages = buildMessages(BOOKMARK_TAG_PROMPT.system, promptText + "\n\n" + userPrompt);
 
   const result = await callProvider(
     settings.provider, settings.apiKey, settings.model, messages,

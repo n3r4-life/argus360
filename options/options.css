@@ -1056,6 +1056,20 @@ textarea {
   text-decoration: underline;
 }
 
+.help-code {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-x: auto;
+  margin: 8px 0 12px;
+}
+
 .help-table-wrap {
   overflow-x: auto;
   margin: 12px 0;
@@ -1150,6 +1164,15 @@ textarea {
 .bm-main { flex: 1; min-width: 0; }
 
 .bm-sidebar-section { margin-bottom: 20px; }
+
+.bm-sidebar-link {
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+}
+.bm-sidebar-link:hover { opacity: 1; text-decoration: underline; }
 
 .bm-sidebar-heading {
   font-size: 12px;

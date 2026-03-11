@@ -236,6 +236,25 @@ function createInlineIntervalStepper(currentMins, onChange) {
 }
 
 // ──────────────────────────────────────────────
+// Bookmark tagging default
+// ──────────────────────────────────────────────
+const DEFAULT_BOOKMARK_TAG_PROMPT = `Analyze this webpage and generate smart metadata for bookmarking.
+
+Return JSON with this exact structure:
+{
+  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
+  "category": "one-word-category",
+  "summary": "One sentence summary of the page content.",
+  "readingTime": "X min"
+}
+
+Rules:
+- tags: 3-7 lowercase tags that describe the content. Be specific (e.g., "react-hooks" not just "programming").
+- category: A single broad category like "tech", "news", "finance", "science", "health", "politics", "tutorial", "reference", "entertainment", "shopping", "social", "other".
+- summary: A concise one-sentence summary (max 150 chars).
+- readingTime: Estimated reading time.`;
+
+// ──────────────────────────────────────────────
 // DOM refs
 // ──────────────────────────────────────────────
 const el = {
@@ -279,6 +298,10 @@ const el = {
   ruleProvider: document.getElementById("rule-provider"),
   ruleDelay: document.getElementById("rule-delay"),
   addRule: document.getElementById("add-rule"),
+  // Bookmark tagging prompt
+  bookmarkTagPrompt: document.getElementById("bookmark-tag-prompt"),
+  resetBookmarkTagPrompt: document.getElementById("reset-bookmark-tag-prompt"),
+  bookmarkTagPromptStatus: document.getElementById("bookmark-tag-prompt-status"),
   // Import/Export
   exportSettings: document.getElementById("export-settings"),
   importSettings: document.getElementById("import-settings"),
@@ -372,6 +395,7 @@ async function loadAllSettings() {
     openaiReasoningEffort: "medium",
     defaultPreset: "summary",
     customPresets: {},
+    bookmarkTagPrompt: "",
     extendedThinking: { enabled: false, budgetTokens: 10000 },
     autoAnalyzeRules: [],
     maxHistorySize: 200,
@@ -403,6 +427,7 @@ async function loadAllSettings() {
 
   populateDefaultPresetDropdown();
   el.defaultPreset.value = settings.defaultPreset || "summary";
+  el.bookmarkTagPrompt.value = settings.bookmarkTagPrompt || DEFAULT_BOOKMARK_TAG_PROMPT;
 
   updateProviderTabIndicators();
 }
@@ -574,6 +599,7 @@ async function saveAllSettings() {
     reasoningEffort: el.reasoningEffort.value,
     openaiReasoningEffort: el.openaiReasoningEffort.value,
     customPresets,
+    bookmarkTagPrompt: el.bookmarkTagPrompt.value !== DEFAULT_BOOKMARK_TAG_PROMPT ? el.bookmarkTagPrompt.value : "",
     extendedThinking: {
       enabled: el.extendedThinkingEnabled.checked,
       budgetTokens: parseInt(el.thinkingBudget.value, 10) || 10000
@@ -799,6 +825,15 @@ function attachListeners() {
     scheduleSave();
   });
 
+  // Bookmark tagging prompt
+  el.bookmarkTagPrompt.addEventListener("input", scheduleSave);
+  el.resetBookmarkTagPrompt.addEventListener("click", () => {
+    el.bookmarkTagPrompt.value = DEFAULT_BOOKMARK_TAG_PROMPT;
+    el.bookmarkTagPromptStatus.textContent = "Reset to default";
+    setTimeout(() => { el.bookmarkTagPromptStatus.textContent = ""; }, 2000);
+    scheduleSave();
+  });
+
   // Add custom preset
   el.addPreset.addEventListener("click", () => {
     const name = prompt("Enter a name for your new preset:");
@@ -829,9 +864,25 @@ function attachListeners() {
   });
 
   // Add auto-analyze rule
-  el.addRule.addEventListener("click", () => {
+  // Check webNavigation permission at load so we can request it synchronously on click
+  let hasWebNav = false;
+  browser.permissions.contains({ permissions: ["webNavigation"] }).then(ok => { hasWebNav = ok; });
+
+  el.addRule.addEventListener("click", async () => {
     const urlPattern = el.ruleUrl.value.trim();
     if (!urlPattern) return;
+
+    // Request webNavigation permission — must be first await (direct user gesture)
+    if (!hasWebNav) {
+      const granted = await browser.permissions.request({ permissions: ["webNavigation"] });
+      if (!granted) {
+        alert("Automation requires the webNavigation permission to detect page loads.");
+        return;
+      }
+      hasWebNav = true;
+      browser.runtime.sendMessage({ action: "initAutoAnalyze" });
+    }
+
     autoAnalyzeRules.push({
       id: "rule-" + Date.now(),
       enabled: true,
@@ -1081,7 +1132,8 @@ async function renderMonitors() {
 
     const historyBtn = document.createElement("button");
     historyBtn.className = "btn btn-sm btn-secondary";
-    historyBtn.textContent = "History";
+    historyBtn.textContent = "Compare";
+    historyBtn.title = "Compare page snapshots and view diffs";
     historyBtn.addEventListener("click", () => {
       browser.tabs.create({
         url: browser.runtime.getURL(`monitors/monitor-history.html?id=${encodeURIComponent(monitor.id)}&title=${encodeURIComponent(monitor.title || monitor.url)}`)
@@ -1453,6 +1505,18 @@ function initMainTabs() {
 
   switchMainTab(savedTab, tabs, panels);
 
+  // Pre-fill automation rule URL from query param (sent by popup)
+  const urlParams = new URLSearchParams(window.location.search);
+  const prefillRule = urlParams.get("prefillRule");
+  if (prefillRule && el.ruleUrl) {
+    try {
+      const u = new URL(prefillRule);
+      el.ruleUrl.value = `*${u.hostname}${u.pathname}*`;
+    } catch {
+      el.ruleUrl.value = prefillRule;
+    }
+  }
+
   tabs.forEach(tab => {
     tab.addEventListener("click", () => {
       const tabName = tab.dataset.tab;
@@ -1549,6 +1613,17 @@ function initBookmarks() {
   bmEl.editModal.addEventListener("click", (e) => {
     if (e.target === bmEl.editModal) bmCloseModal();
   });
+
+  const customizeTagLink = document.getElementById("bm-customize-tagging");
+  if (customizeTagLink) {
+    customizeTagLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      document.querySelector('[data-tab="prompts"]').click();
+      setTimeout(() => {
+        document.getElementById("bookmark-tag-card").scrollIntoView({ behavior: "smooth" });
+      }, 100);
+    });
+  }
 
   bmLoadBookmarks();
 }
