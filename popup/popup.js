@@ -127,6 +127,12 @@ async function populatePresets() {
   customOpt.value = "custom";
   customOpt.textContent = "Custom Prompt...";
   elements.analysisType.appendChild(customOpt);
+
+  // Apply user's default preset
+  const { defaultPreset } = await browser.storage.local.get({ defaultPreset: "summary" });
+  if (defaultPreset && elements.analysisType.querySelector(`option[value="${defaultPreset}"]`)) {
+    elements.analysisType.value = defaultPreset;
+  }
 }
 
 async function checkSelection() {

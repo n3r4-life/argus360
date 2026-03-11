@@ -257,6 +257,7 @@ const el = {
   openaiReasoningHint: document.getElementById("openai-reasoning-hint"),
   openaiReasoningCard: document.getElementById("openai-reasoning-card"),
   multiAgentCard: document.getElementById("multi-agent-card"),
+  defaultPreset: document.getElementById("default-preset"),
   tabList: document.getElementById("prompt-tab-list"),
   promptProvider: document.getElementById("prompt-provider"),
   promptSystem: document.getElementById("prompt-system"),
@@ -369,6 +370,7 @@ async function loadAllSettings() {
     temperature: 0.3,
     reasoningEffort: "medium",
     openaiReasoningEffort: "medium",
+    defaultPreset: "summary",
     customPresets: {},
     extendedThinking: { enabled: false, budgetTokens: 10000 },
     autoAnalyzeRules: [],
@@ -398,6 +400,9 @@ async function loadAllSettings() {
   el.maxHistory.value = settings.maxHistorySize;
   customPresets = settings.customPresets || {};
   autoAnalyzeRules = settings.autoAnalyzeRules || [];
+
+  populateDefaultPresetDropdown();
+  el.defaultPreset.value = settings.defaultPreset || "summary";
 
   updateProviderTabIndicators();
 }
@@ -463,10 +468,36 @@ function updateProviderTabIndicators() {
 }
 
 // ──────────────────────────────────────────────
+// Default preset dropdown
+// ──────────────────────────────────────────────
+function populateDefaultPresetDropdown() {
+  el.defaultPreset.replaceChildren();
+  for (const [key, preset] of Object.entries(DEFAULT_PRESETS)) {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = preset.label;
+    el.defaultPreset.appendChild(opt);
+  }
+  for (const [key, preset] of Object.entries(customPresets)) {
+    if (preset.isCustom) {
+      const opt = document.createElement("option");
+      opt.value = key;
+      opt.textContent = (preset.label || key) + " *";
+      el.defaultPreset.appendChild(opt);
+    }
+  }
+}
+
+// ──────────────────────────────────────────────
 // Prompt tabs (default + custom presets)
 // ──────────────────────────────────────────────
 function buildPromptTabs() {
   el.tabList.replaceChildren();
+
+  // Keep default-preset dropdown in sync
+  const curDefault = el.defaultPreset.value;
+  populateDefaultPresetDropdown();
+  el.defaultPreset.value = curDefault || "summary";
 
   // Default presets
   for (const [key, preset] of Object.entries(DEFAULT_PRESETS)) {
@@ -535,6 +566,7 @@ function flashSaved() {
 async function saveAllSettings() {
   await browser.storage.local.set({
     defaultProvider: el.defaultProvider.value,
+    defaultPreset: el.defaultPreset.value,
     providers,
     maxTokens: parseInt(el.maxTokens.value, 10) || 2048,
     maxInputChars: parseInt(el.maxInputChars.value, 10) || 100000,
@@ -705,6 +737,8 @@ function attachListeners() {
     updateReasoningControls();
     scheduleSave();
   });
+
+  el.defaultPreset.addEventListener("change", scheduleSave);
 
   el.providerTabList.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => selectProviderTab(btn.dataset.provider));
@@ -2749,6 +2783,14 @@ function initStorageManagement() {
   document.getElementById("kg-prune-noise").addEventListener("click", async () => {
     const resp = await browser.runtime.sendMessage({ action: "pruneKGNoise" });
     showKGStatus(resp && resp.pruned ? `Pruned ${resp.pruned} noisy entities` : "No noise found");
+    updateKGStats();
+  });
+  document.getElementById("kg-retype").addEventListener("click", async () => {
+    const resp = await browser.runtime.sendMessage({ action: "retypeKGEntities" });
+    const parts = [];
+    if (resp?.fixed) parts.push(`Re-typed ${resp.fixed}`);
+    if (resp?.pruned) parts.push(`pruned ${resp.pruned} noise`);
+    showKGStatus(parts.length ? parts.join(", ") : "All entities already correct");
     updateKGStats();
   });
   document.getElementById("kg-clear").addEventListener("click", async () => {

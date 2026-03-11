@@ -398,6 +398,13 @@ const KnowledgeGraph = (() => {
     "related stories", "related articles", "recommended for you", "you may like",
     "more stories", "more from", "whats new", "just in", "live updates",
     "share this", "print this", "email this", "save article",
+    "go back", "come back", "right now", "find out", "check out",
+    "turn off", "turn on", "opt out", "opt in", "pick up",
+    "stand by", "move on", "carry on", "set up", "shut down",
+    "take action", "stay tuned", "coming soon", "starts here",
+    "watch now", "listen now", "buy now", "shop now", "order now",
+    "try free", "free trial", "no thanks", "not now", "maybe later",
+    "tap here", "swipe up", "scroll down",
     // Social / sharing
     "follow us", "like us", "share on", "tweet this", "send email",
     "facebook share", "twitter share", "copy link",
@@ -420,6 +427,70 @@ const KnowledgeGraph = (() => {
     "united states", "read the full", "according to", "in addition to",
     "on the other", "at the same", "for the first", "by the end",
     "save lake michigan", "attention rand paul",
+    // News / media jargon that gets capitalized
+    "press release", "press conference", "white paper", "case study",
+    "fact sheet", "executive summary", "annual report", "fiscal year",
+    "public opinion", "popular vote", "swing state", "swing states",
+    "exit poll", "exit polls", "poll numbers", "opinion piece",
+    "open letter", "cover story", "special report", "exclusive interview",
+    "developing story", "staff writer", "guest contributor",
+    "photo credit", "image credit", "file photo", "stock photo",
+    "editor note", "editors note", "authors note", "correction notice",
+    // Common filler phrases that appear capitalized in headlines/titles
+    "big deal", "big picture", "bottom line", "game changer",
+    "long term", "short term", "real time", "high profile",
+    "deep dive", "fast track", "front page", "front line",
+    "ground zero", "prime time", "status quo", "tipping point",
+    "turning point", "wake up call", "talking point", "talking points",
+  ]);
+
+  // Well-known locations without keyword hints (countries, territories, famous places)
+  const KNOWN_LOCATIONS = new Set([
+    // Countries commonly in news
+    "united states", "united kingdom", "south korea", "north korea",
+    "saudi arabia", "south africa", "sri lanka", "costa rica",
+    "puerto rico", "hong kong", "new zealand", "el salvador",
+    "sierra leone", "burkina faso", "ivory coast", "czech republic",
+    "dominican republic", "papua new guinea", "trinidad tobago",
+    "bosnia herzegovina", "antigua barbuda", "solomon islands",
+    // US states / territories
+    "rhode island", "american samoa", "us virgin islands",
+    // Famous places / landmarks
+    "white house", "wall street", "silicon valley", "capitol hill",
+    "camp david", "pearl harbor", "times square", "ground zero",
+    "oval office", "downing street", "red square", "tiananmen square",
+    "gaza strip", "west bank", "golan heights", "crimean peninsula",
+    "suez canal", "panama canal", "strait hormuz", "taiwan strait",
+    "korean peninsula", "arabian peninsula", "iberian peninsula",
+    "french riviera", "ivory coast", "cape town",
+    "buenos aires", "rio janeiro", "sao paulo", "kuala lumpur",
+    "tel aviv", "addis ababa", "dar salaam",
+    "las vegas", "los angeles", "san francisco", "san diego",
+    "san antonio", "san jose", "santa monica", "santa cruz",
+    "el paso", "baton rouge", "des moines", "corpus christi",
+    "little rock", "grand rapids", "fort worth", "fort lauderdale",
+    "long beach", "virginia beach", "palm beach", "myrtle beach",
+    "salt lake", "ann arbor", "palo alto", "santa barbara",
+    "santa fe", "monte carlo", "vatican city",
+  ]);
+
+  // Well-known organizations that lack keyword hints
+  const KNOWN_ORGS = new Set([
+    "white house", // also a location, but often used as org
+    "supreme court", "pentagon", "capitol hill",
+    "wall street", // also location, but often metonym for finance
+    "red cross", "amnesty international", "doctors without borders",
+    "world health", "world trade", "world economic",
+    "human rights", "civil liberties", "planned parenthood",
+    "secret service", "coast guard", "air force", "space force",
+    "marine corps", "national guard", "peace corps",
+    "state department", "justice department", "defense department",
+    "homeland security", "foreign affairs",
+    "federal reserve", "fed reserve",
+    "internal revenue", "social security",
+    "fox news", "sky news", "al jazeera",
+    "associated press", "reuters news",
+    "lone star", "blue origin", "space exploration",
   ]);
 
   function isNoiseEntity(name) {
@@ -431,6 +502,8 @@ const KnowledgeGraph = (() => {
     const words = lower.split(/\s+/);
     const avgLen = lower.replace(/\s+/g, "").length / words.length;
     if (avgLen < 3) return true;
+    // Phrases that are all-lowercase words just capitalized (common adjective+noun pairs)
+    if (words.length === 2 && /^(big|small|long|short|old|young|good|bad|real|fake|full|half|hard|soft|high|low|hot|cold|dark|light|early|late|fast|slow|open|close|top|main|key|raw|due|own|fair|rare|wide|deep|flat|thin|bold|wild|pure|core|true|false|free|safe|live|dead|rich|poor|next|past|left|right|same|such|much|very|just|also|even|still|back|away|down|well|most|more|less|only|ever|each|both|sure|near|far|other)\b/i.test(words[0])) return true;
     return false;
   }
 
@@ -452,11 +525,21 @@ const KnowledgeGraph = (() => {
       if (isNoiseEntity(name)) continue;
       seen.add(key);
 
-      // Guess type
+      // Guess type — check known sets first, then keyword heuristics, then fallback
+      const nameLower = name.toLowerCase();
       let type = "other";
-      if (ORG_SUFFIXES.test(name)) type = "organization";
-      else if (/\b(University|Institute|Foundation|Association|Agency|Department|Ministry|Committee|Commission|Bureau|Council|Board)\b/i.test(name)) type = "organization";
-      else type = "person"; // Default multi-word capitalized = person
+      if (KNOWN_LOCATIONS.has(nameLower)) type = "location";
+      else if (KNOWN_ORGS.has(nameLower)) type = "organization";
+      else if (ORG_SUFFIXES.test(name)) type = "organization";
+      else if (/\b(University|Institute|Foundation|Association|Agency|Department|Ministry|Committee|Commission|Bureau|Council|Board|Party|Union|Bank|Fund|Alliance|Network|Society|Federation|Authority|Office|Service|Corps|Regiment|Brigade|Fleet|Squadron|Church|Temple|Mosque|Synagogue|Cathedral|Hospital|Clinic|School|Academy|College|Library|Museum|Theater|Theatre|Stadium|Center|Centre|Palace|Embassy|Consulate|Court|Police|Guard|Force|Corps|Command|Intelligence|Security|Administration|Commission|Tribunal|Legislature|Parliament|Congress|Senate|Assembly)\b/i.test(name)) type = "organization";
+      else if (/\b(City|County|State|Province|Region|District|Township|Village|Island|Islands|Mountain|Mountains|River|Lake|Ocean|Sea|Bay|Gulf|Peninsula|Valley|Desert|Forest|Park|Beach|Coast|Harbor|Harbour|Port|Cape|Creek|Falls|Springs|Canyon|Plateau|Basin|Strait|Channel|North|South|East|West|Northern|Southern|Eastern|Western|Central|Republic|Kingdom|Emirates|Federation|Town|Heights|Plains|Hills|Ridge|Crossing|Landing|Point|Cove|Bluff|Bend|Hollow|Grove|Meadow|Manor|Haven|Dale|Glen)\b/i.test(name)) type = "location";
+      else if (/\b(War|Battle|Revolution|Crisis|Summit|Conference|Election|Massacre|Uprising|Treaty|Agreement|Act|Amendment|Movement|Campaign|Operation|Scandal|Incident|Attack|Bombing|Siege|Coup|Protest|March|Rally|Festival|Olympics|Championship|Tournament|Award|Prize|Ceremony|Debate|Hearing|Trial|Inquiry|Investigation|Lockdown|Shutdown|Outbreak|Pandemic|Recession|Collapse)\b/i.test(name)) type = "event";
+      else {
+        // Default: 2-word phrases starting with capitalized words are likely person names
+        const words = name.split(/\s+/);
+        if (words.length === 2 || words.length === 3) type = "person";
+        // 4+ word capitalized phrases are more likely orgs/other
+      }
 
       entities.push({ name, type });
     }
@@ -762,6 +845,68 @@ const KnowledgeGraph = (() => {
     return { pruned: noiseIds.size };
   }
 
+  // ── Re-classify existing nodes using improved heuristics ──
+
+  async function retypeEntities() {
+    const allNodes = await ArgusDB.KGNodes.getAll();
+    let fixed = 0;
+    let pruned = 0;
+    for (const node of allNodes) {
+      // First check if this is now considered noise
+      if (isNoiseEntity(node.displayName) || isNoiseEntity(node.canonicalName)) {
+        const edges = await ArgusDB.KGEdges.getByNode(node.id);
+        for (const e of edges) await ArgusDB.KGEdges.remove(e.id);
+        await ArgusDB.KGNodes.remove(node.id);
+        pruned++;
+        continue;
+      }
+
+      // Re-run the type-guesser on the display name
+      const name = node.displayName;
+      const nameLower = name.toLowerCase();
+      let newType = "other";
+      if (KNOWN_LOCATIONS.has(nameLower)) newType = "location";
+      else if (KNOWN_ORGS.has(nameLower)) newType = "organization";
+      else if (ORG_SUFFIXES.test(name)) newType = "organization";
+      else if (/\b(University|Institute|Foundation|Association|Agency|Department|Ministry|Committee|Commission|Bureau|Council|Board|Party|Union|Bank|Fund|Alliance|Network|Society|Federation|Authority|Office|Service|Corps|Regiment|Brigade|Fleet|Squadron|Church|Temple|Mosque|Synagogue|Cathedral|Hospital|Clinic|School|Academy|College|Library|Museum|Theater|Theatre|Stadium|Center|Centre|Palace|Embassy|Consulate|Court|Police|Guard|Force|Corps|Command|Intelligence|Security|Administration|Commission|Tribunal|Legislature|Parliament|Congress|Senate|Assembly)\b/i.test(name)) newType = "organization";
+      else if (/\b(City|County|State|Province|Region|District|Township|Village|Island|Islands|Mountain|Mountains|River|Lake|Ocean|Sea|Bay|Gulf|Peninsula|Valley|Desert|Forest|Park|Beach|Coast|Harbor|Harbour|Port|Cape|Creek|Falls|Springs|Canyon|Plateau|Basin|Strait|Channel|North|South|East|West|Northern|Southern|Eastern|Western|Central|Republic|Kingdom|Emirates|Federation|Town|Heights|Plains|Hills|Ridge|Crossing|Landing|Point|Cove|Bluff|Bend|Hollow|Grove|Meadow|Manor|Haven|Dale|Glen)\b/i.test(name)) newType = "location";
+      else if (/\b(War|Battle|Revolution|Crisis|Summit|Conference|Election|Massacre|Uprising|Treaty|Agreement|Act|Amendment|Movement|Campaign|Operation|Scandal|Incident|Attack|Bombing|Siege|Coup|Protest|March|Rally|Festival|Olympics|Championship|Tournament|Award|Prize|Ceremony|Debate|Hearing|Trial|Inquiry|Investigation|Lockdown|Shutdown|Outbreak|Pandemic|Recession|Collapse)\b/i.test(name)) newType = "event";
+      else {
+        const words = name.split(/\s+/);
+        if (words.length === 2 || words.length === 3) newType = "person";
+      }
+
+      if (newType !== node.type) {
+        // Need to re-key the node since ID includes type
+        const newCanon = canonicalize(name);
+        const newId = nodeId(newType, newCanon);
+
+        // Update edges to point to new ID
+        const edges = await ArgusDB.KGEdges.getByNode(node.id);
+        for (const edge of edges) {
+          await ArgusDB.KGEdges.remove(edge.id);
+          const newSourceId = edge.sourceId === node.id ? newId : edge.sourceId;
+          const newTargetId = edge.targetId === node.id ? newId : edge.targetId;
+          if (newSourceId === newTargetId) continue;
+          const [a, b] = newSourceId < newTargetId ? [newSourceId, newTargetId] : [newTargetId, newSourceId];
+          edge.id = edgeId(a, b, edge.relationType);
+          edge.sourceId = a;
+          edge.targetId = b;
+          await ArgusDB.KGEdges.save(edge);
+        }
+
+        // Remove old node, save with new type & ID
+        await ArgusDB.KGNodes.remove(node.id);
+        node.id = newId;
+        node.type = newType;
+        await ArgusDB.KGNodes.save(node);
+        fixed++;
+      }
+    }
+    console.log(`[KG] Re-typed ${fixed} entities, pruned ${pruned} noise`);
+    return { fixed, pruned };
+  }
+
   // ── Public API ──
   return {
     ENTITY_TYPES,
@@ -780,6 +925,7 @@ const KnowledgeGraph = (() => {
     resolvePendingMerge,
     backfillFromHistory,
     pruneNoiseEntities,
+    retypeEntities,
     normalizeName,
     canonicalize,
     nodeId,

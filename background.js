@@ -876,6 +876,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "resolveKGMerge") return KnowledgeGraph.resolvePendingMerge(message.mergeId, message.accept);
   if (message.action === "runKGInference") return KnowledgeGraph.runInferenceRules();
   if (message.action === "pruneKGNoise") return KnowledgeGraph.pruneNoiseEntities().then(r => ({ success: true, ...r }));
+  if (message.action === "retypeKGEntities") return KnowledgeGraph.retypeEntities().then(r => ({ success: true, ...r }));
   if (message.action === "clearKG") return ArgusDB.KGNodes.clear().then(() => ArgusDB.KGEdges.clear()).then(() => ({ success: true }));
   // Agentic Automation
   if (message.action === "getDashboardData") return AgentEngine.getDashboardData(message.projectId);

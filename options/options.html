@@ -165,6 +165,12 @@
       <section class="card">
         <h2 class="card-title">Analysis Prompts</h2>
         <div class="card-body">
+          <div class="form-group" style="margin-bottom:16px;">
+            <label for="default-preset">Default Analysis Prompt</label>
+            <select id="default-preset" style="max-width:280px;"></select>
+            <span class="hint">The preset selected by default when you open the popup.</span>
+          </div>
+
           <p class="info-text">Customize the system and user prompts for each analysis type. Changes are saved automatically. Click "Reset" to restore defaults.</p>
           <p class="info-text">Available variables: <code>{title}</code> <code>{url}</code> <code>{domain}</code> <code>{date}</code> <code>{wordcount}</code></p>
 
@@ -621,6 +627,7 @@
             <button id="kg-open-graph" class="btn btn-secondary">Open Global Graph</button>
             <button id="kg-run-inference" class="btn btn-secondary">Run Inference</button>
             <button id="kg-prune-noise" class="btn btn-secondary">Prune Noise</button>
+            <button id="kg-retype" class="btn btn-secondary">Fix Types</button>
             <button id="kg-clear" class="btn btn-secondary" style="color:var(--error);">Clear Graph</button>
           </div>
           <div id="kg-pending-merges" class="hidden" style="margin-top:12px;">
