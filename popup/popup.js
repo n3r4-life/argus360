@@ -575,6 +575,34 @@ function attachEventListeners() {
       showToast(resp?.error || "Tech stack detection failed.", "error");
     }
   });
+
+  document.getElementById("osint-archive").addEventListener("click", async () => {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const url = tabs[0]?.url;
+    if (!url || url.startsWith("about:") || url.startsWith("moz-extension:")) { showToast("Cannot check this page.", "error"); return; }
+    showToast("Checking archive.is...", "loading");
+    const resp = await browser.runtime.sendMessage({ action: "checkArchiveNow", url });
+    if (resp?.archiveUrl) {
+      browser.tabs.create({ url: resp.archiveUrl });
+      window.close();
+    } else {
+      showToast("No archived version found on archive.is", "error");
+    }
+  });
+
+  document.getElementById("osint-wayback").addEventListener("click", async () => {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const url = tabs[0]?.url;
+    if (!url || url.startsWith("about:") || url.startsWith("moz-extension:")) { showToast("Cannot check this page.", "error"); return; }
+    showToast("Checking Wayback Machine...", "loading");
+    const resp = await browser.runtime.sendMessage({ action: "checkWaybackNow", url });
+    if (resp?.waybackUrl) {
+      browser.tabs.create({ url: resp.waybackUrl });
+      window.close();
+    } else {
+      showToast("No Wayback Machine snapshot found", "error");
+    }
+  });
 }
 
 // ──────────────────────────────────────────────

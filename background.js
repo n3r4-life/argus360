@@ -164,6 +164,26 @@ async function createContextMenus() {
     contexts: ["page", "frame"]
   });
 
+  // ── Site Versions submenu ──
+  browser.contextMenus.create({
+    id: "argus-versions-parent",
+    parentId: "argus-parent",
+    title: "\uD83D\uDDC3\uFE0F Site Versions",
+    contexts: ["page", "frame"]
+  });
+  browser.contextMenus.create({
+    id: "argus-check-archive",
+    parentId: "argus-versions-parent",
+    title: "Check archive.is",
+    contexts: ["page", "frame"]
+  });
+  browser.contextMenus.create({
+    id: "argus-check-wayback",
+    parentId: "argus-versions-parent",
+    title: "Check Wayback Machine",
+    contexts: ["page", "frame"]
+  });
+
   browser.contextMenus.create({
     id: "argus-separator-actions",
     parentId: "argus-parent",
@@ -626,6 +646,26 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "getArchiveCheck") {
     const cached = archiveCheckCache.get(message.tabId);
     return Promise.resolve({ success: true, archiveUrl: cached?.archiveUrl || null, checked: !!cached });
+  }
+  if (message.action === "checkArchiveNow") {
+    return (async () => {
+      try {
+        const checkUrl = `https://archive.is/newest/${message.url}`;
+        const resp = await fetch(checkUrl, { method: "HEAD", redirect: "follow" });
+        if (resp.ok && resp.url && resp.url !== checkUrl && !resp.url.includes("/newest/")) {
+          return { success: true, archiveUrl: resp.url };
+        }
+        return { success: true, archiveUrl: null };
+      } catch (err) { return { success: false, error: err.message }; }
+    })();
+  }
+  if (message.action === "checkWaybackNow") {
+    return (async () => {
+      try {
+        const snapshot = await checkWaybackAvailability(message.url);
+        return { success: true, waybackUrl: snapshot ? snapshot.url : null };
+      } catch (err) { return { success: false, error: err.message }; }
+    })();
   }
   if (message.action === "getSelection") return handleGetSelection(message);
   if (message.action === "getOpenTabs") return handleGetOpenTabs();
@@ -1319,6 +1359,36 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
         title: "Argus — Error",
         message: `Tech stack detection failed: ${err.message}`
       });
+    }
+    return;
+  }
+
+  // Handle site version checks
+  if (info.menuItemId === "argus-check-archive") {
+    try {
+      const checkUrl = `https://archive.is/newest/${tab.url}`;
+      const resp = await fetch(checkUrl, { method: "HEAD", redirect: "follow" });
+      if (resp.ok && resp.url && resp.url !== checkUrl && !resp.url.includes("/newest/")) {
+        await browser.tabs.create({ url: resp.url });
+      } else {
+        safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus", message: "No archived version found on archive.is" });
+      }
+    } catch (err) {
+      safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus — Error", message: `Archive check failed: ${err.message}` });
+    }
+    return;
+  }
+
+  if (info.menuItemId === "argus-check-wayback") {
+    try {
+      const snapshot = await checkWaybackAvailability(tab.url);
+      if (snapshot && snapshot.url) {
+        await browser.tabs.create({ url: snapshot.url });
+      } else {
+        safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus", message: "No Wayback Machine snapshot found" });
+      }
+    } catch (err) {
+      safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus — Error", message: `Wayback check failed: ${err.message}` });
     }
     return;
   }
