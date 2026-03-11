@@ -12,6 +12,51 @@
 async function handleExtractMetadata(message) {
   try {
     const tabId = message.tabId;
+
+    // PDF fallback: extract metadata from PDF directly
+    let tab;
+    try {
+      tab = await browser.tabs.get(tabId);
+    } catch { /* ignore */ }
+    if (tab && isPdfUrl(tab.url) && typeof pdfjsLib !== "undefined") {
+      try {
+        const resp = await fetch(tab.url);
+        const buf = await resp.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+        const info = await pdf.getMetadata().catch(() => null);
+        const pdfMeta = info?.info || {};
+        return {
+          success: true,
+          metadata: {
+            meta: {
+              title: pdfMeta.Title || "",
+              author: pdfMeta.Author || "",
+              subject: pdfMeta.Subject || "",
+              keywords: pdfMeta.Keywords || "",
+              creator: pdfMeta.Creator || "",
+              producer: pdfMeta.Producer || "",
+              creationDate: pdfMeta.CreationDate || "",
+              modDate: pdfMeta.ModDate || "",
+              "pdf-version": pdf.pdfInfo?.pdfFormatVersion || ""
+            },
+            og: {},
+            twitter: {},
+            jsonLd: [],
+            links: {},
+            author: pdfMeta.Author ? { meta: pdfMeta.Author } : {},
+            dates: {
+              created: pdfMeta.CreationDate || "",
+              modified: pdfMeta.ModDate || ""
+            },
+            lang: "",
+            charset: "",
+            _isPdf: true,
+            _pdfPages: pdf.numPages
+          }
+        };
+      } catch { /* fall through to normal extraction */ }
+    }
+
     const results = await browser.tabs.executeScript(tabId, {
       code: `(function() {
         // ── Meta tags ──
