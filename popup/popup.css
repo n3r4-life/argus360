@@ -622,13 +622,14 @@ textarea {
 }
 
 /* OSINT tools row */
-.osint-tools-row {
+.btn-row.osint-tools-row {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
 }
 .btn-osint {
   flex: 1 1 calc(33.33% - 4px);
+  max-width: calc(33.33% - 4px);
   min-width: 0;
   display: flex;
   align-items: center;
