@@ -71,6 +71,16 @@
     renderMarkers();
     renderPanel();
     fitMapBounds();
+
+    const summary = allLocations.slice(0, 60).map(l =>
+      `- ${l.name || l.text} (${l.type || "location"})${l.lat ? " [" + l.lat + ", " + l.lon + "]" : ""}${l.source ? " — " + l.source : ""}`
+    ).join("\n");
+    ArgusChat.init({
+      container: document.getElementById("argus-chat-container"),
+      contextType: "Geolocation Map",
+      contextData: `Locations for project "${response.projectName || "Unknown"}" (${allLocations.length} total):\n${summary}`,
+      pageTitle: response.projectName
+    });
   }
 
   function demoData() {

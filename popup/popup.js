@@ -354,10 +354,42 @@ function attachEventListeners() {
     window.close();
   });
 
-  document.getElementById("open-archive").addEventListener("click", () => {
-    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#archive") });
-    window.close();
-  });
+  // Archive redirect toggle
+  const redirectBtn = document.getElementById("toggle-redirect");
+  (async () => {
+    const { archiveRedirect } = await browser.storage.local.get({
+      archiveRedirect: { enabled: false, domains: [], providerUrl: "https://archive.is/" }
+    });
+    let redirectEnabled = archiveRedirect.enabled;
+    updateRedirectBtn(redirectBtn, redirectEnabled);
+
+    redirectBtn.addEventListener("click", async () => {
+      const newState = !redirectEnabled;
+      if (newState) {
+        const granted = await browser.permissions.request({
+          permissions: ["webRequest", "webRequestBlocking"]
+        });
+        if (!granted) {
+          showToast("Permission denied — redirect requires webRequest.", "error");
+          return;
+        }
+      }
+      const stored = await browser.storage.local.get({
+        archiveRedirect: { enabled: false, domains: [], providerUrl: "https://archive.is/" }
+      });
+      stored.archiveRedirect.enabled = newState;
+      await browser.storage.local.set({ archiveRedirect: stored.archiveRedirect });
+      await browser.runtime.sendMessage({
+        action: "saveArchiveSettings",
+        enabled: newState,
+        domains: stored.archiveRedirect.domains,
+        providerUrl: stored.archiveRedirect.providerUrl
+      });
+      redirectEnabled = newState;
+      updateRedirectBtn(redirectBtn, redirectEnabled);
+      showToast(newState ? "Archive redirect ON" : "Archive redirect OFF");
+    });
+  })();
 
   document.getElementById("open-history").addEventListener("click", () => {
     browser.tabs.create({ url: browser.runtime.getURL("history/history.html") });
@@ -575,6 +607,49 @@ function attachEventListeners() {
       showToast(resp?.error || "Tech stack detection failed.", "error");
     }
   });
+
+  document.getElementById("osint-archive").addEventListener("click", async () => {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const url = tabs[0]?.url;
+    if (!url || url.startsWith("about:") || url.startsWith("moz-extension:")) { showToast("Cannot check this page.", "error"); return; }
+    showToast("Checking archive.is...", "loading");
+    const resp = await browser.runtime.sendMessage({ action: "checkArchiveNow", url });
+    if (resp?.archiveUrl) {
+      browser.tabs.create({ url: resp.archiveUrl });
+      window.close();
+    } else {
+      showToast("No archived version found on archive.is", "error");
+    }
+  });
+
+  document.getElementById("osint-wayback").addEventListener("click", async () => {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const url = tabs[0]?.url;
+    if (!url || url.startsWith("about:") || url.startsWith("moz-extension:")) { showToast("Cannot check this page.", "error"); return; }
+    showToast("Checking Wayback Machine...", "loading");
+    const resp = await browser.runtime.sendMessage({ action: "checkWaybackNow", url });
+    if (resp?.waybackUrl) {
+      browser.tabs.create({ url: resp.waybackUrl });
+      window.close();
+    } else {
+      showToast("No Wayback Machine snapshot found", "error");
+    }
+  });
+}
+
+// ──────────────────────────────────────────────
+// Redirect toggle helper
+// ──────────────────────────────────────────────
+function updateRedirectBtn(btn, enabled) {
+  if (enabled) {
+    btn.style.color = "var(--accent)";
+    btn.style.background = "rgba(233, 69, 96, 0.15)";
+    btn.title = "Archive Redirect: ON (click to disable)";
+  } else {
+    btn.style.color = "";
+    btn.style.background = "";
+    btn.title = "Archive Redirect: OFF (click to enable)";
+  }
 }
 
 // ──────────────────────────────────────────────

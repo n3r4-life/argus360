@@ -1,244 +1,16 @@
 // ──────────────────────────────────────────────
-// Analysis presets
+// Core background script — router, context menus, analysis, and feature modules
+// Presets & provider config: background-presets.js
+// Provider API calls: background-providers.js
+// Permission helpers: background-permissions.js
+// OSINT tools: background-osint.js
 // ──────────────────────────────────────────────
-const ANALYSIS_PRESETS = {
-  summary: {
-    label: "Summary",
-    system: "You are a precise text analyst.",
-    prompt: "Provide a clear, concise summary of the following webpage content in flowing prose paragraphs. Do NOT use bullet points or 'Key Points' sections — that is a separate analysis type. Summarize the full substance of the content: what it covers, the arguments or information presented, and any conclusions. Use markdown formatting for headings only where needed to separate major topics."
-  },
-  sentiment: {
-    label: "Sentiment Analysis",
-    system: "You are a sentiment analysis expert.",
-    prompt: "Analyze the sentiment and tone of the following webpage content. Identify the overall sentiment (positive/negative/neutral), emotional undertones, and any bias. Use markdown formatting."
-  },
-  factcheck: {
-    label: "Fact-Check",
-    system: "You are a careful fact-checker. Be measured and specific about what can and cannot be verified.",
-    prompt: "Review the following webpage content for factual claims. Identify key claims, assess their verifiability, and flag any that appear questionable, misleading, or unsubstantiated. Use markdown formatting."
-  },
-  keypoints: {
-    label: "Key Points",
-    system: "You are a skilled information extractor.",
-    prompt: "Extract the key points from the following webpage content as a structured bulleted list. Group related points under clear headings. Use markdown formatting."
-  },
-  eli5: {
-    label: "ELI5 (Explain Like I'm 5)",
-    system: "You explain complex topics in simple terms that a 5-year-old could understand. Use analogies and everyday language.",
-    prompt: "Explain the content of this webpage in very simple terms. Avoid jargon. Use short sentences and relatable analogies. Use markdown formatting."
-  },
-  critique: {
-    label: "Critical Analysis",
-    system: "You are a thoughtful critical analyst.",
-    prompt: "Provide a critical analysis of this webpage content. Examine the arguments made, identify strengths and weaknesses, note any logical fallacies, and assess the overall quality of the content. Use markdown formatting."
-  },
-  actionitems: {
-    label: "Action Items",
-    system: "You extract actionable tasks and next steps from text.",
-    prompt: "Extract all actionable items, recommendations, and next steps from this webpage content. Present them as a clear checklist. Use markdown formatting."
-  },
-  research: {
-    label: "Research Report",
-    system: "You are a research analyst who synthesizes information from multiple sources into comprehensive, well-structured reports. Always cite sources by their number (e.g., [Source 1], [Source 2]).",
-    prompt: `Analyze the following sources and produce a structured research report:
 
-## Executive Summary
-A concise overview of findings across all sources (2-3 paragraphs).
+// NOTE: ANALYSIS_PRESETS, PROVIDERS, BROWSER_LANG_MAP, getLanguageInstruction
+// are defined in background-presets.js (loaded before this file)
 
-## Key Findings
-Numbered list of the most important findings. Each finding MUST include a source citation like [Source 1] or [Source 2, Source 3].
-
-## Areas of Agreement
-Points where multiple sources align or corroborate each other.
-
-## Contradictions & Discrepancies
-Points where sources disagree or present conflicting information.
-
-## Gaps in Coverage
-Important aspects of the topic that none of the sources adequately address.
-
-## Recommendations
-Actionable recommendations based on the synthesized findings.
-
-## Source Assessment
-Brief assessment of each source's reliability, bias, and contribution.
-
-Use markdown formatting. Be specific and cite sources throughout.`
-  },
-  latenight: {
-    label: "Late Night Recap",
-    system: "You are a sharp-witted comedic editorial writer. Your style is punchy, irreverent, and conversational — like a late-night monologue meets a newspaper column. Use sarcasm, wit, and strong opinions. Never reference your style, influences, or that you're an AI. Just deliver the content.",
-    prompt: "Recap the following page content as if you're writing your editorial column. Hit the key points but make it entertaining. Be sharp, punchy, and opinionated. Use markdown formatting."
-  },
-  entities: {
-    label: "Entity Extraction (OSINT)",
-    osint: true,
-    system: "You are an OSINT analyst specializing in entity extraction and intelligence gathering. Extract structured data from text. Respond ONLY with valid JSON - no markdown fences, no explanation.",
-    prompt: `Extract all identifiable entities from this page content. Return as JSON with this exact structure:
-{
-  "people": [{ "name": "", "role": "", "context": "" }],
-  "organizations": [{ "name": "", "type": "", "context": "" }],
-  "locations": [{ "name": "", "type": "city/country/address/region", "context": "" }],
-  "dates": [{ "date": "", "event": "", "context": "" }],
-  "amounts": [{ "value": "", "currency": "", "context": "" }],
-  "contact": [{ "type": "email/phone/social/website", "value": "" }],
-  "claims": [{ "claim": "", "attribution": "", "verifiable": true }]
-}
-Include EVERY entity you can find, no matter how minor. For dates, normalize to ISO format where possible. For people, include their role/title if mentioned. For claims, note who made them and whether they are verifiable.`
-  },
-  credibility: {
-    label: "Source Credibility",
-    osint: true,
-    system: "You are a media literacy and source evaluation expert with deep expertise in journalism standards, propaganda techniques, and information quality assessment.",
-    prompt: `Evaluate this page's credibility on a scale of 1-10. Assess each of these dimensions:
-
-## Credibility Score: X/10
-
-### Author & Publication
-- Author credentials and expertise
-- Publication reputation and editorial standards
-
-### Sourcing Quality
-- Are claims attributed to named sources?
-- Are primary sources linked or referenced?
-- Quality and diversity of citations
-
-### Content Analysis
-- Logical consistency and reasoning quality
-- Presence of logical fallacies
-- Emotional manipulation or loaded language
-- Headline accuracy vs content
-
-### Bias Indicators
-- Political or ideological lean
-- Conflicts of interest
-- Selective framing or omission
-
-### Verification Status
-- Claims that can be independently verified
-- Claims that contradict established consensus
-- Red flags or misinformation patterns
-
-Use markdown formatting. Be specific with examples from the text.`
-  },
-  profile: {
-    label: "Person/Org Profile",
-    osint: true,
-    system: "You are an OSINT research analyst who builds comprehensive profiles from available information.",
-    prompt: `Build a structured intelligence profile based on this page content. Extract and organize:
-
-## Profile Summary
-One paragraph overview of the subject.
-
-## Key Details
-- Full name / Organization name
-- Known aliases or alternate names
-- Location(s)
-- Affiliations and associations
-- Online presence (websites, social media)
-
-## Activity & History
-Timeline of notable activities, roles, or events mentioned.
-
-## Network & Associations
-People, organizations, and entities connected to the subject.
-
-## Notable Statements or Positions
-Key quotes, stances, or public positions.
-
-## Assessment
-Brief analytical assessment of the subject based on available information.
-
-Use markdown formatting. Only include what is supported by the content.`
-  }
-};
-
-// ──────────────────────────────────────────────
-// Language preference
-// ──────────────────────────────────────────────
-const BROWSER_LANG_MAP = {
-  en: "English", es: "Spanish", fr: "French", de: "German", pt: "Portuguese",
-  it: "Italian", nl: "Dutch", ru: "Russian", ja: "Japanese", ko: "Korean",
-  zh: "Chinese", ar: "Arabic", hi: "Hindi", tr: "Turkish", pl: "Polish",
-  uk: "Ukrainian", vi: "Vietnamese", th: "Thai", id: "Indonesian", sv: "Swedish",
-  cs: "Czech", ro: "Romanian", hu: "Hungarian", el: "Greek", he: "Hebrew",
-  fil: "Filipino", tl: "Filipino"
-};
-
-async function getLanguageInstruction() {
-  const { responseLanguage } = await browser.storage.local.get({ responseLanguage: "auto" });
-  if (!responseLanguage || responseLanguage === "" || responseLanguage === "English") return "";
-  if (responseLanguage === "auto") {
-    const browserLang = (navigator.language || "en").split("-")[0].toLowerCase();
-    if (browserLang === "en") return "";
-    const langName = BROWSER_LANG_MAP[browserLang];
-    if (!langName) return "";
-    return ` Respond entirely in ${langName}.`;
-  }
-  return ` Respond entirely in ${responseLanguage}.`;
-}
-
-// ──────────────────────────────────────────────
-// Provider definitions
-// ──────────────────────────────────────────────
-const PROVIDERS = {
-  xai: {
-    label: "xAI (Grok)",
-    models: {
-      "grok-4-0709": "Grok 4",
-      "grok-4-1-fast-reasoning": "Grok 4.1 Fast Reasoning",
-      "grok-4-1-fast-non-reasoning": "Grok 4.1 Fast Non-Reasoning",
-      "grok-4.20-multi-agent-experimental-beta-0304": "Grok 4.20 Multi-Agent (Swarm)",
-      "grok-4.20-experimental-beta-0304-reasoning": "Grok 4.20 Reasoning",
-      "grok-4.20-experimental-beta-0304-non-reasoning": "Grok 4.20 Non-Reasoning",
-      "grok-3": "Grok 3",
-      "grok-3-fast": "Grok 3 Fast",
-      "grok-3-mini": "Grok 3 Mini",
-      "grok-2": "Grok 2"
-    },
-    defaultModel: "grok-4-0709"
-  },
-  openai: {
-    label: "OpenAI",
-    models: {
-      "gpt-4.1": "GPT-4.1",
-      "gpt-4.1-mini": "GPT-4.1 Mini",
-      "gpt-4.1-nano": "GPT-4.1 Nano",
-      "o3": "o3",
-      "o3-mini": "o3 Mini",
-      "o4-mini": "o4 Mini",
-      "gpt-4o": "GPT-4o",
-      "gpt-4o-mini": "GPT-4o Mini"
-    },
-    defaultModel: "gpt-4.1"
-  },
-  anthropic: {
-    label: "Anthropic (Claude)",
-    models: {
-      "claude-opus-4-6": "Claude Opus 4.6",
-      "claude-sonnet-4-6": "Claude Sonnet 4.6",
-      "claude-haiku-4-5-20251001": "Claude Haiku 4.5",
-      "claude-sonnet-4-5-20250514": "Claude Sonnet 4.5",
-      "claude-3-5-haiku-20241022": "Claude 3.5 Haiku"
-    },
-    defaultModel: "claude-sonnet-4-6"
-  },
-  gemini: {
-    label: "Google (Gemini)",
-    models: {
-      "gemini-2.5-pro": "Gemini 2.5 Pro",
-      "gemini-2.5-flash": "Gemini 2.5 Flash",
-      "gemini-2.0-flash": "Gemini 2.0 Flash",
-      "gemini-2.0-flash-lite": "Gemini 2.0 Flash Lite"
-    },
-    defaultModel: "gemini-2.5-flash"
-  },
-  custom: {
-    label: "Custom (OpenAI-compatible)",
-    models: {},
-    defaultModel: ""
-  }
-};
+// NOTE: All provider call functions, getProviderSettings, parseSSEStream
+// are defined in background-providers.js (loaded before this file)
 
 // ──────────────────────────────────────────────
 // In-memory conversation history (keyed by tab ID)
@@ -301,17 +73,29 @@ async function createContextMenus() {
     contexts: ["page", "frame"]
   });
 
+  // ── Redirector submenu ──
   browser.contextMenus.create({
-    id: "argus-redirect",
+    id: "argus-redirector-parent",
     parentId: "argus-parent",
-    title: "\uD83D\uDD00 Redirect via Archive",
+    title: "\uD83D\uDD00 Redirector",
     contexts: ["page", "frame"]
   });
-
+  browser.contextMenus.create({
+    id: "argus-redirect",
+    parentId: "argus-redirector-parent",
+    title: "Redirect via Archive",
+    contexts: ["page", "frame"]
+  });
   browser.contextMenus.create({
     id: "argus-save-archive",
-    parentId: "argus-parent",
-    title: "\uD83D\uDCBE Save to Archive",
+    parentId: "argus-redirector-parent",
+    title: "Save to Archive",
+    contexts: ["page", "frame"]
+  });
+  browser.contextMenus.create({
+    id: "argus-add-trouble-list",
+    parentId: "argus-redirector-parent",
+    title: "Add Site to Trouble List",
     contexts: ["page", "frame"]
   });
 
@@ -323,14 +107,14 @@ async function createContextMenus() {
   });
 
   browser.contextMenus.create({
-    id: "argus-techstack",
+    id: "argus-open-reader",
     parentId: "argus-parent",
-    title: "\uD83D\uDD27 Detect Tech Stack",
+    title: "\uD83D\uDCF0 Open Feed Reader",
     contexts: ["page", "frame"]
   });
 
   // Add to Project submenu
-  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+  const argusProjects = await ArgusDB.Projects.getAll();
   if (argusProjects.length > 0) {
     browser.contextMenus.create({
       id: "argus-project-parent",
@@ -371,6 +155,32 @@ async function createContextMenus() {
     id: "argus-whois",
     parentId: "argus-osint-parent",
     title: "Whois / DNS Lookup",
+    contexts: ["page", "frame"]
+  });
+  browser.contextMenus.create({
+    id: "argus-techstack",
+    parentId: "argus-osint-parent",
+    title: "Detect Tech Stack",
+    contexts: ["page", "frame"]
+  });
+
+  // ── Site Versions submenu ──
+  browser.contextMenus.create({
+    id: "argus-versions-parent",
+    parentId: "argus-parent",
+    title: "\uD83D\uDDC3\uFE0F Site Versions",
+    contexts: ["page", "frame"]
+  });
+  browser.contextMenus.create({
+    id: "argus-check-archive",
+    parentId: "argus-versions-parent",
+    title: "Check archive.is",
+    contexts: ["page", "frame"]
+  });
+  browser.contextMenus.create({
+    id: "argus-check-wayback",
+    parentId: "argus-versions-parent",
+    title: "Check Wayback Machine",
     contexts: ["page", "frame"]
   });
 
@@ -542,634 +352,6 @@ async function extractSelection(tabId) {
 }
 
 // ──────────────────────────────────────────────
-// Provider API calls (non-streaming)
-// ──────────────────────────────────────────────
-function handleApiError(response, errorBody, providerLabel) {
-  if (response.status === 401) throw new Error(`Invalid ${providerLabel} API key. Check your key in settings.`);
-  if (response.status === 429) throw new Error("Rate limited. Please wait a moment and try again.");
-  if (response.status === 402 || response.status === 403) throw new Error(`Insufficient credits or access denied for ${providerLabel}.`);
-  throw new Error(`${providerLabel} API error (${response.status}): ${errorBody}`);
-}
-
-function isXaiReasoningModel(model) {
-  // Reasoning-capable: grok-3 (not mini), grok-4, grok-4-1-fast-reasoning, 4.20 reasoning
-  return /grok-(4|3(?!-mini))/.test(model) && !/(non-reasoning)/.test(model);
-}
-
-async function callXai(apiKey, model, messages, opts) {
-  const temperature = opts.temperature ?? 0.3;
-  const maxTokens = opts.maxTokens || 2048;
-  const reasoningEffort = opts.reasoningEffort || "medium";
-  const extThink = opts.extendedThinking;
-  const isMultiAgent = model.includes("multi-agent");
-  const isResponses = isMultiAgent || model.includes("4.20");
-
-  let url, body;
-  if (isResponses) {
-    url = "https://api.x.ai/v1/responses";
-    body = { model, input: messages, temperature };
-    if (maxTokens) body.max_output_tokens = maxTokens;
-    if (isMultiAgent || isXaiReasoningModel(model)) {
-      body.reasoning = { effort: reasoningEffort };
-    }
-  } else {
-    url = "https://api.x.ai/v1/chat/completions";
-    body = { model, messages, temperature, max_tokens: maxTokens };
-    // Send reasoning_effort for reasoning-capable models on chat completions
-    if (extThink?.enabled && isXaiReasoningModel(model)) {
-      body.reasoning_effort = reasoningEffort;
-    }
-  }
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-    body: JSON.stringify(body)
-  });
-
-  if (!response.ok) handleApiError(response, await response.text(), "xAI");
-  const data = await response.json();
-
-  if (isResponses) {
-    const text = data.output_text || (data.output && data.output.find(o => o.type === "message")?.content?.[0]?.text);
-    if (!text) throw new Error("xAI returned an empty response.");
-    // Extract reasoning from responses API output
-    let thinking = "";
-    if (data.output) {
-      for (const block of data.output) {
-        if (block.type === "reasoning" && block.summary) {
-          for (const s of block.summary) {
-            if (s.text) thinking += s.text + "\n";
-          }
-        }
-      }
-    }
-    return { content: text, thinking: thinking.trim() || null, model: data.model || model, usage: data.usage };
-  } else {
-    if (!data.choices || data.choices.length === 0) throw new Error("xAI returned an empty response.");
-    return { content: data.choices[0].message.content, model: data.model, usage: data.usage };
-  }
-}
-
-function isOpenaiReasoningModel(model) {
-  return typeof model === "string" && /^o\d/i.test(model);
-}
-
-function normalizeOpenaiReasoningEffort(effort) {
-  if (effort === "low" || effort === "medium" || effort === "high") return effort;
-  if (effort === "xhigh") return "high";
-  return "medium";
-}
-
-function getOpenaiReasoningParams(model, opts) {
-  if (!opts?.extendedThinking?.enabled) return {};
-  if (!isOpenaiReasoningModel(model)) return {};
-  return { reasoning_effort: normalizeOpenaiReasoningEffort(opts.reasoningEffort) };
-}
-
-async function callOpenai(apiKey, model, messages, opts) {
-  const temperature = opts.temperature ?? 0.3;
-  const maxTokens = opts.maxTokens || 2048;
-  const extThink = opts.extendedThinking;
-  const isReasoning = isOpenaiReasoningModel(model);
-  const reasoningParams = getOpenaiReasoningParams(model, opts);
-
-  const body = { model, messages, max_tokens: maxTokens, ...reasoningParams };
-  // o-series models don't support temperature
-  if (!isReasoning) body.temperature = temperature;
-  // Request reasoning summary for o-series when extended thinking is on
-  if (isReasoning && extThink?.enabled) {
-    body.reasoning = { effort: normalizeOpenaiReasoningEffort(opts.reasoningEffort), summary: "auto" };
-  }
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-    body: JSON.stringify(body)
-  });
-
-  if (!response.ok) handleApiError(response, await response.text(), "OpenAI");
-  const data = await response.json();
-  if (!data.choices || data.choices.length === 0) throw new Error("OpenAI returned an empty response.");
-
-  // Extract reasoning summary from o-series responses
-  let thinking = "";
-  const msg = data.choices[0].message;
-  if (msg.reasoning) {
-    for (const block of (Array.isArray(msg.reasoning) ? msg.reasoning : [msg.reasoning])) {
-      if (block.summary) {
-        for (const s of (Array.isArray(block.summary) ? block.summary : [block.summary])) {
-          if (typeof s === "string") thinking += s + "\n";
-          else if (s?.text) thinking += s.text + "\n";
-        }
-      }
-    }
-  }
-
-  return { content: msg.content, thinking: thinking.trim() || null, model: data.model, usage: data.usage };
-}
-
-async function callAnthropic(apiKey, model, messages, opts) {
-  const maxTokens = opts.maxTokens || 2048;
-  const extendedThinking = opts.extendedThinking;
-
-  // Separate system from messages
-  const systemMsg = messages.find(m => m.role === "system");
-  const nonSystem = messages.filter(m => m.role !== "system");
-
-  const body = {
-    model,
-    max_tokens: maxTokens,
-    system: systemMsg ? systemMsg.content : undefined,
-    messages: nonSystem
-  };
-
-  // Extended thinking support
-  if (extendedThinking && extendedThinking.enabled) {
-    body.thinking = {
-      type: "enabled",
-      budget_tokens: extendedThinking.budgetTokens || 10000
-    };
-    // Extended thinking requires max_tokens to be higher
-    body.max_tokens = Math.max(maxTokens, (extendedThinking.budgetTokens || 10000) + maxTokens);
-  }
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true"
-    },
-    body: JSON.stringify(body)
-  });
-
-  if (!response.ok) handleApiError(response, await response.text(), "Anthropic");
-  const data = await response.json();
-  if (!data.content || data.content.length === 0) throw new Error("Anthropic returned an empty response.");
-
-  const thinkingBlocks = data.content.filter(b => b.type === "thinking");
-  const textBlocks = data.content.filter(b => b.type === "text");
-  const text = textBlocks.map(block => block.text || "").join("");
-  const thinking = thinkingBlocks.map(b => b.thinking || "").join("\n");
-
-  return {
-    content: text,
-    thinking: thinking || undefined,
-    model: data.model,
-    usage: data.usage ? { prompt_tokens: data.usage.input_tokens, completion_tokens: data.usage.output_tokens } : null
-  };
-}
-
-function isGeminiThinkingModel(model) {
-  return /gemini-2\.5/.test(model);
-}
-
-async function callGemini(apiKey, model, messages, opts) {
-  const temperature = opts.temperature ?? 0.3;
-  const maxTokens = opts.maxTokens || 2048;
-  const extThink = opts.extendedThinking;
-
-  const systemMsg = messages.find(m => m.role === "system");
-  const nonSystem = messages.filter(m => m.role !== "system");
-
-  // Convert messages to Gemini format
-  const contents = nonSystem.map(m => ({
-    role: m.role === "assistant" ? "model" : "user",
-    parts: [{ text: m.content }]
-  }));
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-  const body = {
-    contents,
-    generationConfig: { temperature, maxOutputTokens: maxTokens }
-  };
-  if (systemMsg) {
-    body.system_instruction = { parts: [{ text: systemMsg.content }] };
-  }
-  // Gemini 2.5 supports native thinking with thinkingConfig
-  if (extThink?.enabled && isGeminiThinkingModel(model)) {
-    body.generationConfig.thinkingConfig = {
-      thinkingBudget: extThink.budgetTokens || 10000
-    };
-  }
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  });
-
-  if (!response.ok) handleApiError(response, await response.text(), "Gemini");
-  const data = await response.json();
-  const candidate = data.candidates && data.candidates[0];
-  if (!candidate || !candidate.content || !candidate.content.parts) throw new Error("Gemini returned an empty response.");
-
-  // Separate thinking parts from content parts
-  let thinking = "";
-  let text = "";
-  for (const part of candidate.content.parts) {
-    if (part.thought) {
-      thinking += (part.text || "") + "\n";
-    } else {
-      text += part.text || "";
-    }
-  }
-
-  return {
-    content: text,
-    thinking: thinking.trim() || null,
-    model: model,
-    usage: data.usageMetadata ? { prompt_tokens: data.usageMetadata.promptTokenCount, completion_tokens: data.usageMetadata.candidatesTokenCount } : null
-  };
-}
-
-// ──────────────────────────────────────────────
-// Streaming API calls
-// ──────────────────────────────────────────────
-async function parseSSEStream(reader, onChunk, onThinking) {
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop(); // keep incomplete line
-
-    for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        const data = line.slice(6).trim();
-        if (data === "[DONE]") return;
-        try {
-          const parsed = JSON.parse(data);
-          onChunk(parsed);
-        } catch (e) { /* skip malformed */ }
-      } else if (line.startsWith("event: ")) {
-        // Anthropic SSE events - handled within onChunk
-      }
-    }
-  }
-}
-
-async function callXaiStream(apiKey, model, messages, opts, onChunk, onThinking) {
-  const temperature = opts.temperature ?? 0.3;
-  const maxTokens = opts.maxTokens || 2048;
-  const extThink = opts.extendedThinking;
-  const isMultiAgent = model.includes("multi-agent");
-  const isResponses = isMultiAgent || model.includes("4.20");
-
-  // Responses API doesn't support streaming in the same way — fall back to non-streaming
-  if (isResponses) {
-    const result = await callXai(apiKey, model, messages, opts);
-    onChunk(result.content);
-    if (result.thinking && onThinking) onThinking(result.thinking);
-    return result;
-  }
-
-  const body = { model, messages, temperature, max_tokens: maxTokens, stream: true };
-  if (extThink?.enabled && isXaiReasoningModel(model)) {
-    body.reasoning_effort = opts.reasoningEffort || "medium";
-  }
-
-  const response = await fetch("https://api.x.ai/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-    body: JSON.stringify(body)
-  });
-
-  if (!response.ok) handleApiError(response, await response.text(), "xAI");
-
-  let fullContent = "";
-  let modelName = model;
-  await parseSSEStream(response.body.getReader(), (parsed) => {
-    if (parsed.model) modelName = parsed.model;
-    const delta = parsed.choices?.[0]?.delta?.content;
-    if (delta) {
-      fullContent += delta;
-      onChunk(delta);
-    }
-  });
-
-  return { content: fullContent, model: modelName, usage: null };
-}
-
-async function callOpenaiStream(apiKey, model, messages, opts, onChunk, onThinking) {
-  const temperature = opts.temperature ?? 0.3;
-  const maxTokens = opts.maxTokens || 2048;
-  const extThink = opts.extendedThinking;
-  const isReasoning = isOpenaiReasoningModel(model);
-  const reasoningParams = getOpenaiReasoningParams(model, opts);
-
-  const body = { model, messages, max_tokens: maxTokens, stream: true, ...reasoningParams };
-  if (!isReasoning) body.temperature = temperature;
-  if (isReasoning && extThink?.enabled) {
-    body.reasoning = { effort: normalizeOpenaiReasoningEffort(opts.reasoningEffort), summary: "auto" };
-  }
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-    body: JSON.stringify(body)
-  });
-
-  if (!response.ok) handleApiError(response, await response.text(), "OpenAI");
-
-  let fullContent = "";
-  let fullThinking = "";
-  let modelName = model;
-  await parseSSEStream(response.body.getReader(), (parsed) => {
-    if (parsed.model) modelName = parsed.model;
-    const delta = parsed.choices?.[0]?.delta;
-    if (delta?.content) {
-      fullContent += delta.content;
-      onChunk(delta.content);
-    }
-    // Capture reasoning/thinking summary from o-series streaming
-    if (delta?.reasoning_content) {
-      fullThinking += delta.reasoning_content;
-      if (onThinking) onThinking(delta.reasoning_content);
-    }
-  });
-
-  return { content: fullContent, thinking: fullThinking.trim() || null, model: modelName, usage: null };
-}
-
-// ──────────────────────────────────────────────
-// Custom OpenAI-compatible provider
-// ──────────────────────────────────────────────
-async function getCustomProviderConfig() {
-  const { providers } = await browser.storage.local.get({ providers: {} });
-  const cfg = providers.custom || {};
-  if (!cfg.baseUrl) throw new Error("Custom provider: no Base URL configured. Set it in Settings → AI Providers → Custom.");
-  // Ensure baseUrl ends without trailing slash
-  const baseUrl = cfg.baseUrl.replace(/\/+$/, "");
-  const model = cfg.model || "default";
-  return { baseUrl, model, apiKey: cfg.apiKey };
-}
-
-async function callCustom(apiKey, model, messages, opts) {
-  const cfg = await getCustomProviderConfig();
-  const temperature = opts.temperature ?? 0.3;
-  const maxTokens = opts.maxTokens || 2048;
-  const body = { model: cfg.model, messages, max_tokens: maxTokens, temperature };
-
-  const response = await fetch(`${cfg.baseUrl}/v1/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-    body: JSON.stringify(body)
-  });
-
-  if (!response.ok) handleApiError(response, await response.text(), "Custom");
-  const data = await response.json();
-  if (!data.choices || data.choices.length === 0) throw new Error("Custom provider returned an empty response.");
-  return { content: data.choices[0].message.content, thinking: null, model: data.model || cfg.model, usage: data.usage };
-}
-
-async function callCustomStream(apiKey, model, messages, opts, onChunk, onThinking) {
-  const cfg = await getCustomProviderConfig();
-  const temperature = opts.temperature ?? 0.3;
-  const maxTokens = opts.maxTokens || 2048;
-  const body = { model: cfg.model, messages, max_tokens: maxTokens, temperature, stream: true };
-
-  const response = await fetch(`${cfg.baseUrl}/v1/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-    body: JSON.stringify(body)
-  });
-
-  if (!response.ok) handleApiError(response, await response.text(), "Custom");
-
-  let fullContent = "";
-  let modelName = cfg.model;
-  await parseSSEStream(response.body.getReader(), (parsed) => {
-    if (parsed.model) modelName = parsed.model;
-    const delta = parsed.choices?.[0]?.delta;
-    if (delta?.content) {
-      fullContent += delta.content;
-      onChunk(delta.content);
-    }
-  });
-
-  return { content: fullContent, thinking: null, model: modelName, usage: null };
-}
-
-async function callAnthropicStream(apiKey, model, messages, opts, onChunk, onThinking) {
-  const maxTokens = opts.maxTokens || 2048;
-  const extendedThinking = opts.extendedThinking;
-  const systemMsg = messages.find(m => m.role === "system");
-  const nonSystem = messages.filter(m => m.role !== "system");
-
-  const body = {
-    model,
-    max_tokens: maxTokens,
-    system: systemMsg ? systemMsg.content : undefined,
-    messages: nonSystem,
-    stream: true
-  };
-
-  if (extendedThinking && extendedThinking.enabled) {
-    body.thinking = { type: "enabled", budget_tokens: extendedThinking.budgetTokens || 10000 };
-    body.max_tokens = Math.max(maxTokens, (extendedThinking.budgetTokens || 10000) + maxTokens);
-  }
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true"
-    },
-    body: JSON.stringify(body)
-  });
-
-  if (!response.ok) handleApiError(response, await response.text(), "Anthropic");
-
-  let fullContent = "";
-  let fullThinking = "";
-  let modelName = model;
-  const decoder = new TextDecoder();
-  const reader = response.body.getReader();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop();
-
-    for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        const data = line.slice(6).trim();
-        if (data === "[DONE]") break;
-        try {
-          const parsed = JSON.parse(data);
-          if (parsed.type === "message_start" && parsed.message?.model) {
-            modelName = parsed.message.model;
-          }
-          if (parsed.type === "content_block_start") {
-            currentBlockType = parsed.content_block?.type;
-          }
-          if (parsed.type === "content_block_delta") {
-            if (parsed.delta?.type === "thinking_delta" && parsed.delta.thinking) {
-              fullThinking += parsed.delta.thinking;
-              if (onThinking) onThinking(parsed.delta.thinking);
-            } else if (parsed.delta?.type === "text_delta" && parsed.delta.text) {
-              fullContent += parsed.delta.text;
-              onChunk(parsed.delta.text);
-            }
-          }
-        } catch (e) { /* skip */ }
-      }
-    }
-  }
-
-  return {
-    content: fullContent,
-    thinking: fullThinking || undefined,
-    model: modelName,
-    usage: null
-  };
-}
-
-async function callGeminiStream(apiKey, model, messages, opts, onChunk, onThinking) {
-  const temperature = opts.temperature ?? 0.3;
-  const maxTokens = opts.maxTokens || 2048;
-  const extThink = opts.extendedThinking;
-  const systemMsg = messages.find(m => m.role === "system");
-  const nonSystem = messages.filter(m => m.role !== "system");
-
-  const contents = nonSystem.map(m => ({
-    role: m.role === "assistant" ? "model" : "user",
-    parts: [{ text: m.content }]
-  }));
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
-  const body = { contents, generationConfig: { temperature, maxOutputTokens: maxTokens } };
-  if (systemMsg) body.system_instruction = { parts: [{ text: systemMsg.content }] };
-  if (extThink?.enabled && isGeminiThinkingModel(model)) {
-    body.generationConfig.thinkingConfig = { thinkingBudget: extThink.budgetTokens || 10000 };
-  }
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  });
-
-  if (!response.ok) handleApiError(response, await response.text(), "Gemini");
-
-  let fullContent = "";
-  let fullThinking = "";
-  await parseSSEStream(response.body.getReader(), (parsed) => {
-    const parts = parsed.candidates?.[0]?.content?.parts;
-    if (!parts) return;
-    for (const part of parts) {
-      if (part.thought && part.text) {
-        fullThinking += part.text;
-        if (onThinking) onThinking(part.text);
-      } else if (part.text) {
-        fullContent += part.text;
-        onChunk(part.text);
-      }
-    }
-  });
-
-  return { content: fullContent, thinking: fullThinking.trim() || null, model: model, usage: null };
-}
-
-// ──────────────────────────────────────────────
-// Provider router
-// ──────────────────────────────────────────────
-async function callProvider(provider, apiKey, model, messages, opts = {}) {
-  switch (provider) {
-    case "xai": return callXai(apiKey, model, messages, opts);
-    case "openai": return callOpenai(apiKey, model, messages, opts);
-    case "anthropic": return callAnthropic(apiKey, model, messages, opts);
-    case "gemini": return callGemini(apiKey, model, messages, opts);
-    case "custom": return callCustom(apiKey, model, messages, opts);
-    default: throw new Error(`Unknown provider: ${provider}`);
-  }
-}
-
-async function callProviderStream(provider, apiKey, model, messages, opts, onChunk, onThinking) {
-  switch (provider) {
-    case "xai": return callXaiStream(apiKey, model, messages, opts, onChunk, onThinking);
-    case "openai": return callOpenaiStream(apiKey, model, messages, opts, onChunk, onThinking);
-    case "anthropic": return callAnthropicStream(apiKey, model, messages, opts, onChunk, onThinking);
-    case "gemini": return callGeminiStream(apiKey, model, messages, opts, onChunk, onThinking);
-    case "custom": return callCustomStream(apiKey, model, messages, opts, onChunk, onThinking);
-    default: throw new Error(`Unknown provider: ${provider}`);
-  }
-}
-
-// ──────────────────────────────────────────────
-// Settings helper
-// ──────────────────────────────────────────────
-async function getProviderSettings(overrideProvider, presetKey) {
-  const settings = await browser.storage.local.get({
-    defaultProvider: "xai",
-    providers: {
-      xai: { apiKey: "", model: "grok-4-0709" },
-      openai: { apiKey: "", model: "gpt-4.1" },
-      anthropic: { apiKey: "", model: "claude-sonnet-4-6" },
-      gemini: { apiKey: "", model: "gemini-2.5-flash" },
-      custom: { apiKey: "", model: "", baseUrl: "" }
-    },
-    maxTokens: 2048,
-    maxInputChars: 100000,
-    temperature: 0.3,
-    reasoningEffort: "medium",
-    openaiReasoningEffort: "medium",
-    customPresets: {},
-    extendedThinking: { enabled: false, budgetTokens: 10000 },
-    apiKey: "" // Legacy
-  });
-
-  // Legacy migration
-  if (settings.apiKey && !settings.providers.xai.apiKey) {
-    settings.providers.xai.apiKey = settings.apiKey;
-    await browser.storage.local.set({ providers: settings.providers });
-  }
-
-  // Check if preset has a bound provider (and no explicit override was given)
-  let presetProvider = null;
-  if (presetKey && !overrideProvider) {
-    const preset = settings.customPresets[presetKey] || ANALYSIS_PRESETS[presetKey];
-    if (preset?.provider) presetProvider = preset.provider;
-  }
-
-  const provider = overrideProvider || presetProvider || settings.defaultProvider;
-  const providerConfig = settings.providers[provider];
-
-  if (!providerConfig || !providerConfig.apiKey) {
-    throw new Error(`No API key configured for ${PROVIDERS[provider]?.label || provider}. Open settings to add one.`);
-  }
-
-  const effectiveReasoningEffort = provider === "openai"
-    ? (settings.openaiReasoningEffort || "medium")
-    : (settings.reasoningEffort || "medium");
-
-  return {
-    provider,
-    apiKey: providerConfig.apiKey,
-    model: providerConfig.model,
-    maxTokens: settings.maxTokens,
-    maxInputChars: settings.maxInputChars,
-    temperature: settings.temperature,
-    reasoningEffort: effectiveReasoningEffort,
-    customPresets: settings.customPresets || {},
-    extendedThinking: settings.extendedThinking || { enabled: false, budgetTokens: 10000 }
-  };
-}
-
-// ──────────────────────────────────────────────
 // Prompt variable resolution
 // ──────────────────────────────────────────────
 function resolveVariables(template, vars) {
@@ -1240,21 +422,13 @@ async function buildAnalysisPrompts(page, analysisType, customPrompt, settings) 
 // History management
 // ──────────────────────────────────────────────
 async function saveToHistory(entry) {
-  const { maxHistorySize } = await browser.storage.local.get({ maxHistorySize: 200 });
-  const { analysisHistory } = await browser.storage.local.get({ analysisHistory: [] });
-
-  analysisHistory.unshift({
-    id: `hist-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    timestamp: Date.now(),
-    ...entry
-  });
-
-  // Cap history
-  if (analysisHistory.length > maxHistorySize) {
-    analysisHistory.length = maxHistorySize;
-  }
-
-  await browser.storage.local.set({ analysisHistory });
+  await ArgusDB.History.add(entry);
+  // Extract entities for knowledge graph (non-blocking)
+  try {
+    if (entry.content && entry.pageUrl) {
+      KnowledgeGraph.extractAndUpsert(entry.content, entry.pageUrl, entry.pageTitle, entry.preset);
+    }
+  } catch (e) { console.warn("[KG] entity extraction failed:", e); }
 }
 
 // ──────────────────────────────────────────────
@@ -1352,7 +526,8 @@ async function handleAnalyzeStream(port, message) {
       isSelection: !!message.selectedText
     });
 
-    port.postMessage({
+    const detectedSource = SourcePipelines.detectSourceType(page.url, page);
+    const doneMsg = {
       type: "done",
       model: result.model,
       usage: result.usage,
@@ -1360,7 +535,19 @@ async function handleAnalyzeStream(port, message) {
       thinking: result.thinking,
       content: result.content,
       pageTitle: page.title
-    });
+    };
+    if (detectedSource) {
+      doneMsg.sourceType = { id: detectedSource.id, label: detectedSource.label, icon: detectedSource.icon };
+    }
+    port.postMessage(doneMsg);
+
+    // Run specialized pipeline in background (non-blocking enrichment)
+    if (detectedSource && !message.selectedText) {
+      try {
+        const pipelineResult = await SourcePipelines.runPipeline(detectedSource, page, settings);
+        try { port.postMessage({ type: "pipelineData", data: pipelineResult }); } catch(e) {}
+      } catch (e) { console.warn("[Pipeline] Enrichment failed:", e); }
+    }
   } catch (err) {
     try { port.postMessage({ type: "error", error: err.message || "An unexpected error occurred." }); } catch(e) {}
   }
@@ -1460,11 +647,32 @@ browser.runtime.onMessage.addListener((message, sender) => {
     const cached = archiveCheckCache.get(message.tabId);
     return Promise.resolve({ success: true, archiveUrl: cached?.archiveUrl || null, checked: !!cached });
   }
+  if (message.action === "checkArchiveNow") {
+    return (async () => {
+      try {
+        const checkUrl = `https://archive.is/newest/${message.url}`;
+        const resp = await fetch(checkUrl, { method: "HEAD", redirect: "follow" });
+        if (resp.ok && resp.url && resp.url !== checkUrl && !resp.url.includes("/newest/")) {
+          return { success: true, archiveUrl: resp.url };
+        }
+        return { success: true, archiveUrl: null };
+      } catch (err) { return { success: false, error: err.message }; }
+    })();
+  }
+  if (message.action === "checkWaybackNow") {
+    return (async () => {
+      try {
+        const snapshot = await checkWaybackAvailability(message.url);
+        return { success: true, waybackUrl: snapshot ? snapshot.url : null };
+      } catch (err) { return { success: false, error: err.message }; }
+    })();
+  }
   if (message.action === "getSelection") return handleGetSelection(message);
   if (message.action === "getOpenTabs") return handleGetOpenTabs();
   if (message.action === "getConversationState") return handleGetConversationState(message);
   if (message.action === "analyzeInTab") return handleAnalyzeInTab(message);
   if (message.action === "followUp") return handleFollowUp(message);
+  if (message.action === "startConversation") return handleStartConversation(message);
   if (message.action === "reAnalyze") return handleReAnalyze(message);
   if (message.action === "bookmarkPage") return handleBookmarkPage(message);
   if (message.action === "getBookmarks") return handleGetBookmarks(message);
@@ -1504,10 +712,31 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "updateProjectItem") return handleUpdateProjectItem(message);
   if (message.action === "removeProjectItem") return handleRemoveProjectItem(message);
   if (message.action === "exportProject") return handleExportProject(message);
+  if (message.action === "exportAllProjects") return handleExportAllProjects();
+  if (message.action === "importProject") return handleImportProject(message);
   if (message.action === "batchAnalyzeProjectItem") return handleBatchAnalyzeProjectItem(message);
   if (message.action === "batchAnalyzeProject") return handleBatchAnalyzeProject(message);
   if (message.action === "getBatchStatus") return handleGetBatchStatus();
   if (message.action === "cancelBatch") return handleCancelBatch();
+  // Knowledge Graph
+  if (message.action === "getKGGraph") return KnowledgeGraph.getGraphData(message);
+  if (message.action === "getKGStats") return KnowledgeGraph.getStats();
+  if (message.action === "searchKGNodes") return ArgusDB.KGNodes.search(message.query);
+  if (message.action === "deleteKGNode") return ArgusDB.KGNodes.remove(message.id).then(() => ({ success: true }));
+  if (message.action === "deleteKGEdge") return ArgusDB.KGEdges.remove(message.id).then(() => ({ success: true }));
+  if (message.action === "mergeKGNodes") return KnowledgeGraph.mergeNodes(message.keepId, message.removeId).then(n => ({ success: true, node: n }));
+  if (message.action === "getKGPendingMerges") return KnowledgeGraph.getPendingMerges();
+  if (message.action === "resolveKGMerge") return KnowledgeGraph.resolvePendingMerge(message.mergeId, message.accept);
+  if (message.action === "runKGInference") return KnowledgeGraph.runInferenceRules();
+  if (message.action === "clearKG") return ArgusDB.KGNodes.clear().then(() => ArgusDB.KGEdges.clear()).then(() => ({ success: true }));
+  // Agentic Automation
+  if (message.action === "getDashboardData") return AgentEngine.getDashboardData(message.projectId);
+  if (message.action === "generateDigest") return AgentEngine.generateProjectDigest(message.projectId);
+  if (message.action === "generateReportSection") return AgentEngine.generateReportSection(message.projectId, message.sectionType);
+  if (message.action === "detectTrends") return AgentEngine.detectTrends(message.projectId);
+  if (message.action === "getDigests") return AgentEngine.getDigests(message.projectId).then(d => ({ success: true, digests: d }));
+  if (message.action === "setDigestSchedule") return AgentEngine.setDigestSchedule(message.projectId, message.schedule);
+  if (message.action === "getDigestSchedule") return AgentEngine.getDigestSchedule(message.projectId).then(s => ({ success: true, schedule: s }));
   // OSINT tools are handled by background-osint.js's own message listener
   return false;
 });
@@ -1541,45 +770,35 @@ function handleGetProviders() {
 }
 
 async function handleGetHistory(message) {
-  const { analysisHistory } = await browser.storage.local.get({ analysisHistory: [] });
+  const all = await ArgusDB.History.getAllSorted();
   const page = message.page || 0;
   const perPage = message.perPage || 50;
   const start = page * perPage;
   return {
     success: true,
-    history: analysisHistory.slice(start, start + perPage),
-    total: analysisHistory.length
+    history: all.slice(start, start + perPage),
+    total: all.length
   };
 }
 
 async function handleDeleteHistoryItem(message) {
-  const { analysisHistory } = await browser.storage.local.get({ analysisHistory: [] });
-  const filtered = analysisHistory.filter(h => h.id !== message.id);
-  await browser.storage.local.set({ analysisHistory: filtered });
+  await ArgusDB.History.remove(message.id);
   return { success: true };
 }
 
 async function handleClearHistory() {
-  await browser.storage.local.set({ analysisHistory: [] });
+  await ArgusDB.History.clear();
   return { success: true };
 }
 
 async function handleSearchHistory(message) {
-  const { analysisHistory } = await browser.storage.local.get({ analysisHistory: [] });
-  const query = (message.query || "").toLowerCase();
-  const filtered = analysisHistory.filter(h =>
-    (h.pageTitle || "").toLowerCase().includes(query) ||
-    (h.pageUrl || "").toLowerCase().includes(query) ||
-    (h.content || "").toLowerCase().includes(query) ||
-    (h.presetLabel || "").toLowerCase().includes(query)
-  );
+  const filtered = await ArgusDB.History.search(message.query || "");
   return { success: true, history: filtered.slice(0, 100), total: filtered.length };
 }
 
 async function handleGetHistoryForUrl(message) {
-  const { analysisHistory } = await browser.storage.local.get({ analysisHistory: [] });
-  const url = message.url;
-  const matches = analysisHistory.filter(h => h.pageUrl === url);
+  const all = await ArgusDB.History.getAllSorted();
+  const matches = all.filter(h => h.pageUrl === message.url);
   return { success: true, history: matches.slice(0, 10), total: matches.length };
 }
 
@@ -1785,6 +1004,12 @@ async function streamAnalysisToStorage(resultId, page, message, settings, preset
       resultData.isResearch = true;
       resultData.sources = page._sources;
     }
+    // Detect source type and attach to result
+    const detectedSource = SourcePipelines.detectSourceType(page.url, page);
+    if (detectedSource) {
+      resultData.sourceType = { id: detectedSource.id, label: detectedSource.label, icon: detectedSource.icon };
+    }
+
     await browser.storage.local.set({ [resultId]: resultData });
 
     await saveToHistory({
@@ -1793,6 +1018,16 @@ async function streamAnalysisToStorage(resultId, page, message, settings, preset
       content: result.content, thinking: result.thinking, usage: result.usage,
       isSelection: !!message.selectedText
     });
+
+    // Run specialized pipeline in background (non-blocking enrichment)
+    if (detectedSource && !message.selectedText) {
+      try {
+        const pipelineResult = await SourcePipelines.runPipeline(detectedSource, page, settings);
+        // Store under separate key so results page can pick it up even after consuming main result
+        const pipelineKey = `${resultId}-pipeline`;
+        await browser.storage.local.set({ [pipelineKey]: pipelineResult });
+      } catch (e) { console.warn("[Pipeline] Enrichment failed:", e); }
+    }
   } catch (err) {
     await browser.storage.local.set({
       [resultId]: {
@@ -1852,6 +1087,71 @@ async function handleFollowUp(message) {
     })();
 
     return { success: true, followupResultId };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ──────────────────────────────────────────────
+// Start conversation (seed context for chat on any result page)
+// ──────────────────────────────────────────────
+async function handleStartConversation(message) {
+  try {
+    const { contextType, contextData, pageUrl, pageTitle, question, provider: providerOverride } = message;
+    const settings = await getProviderSettings(providerOverride || null);
+
+    const conversationId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const langInst = await getLanguageInstruction();
+
+    const systemPrompt = `You are Argus, an intelligent analysis assistant. The user is viewing ${contextType} results${pageTitle ? ` for "${pageTitle}"` : ""}${pageUrl ? ` (${pageUrl})` : ""}. Answer questions about the data below. Be concise and insightful.${langInst}
+
+--- ${contextType} Data ---
+${contextData}
+--- End Data ---`;
+
+    const messages = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: question }
+    ];
+
+    const followupResultId = `${conversationId}-followup-${Date.now()}`;
+    await browser.storage.local.set({ [followupResultId]: { status: "loading" } });
+
+    // Store conversation history for subsequent follow-ups
+    conversationHistory.set(conversationId, { provider: settings.provider, messages: [...messages] });
+
+    // Stream in background
+    (async () => {
+      try {
+        let streamedContent = "";
+        const result = await callProviderStream(
+          settings.provider, settings.apiKey, settings.model, messages,
+          { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking },
+          async (chunk) => {
+            streamedContent += chunk;
+            await browser.storage.local.set({ [followupResultId]: { status: "streaming", content: streamedContent } });
+          },
+          null
+        );
+
+        const history = conversationHistory.get(conversationId);
+        if (history) {
+          history.messages.push({ role: "assistant", content: result.content });
+          conversationHistory.set(conversationId, history);
+        }
+
+        await browser.storage.local.set({
+          [followupResultId]: {
+            status: "done", content: result.content, thinking: result.thinking,
+            model: result.model, usage: result.usage, provider: settings.provider
+          }
+        });
+      } catch (err) {
+        await browser.storage.local.set({ [followupResultId]: { status: "error", error: err.message } });
+      }
+    })();
+
+    return { success: true, conversationId, followupResultId };
   } catch (err) {
     return { success: false, error: err.message };
   }
@@ -1940,8 +1240,13 @@ async function handleReAnalyze(message) {
 browser.contextMenus.onClicked.addListener(async (info, tab) => {
   // Open Argus Console
   if (info.menuItemId === "argus-console") {
-    const consoleUrl = browser.runtime.getURL("options/options.html");
-    browser.tabs.create({ url: consoleUrl });
+    browser.tabs.create({ url: browser.runtime.getURL("options/options.html") });
+    return;
+  }
+
+  // Open Feed Reader
+  if (info.menuItemId === "argus-open-reader") {
+    browser.tabs.create({ url: browser.runtime.getURL("feeds/feeds.html") });
     return;
   }
 
@@ -1957,14 +1262,14 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
       } else {
         await saveBookmark(page, { tags: [], category: "other", summary: page.description || "" });
       }
-      browser.notifications.create({
+      safeNotify(null, {
         type: "basic",
         iconUrl: "icons/icon-96.png",
         title: "Argus",
         message: `Bookmarked: ${page.title}`
       });
     } catch (err) {
-      browser.notifications.create({
+      safeNotify(null, {
         type: "basic",
         iconUrl: "icons/icon-96.png",
         title: "Argus — Error",
@@ -1988,14 +1293,14 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
           tags: []
         }
       });
-      browser.notifications.create({
+      safeNotify(null, {
         type: "basic",
         iconUrl: "icons/icon-96.png",
         title: "Argus",
         message: `Added to project: ${tab.title || tab.url}`
       });
     } catch (err) {
-      browser.notifications.create({
+      safeNotify(null, {
         type: "basic",
         iconUrl: "icons/icon-96.png",
         title: "Argus — Error",
@@ -2018,7 +1323,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
         analysisPreset: "",
         duration: 0
       });
-      browser.notifications.create({
+      safeNotify(null, {
         type: "basic",
         iconUrl: "icons/icon-96.png",
         title: "Argus",
@@ -2027,7 +1332,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
           : `Monitor: ${result.error}`
       });
     } catch (err) {
-      browser.notifications.create({
+      safeNotify(null, {
         type: "basic",
         iconUrl: "icons/icon-96.png",
         title: "Argus — Error",
@@ -2043,7 +1348,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
       const providerUrl = archiveProviderUrl || "https://archive.is/";
       await browser.tabs.update(tab.id, { url: providerUrl + tab.url });
     } catch (err) {
-      browser.notifications.create({
+      safeNotify(null, {
         type: "basic",
         iconUrl: "icons/icon-96.png",
         title: "Argus — Error",
@@ -2059,11 +1364,41 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
       const submitUrl = "https://archive.is/?run=1&url=" + encodeURIComponent(tab.url);
       await browser.tabs.create({ url: submitUrl });
     } catch (err) {
-      browser.notifications.create({
+      safeNotify(null, {
         type: "basic",
         iconUrl: "icons/icon-96.png",
         title: "Argus — Error",
         message: `Failed to save to archive: ${err.message}`
+      });
+    }
+    return;
+  }
+
+  // Handle add site to trouble list
+  if (info.menuItemId === "argus-add-trouble-list") {
+    try {
+      const host = new URL(tab.url).hostname.replace(/^www\./, "");
+      const { archiveRedirect } = await browser.storage.local.get({
+        archiveRedirect: { enabled: false, domains: DEFAULT_ARCHIVE_DOMAINS, providerUrl: "https://archive.is/" }
+      });
+      const domains = archiveRedirect.domains || [];
+      if (!domains.includes(host)) {
+        domains.push(host);
+        archiveRedirect.domains = domains;
+        await browser.storage.local.set({ archiveRedirect });
+      }
+      safeNotify(null, {
+        type: "basic",
+        iconUrl: "icons/icon-96.png",
+        title: "Argus",
+        message: `Added ${host} to Trouble List`
+      });
+    } catch (err) {
+      safeNotify(null, {
+        type: "basic",
+        iconUrl: "icons/icon-96.png",
+        title: "Argus — Error",
+        message: `Failed to add to Trouble List: ${err.message}`
       });
     }
     return;
@@ -2078,18 +1413,48 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
         await browser.storage.local.set({ [storeKey]: { pageUrl: tab.url, pageTitle: tab.title, technologies: resp.technologies } });
         await browser.tabs.create({ url: browser.runtime.getURL(`osint/techstack.html?id=${encodeURIComponent(storeKey)}`) });
       } else {
-        browser.notifications.create({
+        safeNotify(null, {
           type: "basic", iconUrl: "icons/icon-96.png",
           title: "Argus — Error",
           message: resp?.error || "Tech stack detection failed"
         });
       }
     } catch (err) {
-      browser.notifications.create({
+      safeNotify(null, {
         type: "basic", iconUrl: "icons/icon-96.png",
         title: "Argus — Error",
         message: `Tech stack detection failed: ${err.message}`
       });
+    }
+    return;
+  }
+
+  // Handle site version checks
+  if (info.menuItemId === "argus-check-archive") {
+    try {
+      const checkUrl = `https://archive.is/newest/${tab.url}`;
+      const resp = await fetch(checkUrl, { method: "HEAD", redirect: "follow" });
+      if (resp.ok && resp.url && resp.url !== checkUrl && !resp.url.includes("/newest/")) {
+        await browser.tabs.create({ url: resp.url });
+      } else {
+        safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus", message: "No archived version found on archive.is" });
+      }
+    } catch (err) {
+      safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus — Error", message: `Archive check failed: ${err.message}` });
+    }
+    return;
+  }
+
+  if (info.menuItemId === "argus-check-wayback") {
+    try {
+      const snapshot = await checkWaybackAvailability(tab.url);
+      if (snapshot && snapshot.url) {
+        await browser.tabs.create({ url: snapshot.url });
+      } else {
+        safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus", message: "No Wayback Machine snapshot found" });
+      }
+    } catch (err) {
+      safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus — Error", message: `Wayback check failed: ${err.message}` });
     }
     return;
   }
@@ -2112,7 +1477,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
       let feedUrl = detectedFeed || await discoverFeedUrl(tab.url);
 
       if (!feedUrl) {
-        browser.notifications.create({
+        safeNotify(null, {
           type: "basic",
           iconUrl: "icons/icon-96.png",
           title: "Argus",
@@ -2128,7 +1493,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
         aiSummarize: false,
         monitorBridge: false
       });
-      browser.notifications.create({
+      safeNotify(null, {
         type: "basic",
         iconUrl: "icons/icon-96.png",
         title: "Argus",
@@ -2137,7 +1502,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
           : `Feed: ${result.error}`
       });
     } catch (err) {
-      browser.notifications.create({
+      safeNotify(null, {
         type: "basic",
         iconUrl: "icons/icon-96.png",
         title: "Argus — Error",
@@ -2156,10 +1521,10 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
         await browser.storage.local.set({ [storeKey]: { ...result.metadata, pageUrl: tab.url, pageTitle: tab.title } });
         browser.tabs.create({ url: browser.runtime.getURL(`results/results.html?metadata=${encodeURIComponent(storeKey)}`) });
       } else {
-        browser.notifications.create({ type: "basic", iconUrl: "icons/icon-96.png", title: "Argus", message: result.error || "Failed to extract metadata." });
+        safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus", message: result.error || "Failed to extract metadata." });
       }
     } catch (err) {
-      browser.notifications.create({ type: "basic", iconUrl: "icons/icon-96.png", title: "Argus - Error", message: err.message });
+      safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus - Error", message: err.message });
     }
     return;
   }
@@ -2173,7 +1538,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
         browser.tabs.create({ url: browser.runtime.getURL(`osint/link-map.html?id=${encodeURIComponent(storeKey)}`) });
       }
     } catch (err) {
-      browser.notifications.create({ type: "basic", iconUrl: "icons/icon-96.png", title: "Argus - Error", message: err.message });
+      safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus - Error", message: err.message });
     }
     return;
   }
@@ -2188,7 +1553,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
         browser.tabs.create({ url: browser.runtime.getURL(`results/results.html?whois=${encodeURIComponent(storeKey)}`) });
       }
     } catch (err) {
-      browser.notifications.create({ type: "basic", iconUrl: "icons/icon-96.png", title: "Argus - Error", message: err.message });
+      safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus - Error", message: err.message });
     }
     return;
   }
@@ -2414,7 +1779,8 @@ function matchUrlPattern(url, pattern) {
   }
 }
 
-browser.webNavigation.onCompleted.addListener(async (details) => {
+// Auto-analyze requires optional webNavigation permission
+initWebNavigation(async (details) => {
   // Only main frame
   if (details.frameId !== 0) return;
 
@@ -2510,33 +1876,32 @@ Rules:
 };
 
 async function saveBookmark(pageData, options = {}) {
-  const { smartBookmarks } = await browser.storage.local.get({ smartBookmarks: [] });
-
   // Check for duplicate URL
-  const existingIdx = smartBookmarks.findIndex(b => b.url === pageData.url);
+  const existing = await ArgusDB.Bookmarks.getByUrl(pageData.url);
 
   const bookmark = {
-    id: existingIdx >= 0 ? smartBookmarks[existingIdx].id : `bm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: existing ? existing.id : `bm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     url: pageData.url,
     title: pageData.title,
     text: (pageData.text || "").slice(0, 50000), // Store page text for search, capped at 50k
-    savedAt: existingIdx >= 0 ? smartBookmarks[existingIdx].savedAt : new Date().toISOString(),
+    savedAt: existing ? existing.savedAt : new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     tags: options.tags || [],
     category: options.category || "other",
     summary: options.summary || "",
     readingTime: options.readingTime || "",
-    notes: options.notes || (existingIdx >= 0 ? smartBookmarks[existingIdx].notes : ""),
+    notes: options.notes || (existing ? existing.notes : ""),
     aiTagged: !!options.aiTagged
   };
 
-  if (existingIdx >= 0) {
-    smartBookmarks[existingIdx] = bookmark;
-  } else {
-    smartBookmarks.unshift(bookmark);
-  }
+  await ArgusDB.Bookmarks.add(bookmark);
 
-  await browser.storage.local.set({ smartBookmarks });
+  // Extract entities for knowledge graph (non-blocking)
+  try {
+    const kgText = (bookmark.summary || "") + "\n" + (bookmark.text || "").slice(0, 5000);
+    if (kgText.trim()) KnowledgeGraph.extractAndUpsert(kgText, bookmark.url, bookmark.title, null);
+  } catch (e) { console.warn("[KG] bookmark entity extraction failed:", e); }
+
   return bookmark;
 }
 
@@ -2595,7 +1960,7 @@ async function handleBookmarkPage(message) {
 }
 
 async function handleGetBookmarks(message) {
-  const { smartBookmarks } = await browser.storage.local.get({ smartBookmarks: [] });
+  const smartBookmarks = await ArgusDB.Bookmarks.getAll();
 
   let results = smartBookmarks;
 
@@ -2631,7 +1996,7 @@ async function handleGetBookmarks(message) {
   const allTags = {};
   const allCategories = {};
   smartBookmarks.forEach(b => {
-    b.tags.forEach(t => { allTags[t] = (allTags[t] || 0) + 1; });
+    (b.tags || []).forEach(t => { allTags[t] = (allTags[t] || 0) + 1; });
     if (b.category) allCategories[b.category] = (allCategories[b.category] || 0) + 1;
   });
 
@@ -2645,28 +2010,24 @@ async function handleGetBookmarks(message) {
 }
 
 async function handleUpdateBookmark(message) {
-  const { smartBookmarks } = await browser.storage.local.get({ smartBookmarks: [] });
-  const idx = smartBookmarks.findIndex(b => b.id === message.id);
-  if (idx < 0) return { success: false, error: "Bookmark not found." };
+  const updates = {};
+  if (message.tags !== undefined) updates.tags = message.tags;
+  if (message.notes !== undefined) updates.notes = message.notes;
+  if (message.category !== undefined) updates.category = message.category;
+  updates.updatedAt = new Date().toISOString();
 
-  if (message.tags !== undefined) smartBookmarks[idx].tags = message.tags;
-  if (message.notes !== undefined) smartBookmarks[idx].notes = message.notes;
-  if (message.category !== undefined) smartBookmarks[idx].category = message.category;
-  smartBookmarks[idx].updatedAt = new Date().toISOString();
-
-  await browser.storage.local.set({ smartBookmarks });
-  return { success: true, bookmark: smartBookmarks[idx] };
+  const bookmark = await ArgusDB.Bookmarks.update(message.id, updates);
+  if (!bookmark) return { success: false, error: "Bookmark not found." };
+  return { success: true, bookmark };
 }
 
 async function handleDeleteBookmark(message) {
-  const { smartBookmarks } = await browser.storage.local.get({ smartBookmarks: [] });
-  const filtered = smartBookmarks.filter(b => b.id !== message.id);
-  await browser.storage.local.set({ smartBookmarks: filtered });
+  await ArgusDB.Bookmarks.remove(message.id);
   return { success: true };
 }
 
 async function handleExportBookmarks() {
-  const { smartBookmarks } = await browser.storage.local.get({ smartBookmarks: [] });
+  const smartBookmarks = await ArgusDB.Bookmarks.getAll();
   // Strip stored text to reduce export size
   const exportData = smartBookmarks.map(b => {
     const { text, ...rest } = b;
@@ -2733,15 +2094,14 @@ const MONITOR_ALARM_PREFIX = "tl-monitor-";
 // Track notification → monitor mapping for click handling
 const notificationMonitorMap = new Map();
 
-// Notification click handler — opens the monitored page
-browser.notifications.onClicked.addListener(async (notificationId) => {
+// Notification click handler — opens the monitored page (requires optional notifications permission)
+hasPermission("notifications").then(has => { if (has) browser.notifications.onClicked.addListener(async (notificationId) => {
   const monitorId = notificationMonitorMap.get(notificationId);
   if (!monitorId) return;
 
   notificationMonitorMap.delete(notificationId);
 
-  const { pageMonitors } = await browser.storage.local.get({ pageMonitors: [] });
-  const monitor = pageMonitors.find(m => m.id === monitorId);
+  const monitor = await ArgusDB.Monitors.get(monitorId);
   if (!monitor) return;
 
   // Auto-open: open the page directly
@@ -2749,7 +2109,7 @@ browser.notifications.onClicked.addListener(async (notificationId) => {
 
   // Clear unread count for this monitor
   await clearMonitorUnread(monitorId);
-});
+}); });
 
 // Badge management for unread monitor changes
 async function incrementMonitorBadge(monitorId) {
@@ -2854,7 +2214,7 @@ function extractTextFromHtml(html) {
 
 async function handleAddMonitor(message) {
   try {
-    const { pageMonitors } = await browser.storage.local.get({ pageMonitors: [] });
+    const pageMonitors = await ArgusDB.Monitors.getAll();
 
     // Check for duplicate
     if (pageMonitors.some(m => m.url === message.url)) {
@@ -2884,19 +2244,18 @@ async function handleAddMonitor(message) {
       expiresAt: message.duration ? new Date(Date.now() + message.duration * 3600000).toISOString() : null
     };
 
-    pageMonitors.push(monitor);
-    await browser.storage.local.set({ pageMonitors });
+    await ArgusDB.Monitors.save(monitor);
 
     // Save initial snapshot for the timeline
-    const snapshotKey = `monitor-snapshots-${monitor.id}`;
     const initialSnapshot = {
       id: `snap-${Date.now()}`,
+      monitorId: monitor.id,
       capturedAt: new Date().toISOString(),
       hash,
       text: text.slice(0, 5000),
       isInitial: true
     };
-    await browser.storage.local.set({ [snapshotKey]: [initialSnapshot] });
+    await ArgusDB.Snapshots.add(initialSnapshot);
 
     // Auto-bookmark if enabled
     if (monitor.autoBookmark) {
@@ -2919,100 +2278,87 @@ async function handleAddMonitor(message) {
 }
 
 async function handleGetMonitors() {
-  const { pageMonitors } = await browser.storage.local.get({ pageMonitors: [] });
+  const pageMonitors = await ArgusDB.Monitors.getAll();
   return { success: true, monitors: pageMonitors };
 }
 
 async function handleUpdateMonitor(message) {
-  const { pageMonitors } = await browser.storage.local.get({ pageMonitors: [] });
-  const idx = pageMonitors.findIndex(m => m.id === message.id);
-  if (idx < 0) return { success: false, error: "Monitor not found." };
+  const monitor = await ArgusDB.Monitors.get(message.id);
+  if (!monitor) return { success: false, error: "Monitor not found." };
 
-  if (message.intervalMinutes !== undefined) pageMonitors[idx].intervalMinutes = message.intervalMinutes;
-  if (message.enabled !== undefined) pageMonitors[idx].enabled = message.enabled;
-  if (message.aiAnalysis !== undefined) pageMonitors[idx].aiAnalysis = message.aiAnalysis;
-  if (message.autoOpen !== undefined) pageMonitors[idx].autoOpen = message.autoOpen;
-  if (message.autoBookmark !== undefined) pageMonitors[idx].autoBookmark = message.autoBookmark;
-  if (message.analysisPreset !== undefined) pageMonitors[idx].analysisPreset = message.analysisPreset;
+  if (message.intervalMinutes !== undefined) monitor.intervalMinutes = message.intervalMinutes;
+  if (message.enabled !== undefined) monitor.enabled = message.enabled;
+  if (message.aiAnalysis !== undefined) monitor.aiAnalysis = message.aiAnalysis;
+  if (message.autoOpen !== undefined) monitor.autoOpen = message.autoOpen;
+  if (message.autoBookmark !== undefined) monitor.autoBookmark = message.autoBookmark;
+  if (message.analysisPreset !== undefined) monitor.analysisPreset = message.analysisPreset;
   if (message.duration !== undefined) {
-    pageMonitors[idx].duration = message.duration;
-    pageMonitors[idx].expiresAt = message.duration ? new Date(Date.now() + message.duration * 3600000).toISOString() : null;
-    pageMonitors[idx].expired = false;
+    monitor.duration = message.duration;
+    monitor.expiresAt = message.duration ? new Date(Date.now() + message.duration * 3600000).toISOString() : null;
+    monitor.expired = false;
   }
 
-  await browser.storage.local.set({ pageMonitors });
+  await ArgusDB.Monitors.save(monitor);
 
   // Update alarm
-  const alarmName = `${MONITOR_ALARM_PREFIX}${pageMonitors[idx].id}`;
+  const alarmName = `${MONITOR_ALARM_PREFIX}${monitor.id}`;
   await browser.alarms.clear(alarmName);
-  if (pageMonitors[idx].enabled) {
+  if (monitor.enabled) {
     browser.alarms.create(alarmName, {
-      delayInMinutes: pageMonitors[idx].intervalMinutes,
-      periodInMinutes: pageMonitors[idx].intervalMinutes
+      delayInMinutes: monitor.intervalMinutes,
+      periodInMinutes: monitor.intervalMinutes
     });
   }
 
   // Sync linked bookmark summary with current monitor settings
-  const mon = pageMonitors[idx];
-  if (mon.autoBookmark) {
-    const { smartBookmarks } = await browser.storage.local.get({ smartBookmarks: [] });
-    const bmIdx = smartBookmarks.findIndex(b => b.url === mon.url);
-    if (bmIdx >= 0) {
-      const interval = mon.intervalMinutes >= 60 ? `${mon.intervalMinutes / 60}h` : `${mon.intervalMinutes}min`;
-      const presetStr = mon.analysisPreset ? ` | preset: ${mon.analysisPreset}` : "";
-      smartBookmarks[bmIdx].summary = mon.lastChangeSummary
-        ? `${mon.lastChangeSummary.slice(0, 200)} — monitored every ${interval}${presetStr}`
+  if (monitor.autoBookmark) {
+    const bm = await ArgusDB.Bookmarks.getByUrl(monitor.url);
+    if (bm) {
+      const interval = monitor.intervalMinutes >= 60 ? `${monitor.intervalMinutes / 60}h` : `${monitor.intervalMinutes}min`;
+      const presetStr = monitor.analysisPreset ? ` | preset: ${monitor.analysisPreset}` : "";
+      bm.summary = monitor.lastChangeSummary
+        ? `${monitor.lastChangeSummary.slice(0, 200)} — monitored every ${interval}${presetStr}`
         : `Auto-bookmarked — monitored every ${interval}${presetStr}`;
-      smartBookmarks[bmIdx].updatedAt = new Date().toISOString();
-      await browser.storage.local.set({ smartBookmarks });
+      bm.updatedAt = new Date().toISOString();
+      await ArgusDB.Bookmarks.add(bm);
     }
   }
 
-  return { success: true, monitor: pageMonitors[idx] };
+  return { success: true, monitor };
 }
 
 async function handleDeleteMonitor(message) {
-  const { pageMonitors } = await browser.storage.local.get({ pageMonitors: [] });
-  const monitor = pageMonitors.find(m => m.id === message.id);
+  const monitor = await ArgusDB.Monitors.get(message.id);
   if (monitor) {
     await browser.alarms.clear(`${MONITOR_ALARM_PREFIX}${monitor.id}`);
-    // Clean up associated storage
-    await browser.storage.local.remove([
-      `monitor-history-${monitor.id}`,
-      `monitor-snapshots-${monitor.id}`
-    ]);
     await clearMonitorUnread(monitor.id);
   }
-  const filtered = pageMonitors.filter(m => m.id !== message.id);
-  await browser.storage.local.set({ pageMonitors: filtered });
+  // ArgusDB.Monitors.remove also cleans up snapshots and changes
+  await ArgusDB.Monitors.remove(message.id);
   return { success: true };
 }
 
 async function handleGetMonitorHistory(message) {
-  const key = `monitor-history-${message.monitorId}`;
-  const stored = await browser.storage.local.get({ [key]: [] });
-  return { success: true, history: stored[key] };
+  const changes = await ArgusDB.Changes.getByMonitor(message.monitorId);
+  return { success: true, history: changes };
 }
 
 async function handleGetMonitorSnapshots(message) {
-  const key = `monitor-snapshots-${message.monitorId}`;
-  const stored = await browser.storage.local.get({ [key]: [] });
-  return { success: true, snapshots: stored[key] };
+  const snapshots = await ArgusDB.Snapshots.getByMonitor(message.monitorId);
+  return { success: true, snapshots };
 }
 
 async function handleGetMonitorStorageUsage() {
-  const { pageMonitors } = await browser.storage.local.get({ pageMonitors: [] });
+  const pageMonitors = await ArgusDB.Monitors.getAll();
   let totalBytes = JSON.stringify(pageMonitors).length;
   const perMonitor = [];
 
   for (const monitor of pageMonitors) {
     let monitorBytes = JSON.stringify(monitor).length;
-    const snapshotKey = `monitor-snapshots-${monitor.id}`;
-    const historyKey = `monitor-history-${monitor.id}`;
-    const { [snapshotKey]: snapshots } = await browser.storage.local.get({ [snapshotKey]: [] });
-    const { [historyKey]: history } = await browser.storage.local.get({ [historyKey]: [] });
+    const snapshots = await ArgusDB.Snapshots.getByMonitor(monitor.id);
+    const changes = await ArgusDB.Changes.getByMonitor(monitor.id);
     const snapBytes = JSON.stringify(snapshots).length;
-    const histBytes = JSON.stringify(history).length;
+    const histBytes = JSON.stringify(changes).length;
     monitorBytes += snapBytes + histBytes;
     totalBytes += snapBytes + histBytes;
     perMonitor.push({
@@ -3020,7 +2366,7 @@ async function handleGetMonitorStorageUsage() {
       title: monitor.title || monitor.url,
       bytes: monitorBytes,
       snapshots: snapshots.length,
-      historyEntries: history.length
+      historyEntries: changes.length
     });
   }
 
@@ -3032,19 +2378,15 @@ browser.alarms.onAlarm.addListener(async (alarm) => {
   if (!alarm.name.startsWith(MONITOR_ALARM_PREFIX)) return;
 
   const monitorId = alarm.name.slice(MONITOR_ALARM_PREFIX.length);
-  const { pageMonitors } = await browser.storage.local.get({ pageMonitors: [] });
-  const idx = pageMonitors.findIndex(m => m.id === monitorId);
-  if (idx < 0) return;
-
-  const monitor = pageMonitors[idx];
+  const monitor = await ArgusDB.Monitors.get(monitorId);
+  if (!monitor) return;
   if (!monitor.enabled) return;
 
   // Check if monitor has expired
   if (monitor.expiresAt && new Date(monitor.expiresAt).getTime() <= Date.now()) {
     monitor.enabled = false;
     monitor.expired = true;
-    pageMonitors[idx] = monitor;
-    await browser.storage.local.set({ pageMonitors });
+    await ArgusDB.Monitors.save(monitor);
     await browser.alarms.clear(alarm.name);
     console.log(`[Monitor] ${monitor.title} expired — auto-stopped`);
     return;
@@ -3058,19 +2400,17 @@ browser.alarms.onAlarm.addListener(async (alarm) => {
     monitor.lastChecked = now;
 
     // Always save a snapshot for the timeline (even if no change)
-    const snapshotKey = `monitor-snapshots-${monitor.id}`;
-    const { [snapshotKey]: snapshots } = await browser.storage.local.get({ [snapshotKey]: [] });
     const snapshot = {
       id: `snap-${Date.now()}`,
+      monitorId: monitor.id,
       capturedAt: now,
       hash: newHash,
       text: newText.slice(0, 5000),
       changed: newHash !== monitor.lastHash
     };
-    snapshots.unshift(snapshot);
+    await ArgusDB.Snapshots.add(snapshot);
     // Keep last 100 snapshots per monitor
-    if (snapshots.length > 100) snapshots.length = 100;
-    await browser.storage.local.set({ [snapshotKey]: snapshots });
+    await ArgusDB.Snapshots.pruneForMonitor(monitor.id, 100);
 
     if (newHash !== monitor.lastHash) {
       monitor.changeCount++;
@@ -3078,12 +2418,9 @@ browser.alarms.onAlarm.addListener(async (alarm) => {
       monitor.lastHash = newHash;
       monitor.lastText = newText.slice(0, 10000);
 
-      // Save change to history
-      const historyKey = `monitor-history-${monitor.id}`;
-      const { [historyKey]: history } = await browser.storage.local.get({ [historyKey]: [] });
-
       const changeEntry = {
         id: `chg-${Date.now()}`,
+        monitorId: monitor.id,
         detectedAt: now,
         oldHash: monitor.lastHash,
         newHash,
@@ -3122,9 +2459,13 @@ Summarize the key differences in 2-4 bullet points.`;
         }
       }
 
-      history.unshift(changeEntry);
-      if (history.length > 50) history.length = 50;
-      await browser.storage.local.set({ [historyKey]: history });
+      await ArgusDB.Changes.add(changeEntry);
+
+      // Extract entities for knowledge graph (non-blocking)
+      try {
+        const kgText = (changeEntry.aiSummary || "") + "\n" + (changeEntry.newSnippet || "");
+        if (kgText.trim()) KnowledgeGraph.extractAndUpsert(kgText, monitor.url, monitor.title, null);
+      } catch (e) { console.warn("[KG] monitor change extraction failed:", e); }
 
       // Store last change summary on the monitor for quick display
       monitor.lastChangeSummary = changeEntry.aiSummary || `Content changed (${new Date(now).toLocaleString()})`;
@@ -3140,7 +2481,7 @@ Summarize the key differences in 2-4 bullet points.`;
 
       const notifId = `monitor-change-${monitor.id}-${Date.now()}`;
       notificationMonitorMap.set(notifId, monitor.id);
-      browser.notifications.create(notifId, {
+      safeNotify(notifId, {
         type: "basic",
         iconUrl: "icons/icon-96.png",
         title: `Page Changed: ${monitor.title}`,
@@ -3216,20 +2557,18 @@ Summarize the key differences in 2-4 bullet points.`;
       console.log(`[Monitor] ${monitor.title}: no changes detected`);
     }
 
-    pageMonitors[idx] = monitor;
-    await browser.storage.local.set({ pageMonitors });
+    await ArgusDB.Monitors.save(monitor);
   } catch (err) {
     console.warn(`[Monitor] Check failed for "${monitor.title}" (${monitor.url}):`, err.message);
 
     monitor.lastChecked = new Date().toISOString();
-    pageMonitors[idx] = monitor;
-    await browser.storage.local.set({ pageMonitors });
+    await ArgusDB.Monitors.save(monitor);
   }
 });
 
 // Restore alarms on startup and catch up on any overdue monitors
 (async () => {
-  const { pageMonitors } = await browser.storage.local.get({ pageMonitors: [] });
+  const pageMonitors = await ArgusDB.Monitors.getAll();
   const now = Date.now();
   let updated = false;
 
@@ -3271,17 +2610,15 @@ Summarize the key differences in 2-4 bullet points.`;
         monitor.lastChecked = catchupNow;
 
         // Save snapshot for timeline
-        const snapshotKey = `monitor-snapshots-${monitor.id}`;
-        const { [snapshotKey]: snapshots } = await browser.storage.local.get({ [snapshotKey]: [] });
-        snapshots.unshift({
+        await ArgusDB.Snapshots.add({
           id: `snap-${Date.now()}`,
+          monitorId: monitor.id,
           capturedAt: catchupNow,
           hash: newHash,
           text: newText.slice(0, 5000),
           changed: newHash !== monitor.lastHash
         });
-        if (snapshots.length > 100) snapshots.length = 100;
-        await browser.storage.local.set({ [snapshotKey]: snapshots });
+        await ArgusDB.Snapshots.pruneForMonitor(monitor.id, 100);
 
         if (newHash !== monitor.lastHash) {
           monitor.changeCount++;
@@ -3289,11 +2626,9 @@ Summarize the key differences in 2-4 bullet points.`;
           monitor.lastHash = newHash;
           monitor.lastText = newText.slice(0, 10000);
 
-          const historyKey = `monitor-history-${monitor.id}`;
-          const { [historyKey]: history } = await browser.storage.local.get({ [historyKey]: [] });
-
           const changeEntry = {
             id: `chg-${Date.now()}`,
+            monitorId: monitor.id,
             detectedAt: catchupNow,
             oldHash: monitor.lastHash,
             newHash,
@@ -3331,9 +2666,13 @@ Summarize the key differences in 2-4 bullet points.`;
             }
           }
 
-          history.unshift(changeEntry);
-          if (history.length > 50) history.length = 50;
-          await browser.storage.local.set({ [historyKey]: history });
+          await ArgusDB.Changes.add(changeEntry);
+
+          // Extract entities for knowledge graph (non-blocking)
+          try {
+            const kgText = (changeEntry.aiSummary || "") + "\n" + (changeEntry.newSnippet || "");
+            if (kgText.trim()) KnowledgeGraph.extractAndUpsert(kgText, monitor.url, monitor.title, null);
+          } catch (e) { console.warn("[KG] monitor catchup extraction failed:", e); }
 
           monitor.lastChangeSummary = changeEntry.aiSummary || `Content changed (${new Date(catchupNow).toLocaleString()})`;
           monitor.lastChangeAt = catchupNow;
@@ -3342,7 +2681,7 @@ Summarize the key differences in 2-4 bullet points.`;
 
           const notifId = `monitor-catchup-${monitor.id}-${Date.now()}`;
           notificationMonitorMap.set(notifId, monitor.id);
-          browser.notifications.create(notifId, {
+          safeNotify(notifId, {
             type: "basic",
             iconUrl: "icons/icon-96.png",
             title: `Page Changed: ${monitor.title}`,
@@ -3367,7 +2706,7 @@ Summarize the key differences in 2-4 bullet points.`;
   }
 
   if (updated) {
-    await browser.storage.local.set({ pageMonitors });
+    await ArgusDB.Monitors.saveAll(pageMonitors);
   }
 
   // Restore badge count on startup
@@ -3409,34 +2748,45 @@ browser.storage.onChanged.addListener((changes) => {
     archiveRedirectEnabled = val.enabled;
     archiveRedirectDomains = val.domains || [];
     archiveProviderUrl = val.providerUrl || "https://archive.is/";
+    if (val.enabled) registerArchiveRedirect();
   }
 });
 
-// Intercept requests before they load
-browser.webRequest.onBeforeRequest.addListener(
-  (details) => {
-    if (!archiveRedirectEnabled) return;
-    if (details.type !== "main_frame") return;
+// Intercept requests before they load (requires optional webRequest permission)
+let archiveWebRequestRegistered = false;
 
-    try {
-      const url = new URL(details.url);
-      const host = url.hostname.replace(/^www\./, "");
+function archiveRedirectHandler(details) {
+  if (!archiveRedirectEnabled) return;
+  if (details.type !== "main_frame") return;
 
-      // Don't redirect archive/cache sites themselves
-      if (host.includes("archive.is") || host.includes("archive.ph") || host.includes("archive.today") || host.includes("webcache.googleusercontent.com")) return;
+  try {
+    const url = new URL(details.url);
+    const host = url.hostname.replace(/^www\./, "");
 
-      const matched = archiveRedirectDomains.some(
-        d => host === d || host.endsWith("." + d)
-      );
+    // Don't redirect archive/cache sites themselves
+    if (host.includes("archive.is") || host.includes("archive.ph") || host.includes("archive.today") || host.includes("webcache.googleusercontent.com")) return;
 
-      if (matched) {
-        return { redirectUrl: archiveProviderUrl + details.url };
-      }
-    } catch { /* invalid URL, skip */ }
-  },
-  { urls: ["<all_urls>"] },
-  ["blocking"]
-);
+    const matched = archiveRedirectDomains.some(
+      d => host === d || host.endsWith("." + d)
+    );
+
+    if (matched) {
+      return { redirectUrl: archiveProviderUrl + details.url };
+    }
+  } catch { /* invalid URL, skip */ }
+}
+
+async function registerArchiveRedirect() {
+  if (archiveWebRequestRegistered) return;
+  const registered = await initWebRequestBlocking(
+    archiveRedirectHandler,
+    { urls: ["<all_urls>"] },
+    ["blocking"]
+  );
+  if (registered) archiveWebRequestRegistered = true;
+}
+
+registerArchiveRedirect();
 
 // ══════════════════════════════════════════════════════════════
 // Archive Availability Checker
@@ -3560,7 +2910,7 @@ async function discoverFeedUrl(pageUrl) {
 
 async function handleAddFeed(message) {
   try {
-    const { rssFeeds } = await browser.storage.local.get({ rssFeeds: [] });
+    const rssFeeds = await ArgusDB.Feeds.getAll();
 
     let feedUrl = message.url.trim();
 
@@ -3607,12 +2957,11 @@ async function handleAddFeed(message) {
       monitorBridge: message.monitorBridge || false
     };
 
-    rssFeeds.push(feed);
-    await browser.storage.local.set({ rssFeeds });
+    await ArgusDB.Feeds.save(feed);
 
     // Save initial entries
-    const entryKey = `feed-entries-${feed.id}`;
-    await browser.storage.local.set({ [entryKey]: parsed.entries.slice(0, 100) });
+    const initialEntries = parsed.entries.slice(0, 100).map(e => ({ ...e, feedId: feed.id }));
+    await ArgusDB.FeedEntries.saveMany(initialEntries);
 
     // Set alarm for periodic checks
     browser.alarms.create(`${RSS_ALARM_PREFIX}${feed.id}`, {
@@ -3627,12 +2976,11 @@ async function handleAddFeed(message) {
 }
 
 async function handleGetFeeds() {
-  const { rssFeeds } = await browser.storage.local.get({ rssFeeds: [] });
+  const rssFeeds = await ArgusDB.Feeds.getAll();
   // Include unread counts
   const feeds = [];
   for (const feed of rssFeeds) {
-    const entryKey = `feed-entries-${feed.id}`;
-    const { [entryKey]: entries } = await browser.storage.local.get({ [entryKey]: [] });
+    const entries = await ArgusDB.FeedEntries.getByFeed(feed.id);
     feeds.push({ ...feed, unreadCount: entries.filter(e => !e.read).length, totalEntries: entries.length });
   }
   return { success: true, feeds };
@@ -3640,90 +2988,79 @@ async function handleGetFeeds() {
 
 async function handleGetFeedEntries(message) {
   if (message.feedId) {
-    const entryKey = `feed-entries-${message.feedId}`;
-    const { [entryKey]: entries } = await browser.storage.local.get({ [entryKey]: [] });
+    const entries = await ArgusDB.FeedEntries.getByFeed(message.feedId);
     return { success: true, entries };
   }
   // All feeds — combine and sort by date
-  const { rssFeeds } = await browser.storage.local.get({ rssFeeds: [] });
+  const rssFeeds = await ArgusDB.Feeds.getAll();
   let allEntries = [];
   for (const feed of rssFeeds) {
-    const entryKey = `feed-entries-${feed.id}`;
-    const { [entryKey]: entries } = await browser.storage.local.get({ [entryKey]: [] });
-    allEntries.push(...entries.map(e => ({ ...e, feedId: feed.id, feedTitle: feed.title })));
+    const entries = await ArgusDB.FeedEntries.getByFeed(feed.id);
+    allEntries.push(...entries.map(e => ({ ...e, feedTitle: feed.title })));
   }
   allEntries.sort((a, b) => new Date(b.pubDate || 0) - new Date(a.pubDate || 0));
   return { success: true, entries: allEntries.slice(0, 200) };
 }
 
 async function handleDeleteFeed(message) {
-  const { rssFeeds } = await browser.storage.local.get({ rssFeeds: [] });
-  const feed = rssFeeds.find(f => f.id === message.id);
+  const feed = await ArgusDB.Feeds.get(message.id);
   if (feed) {
     await browser.alarms.clear(`${RSS_ALARM_PREFIX}${feed.id}`);
-    await browser.storage.local.remove([`feed-entries-${feed.id}`]);
   }
-  await browser.storage.local.set({ rssFeeds: rssFeeds.filter(f => f.id !== message.id) });
+  // ArgusDB.Feeds.remove also cleans up entries
+  await ArgusDB.Feeds.remove(message.id);
   return { success: true };
 }
 
 async function handleDeleteAllFeeds() {
-  const { rssFeeds } = await browser.storage.local.get({ rssFeeds: [] });
-  const keysToRemove = rssFeeds.map(f => `feed-entries-${f.id}`);
+  const rssFeeds = await ArgusDB.Feeds.getAll();
   for (const feed of rssFeeds) {
     await browser.alarms.clear(`${RSS_ALARM_PREFIX}${feed.id}`);
   }
-  if (keysToRemove.length) await browser.storage.local.remove(keysToRemove);
-  await browser.storage.local.set({ rssFeeds: [] });
+  await ArgusDB.Feeds.clear();
   return { success: true };
 }
 
 async function handleUpdateFeed(message) {
-  const { rssFeeds } = await browser.storage.local.get({ rssFeeds: [] });
-  const idx = rssFeeds.findIndex(f => f.id === message.id);
-  if (idx < 0) return { success: false, error: "Feed not found." };
+  const feed = await ArgusDB.Feeds.get(message.id);
+  if (!feed) return { success: false, error: "Feed not found." };
 
-  if (message.enabled !== undefined) rssFeeds[idx].enabled = message.enabled;
-  if (message.checkIntervalMinutes !== undefined) rssFeeds[idx].checkIntervalMinutes = message.checkIntervalMinutes;
-  if (message.aiSummarize !== undefined) rssFeeds[idx].aiSummarize = message.aiSummarize;
-  if (message.title !== undefined) rssFeeds[idx].title = message.title;
+  if (message.enabled !== undefined) feed.enabled = message.enabled;
+  if (message.checkIntervalMinutes !== undefined) feed.checkIntervalMinutes = message.checkIntervalMinutes;
+  if (message.aiSummarize !== undefined) feed.aiSummarize = message.aiSummarize;
+  if (message.title !== undefined) feed.title = message.title;
 
-  await browser.storage.local.set({ rssFeeds });
+  await ArgusDB.Feeds.save(feed);
 
   // Update alarm
-  const alarmName = `${RSS_ALARM_PREFIX}${rssFeeds[idx].id}`;
+  const alarmName = `${RSS_ALARM_PREFIX}${feed.id}`;
   await browser.alarms.clear(alarmName);
-  if (rssFeeds[idx].enabled) {
+  if (feed.enabled) {
     browser.alarms.create(alarmName, {
-      delayInMinutes: rssFeeds[idx].checkIntervalMinutes,
-      periodInMinutes: rssFeeds[idx].checkIntervalMinutes
+      delayInMinutes: feed.checkIntervalMinutes,
+      periodInMinutes: feed.checkIntervalMinutes
     });
   }
 
-  return { success: true, feed: rssFeeds[idx] };
+  return { success: true, feed };
 }
 
 async function handleMarkFeedEntryRead(message) {
-  const entryKey = `feed-entries-${message.feedId}`;
-  const { [entryKey]: entries } = await browser.storage.local.get({ [entryKey]: [] });
-  const entry = entries.find(e => e.id === message.entryId);
-  if (entry) entry.read = true;
-  await browser.storage.local.set({ [entryKey]: entries });
+  await ArgusDB.FeedEntries.update(message.entryId, { read: true });
   return { success: true };
 }
 
 async function handleMarkAllFeedRead(message) {
-  const entryKey = `feed-entries-${message.feedId}`;
-  const { [entryKey]: entries } = await browser.storage.local.get({ [entryKey]: [] });
-  entries.forEach(e => { e.read = true; });
-  await browser.storage.local.set({ [entryKey]: entries });
+  const entries = await ArgusDB.FeedEntries.getByFeed(message.feedId);
+  const updated = entries.map(e => ({ ...e, read: true }));
+  await ArgusDB.FeedEntries.saveMany(updated);
   return { success: true };
 }
 
 async function handleRefreshFeed(message) {
-  const { rssFeeds } = await browser.storage.local.get({ rssFeeds: [] });
-  const feed = rssFeeds.find(f => f.id === message.id);
+  const feed = await ArgusDB.Feeds.get(message.id);
   if (!feed) return { success: false, error: "Feed not found." };
+  const rssFeeds = await ArgusDB.Feeds.getAll();
   await checkFeedForUpdates(feed, rssFeeds);
   return { success: true };
 }
@@ -3765,8 +3102,7 @@ async function checkFeedForUpdates(feed, allFeeds) {
     const xmlText = await resp.text();
     const parsed = parseRSSFeed(xmlText);
 
-    const entryKey = `feed-entries-${feed.id}`;
-    const { [entryKey]: existingEntries } = await browser.storage.local.get({ [entryKey]: [] });
+    const existingEntries = await ArgusDB.FeedEntries.getByFeed(feed.id);
     const existingIds = new Set(existingEntries.map(e => e.id));
 
     const newEntries = parsed.entries.filter(e => !existingIds.has(e.id));
@@ -3795,12 +3131,20 @@ async function checkFeedForUpdates(feed, allFeeds) {
         }
       } catch { /* non-critical */ }
 
-      const merged = [...newEntries, ...existingEntries].slice(0, 200);
-      await browser.storage.local.set({ [entryKey]: merged });
+      const newTagged = newEntries.map(e => ({ ...e, feedId: feed.id }));
+      await ArgusDB.FeedEntries.saveMany(newTagged);
+
+      // Extract entities for knowledge graph (non-blocking)
+      try {
+        for (const entry of newTagged.slice(0, 10)) {
+          const kgText = (entry.title || "") + "\n" + (entry.aiSummary || entry.description || "");
+          if (kgText.trim()) KnowledgeGraph.extractAndUpsert(kgText, entry.link || feed.url, entry.title, null);
+        }
+      } catch (e) { console.warn("[KG] feed entry extraction failed:", e); }
 
       // Notification for new entries
       if (newEntries.length > 0) {
-        browser.notifications.create(`rss-${feed.id}-${Date.now()}`, {
+        safeNotify(`rss-${feed.id}-${Date.now()}`, {
           type: "basic",
           iconUrl: "icons/icon-96.png",
           title: `${feed.title}: ${newEntries.length} new`,
@@ -3810,24 +3154,20 @@ async function checkFeedForUpdates(feed, allFeeds) {
 
       // Monitor bridge — if enabled, create a change entry on the linked monitor
       if (feed.monitorBridge) {
-        const { pageMonitors } = await browser.storage.local.get({ pageMonitors: [] });
+        const pageMonitors = await ArgusDB.Monitors.getAll();
         const linkedMonitor = pageMonitors.find(m => m.url === feed.siteUrl || m.url === feed.url);
         if (linkedMonitor) {
           linkedMonitor.changeCount += newEntries.length;
           linkedMonitor.lastChangeSummary = `${newEntries.length} new RSS entries: ${newEntries.slice(0, 2).map(e => e.title).join(", ")}`;
           linkedMonitor.lastChangeAt = new Date().toISOString();
-          await browser.storage.local.set({ pageMonitors });
+          await ArgusDB.Monitors.save(linkedMonitor);
         }
       }
     }
 
     // Update feed metadata
     feed.lastFetched = new Date().toISOString();
-    const feedIdx = allFeeds.findIndex(f => f.id === feed.id);
-    if (feedIdx >= 0) {
-      allFeeds[feedIdx] = feed;
-      await browser.storage.local.set({ rssFeeds: allFeeds });
-    }
+    await ArgusDB.Feeds.save(feed);
   } catch (err) {
     console.warn(`[RSS] Failed to check feed "${feed.title}":`, err.message);
   }
@@ -3839,16 +3179,35 @@ browser.alarms.onAlarm.addListener(async (alarm) => {
   if (!alarm.name.startsWith(RSS_ALARM_PREFIX)) return;
 
   const feedId = alarm.name.slice(RSS_ALARM_PREFIX.length);
-  const { rssFeeds } = await browser.storage.local.get({ rssFeeds: [] });
-  const feed = rssFeeds.find(f => f.id === feedId);
+  const feed = await ArgusDB.Feeds.get(feedId);
   if (!feed || !feed.enabled) return;
 
+  const rssFeeds = await ArgusDB.Feeds.getAll();
   await checkFeedForUpdates(feed, rssFeeds);
+});
+
+// Knowledge Graph inference alarm handler
+browser.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== "kg-inference") return;
+  try {
+    const stats = await KnowledgeGraph.runInferenceRules();
+    if (stats.inferred) console.log("[KG] Periodic inference:", stats.inferred, "new relationships");
+  } catch (e) { console.warn("[KG] Periodic inference error:", e); }
+});
+
+// Scheduled digest alarm handler
+browser.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== "agent-digests") return;
+  try {
+    const results = await AgentEngine.runScheduledDigests();
+    const generated = results.filter(r => r.success).length;
+    if (generated) console.log("[Agent] Scheduled digests generated:", generated);
+  } catch (e) { console.warn("[Agent] Scheduled digest error:", e); }
 });
 
 // Restore RSS alarms on startup
 (async () => {
-  const { rssFeeds } = await browser.storage.local.get({ rssFeeds: [] });
+  const rssFeeds = await ArgusDB.Feeds.getAll();
   for (const feed of rssFeeds) {
     if (!feed.enabled) continue;
     const alarmName = `${RSS_ALARM_PREFIX}${feed.id}`;
@@ -3871,12 +3230,11 @@ function genId(prefix) {
 }
 
 async function handleGetProjects() {
-  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
-  return { success: true, projects: argusProjects };
+  const projects = await ArgusDB.Projects.getAll();
+  return { success: true, projects };
 }
 
 async function handleCreateProject(message) {
-  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
   const project = {
     id: genId("proj"),
     name: message.name || "Untitled Project",
@@ -3887,35 +3245,29 @@ async function handleCreateProject(message) {
     updatedAt: new Date().toISOString(),
     items: []
   };
-  argusProjects.unshift(project);
-  await browser.storage.local.set({ argusProjects });
+  await ArgusDB.Projects.save(project);
   return { success: true, project };
 }
 
 async function handleUpdateProject(message) {
-  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
-  const idx = argusProjects.findIndex(p => p.id === message.projectId);
-  if (idx === -1) return { success: false, error: "Project not found" };
-  const proj = argusProjects[idx];
+  const proj = await ArgusDB.Projects.get(message.projectId);
+  if (!proj) return { success: false, error: "Project not found" };
   if (message.name !== undefined) proj.name = message.name;
   if (message.description !== undefined) proj.description = message.description;
   if (message.starred !== undefined) proj.starred = message.starred;
   if (message.color !== undefined) proj.color = message.color;
   proj.updatedAt = new Date().toISOString();
-  await browser.storage.local.set({ argusProjects });
+  await ArgusDB.Projects.save(proj);
   return { success: true, project: proj };
 }
 
 async function handleDeleteProject(message) {
-  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
-  const filtered = argusProjects.filter(p => p.id !== message.projectId);
-  await browser.storage.local.set({ argusProjects: filtered });
+  await ArgusDB.Projects.remove(message.projectId);
   return { success: true };
 }
 
 async function handleAddProjectItem(message) {
-  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
-  const proj = argusProjects.find(p => p.id === message.projectId);
+  const proj = await ArgusDB.Projects.get(message.projectId);
   if (!proj) return { success: false, error: "Project not found" };
   const item = {
     id: genId("item"),
@@ -3930,13 +3282,12 @@ async function handleAddProjectItem(message) {
   };
   proj.items.unshift(item);
   proj.updatedAt = new Date().toISOString();
-  await browser.storage.local.set({ argusProjects });
+  await ArgusDB.Projects.save(proj);
   return { success: true, item };
 }
 
 async function handleUpdateProjectItem(message) {
-  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
-  const proj = argusProjects.find(p => p.id === message.projectId);
+  const proj = await ArgusDB.Projects.get(message.projectId);
   if (!proj) return { success: false, error: "Project not found" };
   const item = proj.items.find(i => i.id === message.itemId);
   if (!item) return { success: false, error: "Item not found" };
@@ -3944,38 +3295,148 @@ async function handleUpdateProjectItem(message) {
   if (message.tags !== undefined) item.tags = message.tags;
   if (message.title !== undefined) item.title = message.title;
   proj.updatedAt = new Date().toISOString();
-  await browser.storage.local.set({ argusProjects });
+  await ArgusDB.Projects.save(proj);
   return { success: true, item };
 }
 
 async function handleRemoveProjectItem(message) {
-  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
-  const proj = argusProjects.find(p => p.id === message.projectId);
+  const proj = await ArgusDB.Projects.get(message.projectId);
   if (!proj) return { success: false, error: "Project not found" };
   proj.items = proj.items.filter(i => i.id !== message.itemId);
   proj.updatedAt = new Date().toISOString();
-  await browser.storage.local.set({ argusProjects });
+  await ArgusDB.Projects.save(proj);
   return { success: true };
 }
 
 async function handleExportProject(message) {
-  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
-  const proj = argusProjects.find(p => p.id === message.projectId);
+  const proj = await ArgusDB.Projects.get(message.projectId);
   if (!proj) return { success: false, error: "Project not found" };
-  return { success: true, project: proj };
+
+  // Collect related history entries referenced by project items
+  const relatedHistory = [];
+  const refIds = proj.items.filter(i => i.refId).map(i => i.refId);
+  if (refIds.length) {
+    const allHistory = await ArgusDB.History.getAllSorted();
+    for (const entry of allHistory) {
+      if (refIds.includes(entry.id)) relatedHistory.push(entry);
+    }
+  }
+
+  const bundle = {
+    manifest: {
+      format: "argusproj",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      argusVersion: browser.runtime.getManifest().version,
+      projectCount: 1,
+      historyCount: relatedHistory.length,
+    },
+    projects: [proj],
+    history: relatedHistory,
+  };
+  return { success: true, bundle };
+}
+
+async function handleExportAllProjects() {
+  const projects = await ArgusDB.Projects.getAll();
+  if (!projects.length) return { success: false, error: "No projects" };
+
+  // Collect all referenced history entries
+  const refIds = new Set();
+  for (const proj of projects) {
+    for (const item of (proj.items || [])) {
+      if (item.refId) refIds.add(item.refId);
+    }
+  }
+  const relatedHistory = [];
+  if (refIds.size) {
+    const allHistory = await ArgusDB.History.getAllSorted();
+    for (const entry of allHistory) {
+      if (refIds.has(entry.id)) relatedHistory.push(entry);
+    }
+  }
+
+  const bundle = {
+    manifest: {
+      format: "argusproj",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      argusVersion: browser.runtime.getManifest().version,
+      projectCount: projects.length,
+      historyCount: relatedHistory.length,
+    },
+    projects,
+    history: relatedHistory,
+  };
+  return { success: true, bundle };
+}
+
+async function handleImportProject(message) {
+  const { bundle } = message;
+  if (!bundle || !bundle.manifest || bundle.manifest.format !== "argusproj") {
+    return { success: false, error: "Invalid .argusproj file" };
+  }
+
+  let projectsImported = 0;
+  let historyImported = 0;
+
+  // Import projects (assign new IDs to avoid collisions)
+  const idMap = {};
+  for (const proj of (bundle.projects || [])) {
+    const oldId = proj.id;
+    const newId = genId("proj");
+    idMap[oldId] = newId;
+    proj.id = newId;
+    proj.updatedAt = new Date().toISOString();
+    // Remap item IDs
+    for (const item of (proj.items || [])) {
+      item.id = genId("item");
+    }
+    await ArgusDB.Projects.save(proj);
+    projectsImported++;
+  }
+
+  // Import related history entries (new IDs, update project item refIds)
+  const historyIdMap = {};
+  for (const entry of (bundle.history || [])) {
+    const oldId = entry.id;
+    const newId = genId("hist");
+    historyIdMap[oldId] = newId;
+    entry.id = newId;
+    await ArgusDB.History.add(entry);
+    historyImported++;
+  }
+
+  // Update refIds in imported projects to point to new history IDs
+  if (Object.keys(historyIdMap).length) {
+    for (const oldId of Object.keys(idMap)) {
+      const newProjId = idMap[oldId];
+      const savedProj = await ArgusDB.Projects.get(newProjId);
+      if (!savedProj) continue;
+      let changed = false;
+      for (const item of (savedProj.items || [])) {
+        if (item.refId && historyIdMap[item.refId]) {
+          item.refId = historyIdMap[item.refId];
+          changed = true;
+        }
+      }
+      if (changed) await ArgusDB.Projects.save(savedProj);
+    }
+  }
+
+  return { success: true, projectsImported, historyImported };
 }
 
 async function handleBatchAnalyzeProjectItem(message) {
   try {
     const { projectId, itemId, presetKey } = message;
-    const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
-    const proj = argusProjects.find(p => p.id === projectId);
+    const proj = await ArgusDB.Projects.get(projectId);
     if (!proj) return { success: false, error: "Project not found" };
     const item = proj.items.find(i => i.id === itemId);
     if (!item || !item.url) return { success: false, error: "Item has no URL" };
 
     // Check history first — reuse existing analysis if available
-    const { analysisHistory } = await browser.storage.local.get({ analysisHistory: [] });
+    const analysisHistory = await ArgusDB.History.getAllSorted();
     const existingAnalysis = analysisHistory.find(h =>
       h.pageUrl === item.url && h.presetKey === presetKey
     );
@@ -3984,7 +3445,7 @@ async function handleBatchAnalyzeProjectItem(message) {
       item.analysisContent = existingAnalysis.content;
       item.analysisPreset = presetKey;
       proj.updatedAt = new Date().toISOString();
-      await browser.storage.local.set({ argusProjects });
+      await ArgusDB.Projects.save(proj);
       return { success: true, cached: true };
     }
 
@@ -4008,7 +3469,7 @@ async function handleBatchAnalyzeProjectItem(message) {
     item.analysisContent = result.content.replace(/\n?SHARELINE:\s*.+$/m, "");
     item.analysisPreset = presetKey;
     proj.updatedAt = new Date().toISOString();
-    await browser.storage.local.set({ argusProjects });
+    await ArgusDB.Projects.save(proj);
 
     // Also save to history
     await saveToHistory({
@@ -4038,8 +3499,7 @@ async function handleBatchAnalyzeProject(message) {
   if (batchState.running) return { success: false, error: "A batch analysis is already running." };
 
   const { projectId, presetKey, reanalyze } = message;
-  const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
-  const proj = argusProjects.find(p => p.id === projectId);
+  const proj = await ArgusDB.Projects.get(projectId);
   if (!proj) return { success: false, error: "Project not found" };
 
   const targets = reanalyze
@@ -4059,8 +3519,7 @@ async function runBatchLoop(itemIds, projectId, presetKey) {
   for (const itemId of itemIds) {
     if (batchState.cancelled) break;
 
-    const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
-    const proj = argusProjects.find(p => p.id === projectId);
+    const proj = await ArgusDB.Projects.get(projectId);
     if (!proj) { batchState.errors.push("Project disappeared"); break; }
     const item = proj.items.find(i => i.id === itemId);
     if (!item) { batchState.done++; continue; }
@@ -4103,3 +3562,63 @@ function handleCancelBatch() {
   }
   return { success: false, error: "No batch running." };
 }
+
+// ──────────────────────────────────────────────
+// Startup: migrate data to IndexedDB, cleanup, and auto-prune
+// ──────────────────────────────────────────────
+(async function startupInit() {
+  try {
+    // Migrate existing browser.storage.local data to IndexedDB (one-time)
+    await ArgusDB.migrateFromStorage();
+  } catch (e) {
+    console.warn("[ArgusDB] Migration error (will retry next startup):", e);
+  }
+
+  // Clean up stale temporary result keys (these stay in browser.storage.local)
+  try {
+    const all = await browser.storage.local.get(null);
+    const staleKeys = [];
+    const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+    const now = Date.now();
+
+    for (const [key, val] of Object.entries(all)) {
+      if (!key.startsWith("tl-result-")) continue;
+      if (!val || typeof val !== "object") continue;
+
+      if (val.status === "done" || val.status === "error") {
+        staleKeys.push(key);
+      } else if (val.timestamp && now - val.timestamp > maxAge) {
+        staleKeys.push(key);
+      }
+    }
+
+    if (staleKeys.length) {
+      await browser.storage.local.remove(staleKeys);
+    }
+  } catch { /* startup cleanup is best-effort */ }
+
+  // Run auto-prune rules on IndexedDB stores
+  try {
+    const stats = await ArgusDB.runPruneRules();
+    if (stats.deleted || stats.compressed) {
+      console.log("[ArgusDB] Auto-prune:", stats);
+    }
+  } catch { /* prune is best-effort */ }
+
+  // Knowledge Graph: backfill from existing history (one-time)
+  try {
+    await KnowledgeGraph.backfillFromHistory();
+  } catch (e) { console.warn("[KG] Backfill error:", e); }
+
+  // Knowledge Graph: run inference rules on startup
+  try {
+    const kgStats = await KnowledgeGraph.runInferenceRules();
+    if (kgStats.inferred) console.log("[KG] Inferred", kgStats.inferred, "new relationships");
+  } catch { /* inference is best-effort */ }
+
+  // Set up periodic inference alarm (every 30 min)
+  browser.alarms.create("kg-inference", { delayInMinutes: 30, periodInMinutes: 30 });
+
+  // Set up scheduled digest alarm (every 6 hours — actual digest generation checks per-project schedule)
+  browser.alarms.create("agent-digests", { delayInMinutes: 60, periodInMinutes: 360 });
+})();

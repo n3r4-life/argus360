@@ -235,6 +235,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   initMainTabs();
   initHelpBackToTop();
   initWatchlist();
+  initStorageManagement();
 });
 
 function loadVersion() {
@@ -857,17 +858,44 @@ async function renderMonitors() {
     info.appendChild(meta);
 
     if (monitor.lastChangeSummary) {
-      const summary = document.createElement("span");
-      summary.className = "rule-meta";
-      summary.style.display = "block";
-      summary.style.marginTop = "4px";
-      summary.style.color = "var(--accent)";
-      summary.style.fontStyle = "italic";
-      const text = monitor.lastChangeSummary.length > 150
-        ? monitor.lastChangeSummary.slice(0, 150) + "..."
-        : monitor.lastChangeSummary;
-      summary.textContent = `Latest: ${text}`;
-      info.appendChild(summary);
+      const summaryWrap = document.createElement("div");
+      summaryWrap.style.marginTop = "4px";
+
+      const isLong = monitor.lastChangeSummary.length > 150;
+      const summaryPreview = document.createElement("span");
+      summaryPreview.className = "rule-meta";
+      summaryPreview.style.display = "block";
+      summaryPreview.style.color = "var(--accent)";
+      summaryPreview.style.fontStyle = "italic";
+      summaryPreview.textContent = isLong
+        ? `Latest: ${monitor.lastChangeSummary.slice(0, 150)}...`
+        : `Latest: ${monitor.lastChangeSummary}`;
+      summaryWrap.appendChild(summaryPreview);
+
+      if (isLong) {
+        const summaryFull = document.createElement("span");
+        summaryFull.className = "rule-meta hidden";
+        summaryFull.style.display = "none";
+        summaryFull.style.color = "var(--accent)";
+        summaryFull.style.fontStyle = "italic";
+        summaryFull.style.whiteSpace = "pre-wrap";
+        summaryFull.textContent = `Latest: ${monitor.lastChangeSummary}`;
+        summaryWrap.appendChild(summaryFull);
+
+        const expandBtn = document.createElement("button");
+        expandBtn.className = "btn btn-sm";
+        expandBtn.style.cssText = "background:none;border:none;color:var(--text-secondary);font-size:11px;padding:2px 0;cursor:pointer;text-decoration:underline;";
+        expandBtn.textContent = "Show full analysis";
+        expandBtn.addEventListener("click", () => {
+          const isExpanded = summaryFull.style.display !== "none";
+          summaryPreview.style.display = isExpanded ? "block" : "none";
+          summaryFull.style.display = isExpanded ? "none" : "block";
+          expandBtn.textContent = isExpanded ? "Show full analysis" : "Collapse";
+        });
+        summaryWrap.appendChild(expandBtn);
+      }
+
+      info.appendChild(summaryWrap);
     }
 
     const actions = document.createElement("div");
@@ -1059,6 +1087,26 @@ async function renderFeeds() {
       renderFeeds();
     });
 
+    const intervalSelect = document.createElement("select");
+    intervalSelect.className = "btn btn-sm btn-secondary";
+    intervalSelect.style.cssText = "padding:4px 6px;font-size:11px;cursor:pointer;";
+    intervalSelect.title = "Change check interval";
+    for (const [val, label] of [["15","15m"],["30","30m"],["60","1h"],["360","6h"],["1440","24h"]]) {
+      const opt = document.createElement("option");
+      opt.value = val;
+      opt.textContent = label;
+      if (parseInt(val) === feed.checkIntervalMinutes) opt.selected = true;
+      intervalSelect.appendChild(opt);
+    }
+    intervalSelect.addEventListener("change", async () => {
+      await browser.runtime.sendMessage({
+        action: "updateFeed", id: feed.id,
+        checkIntervalMinutes: parseInt(intervalSelect.value)
+      });
+      renderFeeds();
+    });
+
+    actions.appendChild(intervalSelect);
     actions.appendChild(toggleBtn);
     actions.appendChild(refreshBtn);
     actions.appendChild(readBtn);
@@ -1133,6 +1181,22 @@ async function loadArchiveSettings() {
 }
 
 async function saveArchiveSettings() {
+  const enabled = el.archiveEnabled.checked;
+
+  // Request webRequest permissions when enabling redirect
+  if (enabled) {
+    const granted = await browser.permissions.request({
+      permissions: ["webRequest", "webRequestBlocking"]
+    });
+    if (!granted) {
+      el.archiveStatus.textContent = "Permission denied — redirect requires webRequest permission.";
+      el.archiveStatus.style.color = "var(--error)";
+      el.archiveEnabled.checked = false;
+      setTimeout(() => { el.archiveStatus.textContent = ""; }, 4000);
+      return;
+    }
+  }
+
   const domains = el.archiveDomains.value
     .split("\n")
     .map(d => d.trim().toLowerCase().replace(/^www\./, ""))
@@ -1142,7 +1206,7 @@ async function saveArchiveSettings() {
     : el.archiveProvider.value;
   await browser.runtime.sendMessage({
     action: "saveArchiveSettings",
-    enabled: el.archiveEnabled.checked,
+    enabled,
     domains,
     providerUrl
   });
@@ -1268,7 +1332,7 @@ function initMainTabs() {
 
   // Restore last active tab from URL hash or sessionStorage
   const hash = window.location.hash.replace("#", "");
-  const savedTab = hash || sessionStorage.getItem("argus-activeTab") || "analysis";
+  const savedTab = hash || sessionStorage.getItem("argus-activeTab") || "bookmarks";
 
   switchMainTab(savedTab, tabs, panels);
 
@@ -1719,6 +1783,7 @@ function initProjects() {
   projEl.itemNotes = document.getElementById("proj-item-notes");
 
   document.getElementById("proj-new").addEventListener("click", () => projOpenModal());
+  document.getElementById("proj-import").addEventListener("click", projImport);
   document.getElementById("proj-export-all").addEventListener("click", projExportAll);
   document.getElementById("proj-add-note").addEventListener("click", () => projAddItem("note"));
   document.getElementById("proj-add-url").addEventListener("click", () => projAddItem("url"));
@@ -1751,6 +1816,7 @@ function initProjects() {
   document.getElementById("proj-timeline").addEventListener("click", projOpenTimeline);
   document.getElementById("proj-report").addEventListener("click", projGenerateReport);
   document.getElementById("proj-anomaly").addEventListener("click", projAnomalyScan);
+  document.getElementById("proj-dashboard").addEventListener("click", projOpenDashboard);
 
   projLoadProjects();
   checkRunningBatch();
@@ -2131,28 +2197,69 @@ async function projAddItem(type) {
   }
 }
 
-async function projExportOne(id) {
-  const resp = await browser.runtime.sendMessage({ action: "exportProject", projectId: id });
-  if (!resp || !resp.success) return;
-  const blob = new Blob([JSON.stringify(resp.project, null, 2)], { type: "application/json" });
+function downloadBundle(bundle, filename) {
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${resp.project.name.replace(/[^a-z0-9]/gi, "_")}.json`;
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
 }
 
+async function projExportOne(id) {
+  const resp = await browser.runtime.sendMessage({ action: "exportProject", projectId: id });
+  if (!resp || !resp.success) return;
+  const name = (resp.bundle.projects[0].name || "project").replace(/[^a-z0-9]/gi, "_");
+  downloadBundle(resp.bundle, `${name}.argusproj`);
+}
+
 async function projExportAll() {
-  const resp = await browser.runtime.sendMessage({ action: "getProjects" });
-  if (!resp || !resp.success || resp.projects.length === 0) return;
-  const blob = new Blob([JSON.stringify(resp.projects, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "argus-projects.json";
-  a.click();
-  URL.revokeObjectURL(url);
+  const resp = await browser.runtime.sendMessage({ action: "exportAllProjects" });
+  if (!resp || !resp.success) return;
+  downloadBundle(resp.bundle, "argus-projects.argusproj");
+}
+
+function projImport() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".argusproj,.json";
+  input.addEventListener("change", async () => {
+    const file = input.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      let bundle = JSON.parse(text);
+
+      // Support importing old-format single project JSON
+      if (!bundle.manifest && bundle.id && bundle.items) {
+        bundle = {
+          manifest: { format: "argusproj", version: 1, exportedAt: new Date().toISOString(), projectCount: 1, historyCount: 0 },
+          projects: [bundle],
+          history: [],
+        };
+      }
+      // Support importing old-format array of projects
+      if (Array.isArray(bundle)) {
+        bundle = {
+          manifest: { format: "argusproj", version: 1, exportedAt: new Date().toISOString(), projectCount: bundle.length, historyCount: 0 },
+          projects: bundle,
+          history: [],
+        };
+      }
+
+      const resp = await browser.runtime.sendMessage({ action: "importProject", bundle });
+      if (resp && resp.success) {
+        alert(`Imported ${resp.projectsImported} project(s) and ${resp.historyImported} history item(s).`);
+        projLoadList();
+      } else {
+        alert("Import failed: " + (resp ? resp.error : "Unknown error"));
+      }
+    } catch (e) {
+      alert("Failed to read file: " + e.message);
+    }
+  });
+  input.click();
 }
 
 let batchPollTimer = null;
@@ -2332,6 +2439,11 @@ function projOpenHeatmap() {
 function projOpenGeomap() {
   if (!projState.activeProjectId) return;
   browser.tabs.create({ url: browser.runtime.getURL(`osint/geomap.html?project=${encodeURIComponent(projState.activeProjectId)}`) });
+}
+
+function projOpenDashboard() {
+  if (!projState.activeProjectId) return;
+  browser.tabs.create({ url: browser.runtime.getURL(`osint/dashboard.html?projectId=${encodeURIComponent(projState.activeProjectId)}`) });
 }
 
 async function projGenerateReport() {
@@ -2520,4 +2632,184 @@ async function loadWatchlistMatches() {
     div.appendChild(matchInfo);
     container.appendChild(div);
   }
+}
+
+// ──────────────────────────────────────────────
+// Storage Management
+// ──────────────────────────────────────────────
+function initStorageManagement() {
+  updateStorageUsage();
+
+  document.getElementById("purge-history-btn").addEventListener("click", purgeOldHistory);
+  document.getElementById("purge-snapshots-btn").addEventListener("click", purgeMonitorSnapshots);
+  document.getElementById("purge-cached-btn").addEventListener("click", purgeAllCachedData);
+
+  // Knowledge Graph
+  document.getElementById("kg-open-graph").addEventListener("click", () => {
+    browser.tabs.create({ url: browser.runtime.getURL("osint/graph.html?mode=global") });
+  });
+  document.getElementById("kg-run-inference").addEventListener("click", async () => {
+    const resp = await browser.runtime.sendMessage({ action: "runKGInference" });
+    showKGStatus(resp && resp.inferred ? `Inferred ${resp.inferred} new relationships` : "No new inferences");
+  });
+  document.getElementById("kg-clear").addEventListener("click", async () => {
+    if (!confirm("Clear the entire knowledge graph? This cannot be undone.")) return;
+    await browser.runtime.sendMessage({ action: "clearKG" });
+    showKGStatus("Knowledge graph cleared");
+    updateKGStats();
+  });
+  updateKGStats();
+  loadPendingMerges();
+
+  // OSINT Quick Tools (on OSINT tab)
+  const osintLaunch = (tool) => async () => {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+    if (!tab || !tab.url || tab.url.startsWith("about:") || tab.url.startsWith("moz-extension:")) {
+      alert("Open a web page first, then use this tool.");
+      return;
+    }
+    browser.runtime.sendMessage({ action: tool, tabId: tab.id });
+  };
+  const osintMetaBtn = document.getElementById("osint-launch-metadata");
+  const osintLinksBtn = document.getElementById("osint-launch-links");
+  const osintWhoisBtn = document.getElementById("osint-launch-whois");
+  const osintTechBtn = document.getElementById("osint-launch-techstack");
+  if (osintMetaBtn) osintMetaBtn.addEventListener("click", osintLaunch("extractMetadata"));
+  if (osintLinksBtn) osintLinksBtn.addEventListener("click", osintLaunch("mapLinks"));
+  if (osintWhoisBtn) osintWhoisBtn.addEventListener("click", osintLaunch("whoisLookup"));
+  if (osintTechBtn) osintTechBtn.addEventListener("click", osintLaunch("detectTechStack"));
+}
+
+async function updateStorageUsage() {
+  const display = document.getElementById("storage-usage-display");
+  try {
+    // Combine browser.storage.local (settings/ephemeral) + IndexedDB (heavy data)
+    const all = await browser.storage.local.get(null);
+    const localBytes = new Blob([JSON.stringify(all)]).size;
+    const idbSizes = await ArgusDB.estimateSize();
+    const totalBytes = localBytes + (idbSizes._total || 0);
+    if (totalBytes < 1024) display.textContent = totalBytes + " B";
+    else if (totalBytes < 1048576) display.textContent = (totalBytes / 1024).toFixed(1) + " KB";
+    else display.textContent = (totalBytes / 1048576).toFixed(1) + " MB";
+  } catch {
+    display.textContent = "Unable to calculate";
+  }
+}
+
+function showPurgeStatus(msg) {
+  const status = document.getElementById("storage-purge-status");
+  status.textContent = msg;
+  status.classList.remove("hidden");
+  setTimeout(() => status.classList.add("hidden"), 3000);
+}
+
+async function purgeOldHistory() {
+  const days = parseInt(document.getElementById("purge-history-age").value, 10);
+  const count = await ArgusDB.History.purgeOlderThan(days);
+  showPurgeStatus(`Purged ${count} history entries`);
+  updateStorageUsage();
+}
+
+async function purgeMonitorSnapshots() {
+  const keep = parseInt(document.getElementById("purge-snapshots-keep").value, 10);
+  const monitors = await ArgusDB.Monitors.getAll();
+  let trimmed = 0;
+  for (const mon of monitors) {
+    trimmed += await ArgusDB.Snapshots.pruneForMonitor(mon.id, keep);
+  }
+  showPurgeStatus(`Trimmed ${trimmed} snapshots`);
+  updateStorageUsage();
+}
+
+async function purgeAllCachedData() {
+  // Ephemeral result keys stay in browser.storage.local
+  const all = await browser.storage.local.get(null);
+  const prefixes = ["tl-result-", "techstack-", "metadata-", "linkmap-", "whois-", "result-"];
+  const keysToRemove = Object.keys(all).filter(k => prefixes.some(p => k.startsWith(p)));
+  if (keysToRemove.length) await browser.storage.local.remove(keysToRemove);
+  showPurgeStatus(`Removed ${keysToRemove.length} cached entries`);
+  updateStorageUsage();
+}
+
+// ──────────────────────────────────────────────
+// Knowledge Graph management
+// ──────────────────────────────────────────────
+
+function showKGStatus(msg) {
+  const status = document.getElementById("kg-status");
+  status.textContent = msg;
+  status.classList.remove("hidden");
+  setTimeout(() => status.classList.add("hidden"), 3000);
+}
+
+async function updateKGStats() {
+  const display = document.getElementById("kg-stats-display");
+  try {
+    const stats = await browser.runtime.sendMessage({ action: "getKGStats" });
+    if (stats && typeof stats.nodeCount === "number") {
+      const parts = [`${stats.nodeCount} entities`, `${stats.edgeCount} connections`];
+      if (stats.typeCounts) {
+        const types = Object.entries(stats.typeCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([t, c]) => `${c} ${t}s`);
+        if (types.length) parts.push(types.join(", "));
+      }
+      display.textContent = parts.join(" | ");
+    } else {
+      display.textContent = "No data yet";
+    }
+  } catch {
+    display.textContent = "Unable to load";
+  }
+}
+
+async function loadPendingMerges() {
+  try {
+    const merges = await browser.runtime.sendMessage({ action: "getKGPendingMerges" });
+    const container = document.getElementById("kg-pending-merges");
+    const list = document.getElementById("kg-merge-list");
+    if (!merges || !merges.length) {
+      container.classList.add("hidden");
+      return;
+    }
+    container.classList.remove("hidden");
+    list.replaceChildren();
+
+    for (const merge of merges) {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;";
+
+      const text = document.createElement("span");
+      text.style.flex = "1";
+      text.textContent = `"${merge.newName}" \u2192 "${merge.existingName}"? (${Math.round(merge.confidence * 100)}%)`;
+      row.appendChild(text);
+
+      const acceptBtn = document.createElement("button");
+      acceptBtn.className = "btn btn-secondary";
+      acceptBtn.style.cssText = "padding:2px 8px;font-size:11px;color:var(--success);";
+      acceptBtn.textContent = "Merge";
+      acceptBtn.addEventListener("click", async () => {
+        await browser.runtime.sendMessage({ action: "resolveKGMerge", mergeId: merge.id, accept: true });
+        row.remove();
+        updateKGStats();
+        if (!list.children.length) container.classList.add("hidden");
+      });
+      row.appendChild(acceptBtn);
+
+      const dismissBtn = document.createElement("button");
+      dismissBtn.className = "btn btn-secondary";
+      dismissBtn.style.cssText = "padding:2px 8px;font-size:11px;";
+      dismissBtn.textContent = "Dismiss";
+      dismissBtn.addEventListener("click", async () => {
+        await browser.runtime.sendMessage({ action: "resolveKGMerge", mergeId: merge.id, accept: false });
+        row.remove();
+        if (!list.children.length) container.classList.add("hidden");
+      });
+      row.appendChild(dismissBtn);
+
+      list.appendChild(row);
+    }
+  } catch { /* non-critical */ }
 }

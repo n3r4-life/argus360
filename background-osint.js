@@ -630,15 +630,12 @@ async function scanForWatchwords(text, sourceType, sourceUrl, sourceTitle) {
 
     // If there are matches, persist them and notify
     if (matches.length > 0) {
-      const { watchlistMatches } = await browser.storage.local.get({ watchlistMatches: [] });
-      watchlistMatches.unshift(...matches);
-      // Keep last 500 matches
-      if (watchlistMatches.length > 500) watchlistMatches.length = 500;
-      await browser.storage.local.set({ watchlistMatches });
+      await ArgusDB.Watchlist.addMany(matches);
+      await ArgusDB.Watchlist.prune(500);
 
       // Fire notification
       const terms = matches.map(m => m.term).join(", ");
-      browser.notifications.create(`watchlist-${Date.now()}`, {
+      safeNotify(`watchlist-${Date.now()}`, {
         type: "basic",
         iconUrl: "icons/icon-96.png",
         title: "Argus Watchlist Alert",
@@ -782,11 +779,11 @@ async function handleBuildConnectionGraph(message) {
     const { projectId } = message;
     if (!projectId) return { success: false, error: "projectId is required" };
 
-    const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+    const argusProjects = await ArgusDB.Projects.getAll();
     const project = argusProjects.find(p => p.id === projectId);
     if (!project) return { success: false, error: "Project not found" };
 
-    const { analysisHistory } = await browser.storage.local.get({ analysisHistory: [] });
+    const analysisHistory = await ArgusDB.History.getAllSorted();
 
     // Map entity name -> node info
     const nodeMap = new Map();
@@ -890,11 +887,11 @@ async function handleBuildTimeline(message) {
     const { projectId } = message;
     if (!projectId) return { success: false, error: "projectId is required" };
 
-    const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+    const argusProjects = await ArgusDB.Projects.getAll();
     const project = argusProjects.find(p => p.id === projectId);
     if (!project) return { success: false, error: "Project not found" };
 
-    const { analysisHistory } = await browser.storage.local.get({ analysisHistory: [] });
+    const analysisHistory = await ArgusDB.History.getAllSorted();
 
     const events = [];
 
@@ -997,11 +994,11 @@ async function handleGenerateReport(message) {
     const { projectId, sections } = message;
     if (!projectId) return { success: false, error: "projectId is required" };
 
-    const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+    const argusProjects = await ArgusDB.Projects.getAll();
     const project = argusProjects.find(p => p.id === projectId);
     if (!project) return { success: false, error: "Project not found" };
 
-    const { analysisHistory } = await browser.storage.local.get({ analysisHistory: [] });
+    const analysisHistory = await ArgusDB.History.getAllSorted();
 
     // Gather all data for the project
     const itemSummaries = [];
@@ -1155,14 +1152,14 @@ async function handleAnomalyScan(message) {
     const { projectId } = message;
     if (!projectId) return { success: false, error: "projectId is required" };
 
-    const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+    const argusProjects = await ArgusDB.Projects.getAll();
     const project = argusProjects.find(p => p.id === projectId);
     if (!project) return { success: false, error: "Project not found" };
     if (!project.items || project.items.length === 0) {
       return { success: false, error: "Project has no items to scan" };
     }
 
-    const { analysisHistory } = await browser.storage.local.get({ analysisHistory: [] });
+    const analysisHistory = await ArgusDB.History.getAllSorted();
 
     // Gather item data with entity info
     const itemSummaries = [];
@@ -1668,11 +1665,11 @@ async function handleBuildHeatmap(message) {
     const { projectId } = message;
     if (!projectId) return { success: false, error: "projectId is required" };
 
-    const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+    const argusProjects = await ArgusDB.Projects.getAll();
     const project = argusProjects.find(p => p.id === projectId);
     if (!project) return { success: false, error: "Project not found" };
 
-    const { analysisHistory } = await browser.storage.local.get({ analysisHistory: [] });
+    const analysisHistory = await ArgusDB.History.getAllSorted();
 
     // Collect entity data per page
     const pageMap = new Map(); // url -> { title, url, index }
@@ -1797,11 +1794,11 @@ async function handleBuildGeomap(message) {
     const { projectId } = message;
     if (!projectId) return { success: false, error: "projectId is required" };
 
-    const { argusProjects } = await browser.storage.local.get({ argusProjects: [] });
+    const argusProjects = await ArgusDB.Projects.getAll();
     const project = argusProjects.find(p => p.id === projectId);
     if (!project) return { success: false, error: "Project not found" };
 
-    const { analysisHistory } = await browser.storage.local.get({ analysisHistory: [] });
+    const analysisHistory = await ArgusDB.History.getAllSorted();
 
     // Collect location entities
     const locationMap = new Map(); // name -> { name, type, mentions, sources: [{title, url}] }

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project Dashboard - Argus OSINT</title>
+  <link rel="stylesheet" href="dashboard.css">
+  <link rel="stylesheet" href="../lib/argus-chat.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+</head>
+<body>
+  <script src="../shared/ribbon.js"></script>
+  <header class="dash-header">
+    <div class="header-left">
+      <h1 class="project-title">Argus OSINT</h1>
+      <span class="project-name" id="projectName">Project Dashboard</span>
+    </div>
+    <div class="header-controls">
+      <div class="digest-controls">
+        <label>Auto-Digest:
+          <select id="digestSchedule">
+            <option value="disabled">Disabled</option>
+            <option value="daily">Daily</option>
+            <option value="weekly" selected>Weekly</option>
+          </select>
+        </label>
+        <button id="generateDigest" class="btn btn-primary">Generate Digest Now</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="dash-main">
+    <div id="loadingState" class="loading-state">
+      <div class="loading-spinner"></div>
+      <p>Loading dashboard...</p>
+    </div>
+
+    <div id="dashContent" class="dash-content hidden">
+      <!-- Stats Row -->
+      <div class="stats-row" id="statsRow">
+        <div class="stat-card">
+          <div class="stat-value" id="statItems">0</div>
+          <div class="stat-label">Items</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statEntities">0</div>
+          <div class="stat-label">Entities</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statRelationships">0</div>
+          <div class="stat-label">Relationships</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statRecentChanges">0</div>
+          <div class="stat-label">Changes (7d)</div>
+        </div>
+      </div>
+
+      <!-- Alerts Row -->
+      <div id="alertsRow" class="alerts-row hidden">
+        <h3 class="section-title">Alerts</h3>
+        <div id="alertsList" class="alerts-list"></div>
+      </div>
+
+      <!-- Main Grid -->
+      <div class="dash-grid">
+        <!-- Left Column -->
+        <div class="dash-col">
+          <!-- Activity Chart -->
+          <div class="widget">
+            <h3 class="widget-title">Activity (30 Days)</h3>
+            <div class="activity-chart" id="activityChart"></div>
+          </div>
+
+          <!-- Entity Breakdown -->
+          <div class="widget">
+            <h3 class="widget-title">Entity Breakdown</h3>
+            <div class="type-bars" id="typeBars"></div>
+          </div>
+
+          <!-- Co-occurrence Matrix -->
+          <div class="widget">
+            <h3 class="widget-title">Entity Co-occurrence</h3>
+            <div class="cooccurrence" id="cooccurrenceGrid"></div>
+          </div>
+        </div>
+
+        <!-- Right Column -->
+        <div class="dash-col">
+          <!-- Top Entities -->
+          <div class="widget">
+            <h3 class="widget-title">Top Entities</h3>
+            <div class="entity-list" id="topEntities"></div>
+          </div>
+
+          <!-- Recent Changes -->
+          <div class="widget">
+            <h3 class="widget-title">Recent Graph Changes</h3>
+            <div class="changes-list" id="recentChanges"></div>
+          </div>
+
+          <!-- Trends -->
+          <div class="widget" id="trendsWidget">
+            <h3 class="widget-title">Trends</h3>
+            <div id="trendsList" class="trends-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reports Section -->
+      <div class="reports-section">
+        <h3 class="section-title">Auto-Report Sections</h3>
+        <div class="report-buttons">
+          <button class="btn btn-secondary report-btn" data-section="executiveSummary">Executive Summary</button>
+          <button class="btn btn-secondary report-btn" data-section="knowledgeGaps">Knowledge Gaps</button>
+          <button class="btn btn-secondary report-btn" data-section="contradictions">Contradictions</button>
+          <button class="btn btn-secondary report-btn" data-section="timelineHighlights">Timeline Highlights</button>
+        </div>
+        <div id="reportOutput" class="report-output hidden">
+          <div class="report-header">
+            <h4 id="reportTitle"></h4>
+            <button id="reportClose" class="btn-close">&times;</button>
+          </div>
+          <div id="reportContent" class="report-content markdown-body"></div>
+          <div id="reportMeta" class="report-meta"></div>
+        </div>
+      </div>
+
+      <!-- Latest Digest -->
+      <div class="digest-section">
+        <h3 class="section-title">Latest Digest</h3>
+        <div id="digestContent" class="digest-content">
+          <p class="empty-state">No digest generated yet. Click "Generate Digest Now" to create one.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div id="argus-chat-container" style="padding:16px 20px;"></div>
+
+  <script src="../lib/purify.min.js"></script>
+  <script src="../lib/marked.min.js"></script>
+  <script src="../lib/argus-chat.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>

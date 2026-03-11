@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Argus Analysis</title>
   <link rel="stylesheet" href="results.css">
+  <link rel="stylesheet" href="../lib/argus-chat.css">
   <link rel="stylesheet" href="../shared/ribbon.css">
 </head>
 <body>
@@ -15,6 +16,7 @@
       <h1 class="header-title">Argus</h1>
     </div>
     <span id="preset-label" class="preset-badge"></span>
+    <span id="source-type-badge" class="source-type-badge hidden"></span>
   </header>
 
   <div id="page-info" class="page-info">
@@ -63,6 +65,12 @@
     </div>
 
     <div id="result-content" class="result-content markdown-body"></div>
+
+    <div id="pipeline-section" class="pipeline-section hidden">
+      <button id="pipeline-toggle" class="pipeline-toggle-btn">Show Source Insights</button>
+      <div id="pipeline-content" class="pipeline-content hidden markdown-body"></div>
+    </div>
+
     <div id="result-meta" class="result-meta"></div>
   </div>
 
@@ -93,13 +101,18 @@
     </div>
   </div>
 
+  <div id="argus-chat-container" class="hidden" style="padding:0 20px 20px;"></div>
+
   <div id="error-container" class="error-container hidden">
     <div class="error-icon">!</div>
     <p id="error-message" class="error-text"></p>
   </div>
 
+  <script src="../lib/purify.min.js"></script>
   <script src="../lib/marked.min.js"></script>
   <script src="../lib/export-utils.js"></script>
+  <script src="../lib/intelligence-viewer.js"></script>
+  <script src="../lib/argus-chat.js"></script>
   <script src="results.js"></script>
 </body>
 </html>

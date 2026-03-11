@@ -93,6 +93,16 @@ body {
   background: var(--border);
 }
 
+.icon-btn-accent {
+  color: var(--accent);
+  background: rgba(233, 69, 96, 0.1);
+  border: 1px solid rgba(233, 69, 96, 0.3);
+}
+.icon-btn-accent:hover {
+  color: var(--accent-hover);
+  background: rgba(233, 69, 96, 0.2);
+}
+
 /* Forms */
 .form-group {
   padding: 8px 16px;
@@ -612,17 +622,21 @@ textarea {
 }
 
 /* OSINT tools row */
-.osint-tools-row {
-  gap: 6px;
+.btn-row.osint-tools-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
 }
 .btn-osint {
-  flex: 1;
+  flex: 1 1 calc(33.33% - 4px);
+  max-width: calc(33.33% - 4px);
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 8px 6px;
-  font-size: 12px;
+  gap: 3px;
+  padding: 6px 4px;
+  font-size: 11px;
   font-weight: 500;
   background: var(--bg-secondary);
   color: var(--text-secondary);

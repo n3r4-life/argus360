@@ -3,7 +3,7 @@
 **Analyze any webpage with any AI.** Argus is a Firefox extension that lets you run AI-powered analysis on any page using Grok, ChatGPT, Claude, Gemini, or any OpenAI-compatible provider -- with OSINT tools, custom prompts, streaming responses, follow-up questions, multi-provider comparison, smart bookmarks, page monitoring, and more.
 
 ![Firefox](https://img.shields.io/badge/Firefox-142%2B-orange)
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-360.1.0.1-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ---
@@ -50,7 +50,30 @@
 - **Timeline Builder** -- chronological timeline of events extracted from project analyses. Date range filters and markdown export.
 - **Investigation Report** -- AI-generated comprehensive report synthesizing all project data
 
-All OSINT tools feed into the Projects system.
+All OSINT tools feed into the Projects system and the Knowledge Graph.
+
+### Knowledge Graph
+- **Persistent entity graph** built automatically from every analysis, bookmark, and monitor change
+- **Fuzzy entity matching** (Levenshtein + token overlap) prevents duplicates
+- **Co-occurrence edges** created between entities appearing together
+- **Inference rules** run periodically to discover implicit relationships (e.g., person + org mentioned 3+ times -> affiliated-with)
+- **Global Graph visualization** -- interactive force-directed canvas with type filters, search, and PNG export
+- **Pending merges** -- human review for ambiguous entity matches
+- Managed from the **OSINT** tab in the Argus Console
+
+### Source-Aware Pipelines
+Argus detects page types and runs specialized analysis pipelines automatically:
+- **Wikipedia** -- structured profile extraction, infobox data, related entities
+- **News Articles** -- claims with evidence levels, bias indicators, source quality scoring
+- **Classifieds/Marketplace** -- listing extraction, scam risk analysis, price tracking over time
+- **Research/Academic** -- claims analysis, knowledge coverage, methodology notes
+
+Pipeline results appear in a collapsible "Source Insights" panel below the main analysis. All extracted entities are fed into the Knowledge Graph.
+
+### Project Dashboard & Auto-Digests
+- **At-a-glance dashboard** for each project with stats, activity charts, entity breakdown, co-occurrence heatmap, and trend alerts
+- **Auto-report sections** generated on demand: Executive Summary, Knowledge Gaps, Contradictions, Timeline Highlights
+- **Scheduled digests** (daily/weekly per project) -- AI-generated briefings summarizing new items, findings, and suggested next steps
 
 ### Smart Bookmarks
 - Bookmark any page with **AI-generated tags, categories, and summaries**
@@ -374,48 +397,47 @@ Use these in custom presets:
 
 ```
 Argus/
-├── manifest.json          # Extension manifest (Manifest V2)
-├── background.js          # Core logic: API calls, streaming, message handling
-├── background-osint.js    # OSINT backend handlers
-├── popup/                 # Browser action popup
+├── manifest.json              # Extension manifest (Manifest V2)
+├── background.js              # Core logic: API calls, streaming, message handling
+├── background-osint.js        # OSINT backend handlers
+├── background-presets.js      # Analysis presets and provider definitions
+├── background-providers.js    # AI provider API functions (streaming + non-streaming)
+├── background-permissions.js  # Optional permission management
+├── background-kg.js           # Knowledge Graph engine (entity extraction, fuzzy matching, inference)
+├── background-pipelines.js    # Source-aware pipelines (Wikipedia, News, Classifieds, Research)
+├── background-agents.js       # Agentic automation (digests, reports, trend detection, dashboard)
+├── popup/                     # Browser action popup
 │   ├── popup.html
 │   ├── popup.js
 │   └── popup.css
-├── results/               # Analysis results display page
+├── results/                   # Analysis results display page
 │   ├── results.html
 │   ├── results.js
 │   └── results.css
-├── options/               # Full settings page
+├── options/                   # Full settings / console page
 │   ├── options.html
 │   ├── options.js
 │   └── options.css
-├── bookmarks/             # Smart bookmarks page
-│   ├── bookmarks.html
-│   ├── bookmarks.js
-│   └── bookmarks.css
-├── history/               # Analysis history viewer
-│   ├── history.html
-│   ├── history.js
-│   └── history.css
-├── monitors/              # Page monitor change history
-│   ├── monitor-history.html
-│   ├── monitor-history.js
-│   └── monitor-history.css
-├── feeds/                 # RSS feed reader
-│   ├── feeds.html
-│   ├── feeds.js
-│   └── feeds.css
-├── osint/                 # OSINT tool pages
-│   ├── link-map.html/.js/.css
-│   ├── graph.html/.js/.css
-│   └── timeline.html/.js/.css
-├── shared/                # Shared UI components
-│   ├── ribbon.js
-│   └── ribbon.css
+├── bookmarks/                 # Smart bookmarks page
+├── history/                   # Analysis history viewer
+├── monitors/                  # Page monitor change history
+├── feeds/                     # RSS feed reader
+├── osint/                     # OSINT tool pages
+│   ├── graph.html/.js/.css        # Connection graph (project + global KG)
+│   ├── dashboard.html/.js/.css    # Project dashboard with widgets
+│   ├── timeline.html/.js/.css     # Event timeline
+│   ├── link-map.html/.js/.css     # Link mapping
+│   ├── heatmap.html/.js/.css      # Entity heatmap
+│   ├── geomap.html/.js/.css       # Geolocation map
+│   └── techstack.html/.js/.css    # Tech stack detection
+├── shared/                    # Shared UI components (nav ribbon)
 ├── lib/
-│   ├── marked.min.js      # Markdown rendering
-│   └── export-utils.js    # Shared export functions
-└── icons/                 # Extension icons (16-128px)
+│   ├── storage-db.js          # IndexedDB storage (ArgusDB)
+│   ├── intelligence-viewer.js # Unified rendering component
+│   ├── marked.min.js          # Markdown rendering
+│   ├── purify.min.js          # HTML sanitization
+│   └── export-utils.js        # Shared export functions
+└── icons/                     # Extension icons (16-128px)
 ```
 
 ---

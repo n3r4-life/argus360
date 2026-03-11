@@ -60,6 +60,49 @@ body {
   border-radius: 12px;
 }
 
+.source-type-badge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3px 10px;
+  background: #0f3460;
+  color: #64b5f6;
+  border: 1px solid #64b5f6;
+  border-radius: 12px;
+  margin-left: 6px;
+}
+.source-type-badge .source-icon {
+  margin-right: 4px;
+}
+
+/* Pipeline insights section */
+.pipeline-section {
+  margin: 16px 24px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+}
+.pipeline-toggle-btn {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  color: #64b5f6;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+.pipeline-toggle-btn:hover {
+  background: rgba(100, 181, 246, 0.08);
+}
+.pipeline-content {
+  padding: 0 16px 16px;
+  font-size: 14px;
+}
+
 /* Page info bar */
 .page-info {
   padding: 10px 24px;

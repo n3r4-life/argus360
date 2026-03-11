@@ -75,6 +75,18 @@
           $('#projectBadge').textContent = projName;
         }
         applyFilters();
+
+        // Init chat
+        const entities = (matrix.entities || []).slice(0, 40);
+        const summary = entities.map(e =>
+          `- ${e.name} (${e.type || "entity"}) — ${e.totalMentions || 0} total mentions`
+        ).join("\n");
+        ArgusChat.init({
+          container: document.getElementById("argus-chat-container"),
+          contextType: "Entity Heatmap",
+          contextData: `Heatmap for "${projName || "Unknown"}" — ${entities.length} entities across ${(matrix.pages || []).length} pages.\n\n${summary}`,
+          pageTitle: projName
+        });
       } else {
         showEmpty();
       }

@@ -22,11 +22,7 @@
     <!-- ═══ Main Navigation ═══ -->
     <nav class="main-nav" id="main-nav">
       <div class="nav-row">
-        <button class="nav-tab active" data-tab="analysis">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          <span>Analysis</span>
-        </button>
-        <button class="nav-tab" data-tab="bookmarks">
+        <button class="nav-tab active" data-tab="bookmarks">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
           <span>Bookmarks</span>
         </button>
@@ -42,6 +38,10 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
           <span>Feeds</span>
         </button>
+        <button class="nav-tab" data-tab="osint">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span>OSINT</span>
+        </button>
         <button class="nav-tab" data-tab="automation">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           <span>Automation</span>
@@ -52,6 +52,10 @@
         </button>
       </div>
       <div class="nav-row nav-row-secondary">
+        <button class="nav-tab" data-tab="prompts">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Prompts</span>
+        </button>
         <button class="nav-tab" data-tab="providers">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
           <span>Providers</span>
@@ -150,9 +154,9 @@
     </div>
 
     <!-- ═══════════════════════════════════════════ -->
-    <!-- TAB: Analysis                               -->
+    <!-- TAB: Prompts                                -->
     <!-- ═══════════════════════════════════════════ -->
-    <div class="tab-panel active" data-panel="analysis">
+    <div class="tab-panel" data-panel="prompts">
 
       <!-- Prompt Editor -->
       <section class="card">
@@ -192,119 +196,6 @@
                 <button id="delete-preset" class="btn btn-secondary btn-sm hidden">Delete Preset</button>
               </div>
               <span id="prompt-status" class="prompt-status"></span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- General Settings -->
-      <section class="card">
-        <h2 class="card-title">General Settings</h2>
-        <div class="card-body">
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label for="max-tokens">Max Response Tokens</label>
-              <input type="number" id="max-tokens" value="2048" min="256" max="16384" step="256">
-              <span class="hint">256 - 16,384</span>
-            </div>
-            <div class="form-group flex-1">
-              <label for="max-input-chars">Max Input Characters</label>
-              <input type="number" id="max-input-chars" value="100000" min="1000" max="500000" step="1000">
-              <span class="hint">How much page text to send</span>
-            </div>
-            <div class="form-group flex-1">
-              <label for="temperature">Temperature</label>
-              <div class="range-row">
-                <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.3">
-                <span id="temp-value" class="range-value">0.3</span>
-              </div>
-              <span class="hint">Lower = more focused, higher = more creative</span>
-            </div>
-          </div>
-          <div class="form-row" style="margin-top:8px;">
-            <div class="form-group flex-1">
-              <label for="response-language">Response Language</label>
-              <select id="response-language">
-                <option value="auto">Auto-detect (browser language)</option>
-                <option value="English">English (default)</option>
-                <option value="Spanish">Spanish</option>
-                <option value="French">French</option>
-                <option value="German">German</option>
-                <option value="Portuguese">Portuguese</option>
-                <option value="Italian">Italian</option>
-                <option value="Dutch">Dutch</option>
-                <option value="Russian">Russian</option>
-                <option value="Japanese">Japanese</option>
-                <option value="Korean">Korean</option>
-                <option value="Chinese (Simplified)">Chinese (Simplified)</option>
-                <option value="Chinese (Traditional)">Chinese (Traditional)</option>
-                <option value="Arabic">Arabic</option>
-                <option value="Hindi">Hindi</option>
-                <option value="Turkish">Turkish</option>
-                <option value="Polish">Polish</option>
-                <option value="Ukrainian">Ukrainian</option>
-                <option value="Vietnamese">Vietnamese</option>
-                <option value="Thai">Thai</option>
-                <option value="Indonesian">Indonesian</option>
-                <option value="Swedish">Swedish</option>
-                <option value="Czech">Czech</option>
-                <option value="Romanian">Romanian</option>
-                <option value="Hungarian">Hungarian</option>
-                <option value="Greek">Greek</option>
-                <option value="Hebrew">Hebrew</option>
-                <option value="Filipino">Filipino</option>
-              </select>
-              <span class="hint">Language for AI responses — "Auto" uses your browser's language setting</span>
-            </div>
-            <div class="form-group flex-1">
-              <label class="toggle-label">
-                <input type="checkbox" id="show-badge" checked>
-                <span>Show badge count on toolbar icon</span>
-              </label>
-              <span class="hint">Show unread monitor change count on the Argus icon</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Extended Thinking -->
-      <section class="card">
-        <h2 class="card-title">Extended Thinking
-          <span class="badge">Claude + OpenAI + Grok</span>
-        </h2>
-        <div class="card-body">
-          <p class="info-text">Enable extended thinking across supported providers. Claude uses native thinking output, while OpenAI and Grok are prompted to include a visible REASONING section before the final answer.</p>
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label class="toggle-label">
-                <input type="checkbox" id="extended-thinking-enabled">
-                <span>Enable Extended Thinking</span>
-              </label>
-            </div>
-            <div class="form-group flex-1">
-              <label for="thinking-budget">Thinking Budget (tokens)</label>
-              <input type="number" id="thinking-budget" value="10000" min="1000" max="100000" step="1000">
-              <span class="hint" id="thinking-budget-hint">Claude native thinking token budget (OpenAI and Grok ignore this value)</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- OpenAI Reasoning -->
-      <section class="card" id="openai-reasoning-card">
-        <h2 class="card-title">OpenAI Reasoning
-          <span class="badge">o-series</span>
-        </h2>
-        <div class="card-body">
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label for="openai-reasoning-effort">Reasoning Effort</label>
-              <select id="openai-reasoning-effort">
-                <option value="low">Low</option>
-                <option value="medium" selected>Medium</option>
-                <option value="high">High</option>
-              </select>
-              <span class="hint" id="openai-reasoning-hint">Used when default provider is OpenAI, Extended Thinking is enabled, and model is o3/o3-mini/o4-mini.</span>
             </div>
           </div>
         </div>
@@ -390,7 +281,7 @@
     <!-- ═══════════════════════════════════════════ -->
     <!-- TAB: Bookmarks                                -->
     <!-- ═══════════════════════════════════════════ -->
-    <div class="tab-panel" data-panel="bookmarks">
+    <div class="tab-panel active" data-panel="bookmarks">
 
       <div class="bm-toolbar">
         <div class="bm-toolbar-left">
@@ -462,6 +353,7 @@
           <div class="proj-toolbar">
             <input type="text" id="proj-search" class="proj-search" placeholder="Search projects...">
             <button id="proj-new" class="btn btn-secondary btn-sm">+ New Project</button>
+            <button id="proj-import" class="btn btn-secondary btn-sm">Import</button>
             <button id="proj-export-all" class="btn btn-secondary btn-sm">Export All</button>
           </div>
 
@@ -499,6 +391,7 @@
                   <button id="proj-timeline" class="btn btn-secondary btn-sm" title="Build timeline from dates">Timeline</button>
                   <button id="proj-report" class="btn btn-secondary btn-sm" title="Generate investigation report">Report</button>
                   <button id="proj-anomaly" class="btn btn-secondary btn-sm" title="AI anomaly &amp; outlier detection">Anomaly Scan</button>
+                  <button id="proj-dashboard" class="btn btn-primary btn-sm" title="Open project dashboard with at-a-glance widgets">Dashboard</button>
                 </div>
                 <div id="proj-osint-status" class="prompt-status" style="padding:4px 0;font-size:12px;"></div>
                 <div class="proj-items-list" id="proj-items-list"></div>
@@ -639,42 +532,6 @@
         </div>
       </section>
 
-      <!-- Keyword Watchlist -->
-      <section class="card">
-        <h2 class="card-title">Keyword Watchlist
-          <span class="badge">OSINT</span>
-        </h2>
-        <div class="card-body">
-          <p class="info-text">Track keywords across monitored pages and RSS feeds. Get notified when a keyword appears.</p>
-          <div id="watchlist-items" class="rules-list"></div>
-          <div class="rule-form">
-            <div class="form-row">
-              <div class="form-group flex-2">
-                <label for="watchword-term">Keyword or Phrase</label>
-                <input type="text" id="watchword-term" placeholder="e.g. merger, data breach, John Smith">
-              </div>
-              <div class="form-group flex-1">
-                <label class="toggle-label">
-                  <input type="checkbox" id="watchword-case">
-                  <span>Case Sensitive</span>
-                </label>
-              </div>
-              <div class="form-group flex-1">
-                <label class="toggle-label">
-                  <input type="checkbox" id="watchword-regex">
-                  <span>Regex</span>
-                </label>
-              </div>
-              <div class="form-group flex-1" style="justify-content:flex-end;">
-                <button id="add-watchword" class="btn btn-secondary btn-sm">Add Keyword</button>
-              </div>
-            </div>
-          </div>
-          <span id="watchlist-status" class="prompt-status"></span>
-          <div id="watchlist-matches" class="rules-list" style="margin-top:12px;"></div>
-        </div>
-      </section>
-
     </div>
 
     <!-- ═══════════════════════════════════════════ -->
@@ -742,6 +599,92 @@
     </div>
 
     <!-- ═══════════════════════════════════════════ -->
+    <!-- TAB: OSINT                                    -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="osint">
+
+      <!-- Knowledge Graph -->
+      <section class="card">
+        <h2 class="card-title">Knowledge Graph
+          <span class="badge">Intelligence</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Argus automatically builds a knowledge graph from your analyses, bookmarks, and monitored pages. Entities (people, organizations, locations) are extracted and connected across all your research.</p>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>Graph Stats</label>
+              <span id="kg-stats-display" style="font-size:13px;color:var(--text-secondary);">Loading...</span>
+            </div>
+          </div>
+          <div class="form-row" style="gap:8px;">
+            <button id="kg-open-graph" class="btn btn-secondary">Open Global Graph</button>
+            <button id="kg-run-inference" class="btn btn-secondary">Run Inference</button>
+            <button id="kg-clear" class="btn btn-secondary" style="color:var(--error);">Clear Graph</button>
+          </div>
+          <div id="kg-pending-merges" class="hidden" style="margin-top:12px;">
+            <label>Pending Entity Merges</label>
+            <p class="info-text" style="margin:0 0 6px;">Argus found entities that might be the same. Review and merge or dismiss.</p>
+            <div id="kg-merge-list"></div>
+          </div>
+          <span id="kg-status" class="save-indicator hidden" style="color:var(--success);">Done</span>
+        </div>
+      </section>
+
+      <!-- Keyword Watchlist -->
+      <section class="card">
+        <h2 class="card-title">Keyword Watchlist
+          <span class="badge">Tracking</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Track keywords across monitored pages and RSS feeds. Get notified when a keyword appears.</p>
+          <div id="watchlist-items" class="rules-list"></div>
+          <div class="rule-form">
+            <div class="form-row">
+              <div class="form-group flex-2">
+                <label for="watchword-term">Keyword or Phrase</label>
+                <input type="text" id="watchword-term" placeholder="e.g. merger, data breach, John Smith">
+              </div>
+              <div class="form-group flex-1">
+                <label class="toggle-label">
+                  <input type="checkbox" id="watchword-case">
+                  <span>Case Sensitive</span>
+                </label>
+              </div>
+              <div class="form-group flex-1">
+                <label class="toggle-label">
+                  <input type="checkbox" id="watchword-regex">
+                  <span>Regex</span>
+                </label>
+              </div>
+              <div class="form-group flex-1" style="justify-content:flex-end;">
+                <button id="add-watchword" class="btn btn-secondary btn-sm">Add Keyword</button>
+              </div>
+            </div>
+          </div>
+          <span id="watchlist-status" class="prompt-status"></span>
+          <div id="watchlist-matches" class="rules-list" style="margin-top:12px;"></div>
+        </div>
+      </section>
+
+      <!-- OSINT Quick Tools -->
+      <section class="card">
+        <h2 class="card-title">Quick Tools
+          <span class="badge">OSINT</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Launch OSINT analysis tools on the current page or from project data.</p>
+          <div class="form-row" style="gap:8px;flex-wrap:wrap;">
+            <button id="osint-launch-metadata" class="btn btn-secondary">Extract Metadata</button>
+            <button id="osint-launch-links" class="btn btn-secondary">Map Links</button>
+            <button id="osint-launch-whois" class="btn btn-secondary">Whois / DNS</button>
+            <button id="osint-launch-techstack" class="btn btn-secondary">Tech Stack</button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
     <!-- TAB: Archive                                 -->
     <!-- ═══════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="archive">
@@ -751,7 +694,7 @@
           <span class="badge">Bypass</span>
         </h2>
         <div class="card-body">
-          <p class="info-text">Automatically redirect paywalled or annoying news sites through an archive service for clean, ad-free reading. Manage your blocked domain list below.</p>
+          <p class="info-text">Automatically redirect paywalled or annoying news sites through an archive service for clean, ad-free reading. Manage your Trouble List below.</p>
 
           <div class="form-row" style="margin-bottom:12px;">
             <div class="form-group flex-1">
@@ -776,7 +719,7 @@
           </div>
 
           <div class="form-group">
-            <label for="archive-domains">Blocked Domains <span class="rule-meta">(one per line — e.g. nytimes.com)</span></label>
+            <label for="archive-domains">Trouble List <span class="rule-meta">(one per line — e.g. nytimes.com)</span></label>
             <textarea id="archive-domains" rows="12" style="width:100%;font-family:monospace;font-size:13px;background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius);padding:10px;resize:vertical;"></textarea>
           </div>
 
@@ -793,7 +736,7 @@
               <label for="archive-check-mode">Archive Availability Check</label>
               <select id="archive-check-mode">
                 <option value="off">Off</option>
-                <option value="redirect-list">Redirect list domains only</option>
+                <option value="redirect-list">Trouble List domains only</option>
                 <option value="all">All sites</option>
               </select>
               <span class="hint">When enabled, Argus checks archive.is in the background as you browse</span>
@@ -802,7 +745,7 @@
               <label for="wayback-check-mode">Wayback Machine Check</label>
               <select id="wayback-check-mode">
                 <option value="off">Off</option>
-                <option value="redirect-list">Redirect list domains only</option>
+                <option value="redirect-list">Trouble List domains only</option>
                 <option value="all">All sites</option>
               </select>
               <span class="hint">Also check Internet Archive's Wayback Machine for snapshots</span>
@@ -817,6 +760,119 @@
     <!-- TAB: Settings                               -->
     <!-- ═══════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="settings">
+
+      <!-- General Settings -->
+      <section class="card">
+        <h2 class="card-title">General Settings</h2>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="max-tokens">Max Response Tokens</label>
+              <input type="number" id="max-tokens" value="2048" min="256" max="16384" step="256">
+              <span class="hint">256 - 16,384</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="max-input-chars">Max Input Characters</label>
+              <input type="number" id="max-input-chars" value="100000" min="1000" max="500000" step="1000">
+              <span class="hint">How much page text to send</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="temperature">Temperature</label>
+              <div class="range-row">
+                <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.3">
+                <span id="temp-value" class="range-value">0.3</span>
+              </div>
+              <span class="hint">Lower = more focused, higher = more creative</span>
+            </div>
+          </div>
+          <div class="form-row" style="margin-top:8px;">
+            <div class="form-group flex-1">
+              <label for="response-language">Response Language</label>
+              <select id="response-language">
+                <option value="auto">Auto-detect (browser language)</option>
+                <option value="English">English (default)</option>
+                <option value="Spanish">Spanish</option>
+                <option value="French">French</option>
+                <option value="German">German</option>
+                <option value="Portuguese">Portuguese</option>
+                <option value="Italian">Italian</option>
+                <option value="Dutch">Dutch</option>
+                <option value="Russian">Russian</option>
+                <option value="Japanese">Japanese</option>
+                <option value="Korean">Korean</option>
+                <option value="Chinese (Simplified)">Chinese (Simplified)</option>
+                <option value="Chinese (Traditional)">Chinese (Traditional)</option>
+                <option value="Arabic">Arabic</option>
+                <option value="Hindi">Hindi</option>
+                <option value="Turkish">Turkish</option>
+                <option value="Polish">Polish</option>
+                <option value="Ukrainian">Ukrainian</option>
+                <option value="Vietnamese">Vietnamese</option>
+                <option value="Thai">Thai</option>
+                <option value="Indonesian">Indonesian</option>
+                <option value="Swedish">Swedish</option>
+                <option value="Czech">Czech</option>
+                <option value="Romanian">Romanian</option>
+                <option value="Hungarian">Hungarian</option>
+                <option value="Greek">Greek</option>
+                <option value="Hebrew">Hebrew</option>
+                <option value="Filipino">Filipino</option>
+              </select>
+              <span class="hint">Language for AI responses — "Auto" uses your browser's language setting</span>
+            </div>
+            <div class="form-group flex-1">
+              <label class="toggle-label">
+                <input type="checkbox" id="show-badge" checked>
+                <span>Show badge count on toolbar icon</span>
+              </label>
+              <span class="hint">Show unread monitor change count on the Argus icon</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Extended Thinking -->
+      <section class="card">
+        <h2 class="card-title">Extended Thinking
+          <span class="badge">Claude + OpenAI + Grok</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Enable extended thinking across supported providers. Claude uses native thinking output, while OpenAI and Grok are prompted to include a visible REASONING section before the final answer.</p>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label class="toggle-label">
+                <input type="checkbox" id="extended-thinking-enabled">
+                <span>Enable Extended Thinking</span>
+              </label>
+            </div>
+            <div class="form-group flex-1">
+              <label for="thinking-budget">Thinking Budget (tokens)</label>
+              <input type="number" id="thinking-budget" value="10000" min="1000" max="100000" step="1000">
+              <span class="hint" id="thinking-budget-hint">Claude native thinking token budget (OpenAI and Grok ignore this value)</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- OpenAI Reasoning -->
+      <section class="card" id="openai-reasoning-card">
+        <h2 class="card-title">OpenAI Reasoning
+          <span class="badge">o-series</span>
+        </h2>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="openai-reasoning-effort">Reasoning Effort</label>
+              <select id="openai-reasoning-effort">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+              <span class="hint" id="openai-reasoning-hint">Used when default provider is OpenAI, Extended Thinking is enabled, and model is o3/o3-mini/o4-mini.</span>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <!-- Import / Export -->
       <section class="card">
@@ -855,6 +911,55 @@
         </div>
       </section>
 
+      <!-- Storage Management -->
+      <section class="card">
+        <h2 class="card-title">Storage Management</h2>
+        <div class="card-body">
+          <p class="info-text">Manage browser storage used by Argus. Purge old data to free up space.</p>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>Storage Usage</label>
+              <span id="storage-usage-display" style="font-size:13px;color:var(--text-secondary);">Calculating...</span>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="purge-history-age">Purge Analysis History Older Than</label>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <select id="purge-history-age" style="flex:1;">
+                  <option value="30">30 days</option>
+                  <option value="60">60 days</option>
+                  <option value="90">90 days</option>
+                </select>
+                <button id="purge-history-btn" class="btn btn-secondary" style="color:var(--error);">Purge History</button>
+              </div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="purge-snapshots-keep">Keep Last N Snapshots Per Monitor</label>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <select id="purge-snapshots-keep" style="flex:1;">
+                  <option value="5">5 snapshots</option>
+                  <option value="10" selected>10 snapshots</option>
+                  <option value="20">20 snapshots</option>
+                  <option value="50">50 snapshots</option>
+                </select>
+                <button id="purge-snapshots-btn" class="btn btn-secondary" style="color:var(--error);">Purge Snapshots</button>
+              </div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>Purge All Cached Results</label>
+              <p class="info-text" style="margin:0 0 6px;">Removes all temporary result keys (analysis results, tech stack, metadata, link map, WHOIS).</p>
+              <button id="purge-cached-btn" class="btn btn-secondary" style="color:var(--error);">Purge All Cached Data</button>
+            </div>
+          </div>
+          <span id="storage-purge-status" class="save-indicator hidden" style="color:var(--success);">Done</span>
+        </div>
+      </section>
+
       <!-- Keyboard Shortcuts -->
       <section class="card">
         <h2 class="card-title">Keyboard Shortcuts</h2>
@@ -883,7 +988,7 @@
         <h2 class="card-title">About</h2>
         <div class="card-body">
           <p class="info-text">
-            Argus is an AI-powered web analysis toolkit with OSINT capabilities. Supports Grok, OpenAI, Claude, Gemini, and any OpenAI-compatible endpoint. Features streaming responses, custom editable prompts, multi-provider comparison, page monitoring, RSS feeds, smart bookmarks, project-based investigations, entity extraction, connection graphing, and more. Your API keys are stored locally and never shared.
+            Argus is an AI-powered web analysis toolkit with OSINT capabilities. Supports Grok, OpenAI, Claude, Gemini, and any OpenAI-compatible endpoint. Features streaming responses, custom editable prompts, multi-provider comparison, page monitoring, RSS feeds, smart bookmarks, project-based investigations, entity extraction, knowledge graph, source-aware pipelines, project dashboards with auto-digests, and more. Your API keys are stored locally and never shared.
           </p>
           <div class="about-meta">
             <span>Version <strong id="version-number"></strong></span>
@@ -910,6 +1015,9 @@
         <a href="#help-feeds">RSS Feeds</a>
         <a href="#help-archive">Redirects</a>
         <a href="#help-osint">OSINT Tools</a>
+        <a href="#help-kg">Knowledge Graph</a>
+        <a href="#help-pipelines">Source Pipelines</a>
+        <a href="#help-dashboard">Dashboard &amp; Digests</a>
         <a href="#help-providers">Provider Features</a>
         <a href="#help-export">Exporting</a>
         <a href="#help-config">Config Reference</a>
@@ -961,7 +1069,7 @@
             <li>Click the <strong>gear icon</strong> to open Quick Settings</li>
             <li>Select your provider, paste your API key, choose a model, and click <strong>Save Settings</strong></li>
           </ol>
-          <p>For full configuration, use this Console — the <strong>Providers</strong> tab lets you configure all five built-in providers plus a Custom (OpenAI-compatible) provider, and the <strong>Analysis</strong> tab lets you tweak response settings, create custom presets, and more.</p>
+          <p>For full configuration, use this Console — the <strong>Providers</strong> tab lets you configure all five built-in providers plus a Custom (OpenAI-compatible) provider, and the <strong>Prompts</strong> tab lets you create custom presets, and the <strong>Settings</strong> tab lets you tweak response parameters.</p>
         </div>
       </section>
 
@@ -1079,13 +1187,22 @@
           <p>All presets — both built-in and custom — are fully editable. You can modify their system prompts, user prompts, and preferred providers to suit your workflow.</p>
 
           <h3>Custom Presets</h3>
-          <p>Create your own presets in the <strong>Analysis</strong> tab under <strong>Analysis Prompts</strong>.</p>
+          <p>Create your own presets in the <strong>Prompts</strong> tab under <strong>Analysis Prompts</strong>.</p>
           <ol>
             <li>Click <strong>"+ New Preset"</strong> and give it a name</li>
             <li>Optionally set a <strong>Preferred Provider</strong> — this preset will always use that provider</li>
             <li>Write your system prompt (role/behavior instruction) and user prompt (what to do with the page)</li>
             <li>The preset appears in the popup dropdown, shown as <code>Preset Name &rarr; Provider</code> if bound</li>
           </ol>
+
+          <h3>Sharing Preset Packs</h3>
+          <p>Custom presets are stored in <code>browser.storage.local</code> under the <code>customPresets</code> key. To share a pack of presets:</p>
+          <ol>
+            <li>Export your presets from the <strong>Prompts</strong> tab using the <strong>Export Presets</strong> button (if available), or use the browser console: <code>browser.storage.local.get("customPresets")</code></li>
+            <li>Save the JSON object to a <code>.json</code> file (e.g., <code>argus-presets-osint.json</code>)</li>
+            <li>Share the file — recipients can import it via <strong>Import Presets</strong> or paste the JSON into their storage</li>
+          </ol>
+          <p>Each preset in the JSON has a <code>label</code>, <code>system</code> (system prompt), <code>prompt</code> (user prompt), and optional <code>provider</code> (preferred provider key). You can create specialized packs — e.g., an OSINT pack, a journalism pack, a research pack — and share them with your team.</p>
 
           <h3>Prompt Variables</h3>
           <p>Use these placeholders in custom presets — they're replaced with actual values at analysis time:</p>
@@ -1161,6 +1278,7 @@
             <li><strong>Connection Graph</strong> — force-directed graph showing entity relationships across your project, with drag/zoom/pan interaction and PNG export</li>
             <li><strong>Timeline</strong> — chronological event timeline assembled from project data, with date range filters and markdown export</li>
             <li><strong>Investigation Report</strong> — AI-generated report synthesizing all project data into a structured intelligence brief</li>
+            <li><strong>Dashboard</strong> — at-a-glance project intelligence with activity charts, entity breakdown, co-occurrence heatmap, trend alerts, and auto-generated digests</li>
           </ul>
           <p>Batch analysis runs in the background, so you can navigate away from the project while it processes.</p>
         </div>
@@ -1230,7 +1348,7 @@
           <ol>
             <li>Go to the <strong>Redirects</strong> tab in this console</li>
             <li>Toggle <strong>Enable Archive Redirect</strong></li>
-            <li>Edit the domain list — add or remove sites (one per line)</li>
+            <li>Edit the Trouble List — add or remove sites (one per line)</li>
             <li>Click <strong>Save</strong></li>
           </ol>
           <p>When enabled, navigating to any listed domain will instantly redirect through archive.is. This is off by default. A default list of 24 common paywalled sites is included.</p>
@@ -1241,7 +1359,7 @@
       <section class="card" id="help-osint">
         <h2 class="card-title">OSINT Tools</h2>
         <div class="card-body help-content">
-          <p>Argus includes a suite of open-source intelligence tools that work without an AI provider. These are available from the popup quick tools, the context menu, or as project tools.</p>
+          <p>Argus includes a suite of open-source intelligence tools available from the popup, the right-click context menu, the <strong>OSINT</strong> tab in the console, and as project tools.</p>
 
           <h3>Metadata Extraction</h3>
           <p>Extracts meta tags, Open Graph data, Twitter Cards, JSON-LD structured data, publication dates, and author information from the current page.</p>
@@ -1252,6 +1370,9 @@
           <h3>Whois / DNS Lookup</h3>
           <p>Performs RDAP whois lookups and DNS record queries (via Google DNS) for the current page's domain. View registration details, nameservers, and DNS records without leaving the browser.</p>
 
+          <h3>Tech Stack Detection</h3>
+          <p>Identifies website technologies, frameworks, analytics tools, CDNs, and CMS platforms from page headers, scripts, and meta tags.</p>
+
           <h3>Wayback Machine</h3>
           <p>Automatically checks the Wayback Machine (archive.org) for availability of visited pages. See when a page was last archived and jump directly to the archived version.</p>
 
@@ -1259,7 +1380,84 @@
           <p>Automatically checks for archived versions of visited pages on archive.is. Quickly access clean, cached copies of articles.</p>
 
           <h3>Keyword Watchlist</h3>
-          <p>Watch for specific keywords across your monitors and feeds. Supports regular expressions for advanced pattern matching. When a watched keyword is detected, Argus sends a browser notification so you never miss a relevant update.</p>
+          <p>Track specific keywords across your monitors and RSS feeds (now on the <strong>OSINT</strong> tab). Supports regular expressions for advanced pattern matching. When a watched keyword is detected, Argus sends a browser notification so you never miss a relevant update.</p>
+        </div>
+      </section>
+
+      <!-- Knowledge Graph -->
+      <section class="card" id="help-kg">
+        <h2 class="card-title">Knowledge Graph</h2>
+        <div class="card-body help-content">
+          <p>Argus automatically builds a persistent knowledge graph from every analysis, bookmark, and monitored page. Entities (people, organizations, locations, dates) are extracted and connected across all your research.</p>
+
+          <h3>How It Works</h3>
+          <ul>
+            <li>Entities are extracted automatically whenever you run an analysis, save a bookmark, or get a monitor change notification</li>
+            <li>Fuzzy matching (Levenshtein distance + token overlap) prevents duplicate entries for the same entity</li>
+            <li>Co-occurrence edges are created between entities that appear together in the same content</li>
+            <li>Inference rules run periodically to discover implicit relationships (e.g., person + organization mentioned together 3+ times &rarr; affiliated-with)</li>
+          </ul>
+
+          <h3>Managing the Graph</h3>
+          <p>The Knowledge Graph card is on the <strong>OSINT</strong> tab. From there you can:</p>
+          <ul>
+            <li><strong>Open Global Graph</strong> — interactive force-directed visualization of all entities and connections</li>
+            <li><strong>Run Inference</strong> — manually trigger inference rules to discover new relationships</li>
+            <li><strong>Pending Merges</strong> — review ambiguous entity matches that Argus flagged for human review</li>
+            <li><strong>Clear Graph</strong> — reset the knowledge graph entirely</li>
+          </ul>
+          <p>Project-level graphs are also available from each project's toolbar (Graph button).</p>
+        </div>
+      </section>
+
+      <!-- Source Pipelines -->
+      <section class="card" id="help-pipelines">
+        <h2 class="card-title">Source-Aware Pipelines</h2>
+        <div class="card-body help-content">
+          <p>Argus detects the type of page you're analyzing and automatically runs a specialized pipeline to extract structured intelligence. This runs in the background after your main analysis.</p>
+
+          <h3>Detected Source Types</h3>
+          <div class="help-table-wrap">
+            <table class="help-table">
+              <thead><tr><th>Type</th><th>Detection</th><th>What It Extracts</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Wikipedia</strong></td><td>Wikipedia URLs</td><td>Structured profile, infobox data, related entities, categories, key facts</td></tr>
+                <tr><td><strong>News Article</strong></td><td>Major news domains + byline/dateline heuristics</td><td>Claims with evidence levels, bias indicators, source quality score, related stories</td></tr>
+                <tr><td><strong>Classifieds</strong></td><td>Marketplace URLs + price/listing heuristics</td><td>Listing data, seller info, scam risk analysis, price tracking over time</td></tr>
+                <tr><td><strong>Research</strong></td><td>Academic/wiki URLs (arxiv, scholar, etc.)</td><td>Claims analysis, knowledge coverage, methodology notes, suggested follow-ups</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Pipeline results appear in a collapsible <strong>"Source Insights"</strong> panel below your analysis results. All extracted entities are fed into the Knowledge Graph automatically.</p>
+        </div>
+      </section>
+
+      <!-- Dashboard & Digests -->
+      <section class="card" id="help-dashboard">
+        <h2 class="card-title">Dashboard &amp; Digests</h2>
+        <div class="card-body help-content">
+          <p>Each project has an interactive dashboard providing at-a-glance intelligence about your research progress.</p>
+
+          <h3>Dashboard Widgets</h3>
+          <ul>
+            <li><strong>Stats Overview</strong> — total items, entities, relationships, and recent changes</li>
+            <li><strong>Activity Chart</strong> — 30-day item collection histogram</li>
+            <li><strong>Entity Breakdown</strong> — visual bars showing entity types (people, orgs, locations)</li>
+            <li><strong>Co-occurrence Heatmap</strong> — matrix showing which top entities appear together</li>
+            <li><strong>Trend Alerts</strong> — mention spikes, new entities, and graph growth indicators</li>
+          </ul>
+
+          <h3>Auto-Report Sections</h3>
+          <p>Generate AI-powered report sections on demand from the dashboard:</p>
+          <ul>
+            <li><strong>Executive Summary</strong> — key findings, patterns, and recommended next steps</li>
+            <li><strong>Knowledge Gaps</strong> — what's missing from your research, prioritized collection targets</li>
+            <li><strong>Contradictions</strong> — conflicting claims across sources, reliability assessment</li>
+            <li><strong>Timeline Highlights</strong> — chronological narrative from collected data</li>
+          </ul>
+
+          <h3>Scheduled Digests</h3>
+          <p>Set a digest schedule (Daily, Weekly, or Disabled) per project. Argus generates AI briefings summarizing new items, key findings, and suggested actions. Digests are checked every 6 hours and generated when the schedule interval has elapsed.</p>
         </div>
       </section>
 
@@ -1268,10 +1466,10 @@
         <h2 class="card-title">Provider-Specific Features</h2>
         <div class="card-body help-content">
           <h3>Extended Thinking <span class="badge">Claude</span></h3>
-          <p>When using Anthropic's Claude models, you can enable <strong>Extended Thinking</strong> in the <strong>Analysis</strong> tab. This shows Claude's internal reasoning process before the final answer — useful for complex analysis, fact-checking, or research tasks. Set a thinking budget to control how many tokens Claude uses for reasoning (1,000–100,000).</p>
+          <p>When using Anthropic's Claude models, you can enable <strong>Extended Thinking</strong> in the <strong>Settings</strong> tab. This shows Claude's internal reasoning process before the final answer — useful for complex analysis, fact-checking, or research tasks. Set a thinking budget to control how many tokens Claude uses for reasoning (1,000–100,000).</p>
 
           <h3>Multi-Agent Swarm <span class="badge">Grok 4.20</span></h3>
-          <p>When using xAI's Grok 4.20 Multi-Agent model, Argus dispatches your query to multiple AI agents working in parallel. Configure reasoning effort in the <strong>Analysis</strong> tab:</p>
+          <p>When using xAI's Grok 4.20 Multi-Agent model, Argus dispatches your query to multiple AI agents working in parallel. Configure reasoning effort in the <strong>Prompts</strong> tab:</p>
           <ul>
             <li><strong>Low</strong> — 4 agents, quick responses</li>
             <li><strong>Medium</strong> — 4 agents, balanced depth</li>
@@ -1414,6 +1612,7 @@
     </div>
   </div>
 
+  <script src="../lib/storage-db.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

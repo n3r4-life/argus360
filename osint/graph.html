@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Connection Graph - Argus OSINT</title>
   <link rel="stylesheet" href="graph.css">
+  <link rel="stylesheet" href="../lib/argus-chat.css">
   <link rel="stylesheet" href="../shared/ribbon.css">
 </head>
 <body>
@@ -13,8 +14,13 @@
     <div class="header-left">
       <h1 class="project-title">Argus OSINT</h1>
       <span class="project-name" id="projectName">Connection Graph</span>
+      <div class="mode-toggle" id="modeToggle">
+        <button class="mode-btn active" data-mode="project">Project</button>
+        <button class="mode-btn" data-mode="global">Global KG</button>
+      </div>
     </div>
     <div class="header-controls">
+      <input type="text" id="graphSearch" class="graph-search" placeholder="Search entities...">
       <div class="filter-group">
         <label class="filter-checkbox">
           <input type="checkbox" data-type="person" checked>
@@ -73,6 +79,14 @@
         <span class="detail-label">Connections</span>
         <span class="detail-value" id="detailConnections">-</span>
       </div>
+      <div class="detail-row kg-detail hidden" id="detailAliasesRow">
+        <span class="detail-label">Aliases</span>
+        <span class="detail-value" id="detailAliases">-</span>
+      </div>
+      <div class="detail-row kg-detail hidden" id="detailFirstSeenRow">
+        <span class="detail-label">First Seen</span>
+        <span class="detail-value" id="detailFirstSeen">-</span>
+      </div>
       <div class="detail-section">
         <h3>Appears On</h3>
         <ul id="detailPages" class="page-list"></ul>
@@ -84,6 +98,11 @@
     </div>
   </aside>
 
+  <div id="argus-chat-container" style="padding:16px 20px;"></div>
+
+  <script src="../lib/purify.min.js"></script>
+  <script src="../lib/marked.min.js"></script>
+  <script src="../lib/argus-chat.js"></script>
   <script src="graph.js"></script>
 </body>
 </html>

@@ -56,6 +56,24 @@
     renderLinks();
     bindTabs();
     bindActions();
+    initChat();
+  }
+
+  function initChat() {
+    const links = linkData.links || linkData;
+    const parts = [];
+    if (links.external?.length) parts.push(`External links (${links.external.length}):\n` + links.external.slice(0, 50).map(l => `- ${l.url || l.href}`).join("\n"));
+    if (links.internal?.length) parts.push(`Internal links (${links.internal.length}):\n` + links.internal.slice(0, 30).map(l => `- ${l.url || l.href || l.path}`).join("\n"));
+    if (links.social?.length) parts.push(`Social links: ${links.social.map(l => l.url || l.href).join(", ")}`);
+    if (links.emails?.length) parts.push(`Emails: ${links.emails.join(", ")}`);
+    if (links.phones?.length) parts.push(`Phones: ${links.phones.join(", ")}`);
+    ArgusChat.init({
+      container: document.getElementById("argus-chat-container"),
+      contextType: "Link Map",
+      contextData: parts.join("\n\n") || "No links found.",
+      pageUrl: linkData.pageUrl,
+      pageTitle: linkData.pageTitle
+    });
   }
 
   /* ── Normalize extraction data ── */
