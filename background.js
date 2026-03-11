@@ -73,17 +73,29 @@ async function createContextMenus() {
     contexts: ["page", "frame"]
   });
 
+  // ── Redirector submenu ──
   browser.contextMenus.create({
-    id: "argus-redirect",
+    id: "argus-redirector-parent",
     parentId: "argus-parent",
-    title: "\uD83D\uDD00 Redirect via Archive",
+    title: "\uD83D\uDD00 Redirector",
     contexts: ["page", "frame"]
   });
-
+  browser.contextMenus.create({
+    id: "argus-redirect",
+    parentId: "argus-redirector-parent",
+    title: "Redirect via Archive",
+    contexts: ["page", "frame"]
+  });
   browser.contextMenus.create({
     id: "argus-save-archive",
-    parentId: "argus-parent",
-    title: "\uD83D\uDCBE Save to Archive",
+    parentId: "argus-redirector-parent",
+    title: "Save to Archive",
+    contexts: ["page", "frame"]
+  });
+  browser.contextMenus.create({
+    id: "argus-add-trouble-list",
+    parentId: "argus-redirector-parent",
+    title: "Add Site to Trouble List",
     contexts: ["page", "frame"]
   });
 
@@ -98,13 +110,6 @@ async function createContextMenus() {
     id: "argus-open-reader",
     parentId: "argus-parent",
     title: "\uD83D\uDCF0 Open Feed Reader",
-    contexts: ["page", "frame"]
-  });
-
-  browser.contextMenus.create({
-    id: "argus-techstack",
-    parentId: "argus-parent",
-    title: "\uD83D\uDD27 Detect Tech Stack",
     contexts: ["page", "frame"]
   });
 
@@ -150,6 +155,12 @@ async function createContextMenus() {
     id: "argus-whois",
     parentId: "argus-osint-parent",
     title: "Whois / DNS Lookup",
+    contexts: ["page", "frame"]
+  });
+  browser.contextMenus.create({
+    id: "argus-techstack",
+    parentId: "argus-osint-parent",
+    title: "Detect Tech Stack",
     contexts: ["page", "frame"]
   });
 
@@ -1252,6 +1263,36 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
         iconUrl: "icons/icon-96.png",
         title: "Argus — Error",
         message: `Failed to save to archive: ${err.message}`
+      });
+    }
+    return;
+  }
+
+  // Handle add site to trouble list
+  if (info.menuItemId === "argus-add-trouble-list") {
+    try {
+      const host = new URL(tab.url).hostname.replace(/^www\./, "");
+      const { archiveRedirect } = await browser.storage.local.get({
+        archiveRedirect: { enabled: false, domains: DEFAULT_ARCHIVE_DOMAINS, providerUrl: "https://archive.is/" }
+      });
+      const domains = archiveRedirect.domains || [];
+      if (!domains.includes(host)) {
+        domains.push(host);
+        archiveRedirect.domains = domains;
+        await browser.storage.local.set({ archiveRedirect });
+      }
+      safeNotify(null, {
+        type: "basic",
+        iconUrl: "icons/icon-96.png",
+        title: "Argus",
+        message: `Added ${host} to Trouble List`
+      });
+    } catch (err) {
+      safeNotify(null, {
+        type: "basic",
+        iconUrl: "icons/icon-96.png",
+        title: "Argus — Error",
+        message: `Failed to add to Trouble List: ${err.message}`
       });
     }
     return;

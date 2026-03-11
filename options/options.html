@@ -807,7 +807,7 @@
           <span class="badge">Bypass</span>
         </h2>
         <div class="card-body">
-          <p class="info-text">Automatically redirect paywalled or annoying news sites through an archive service for clean, ad-free reading. Manage your blocked domain list below.</p>
+          <p class="info-text">Automatically redirect paywalled or annoying news sites through an archive service for clean, ad-free reading. Manage your Trouble List below.</p>
 
           <div class="form-row" style="margin-bottom:12px;">
             <div class="form-group flex-1">
@@ -832,7 +832,7 @@
           </div>
 
           <div class="form-group">
-            <label for="archive-domains">Blocked Domains <span class="rule-meta">(one per line — e.g. nytimes.com)</span></label>
+            <label for="archive-domains">Trouble List <span class="rule-meta">(one per line — e.g. nytimes.com)</span></label>
             <textarea id="archive-domains" rows="12" style="width:100%;font-family:monospace;font-size:13px;background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius);padding:10px;resize:vertical;"></textarea>
           </div>
 
@@ -849,7 +849,7 @@
               <label for="archive-check-mode">Archive Availability Check</label>
               <select id="archive-check-mode">
                 <option value="off">Off</option>
-                <option value="redirect-list">Redirect list domains only</option>
+                <option value="redirect-list">Trouble List domains only</option>
                 <option value="all">All sites</option>
               </select>
               <span class="hint">When enabled, Argus checks archive.is in the background as you browse</span>
@@ -858,7 +858,7 @@
               <label for="wayback-check-mode">Wayback Machine Check</label>
               <select id="wayback-check-mode">
                 <option value="off">Off</option>
-                <option value="redirect-list">Redirect list domains only</option>
+                <option value="redirect-list">Trouble List domains only</option>
                 <option value="all">All sites</option>
               </select>
               <span class="hint">Also check Internet Archive's Wayback Machine for snapshots</span>
@@ -1348,7 +1348,7 @@
           <ol>
             <li>Go to the <strong>Redirects</strong> tab in this console</li>
             <li>Toggle <strong>Enable Archive Redirect</strong></li>
-            <li>Edit the domain list — add or remove sites (one per line)</li>
+            <li>Edit the Trouble List — add or remove sites (one per line)</li>
             <li>Click <strong>Save</strong></li>
           </ol>
           <p>When enabled, navigating to any listed domain will instantly redirect through archive.is. This is off by default. A default list of 24 common paywalled sites is included.</p>
