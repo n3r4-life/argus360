@@ -830,6 +830,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "deleteMonitor") return handleDeleteMonitor(message);
   if (message.action === "getMonitorHistory") return handleGetMonitorHistory(message);
   if (message.action === "getAllMonitorChanges") return handleGetAllMonitorChanges();
+  if (message.action === "clearAllMonitorChanges") return ArgusDB.Changes.clear().then(() => ({ success: true }));
   if (message.action === "clearMonitorUnread") return clearMonitorUnread(message.monitorId).then(() => ({ success: true }));
   if (message.action === "getMonitorUnreads") return browser.storage.local.get({ monitorUnreads: {} }).then(r => ({ success: true, unreads: r.monitorUnreads }));
   if (message.action === "getMonitorSnapshots") return handleGetMonitorSnapshots(message);

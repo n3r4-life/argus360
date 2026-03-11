@@ -232,6 +232,16 @@ function closeDetail() {
   currentItem = null;
 }
 
+// ── Monitor changes clear button ──
+const clearMonitorBtn = document.getElementById("clear-monitor-changes");
+clearMonitorBtn.addEventListener("click", async () => {
+  if (!confirm("Clear all monitor change history? This cannot be undone.")) return;
+  await browser.runtime.sendMessage({ action: "clearAllMonitorChanges" });
+  allMonitorChanges = null;
+  monitorChangesLoaded = false;
+  loadMonitorChanges();
+});
+
 // ── Tab switching ──
 const monitorList = document.getElementById("monitor-changes-list");
 let monitorChangesLoaded = false;
@@ -246,11 +256,13 @@ document.querySelectorAll(".history-tab").forEach(tab => {
       monitorList.style.display = "none";
       elements.searchInput.placeholder = "Search history...";
       elements.clearAll.style.display = "";
+      clearMonitorBtn.style.display = "none";
     } else {
       elements.historyList.style.display = "none";
       monitorList.style.display = "";
       elements.searchInput.placeholder = "Search monitor changes...";
       elements.clearAll.style.display = "none";
+      clearMonitorBtn.style.display = "";
       if (!monitorChangesLoaded) {
         monitorChangesLoaded = true;
         loadMonitorChanges();
