@@ -2652,6 +2652,11 @@ function initStorageManagement() {
     const resp = await browser.runtime.sendMessage({ action: "runKGInference" });
     showKGStatus(resp && resp.inferred ? `Inferred ${resp.inferred} new relationships` : "No new inferences");
   });
+  document.getElementById("kg-prune-noise").addEventListener("click", async () => {
+    const resp = await browser.runtime.sendMessage({ action: "pruneKGNoise" });
+    showKGStatus(resp && resp.pruned ? `Pruned ${resp.pruned} noisy entities` : "No noise found");
+    updateKGStats();
+  });
   document.getElementById("kg-clear").addEventListener("click", async () => {
     if (!confirm("Clear the entire knowledge graph? This cannot be undone.")) return;
     await browser.runtime.sendMessage({ action: "clearKG" });

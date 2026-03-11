@@ -388,6 +388,52 @@ const KnowledgeGraph = (() => {
 
   // ── Regex-based entity extraction (fast, no API) ──
 
+  // Common noise phrases from page boilerplate, nav, sidebars, CTAs
+  const NOISE_ENTITIES = new Set([
+    // Navigation & UI
+    "watch live", "read more", "sign up", "log in", "sign in", "subscribe now",
+    "click here", "learn more", "get started", "view all", "see more", "show more",
+    "load more", "read full", "full story", "breaking news", "latest news",
+    "top stories", "trending now", "most popular", "most read", "editors picks",
+    "related stories", "related articles", "recommended for you", "you may like",
+    "more stories", "more from", "whats new", "just in", "live updates",
+    "share this", "print this", "email this", "save article",
+    // Social / sharing
+    "follow us", "like us", "share on", "tweet this", "send email",
+    "facebook share", "twitter share", "copy link",
+    // Common section headers
+    "table of contents", "about us", "contact us", "privacy policy",
+    "terms of service", "terms and conditions", "cookie policy", "cookie settings",
+    "advertise with us", "work with us", "careers at", "join our team",
+    // Media / video boilerplate
+    "skip to content", "skip to main", "skip navigation", "back to top",
+    "now playing", "up next", "auto play", "full screen",
+    "closed captions", "picture in picture",
+    // Newsletter / subscription
+    "daily newsletter", "weekly newsletter", "morning newsletter",
+    "evening newsletter", "breaking alerts", "news alerts",
+    "enter your email", "your email address",
+    // Generic actions
+    "add comment", "post comment", "leave reply", "report abuse",
+    "flag content", "download app", "get app", "open app",
+    // Common false-positive multi-word capitalized phrases
+    "united states", "read the full", "according to", "in addition to",
+    "on the other", "at the same", "for the first", "by the end",
+    "save lake michigan", "attention rand paul",
+  ]);
+
+  function isNoiseEntity(name) {
+    const lower = name.toLowerCase().trim();
+    if (NOISE_ENTITIES.has(lower)) return true;
+    // Single common words that get through as 2-word with article/preposition
+    if (lower.length < 4) return true;
+    // Very short "entities" (< 3 chars per word average)
+    const words = lower.split(/\s+/);
+    const avgLen = lower.replace(/\s+/g, "").length / words.length;
+    if (avgLen < 3) return true;
+    return false;
+  }
+
   function extractEntitiesRegex(text) {
     if (!text) return [];
     const entities = [];
@@ -403,6 +449,7 @@ const KnowledgeGraph = (() => {
       // Skip common phrases
       if (/^(The |This |That |These |Those |Some |Many |Most |Last |First |Next |New |Old )/i.test(name)) continue;
       if (name.split(/\s+/).length < 2) continue;
+      if (isNoiseEntity(name)) continue;
       seen.add(key);
 
       // Guess type
@@ -481,6 +528,9 @@ const KnowledgeGraph = (() => {
     } else {
       entities = extractEntitiesRegex(content);
     }
+
+    // Filter noise from both extraction paths
+    entities = entities.filter(e => e.name && !isNoiseEntity(e.name));
 
     if (!entities.length) return { nodes: 0, edges: 0 };
 
@@ -685,6 +735,33 @@ const KnowledgeGraph = (() => {
     return { processed };
   }
 
+  // ── Prune noisy entities from existing graph ──
+
+  async function pruneNoiseEntities() {
+    const allNodes = await ArgusDB.KGNodes.getAll();
+    const noiseIds = new Set();
+    for (const node of allNodes) {
+      if (isNoiseEntity(node.displayName) || isNoiseEntity(node.canonicalName)) {
+        noiseIds.add(node.id);
+      }
+    }
+    if (!noiseIds.size) return { pruned: 0 };
+
+    // Remove all noisy nodes
+    for (const id of noiseIds) {
+      await ArgusDB.KGNodes.remove(id);
+    }
+    // Remove edges connected to noisy nodes (single pass)
+    const allEdges = await ArgusDB.KGEdges.getAll();
+    for (const e of allEdges) {
+      if (noiseIds.has(e.sourceId) || noiseIds.has(e.targetId)) {
+        await ArgusDB.KGEdges.remove(e.id);
+      }
+    }
+    console.log(`[KG] Pruned ${noiseIds.size} noisy entities`);
+    return { pruned: noiseIds.size };
+  }
+
   // ── Public API ──
   return {
     ENTITY_TYPES,
@@ -702,6 +779,7 @@ const KnowledgeGraph = (() => {
     getPendingMerges,
     resolvePendingMerge,
     backfillFromHistory,
+    pruneNoiseEntities,
     normalizeName,
     canonicalize,
     nodeId,

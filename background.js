@@ -874,6 +874,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "getKGPendingMerges") return KnowledgeGraph.getPendingMerges();
   if (message.action === "resolveKGMerge") return KnowledgeGraph.resolvePendingMerge(message.mergeId, message.accept);
   if (message.action === "runKGInference") return KnowledgeGraph.runInferenceRules();
+  if (message.action === "pruneKGNoise") return KnowledgeGraph.pruneNoiseEntities().then(r => ({ success: true, ...r }));
   if (message.action === "clearKG") return ArgusDB.KGNodes.clear().then(() => ArgusDB.KGEdges.clear()).then(() => ({ success: true }));
   // Agentic Automation
   if (message.action === "getDashboardData") return AgentEngine.getDashboardData(message.projectId);
@@ -3795,6 +3796,12 @@ function handleCancelBatch() {
   try {
     await KnowledgeGraph.backfillFromHistory();
   } catch (e) { console.warn("[KG] Backfill error:", e); }
+
+  // Knowledge Graph: prune noisy entities on startup
+  try {
+    const pruneResult = await KnowledgeGraph.pruneNoiseEntities();
+    if (pruneResult.pruned) console.log("[KG] Pruned", pruneResult.pruned, "noisy entities");
+  } catch { /* prune is best-effort */ }
 
   // Knowledge Graph: run inference rules on startup
   try {

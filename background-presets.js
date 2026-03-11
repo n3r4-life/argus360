@@ -84,7 +84,8 @@ Use markdown formatting. Be specific and cite sources throughout.`
   "contact": [{ "type": "email/phone/social/website", "value": "" }],
   "claims": [{ "claim": "", "attribution": "", "verifiable": true }]
 }
-Include EVERY entity you can find, no matter how minor. For dates, normalize to ISO format where possible. For people, include their role/title if mentioned. For claims, note who made them and whether they are verifiable.`
+Extract entities from the ARTICLE BODY CONTENT only. IGNORE navigation menus, sidebars, headers/footers, "trending now" sections, newsletter signup text, social sharing buttons, ad copy, cookie banners, and other page boilerplate. Only extract entities that are part of the actual article or document content.
+For dates, normalize to ISO format where possible. For people, include their role/title if mentioned. For claims, note who made them and whether they are verifiable.`
   },
   credibility: {
     label: "Source Credibility",
