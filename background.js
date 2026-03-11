@@ -672,6 +672,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "getConversationState") return handleGetConversationState(message);
   if (message.action === "analyzeInTab") return handleAnalyzeInTab(message);
   if (message.action === "followUp") return handleFollowUp(message);
+  if (message.action === "startConversation") return handleStartConversation(message);
   if (message.action === "reAnalyze") return handleReAnalyze(message);
   if (message.action === "bookmarkPage") return handleBookmarkPage(message);
   if (message.action === "getBookmarks") return handleGetBookmarks(message);
@@ -1086,6 +1087,71 @@ async function handleFollowUp(message) {
     })();
 
     return { success: true, followupResultId };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ──────────────────────────────────────────────
+// Start conversation (seed context for chat on any result page)
+// ──────────────────────────────────────────────
+async function handleStartConversation(message) {
+  try {
+    const { contextType, contextData, pageUrl, pageTitle, question, provider: providerOverride } = message;
+    const settings = await getProviderSettings(providerOverride || null);
+
+    const conversationId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const langInst = await getLanguageInstruction();
+
+    const systemPrompt = `You are Argus, an intelligent analysis assistant. The user is viewing ${contextType} results${pageTitle ? ` for "${pageTitle}"` : ""}${pageUrl ? ` (${pageUrl})` : ""}. Answer questions about the data below. Be concise and insightful.${langInst}
+
+--- ${contextType} Data ---
+${contextData}
+--- End Data ---`;
+
+    const messages = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: question }
+    ];
+
+    const followupResultId = `${conversationId}-followup-${Date.now()}`;
+    await browser.storage.local.set({ [followupResultId]: { status: "loading" } });
+
+    // Store conversation history for subsequent follow-ups
+    conversationHistory.set(conversationId, { provider: settings.provider, messages: [...messages] });
+
+    // Stream in background
+    (async () => {
+      try {
+        let streamedContent = "";
+        const result = await callProviderStream(
+          settings.provider, settings.apiKey, settings.model, messages,
+          { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking },
+          async (chunk) => {
+            streamedContent += chunk;
+            await browser.storage.local.set({ [followupResultId]: { status: "streaming", content: streamedContent } });
+          },
+          null
+        );
+
+        const history = conversationHistory.get(conversationId);
+        if (history) {
+          history.messages.push({ role: "assistant", content: result.content });
+          conversationHistory.set(conversationId, history);
+        }
+
+        await browser.storage.local.set({
+          [followupResultId]: {
+            status: "done", content: result.content, thinking: result.thinking,
+            model: result.model, usage: result.usage, provider: settings.provider
+          }
+        });
+      } catch (err) {
+        await browser.storage.local.set({ [followupResultId]: { status: "error", error: err.message } });
+      }
+    })();
+
+    return { success: true, conversationId, followupResultId };
   } catch (err) {
     return { success: false, error: err.message };
   }

@@ -62,6 +62,19 @@
     })).sort((a, b) => a.dateObj - b.dateObj);
 
     render();
+    initChat(data.projectName);
+  }
+
+  function initChat(projectName) {
+    const summary = allEvents.slice(0, 80).map(e =>
+      `- [${e.type || "event"}] ${e.date}: ${e.title || e.text || ""}${e.source ? " (" + e.source + ")" : ""}`
+    ).join("\n");
+    ArgusChat.init({
+      container: document.getElementById("argus-chat-container"),
+      contextType: "Timeline",
+      contextData: `Timeline events for project "${projectName || "Unknown"}" (${allEvents.length} total):\n${summary}`,
+      pageTitle: projectName
+    });
   }
 
   /* ---- Rendering ---- */

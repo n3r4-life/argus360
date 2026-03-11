@@ -218,6 +218,19 @@
 
     simStep = 0;
     runSimulation();
+
+    const nodeSummary = nodes.slice(0, 50).map(n =>
+      `- ${n.label || n.name} (${n.type || "entity"}, ${n.count || 1} mentions)`
+    ).join("\n");
+    const edgeSummary = edges.slice(0, 30).map(e =>
+      `- ${e.sourceNode?.label || e.source} ↔ ${e.targetNode?.label || e.target} (weight: ${e.weight || 1})`
+    ).join("\n");
+    ArgusChat.init({
+      container: document.getElementById("argus-chat-container"),
+      contextType: "Connection Graph",
+      contextData: `Entity graph for "${data.projectName || "Unknown"}" — ${nodes.length} entities, ${edges.length} connections.\n\nEntities:\n${nodeSummary}\n\nConnections:\n${edgeSummary}`,
+      pageTitle: data.projectName
+    });
   }
 
   /* ---- Physics ---- */

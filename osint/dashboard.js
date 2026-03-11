@@ -96,6 +96,16 @@ function renderDashboard(data) {
 
   // Latest digest
   renderDigest(data.latestDigest);
+
+  // Init chat
+  const topNames = (data.topEntities || []).slice(0, 20).map(e => `${e.name} (${e.type}, ${e.count} mentions)`).join(", ");
+  const trendInfo = (data.trends?.alerts || []).map(a => `- ${a.message || a.entity}`).join("\n");
+  ArgusChat.init({
+    container: document.getElementById("argus-chat-container"),
+    contextType: "Project Dashboard",
+    contextData: `Project: ${data.project.name}\nItems: ${data.stats.totalItems}, Entities: ${data.stats.totalEntities}, Relationships: ${data.stats.totalRelationships}\nTop entities: ${topNames}\n${trendInfo ? "Trends:\n" + trendInfo : ""}`,
+    pageTitle: data.project.name
+  });
 }
 
 function renderAlerts(trends) {

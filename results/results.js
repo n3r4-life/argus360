@@ -821,6 +821,17 @@ async function displayMetadata(storeKey) {
   IntelligenceViewer.renderMarkdown(md, elements.resultContent);
   viewer.setMetaText("Extracted from page DOM");
 
+  // Init chat component
+  const chatContainer = document.getElementById("argus-chat-container");
+  chatContainer.classList.remove("hidden");
+  ArgusChat.init({
+    container: chatContainer,
+    contextType: "Page Metadata",
+    contextData: md,
+    pageUrl: data.pageUrl,
+    pageTitle: data.pageTitle
+  });
+
   // Clean up stored data
   browser.storage.local.remove(storeKey);
 }
@@ -884,6 +895,17 @@ async function displayWhois(storeKey) {
   viewer.setRawMarkdown(rawMarkdown);
   IntelligenceViewer.renderMarkdown(md, elements.resultContent);
   viewer.setMetaText("RDAP/DNS lookup");
+
+  // Init chat component
+  const chatContainer = document.getElementById("argus-chat-container");
+  chatContainer.classList.remove("hidden");
+  ArgusChat.init({
+    container: chatContainer,
+    contextType: "Whois / DNS",
+    contextData: md,
+    pageUrl: data.pageUrl,
+    pageTitle: data.whois?.domain || data.pageTitle
+  });
 
   browser.storage.local.remove(storeKey);
 }

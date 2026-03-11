@@ -42,6 +42,20 @@
     renderTechnologies();
     bindTabs();
     bindActions();
+    initChat();
+  }
+
+  function initChat() {
+    const summary = (techData.technologies || []).map(t =>
+      `- ${t.name} (${t.category || "Other"})${t.version ? " v" + t.version : ""}${t.evidence ? " — " + t.evidence : ""}`
+    ).join("\n");
+    ArgusChat.init({
+      container: document.getElementById("argus-chat-container"),
+      contextType: "Tech Stack",
+      contextData: `Technologies detected on ${techData.pageUrl || "this page"}:\n${summary}`,
+      pageUrl: techData.pageUrl,
+      pageTitle: techData.pageTitle
+    });
   }
 
   /* ── Header ── */
