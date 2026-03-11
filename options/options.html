@@ -201,119 +201,6 @@
         </div>
       </section>
 
-      <!-- General Settings -->
-      <section class="card">
-        <h2 class="card-title">General Settings</h2>
-        <div class="card-body">
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label for="max-tokens">Max Response Tokens</label>
-              <input type="number" id="max-tokens" value="2048" min="256" max="16384" step="256">
-              <span class="hint">256 - 16,384</span>
-            </div>
-            <div class="form-group flex-1">
-              <label for="max-input-chars">Max Input Characters</label>
-              <input type="number" id="max-input-chars" value="100000" min="1000" max="500000" step="1000">
-              <span class="hint">How much page text to send</span>
-            </div>
-            <div class="form-group flex-1">
-              <label for="temperature">Temperature</label>
-              <div class="range-row">
-                <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.3">
-                <span id="temp-value" class="range-value">0.3</span>
-              </div>
-              <span class="hint">Lower = more focused, higher = more creative</span>
-            </div>
-          </div>
-          <div class="form-row" style="margin-top:8px;">
-            <div class="form-group flex-1">
-              <label for="response-language">Response Language</label>
-              <select id="response-language">
-                <option value="auto">Auto-detect (browser language)</option>
-                <option value="English">English (default)</option>
-                <option value="Spanish">Spanish</option>
-                <option value="French">French</option>
-                <option value="German">German</option>
-                <option value="Portuguese">Portuguese</option>
-                <option value="Italian">Italian</option>
-                <option value="Dutch">Dutch</option>
-                <option value="Russian">Russian</option>
-                <option value="Japanese">Japanese</option>
-                <option value="Korean">Korean</option>
-                <option value="Chinese (Simplified)">Chinese (Simplified)</option>
-                <option value="Chinese (Traditional)">Chinese (Traditional)</option>
-                <option value="Arabic">Arabic</option>
-                <option value="Hindi">Hindi</option>
-                <option value="Turkish">Turkish</option>
-                <option value="Polish">Polish</option>
-                <option value="Ukrainian">Ukrainian</option>
-                <option value="Vietnamese">Vietnamese</option>
-                <option value="Thai">Thai</option>
-                <option value="Indonesian">Indonesian</option>
-                <option value="Swedish">Swedish</option>
-                <option value="Czech">Czech</option>
-                <option value="Romanian">Romanian</option>
-                <option value="Hungarian">Hungarian</option>
-                <option value="Greek">Greek</option>
-                <option value="Hebrew">Hebrew</option>
-                <option value="Filipino">Filipino</option>
-              </select>
-              <span class="hint">Language for AI responses — "Auto" uses your browser's language setting</span>
-            </div>
-            <div class="form-group flex-1">
-              <label class="toggle-label">
-                <input type="checkbox" id="show-badge" checked>
-                <span>Show badge count on toolbar icon</span>
-              </label>
-              <span class="hint">Show unread monitor change count on the Argus icon</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Extended Thinking -->
-      <section class="card">
-        <h2 class="card-title">Extended Thinking
-          <span class="badge">Claude + OpenAI + Grok</span>
-        </h2>
-        <div class="card-body">
-          <p class="info-text">Enable extended thinking across supported providers. Claude uses native thinking output, while OpenAI and Grok are prompted to include a visible REASONING section before the final answer.</p>
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label class="toggle-label">
-                <input type="checkbox" id="extended-thinking-enabled">
-                <span>Enable Extended Thinking</span>
-              </label>
-            </div>
-            <div class="form-group flex-1">
-              <label for="thinking-budget">Thinking Budget (tokens)</label>
-              <input type="number" id="thinking-budget" value="10000" min="1000" max="100000" step="1000">
-              <span class="hint" id="thinking-budget-hint">Claude native thinking token budget (OpenAI and Grok ignore this value)</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- OpenAI Reasoning -->
-      <section class="card" id="openai-reasoning-card">
-        <h2 class="card-title">OpenAI Reasoning
-          <span class="badge">o-series</span>
-        </h2>
-        <div class="card-body">
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label for="openai-reasoning-effort">Reasoning Effort</label>
-              <select id="openai-reasoning-effort">
-                <option value="low">Low</option>
-                <option value="medium" selected>Medium</option>
-                <option value="high">High</option>
-              </select>
-              <span class="hint" id="openai-reasoning-hint">Used when default provider is OpenAI, Extended Thinking is enabled, and model is o3/o3-mini/o4-mini.</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <!-- Multi-Agent Settings -->
       <section class="card" id="multi-agent-card">
         <h2 class="card-title">Multi-Agent Settings
@@ -873,6 +760,119 @@
     <!-- TAB: Settings                               -->
     <!-- ═══════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="settings">
+
+      <!-- General Settings -->
+      <section class="card">
+        <h2 class="card-title">General Settings</h2>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="max-tokens">Max Response Tokens</label>
+              <input type="number" id="max-tokens" value="2048" min="256" max="16384" step="256">
+              <span class="hint">256 - 16,384</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="max-input-chars">Max Input Characters</label>
+              <input type="number" id="max-input-chars" value="100000" min="1000" max="500000" step="1000">
+              <span class="hint">How much page text to send</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="temperature">Temperature</label>
+              <div class="range-row">
+                <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.3">
+                <span id="temp-value" class="range-value">0.3</span>
+              </div>
+              <span class="hint">Lower = more focused, higher = more creative</span>
+            </div>
+          </div>
+          <div class="form-row" style="margin-top:8px;">
+            <div class="form-group flex-1">
+              <label for="response-language">Response Language</label>
+              <select id="response-language">
+                <option value="auto">Auto-detect (browser language)</option>
+                <option value="English">English (default)</option>
+                <option value="Spanish">Spanish</option>
+                <option value="French">French</option>
+                <option value="German">German</option>
+                <option value="Portuguese">Portuguese</option>
+                <option value="Italian">Italian</option>
+                <option value="Dutch">Dutch</option>
+                <option value="Russian">Russian</option>
+                <option value="Japanese">Japanese</option>
+                <option value="Korean">Korean</option>
+                <option value="Chinese (Simplified)">Chinese (Simplified)</option>
+                <option value="Chinese (Traditional)">Chinese (Traditional)</option>
+                <option value="Arabic">Arabic</option>
+                <option value="Hindi">Hindi</option>
+                <option value="Turkish">Turkish</option>
+                <option value="Polish">Polish</option>
+                <option value="Ukrainian">Ukrainian</option>
+                <option value="Vietnamese">Vietnamese</option>
+                <option value="Thai">Thai</option>
+                <option value="Indonesian">Indonesian</option>
+                <option value="Swedish">Swedish</option>
+                <option value="Czech">Czech</option>
+                <option value="Romanian">Romanian</option>
+                <option value="Hungarian">Hungarian</option>
+                <option value="Greek">Greek</option>
+                <option value="Hebrew">Hebrew</option>
+                <option value="Filipino">Filipino</option>
+              </select>
+              <span class="hint">Language for AI responses — "Auto" uses your browser's language setting</span>
+            </div>
+            <div class="form-group flex-1">
+              <label class="toggle-label">
+                <input type="checkbox" id="show-badge" checked>
+                <span>Show badge count on toolbar icon</span>
+              </label>
+              <span class="hint">Show unread monitor change count on the Argus icon</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Extended Thinking -->
+      <section class="card">
+        <h2 class="card-title">Extended Thinking
+          <span class="badge">Claude + OpenAI + Grok</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Enable extended thinking across supported providers. Claude uses native thinking output, while OpenAI and Grok are prompted to include a visible REASONING section before the final answer.</p>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label class="toggle-label">
+                <input type="checkbox" id="extended-thinking-enabled">
+                <span>Enable Extended Thinking</span>
+              </label>
+            </div>
+            <div class="form-group flex-1">
+              <label for="thinking-budget">Thinking Budget (tokens)</label>
+              <input type="number" id="thinking-budget" value="10000" min="1000" max="100000" step="1000">
+              <span class="hint" id="thinking-budget-hint">Claude native thinking token budget (OpenAI and Grok ignore this value)</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- OpenAI Reasoning -->
+      <section class="card" id="openai-reasoning-card">
+        <h2 class="card-title">OpenAI Reasoning
+          <span class="badge">o-series</span>
+        </h2>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="openai-reasoning-effort">Reasoning Effort</label>
+              <select id="openai-reasoning-effort">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+              <span class="hint" id="openai-reasoning-hint">Used when default provider is OpenAI, Extended Thinking is enabled, and model is o3/o3-mini/o4-mini.</span>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <!-- Import / Export -->
       <section class="card">
