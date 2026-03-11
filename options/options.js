@@ -1422,11 +1422,22 @@ function initMainTabs() {
   tabs.forEach(tab => {
     tab.addEventListener("click", () => {
       const tabName = tab.dataset.tab;
-      switchMainTab(tabName, tabs, panels);
-      sessionStorage.setItem("argus-activeTab", tabName);
-      history.replaceState(null, "", `#${tabName}`);
+      if (tabName) {
+        switchMainTab(tabName, tabs, panels);
+        sessionStorage.setItem("argus-activeTab", tabName);
+        history.replaceState(null, "", `#${tabName}`);
+      }
     });
   });
+
+  // History icon button (not a tab — opens history page)
+  const histNavBtn = document.getElementById("open-history-nav");
+  if (histNavBtn) {
+    histNavBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      browser.tabs.create({ url: browser.runtime.getURL("history/history.html") });
+    });
+  }
 }
 
 function initHelpBackToTop() {

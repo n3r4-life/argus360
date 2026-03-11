@@ -359,6 +359,11 @@ function attachEventListeners() {
     window.close();
   });
 
+  document.getElementById("open-automation").addEventListener("click", () => {
+    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#automation") });
+    window.close();
+  });
+
   // Archive redirect toggle
   const redirectBtn = document.getElementById("toggle-redirect");
   (async () => {

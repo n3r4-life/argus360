@@ -179,6 +179,12 @@ a:hover {
   opacity: 1;
 }
 
+.nav-tab-icon {
+  padding: 6px 8px;
+  margin-left: auto;
+}
+.nav-tab-icon span { display: none; }
+
 /* ═══ Tab Panels ═══ */
 .tab-panel {
   display: none;
