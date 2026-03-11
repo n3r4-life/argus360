@@ -131,6 +131,98 @@ let autoAnalyzeRules = [];
 let saveTimeout = null;
 
 // ──────────────────────────────────────────────
+// Interval stepper utility
+// ──────────────────────────────────────────────
+const INTERVAL_STEPS = [
+  1, 2, 3, 4, 5, 10, 15, 30, 45,
+  60, 75, 90, 180, 360, 720,
+  1440, 2160, 2880, 4320,
+  10080, 20160, 43200
+];
+
+function formatInterval(mins) {
+  if (mins >= 43200) return `${Math.round(mins / 43200)}mo`;
+  if (mins >= 10080) return `${Math.round(mins / 10080)}w`;
+  if (mins >= 1440) return `${(mins / 1440).toFixed(mins % 1440 ? 1 : 0).replace(/\.0$/, "")}d`;
+  if (mins >= 60) return `${(mins / 60).toFixed(mins % 60 ? 1 : 0).replace(/\.0$/, "")}h`;
+  return `${mins}m`;
+}
+
+function nearestStepIndex(mins) {
+  let best = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < INTERVAL_STEPS.length; i++) {
+    const d = Math.abs(INTERVAL_STEPS[i] - mins);
+    if (d < bestDist) { bestDist = d; best = i; }
+  }
+  return best;
+}
+
+function initIntervalStepper(containerId, hiddenId, displayId, initialMins) {
+  const container = document.getElementById(containerId);
+  const hidden = document.getElementById(hiddenId);
+  const display = document.getElementById(displayId);
+  if (!container || !hidden || !display) return;
+
+  let idx = nearestStepIndex(initialMins || 60);
+  hidden.value = INTERVAL_STEPS[idx];
+  display.textContent = formatInterval(INTERVAL_STEPS[idx]);
+
+  container.querySelectorAll(".interval-step-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const dir = parseInt(btn.dataset.dir);
+      idx = Math.max(0, Math.min(INTERVAL_STEPS.length - 1, idx + dir));
+      hidden.value = INTERVAL_STEPS[idx];
+      display.textContent = formatInterval(INTERVAL_STEPS[idx]);
+    });
+  });
+
+  return {
+    getValue: () => INTERVAL_STEPS[idx],
+    setValue: (mins) => {
+      idx = nearestStepIndex(mins);
+      hidden.value = INTERVAL_STEPS[idx];
+      display.textContent = formatInterval(INTERVAL_STEPS[idx]);
+    }
+  };
+}
+
+function createInlineIntervalStepper(currentMins, onChange) {
+  const wrap = document.createElement("div");
+  wrap.className = "interval-stepper";
+
+  let idx = nearestStepIndex(currentMins || 60);
+
+  const downBtn = document.createElement("button");
+  downBtn.type = "button";
+  downBtn.className = "interval-step-btn";
+  downBtn.textContent = "\u25BE";
+
+  const display = document.createElement("span");
+  display.className = "interval-display";
+  display.textContent = formatInterval(INTERVAL_STEPS[idx]);
+
+  const upBtn = document.createElement("button");
+  upBtn.type = "button";
+  upBtn.className = "interval-step-btn";
+  upBtn.textContent = "\u25B4";
+
+  function step(dir) {
+    idx = Math.max(0, Math.min(INTERVAL_STEPS.length - 1, idx + dir));
+    display.textContent = formatInterval(INTERVAL_STEPS[idx]);
+    if (onChange) onChange(INTERVAL_STEPS[idx]);
+  }
+
+  downBtn.addEventListener("click", () => step(-1));
+  upBtn.addEventListener("click", () => step(1));
+
+  wrap.appendChild(downBtn);
+  wrap.appendChild(display);
+  wrap.appendChild(upBtn);
+  return wrap;
+}
+
+// ──────────────────────────────────────────────
 // DOM refs
 // ──────────────────────────────────────────────
 const el = {
@@ -222,6 +314,10 @@ const el = {
 // Init
 // ──────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
+  // Init interval steppers for add-new forms
+  initIntervalStepper("monitor-interval-stepper", "monitor-interval", "monitor-interval-display", 60);
+  initIntervalStepper("feed-interval-stepper", "feed-interval", "feed-interval-display", 60);
+
   await loadAllSettings();
   buildPromptTabs();
   selectPromptTab("summary");
@@ -927,27 +1023,13 @@ async function renderMonitors() {
       renderMonitors();
     });
 
-    // Interval selector
-    const intervalSelect = document.createElement("select");
-    intervalSelect.className = "btn btn-sm btn-secondary";
-    intervalSelect.style.cursor = "pointer";
-    intervalSelect.style.width = "auto";
-    intervalSelect.style.minWidth = "0";
-    intervalSelect.style.maxWidth = "70px";
-    [1, 3, 5, 10, 15, 30, 60, 360, 720, 1440, 2160, 2880, 4320].forEach(mins => {
-      const opt = document.createElement("option");
-      opt.value = mins;
-      opt.textContent = mins >= 1440 ? `${mins / 1440}d` : mins >= 60 ? `${mins / 60}h` : `${mins}m`;
-      if (mins === monitor.intervalMinutes) opt.selected = true;
-      intervalSelect.appendChild(opt);
-    });
-    intervalSelect.addEventListener("change", async () => {
+    // Interval stepper
+    const intervalStepper = createInlineIntervalStepper(monitor.intervalMinutes, async (newMins) => {
       await browser.runtime.sendMessage({
         action: "updateMonitor",
         id: monitor.id,
-        intervalMinutes: parseInt(intervalSelect.value, 10)
+        intervalMinutes: newMins
       });
-      renderMonitors();
     });
 
     const historyBtn = document.createElement("button");
@@ -980,7 +1062,7 @@ async function renderMonitors() {
 
     actions.appendChild(toggleBtn);
     actions.appendChild(autoOpenBtn);
-    actions.appendChild(intervalSelect);
+    actions.appendChild(intervalStepper);
     actions.appendChild(historyBtn);
     actions.appendChild(timelineBtn);
     actions.appendChild(deleteBtn);
@@ -1087,26 +1169,14 @@ async function renderFeeds() {
       renderFeeds();
     });
 
-    const intervalSelect = document.createElement("select");
-    intervalSelect.className = "btn btn-sm btn-secondary";
-    intervalSelect.style.cssText = "padding:4px 6px;font-size:11px;cursor:pointer;";
-    intervalSelect.title = "Change check interval";
-    for (const [val, label] of [["1","1m"],["3","3m"],["5","5m"],["10","10m"],["15","15m"],["30","30m"],["60","1h"],["360","6h"],["720","12h"],["1440","1d"],["2160","36h"],["2880","2d"],["4320","3d"]]) {
-      const opt = document.createElement("option");
-      opt.value = val;
-      opt.textContent = label;
-      if (parseInt(val) === feed.checkIntervalMinutes) opt.selected = true;
-      intervalSelect.appendChild(opt);
-    }
-    intervalSelect.addEventListener("change", async () => {
+    const intervalStepper = createInlineIntervalStepper(feed.checkIntervalMinutes || 60, async (newMins) => {
       await browser.runtime.sendMessage({
         action: "updateFeed", id: feed.id,
-        checkIntervalMinutes: parseInt(intervalSelect.value)
+        checkIntervalMinutes: newMins
       });
-      renderFeeds();
     });
 
-    actions.appendChild(intervalSelect);
+    actions.appendChild(intervalStepper);
     actions.appendChild(toggleBtn);
     actions.appendChild(refreshBtn);
     actions.appendChild(readBtn);

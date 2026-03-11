@@ -255,6 +255,40 @@ a:hover {
   margin-bottom: 6px;
 }
 
+/* Interval stepper */
+.interval-stepper {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  width: 90px;
+  height: 38px;
+}
+.interval-step-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0 8px;
+  font-size: 10px;
+  line-height: 38px;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.interval-step-btn:hover { color: var(--text-primary); background: var(--bg-surface); }
+.interval-step-btn:active { background: var(--accent); color: #fff; }
+.interval-display {
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  user-select: none;
+  white-space: nowrap;
+}
+
 select, input[type="text"], input[type="password"], input[type="number"], textarea {
   width: 100%;
   padding: 10px 12px;

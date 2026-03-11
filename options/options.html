@@ -464,21 +464,12 @@
               </div>
               <div class="form-group flex-1">
                 <label for="monitor-interval">Check Interval</label>
-                <select id="monitor-interval">
-                  <option value="1">Every 1 min</option>
-                  <option value="3">Every 3 min</option>
-                  <option value="5">Every 5 min</option>
-                  <option value="10">Every 10 min</option>
-                  <option value="15">Every 15 min</option>
-                  <option value="30">Every 30 min</option>
-                  <option value="60" selected>Every hour</option>
-                  <option value="360">Every 6 hours</option>
-                  <option value="720">Every 12 hours</option>
-                  <option value="1440">Every day</option>
-                  <option value="2160">Every 36 hours</option>
-                  <option value="2880">Every 2 days</option>
-                  <option value="4320">Every 3 days</option>
-                </select>
+                <div class="interval-stepper" id="monitor-interval-stepper">
+                  <button type="button" class="interval-step-btn" data-dir="-1">&#9662;</button>
+                  <span class="interval-display" id="monitor-interval-display">1h</span>
+                  <button type="button" class="interval-step-btn" data-dir="1">&#9652;</button>
+                  <input type="hidden" id="monitor-interval" value="60">
+                </div>
               </div>
               <div class="form-group flex-1">
                 <label for="monitor-duration">Duration</label>
@@ -564,21 +555,12 @@
               </div>
               <div class="form-group flex-1">
                 <label for="feed-interval">Check Interval</label>
-                <select id="feed-interval">
-                  <option value="1">Every 1 min</option>
-                  <option value="3">Every 3 min</option>
-                  <option value="5">Every 5 min</option>
-                  <option value="10">Every 10 min</option>
-                  <option value="15">Every 15 min</option>
-                  <option value="30">Every 30 min</option>
-                  <option value="60" selected>Every hour</option>
-                  <option value="360">Every 6 hours</option>
-                  <option value="720">Every 12 hours</option>
-                  <option value="1440">Every day</option>
-                  <option value="2160">Every 36 hours</option>
-                  <option value="2880">Every 2 days</option>
-                  <option value="4320">Every 3 days</option>
-                </select>
+                <div class="interval-stepper" id="feed-interval-stepper">
+                  <button type="button" class="interval-step-btn" data-dir="-1">&#9662;</button>
+                  <span class="interval-display" id="feed-interval-display">1h</span>
+                  <button type="button" class="interval-step-btn" data-dir="1">&#9652;</button>
+                  <input type="hidden" id="feed-interval" value="60">
+                </div>
               </div>
             </div>
             <div class="form-row">
