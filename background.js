@@ -277,6 +277,45 @@ async function extractFrameContent(tabId, frameId) {
 }
 
 // ──────────────────────────────────────────────
+// PDF.js worker setup
+// ──────────────────────────────────────────────
+if (typeof pdfjsLib !== "undefined") {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = browser.runtime.getURL("lib/pdf.worker.min.js");
+}
+
+function isPdfUrl(url) {
+  if (!url) return false;
+  try {
+    const pathname = new URL(url).pathname.toLowerCase();
+    return pathname.endsWith(".pdf");
+  } catch { return false; }
+}
+
+async function extractPdfContent(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Failed to fetch PDF: ${response.status}`);
+  const contentType = response.headers.get("content-type") || "";
+
+  const arrayBuffer = await response.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+  const pages = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const strings = content.items.map(item => item.str);
+    pages.push(strings.join(" "));
+  }
+
+  const text = pages.join("\n\n");
+  const metadata = await pdf.getMetadata().catch(() => null);
+  const title = metadata?.info?.Title || url.split("/").pop().replace(/\.pdf$/i, "") || "PDF Document";
+  const description = metadata?.info?.Subject || metadata?.info?.Keywords || "";
+
+  return { title, url, description, text, selection: "", isPdf: true, pdfPages: pdf.numPages };
+}
+
+// ──────────────────────────────────────────────
 // Content extraction from active tab
 // ──────────────────────────────────────────────
 async function extractPageContent(tabId) {
@@ -295,46 +334,75 @@ async function extractPageContent(tabId) {
     throw new Error("Cannot analyze browser internal pages.");
   }
 
-  const results = await browser.tabs.executeScript(tab.id, {
-    code: `
-      (function() {
-        const title = document.title || "";
-        const url = window.location.href;
-        const meta = document.querySelector('meta[name="description"]');
-        const description = meta ? meta.content : "";
-        const selection = window.getSelection().toString();
+  // PDF detection: check URL or content-type header
+  if (isPdfUrl(tab.url) || (tab.url && tab.title && tab.title.endsWith(".pdf"))) {
+    try {
+      const pdfResult = await extractPdfContent(tab.url);
+      return { ...pdfResult, tabId: tab.id };
+    } catch (e) {
+      throw new Error(`PDF extraction failed: ${e.message}`);
+    }
+  }
 
-        // Try multiple selectors and pick the longest result
-        const candidates = [
-          "article",
-          "main",
-          '[role="main"]',
-          '[itemprop="articleBody"]',
-          ".article-body", ".article-content", ".article__body", ".article__content",
-          ".post-content", ".post-body", ".entry-content",
-          ".story-body", ".story-content",
-          "#article-body", "#article-content",
-          ".content-body", ".page-content"
-        ];
-        let bestText = "";
-        for (const sel of candidates) {
-          const el = document.querySelector(sel);
-          if (el) {
-            const t = el.innerText || "";
-            if (t.length > bestText.length) bestText = t;
+  let results;
+  try {
+    results = await browser.tabs.executeScript(tab.id, {
+      code: `
+        (function() {
+          const title = document.title || "";
+          const url = window.location.href;
+          const meta = document.querySelector('meta[name="description"]');
+          const description = meta ? meta.content : "";
+          const selection = window.getSelection().toString();
+
+          // Try multiple selectors and pick the longest result
+          const candidates = [
+            "article",
+            "main",
+            '[role="main"]',
+            '[itemprop="articleBody"]',
+            ".article-body", ".article-content", ".article__body", ".article__content",
+            ".post-content", ".post-body", ".entry-content",
+            ".story-body", ".story-content",
+            "#article-body", "#article-content",
+            ".content-body", ".page-content"
+          ];
+          let bestText = "";
+          for (const sel of candidates) {
+            const el = document.querySelector(sel);
+            if (el) {
+              const t = el.innerText || "";
+              if (t.length > bestText.length) bestText = t;
+            }
           }
-        }
-        // Fall back to document.body if no candidate found or too short
-        if (bestText.length < 200) bestText = document.body.innerText || "";
-        return { title, url, description, text: bestText, selection };
-      })();
-    `
-  });
+          // Fall back to document.body if no candidate found or too short
+          if (bestText.length < 200) bestText = document.body.innerText || "";
+          return { title, url, description, text: bestText, selection };
+        })();
+      `
+    });
+  } catch (scriptError) {
+    // executeScript fails on PDF viewer or restricted pages — try PDF extraction
+    if (tab.url && typeof pdfjsLib !== "undefined") {
+      try {
+        const pdfResult = await extractPdfContent(tab.url);
+        return { ...pdfResult, tabId: tab.id };
+      } catch { /* fall through to original error */ }
+    }
+    throw new Error("Missing host permission for the tab");
+  }
 
   if (!results || !results[0]) throw new Error("Failed to extract page content.");
 
   const { title, url, description, text, selection } = results[0];
   if (!text || text.trim().length < 20) {
+    // Last resort: maybe it's a PDF served without .pdf extension
+    if (tab.url && typeof pdfjsLib !== "undefined") {
+      try {
+        const pdfResult = await extractPdfContent(tab.url);
+        return { ...pdfResult, tabId: tab.id };
+      } catch { /* not a PDF, throw original error */ }
+    }
     throw new Error("Page appears to have no readable text content.");
   }
 
@@ -2162,6 +2230,12 @@ function getArchiveUrl(url) {
 }
 
 async function fetchPageText(url) {
+  // PDF detection: fetch and extract text via pdf.js
+  if (isPdfUrl(url) && typeof pdfjsLib !== "undefined") {
+    const pdfResult = await extractPdfContent(url);
+    return pdfResult.text;
+  }
+
   // Auto-route through archive provider if domain is on the redirect list
   const archiveUrl = getArchiveUrl(url);
   let fetchUrl = url;

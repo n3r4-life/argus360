@@ -46,6 +46,7 @@
   "background": {
     "scripts": [
       "lib/storage-db.js",
+      "lib/pdf.min.js",
       "background-permissions.js",
       "background-presets.js",
       "background-providers.js",
@@ -57,6 +58,10 @@
     ],
     "persistent": true
   },
+
+  "web_accessible_resources": [
+    "lib/pdf.worker.min.js"
+  ],
 
   "options_ui": {
     "page": "options/options.html",
