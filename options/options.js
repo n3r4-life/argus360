@@ -1316,7 +1316,7 @@ function initMainTabs() {
 
   // Restore last active tab from URL hash or sessionStorage
   const hash = window.location.hash.replace("#", "");
-  const savedTab = hash || sessionStorage.getItem("argus-activeTab") || "analysis";
+  const savedTab = hash || sessionStorage.getItem("argus-activeTab") || "bookmarks";
 
   switchMainTab(savedTab, tabs, panels);
 

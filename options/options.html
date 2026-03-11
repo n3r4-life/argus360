@@ -22,11 +22,7 @@
     <!-- ═══ Main Navigation ═══ -->
     <nav class="main-nav" id="main-nav">
       <div class="nav-row">
-        <button class="nav-tab active" data-tab="analysis">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          <span>Analysis</span>
-        </button>
-        <button class="nav-tab" data-tab="bookmarks">
+        <button class="nav-tab active" data-tab="bookmarks">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
           <span>Bookmarks</span>
         </button>
@@ -56,6 +52,10 @@
         </button>
       </div>
       <div class="nav-row nav-row-secondary">
+        <button class="nav-tab" data-tab="prompts">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Prompts</span>
+        </button>
         <button class="nav-tab" data-tab="providers">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
           <span>Providers</span>
@@ -154,9 +154,9 @@
     </div>
 
     <!-- ═══════════════════════════════════════════ -->
-    <!-- TAB: Analysis                               -->
+    <!-- TAB: Prompts                                -->
     <!-- ═══════════════════════════════════════════ -->
-    <div class="tab-panel active" data-panel="analysis">
+    <div class="tab-panel" data-panel="prompts">
 
       <!-- Prompt Editor -->
       <section class="card">
@@ -281,7 +281,7 @@
     <!-- ═══════════════════════════════════════════ -->
     <!-- TAB: Bookmarks                                -->
     <!-- ═══════════════════════════════════════════ -->
-    <div class="tab-panel" data-panel="bookmarks">
+    <div class="tab-panel active" data-panel="bookmarks">
 
       <div class="bm-toolbar">
         <div class="bm-toolbar-left">
@@ -1069,7 +1069,7 @@
             <li>Click the <strong>gear icon</strong> to open Quick Settings</li>
             <li>Select your provider, paste your API key, choose a model, and click <strong>Save Settings</strong></li>
           </ol>
-          <p>For full configuration, use this Console — the <strong>Providers</strong> tab lets you configure all five built-in providers plus a Custom (OpenAI-compatible) provider, and the <strong>Analysis</strong> tab lets you tweak response settings, create custom presets, and more.</p>
+          <p>For full configuration, use this Console — the <strong>Providers</strong> tab lets you configure all five built-in providers plus a Custom (OpenAI-compatible) provider, and the <strong>Prompts</strong> tab lets you create custom presets, and the <strong>Settings</strong> tab lets you tweak response parameters.</p>
         </div>
       </section>
 
@@ -1187,7 +1187,7 @@
           <p>All presets — both built-in and custom — are fully editable. You can modify their system prompts, user prompts, and preferred providers to suit your workflow.</p>
 
           <h3>Custom Presets</h3>
-          <p>Create your own presets in the <strong>Analysis</strong> tab under <strong>Analysis Prompts</strong>.</p>
+          <p>Create your own presets in the <strong>Prompts</strong> tab under <strong>Analysis Prompts</strong>.</p>
           <ol>
             <li>Click <strong>"+ New Preset"</strong> and give it a name</li>
             <li>Optionally set a <strong>Preferred Provider</strong> — this preset will always use that provider</li>
@@ -1198,7 +1198,7 @@
           <h3>Sharing Preset Packs</h3>
           <p>Custom presets are stored in <code>browser.storage.local</code> under the <code>customPresets</code> key. To share a pack of presets:</p>
           <ol>
-            <li>Export your presets from the <strong>Analysis</strong> tab using the <strong>Export Presets</strong> button (if available), or use the browser console: <code>browser.storage.local.get("customPresets")</code></li>
+            <li>Export your presets from the <strong>Prompts</strong> tab using the <strong>Export Presets</strong> button (if available), or use the browser console: <code>browser.storage.local.get("customPresets")</code></li>
             <li>Save the JSON object to a <code>.json</code> file (e.g., <code>argus-presets-osint.json</code>)</li>
             <li>Share the file — recipients can import it via <strong>Import Presets</strong> or paste the JSON into their storage</li>
           </ol>
@@ -1466,10 +1466,10 @@
         <h2 class="card-title">Provider-Specific Features</h2>
         <div class="card-body help-content">
           <h3>Extended Thinking <span class="badge">Claude</span></h3>
-          <p>When using Anthropic's Claude models, you can enable <strong>Extended Thinking</strong> in the <strong>Analysis</strong> tab. This shows Claude's internal reasoning process before the final answer — useful for complex analysis, fact-checking, or research tasks. Set a thinking budget to control how many tokens Claude uses for reasoning (1,000–100,000).</p>
+          <p>When using Anthropic's Claude models, you can enable <strong>Extended Thinking</strong> in the <strong>Settings</strong> tab. This shows Claude's internal reasoning process before the final answer — useful for complex analysis, fact-checking, or research tasks. Set a thinking budget to control how many tokens Claude uses for reasoning (1,000–100,000).</p>
 
           <h3>Multi-Agent Swarm <span class="badge">Grok 4.20</span></h3>
-          <p>When using xAI's Grok 4.20 Multi-Agent model, Argus dispatches your query to multiple AI agents working in parallel. Configure reasoning effort in the <strong>Analysis</strong> tab:</p>
+          <p>When using xAI's Grok 4.20 Multi-Agent model, Argus dispatches your query to multiple AI agents working in parallel. Configure reasoning effort in the <strong>Prompts</strong> tab:</p>
           <ul>
             <li><strong>Low</strong> — 4 agents, quick responses</li>
             <li><strong>Medium</strong> — 4 agents, balanced depth</li>
