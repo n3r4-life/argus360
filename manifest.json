@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Argus",
-  "version": "360.1.0.1",
+  "version": "360.1.0.2",
   "description": "Analyze any webpage using Grok, ChatGPT, Claude, or Gemini. Custom prompts, OSINT tools, streaming responses, multi-provider comparison, analysis history, and more.",
 
   "browser_specific_settings": {
