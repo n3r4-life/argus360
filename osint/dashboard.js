@@ -375,7 +375,7 @@ function renderDigest(digest) {
   container.textContent = "";
   const mdDiv = document.createElement("div");
   mdDiv.className = "markdown-body";
-  mdDiv.innerHTML = DOMPurify.sanitize(marked.parse(digest.content)); // sanitized
+  mdDiv.appendChild(DOMPurify.sanitize(marked.parse(digest.content), { RETURN_DOM_FRAGMENT: true }));
   const metaDiv = document.createElement("div");
   metaDiv.className = "digest-meta";
   metaDiv.textContent = `Generated ${new Date(digest.generatedAt).toLocaleString()} | ${digest.provider} / ${digest.model}`;
@@ -407,7 +407,9 @@ async function generateReport(sectionType, btn) {
     output.classList.remove("hidden");
     document.getElementById("reportTitle").textContent = sectionLabels[sectionType] || sectionType;
 
-    document.getElementById("reportContent").innerHTML = DOMPurify.sanitize(marked.parse(resp.section.content)); // sanitized
+    const reportEl = document.getElementById("reportContent");
+    reportEl.textContent = "";
+    reportEl.appendChild(DOMPurify.sanitize(marked.parse(resp.section.content), { RETURN_DOM_FRAGMENT: true }));
     document.getElementById("reportMeta").textContent =
       `Generated ${new Date(resp.section.generatedAt).toLocaleString()} | ${resp.section.provider} / ${resp.section.model}`;
 
