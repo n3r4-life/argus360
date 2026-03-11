@@ -360,12 +360,64 @@ async function extractPageContent(tabId) {
   }
 
   // PDF detection: check URL or content-type header
-  if (isPdfUrl(tab.url) || (tab.url && tab.title && tab.title.endsWith(".pdf"))) {
+  // For file:// PDFs, Firefox's built-in viewer renders HTML we can scrape via executeScript
+  const looksLikePdf = isPdfUrl(tab.url) || (tab.url && tab.title && tab.title.endsWith(".pdf"));
+  if (looksLikePdf && !tab.url.startsWith("file:")) {
     try {
       const pdfResult = await extractPdfContent(tab.url);
       return { ...pdfResult, tabId: tab.id };
     } catch (e) {
       throw new Error(`PDF extraction failed: ${e.message}`);
+    }
+  }
+
+  // For file:// PDFs, extract from Firefox's built-in PDF.js viewer
+  if (looksLikePdf && tab.url.startsWith("file:")) {
+    try {
+      const pdfViewerResults = await browser.tabs.executeScript(tab.id, {
+        code: `
+          (function() {
+            // Firefox's PDF.js viewer renders text in .textLayer span elements
+            const spans = document.querySelectorAll(".textLayer span");
+            if (spans.length > 0) {
+              const pages = document.querySelectorAll(".page");
+              const pageTexts = [];
+              pages.forEach(page => {
+                const layer = page.querySelector(".textLayer");
+                if (layer) {
+                  const pageSpans = layer.querySelectorAll("span");
+                  const text = Array.from(pageSpans).map(s => s.textContent).join(" ");
+                  if (text.trim()) pageTexts.push(text.trim());
+                }
+              });
+              return {
+                title: document.title || "PDF Document",
+                url: window.location.href,
+                text: pageTexts.join("\\n\\n"),
+                pages: pageTexts.length
+              };
+            }
+            // Fallback: grab all visible text
+            return {
+              title: document.title || "PDF Document",
+              url: window.location.href,
+              text: document.body.innerText || "",
+              pages: 0
+            };
+          })();
+        `
+      });
+      if (pdfViewerResults && pdfViewerResults[0] && pdfViewerResults[0].text.trim().length > 20) {
+        const r = pdfViewerResults[0];
+        return {
+          title: r.title.replace(/ - .+$/, "") || "PDF Document",
+          url: r.url, description: "", text: r.text,
+          selection: "", isPdf: true, pdfPages: r.pages,
+          tabId: tab.id
+        };
+      }
+    } catch (e) {
+      throw new Error(`Cannot access file:// PDF. In about:addons → Argus → Permissions, enable "Access your data for all websites", or open the PDF from a web URL instead. (${e.message})`);
     }
   }
 

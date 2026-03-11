@@ -1568,7 +1568,17 @@
           <p>Go to the <strong>Providers</strong> tab and paste your API key for the provider you want to use. Make sure to select the correct provider tab (xAI, OpenAI, Claude, Gemini, or Custom). For the Custom provider, you need at minimum a Base URL configured.</p>
 
           <h3>"Failed to start analysis"</h3>
-          <p>This usually means the page content couldn't be extracted. Some pages (browser internal pages like <code>about:*</code>, PDFs, or heavily JavaScript-rendered pages) may not work. Try a different page.</p>
+          <p>This usually means the page content couldn't be extracted. Some pages (browser internal pages like <code>about:*</code> or heavily JavaScript-rendered pages) may not work. Try a different page.</p>
+
+          <h3>PDF files not working (file:// permission)</h3>
+          <p>Argus can analyze PDFs opened from web URLs automatically. For <strong>downloaded/local PDFs</strong> (<code>file://</code> URLs), Firefox requires extra permission:</p>
+          <ol>
+            <li>Go to <strong>about:addons</strong> (or Menu &rarr; Add-ons)</li>
+            <li>Click on <strong>Argus</strong></li>
+            <li>Go to the <strong>Permissions</strong> tab</li>
+            <li>Enable <strong>"Access your data for all websites"</strong></li>
+          </ol>
+          <p>This allows Argus to read the PDF text from Firefox's built-in viewer. Alternatively, open the PDF from its original web URL instead of the downloaded copy.</p>
 
           <h3>API errors (401, 403, 429)</h3>
           <ul>
