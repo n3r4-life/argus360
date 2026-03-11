@@ -329,13 +329,21 @@
       if (e.inferred) ctx.setLineDash([]);
     }
 
-    // Nodes
-    for (const n of nodes) {
-      if (!visibleTypes.has(n.type)) continue;
+    // Nodes (draw selected last so its label is always on top)
+    const sortedNodes = nodes.filter(n => visibleTypes.has(n.type));
+    if (selectedNode) {
+      const idx = sortedNodes.indexOf(selectedNode);
+      if (idx > -1) {
+        sortedNodes.splice(idx, 1);
+        sortedNodes.push(selectedNode);
+      }
+    }
 
+    for (const n of sortedNodes) {
       const r = nodeRadius(n);
       const color = TYPE_COLORS[n.type] || TYPE_COLORS.other;
       const isSelected = n === selectedNode;
+      const isHovered = n === hoveredNode;
       const isConnected = selectedNode && edges.some(e =>
         (e.sourceNode === selectedNode && e.targetNode === n) ||
         (e.targetNode === selectedNode && e.sourceNode === n)
@@ -351,18 +359,34 @@
         ctx.strokeStyle = '#fff';
         ctx.lineWidth = 2.5;
         ctx.stroke();
-      } else if (n === hoveredNode) {
+      } else if (isHovered) {
         ctx.strokeStyle = 'rgba(255,255,255,0.5)';
         ctx.lineWidth = 1.5;
         ctx.stroke();
       }
 
-      // Label
-      ctx.font = LABEL_FONT;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      ctx.fillStyle = dimmed ? 'rgba(232,232,232,0.25)' : 'rgba(232,232,232,0.9)';
-      ctx.fillText(n.label, n.x, n.y + r + 4);
+      // Label — selected/hovered get a background pill for readability
+      if (isSelected || isHovered) {
+        const labelFont = isSelected ? 'bold 12px -apple-system, BlinkMacSystemFont, sans-serif' : LABEL_FONT;
+        ctx.font = labelFont;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        const labelY = n.y + r + 5;
+        const textWidth = ctx.measureText(n.label).width;
+        const pad = 4;
+        ctx.fillStyle = 'rgba(20, 20, 30, 0.85)';
+        ctx.beginPath();
+        ctx.roundRect(n.x - textWidth / 2 - pad, labelY - 2, textWidth + pad * 2, 16, 3);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillText(n.label, n.x, labelY);
+      } else {
+        ctx.font = LABEL_FONT;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = dimmed ? 'rgba(232,232,232,0.25)' : 'rgba(232,232,232,0.9)';
+        ctx.fillText(n.label, n.x, n.y + r + 4);
+      }
     }
 
     ctx.restore();
