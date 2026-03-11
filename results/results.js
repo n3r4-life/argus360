@@ -57,6 +57,14 @@ const viewer = IntelligenceViewer.create({
   printBtn: elements.printResult,
 });
 
+// Pipeline UI elements
+const pipelineEls = {
+  badge: document.getElementById("source-type-badge"),
+  section: document.getElementById("pipeline-section"),
+  toggle: document.getElementById("pipeline-toggle"),
+  content: document.getElementById("pipeline-content"),
+};
+
 document.addEventListener("DOMContentLoaded", () => {
   const params = new URLSearchParams(window.location.search);
   resultId = params.get("id");
@@ -316,6 +324,10 @@ async function pollForResult(id) {
       viewer.setStreaming(false);
       showResult(data);
       browser.storage.local.remove(id);
+      // Poll for pipeline enrichment data (arrives async after main result)
+      if (data.sourceType) {
+        pollForPipelineData(id);
+      }
       return;
     }
 
@@ -376,11 +388,53 @@ function showResult(data) {
 
   viewer.setMeta({ provider: data.provider, model: data.model, usage: data.usage });
 
+  // Source type badge
+  if (data.sourceType) {
+    showSourceBadge(data.sourceType);
+  }
+
+  // Pipeline enriched results
+  if (data.pipelineData && data.pipelineData.markdown) {
+    showPipelineResults(data.pipelineData);
+  }
+
   viewer.showLoading(false);
   viewer.showResults(true);
 
   // Show follow-up input
   elements.followupContainer.classList.remove("hidden");
+}
+
+function showSourceBadge(sourceType) {
+  pipelineEls.badge.innerHTML = `<span class="source-icon">${sourceType.icon || ""}</span>${sourceType.label}`;
+  pipelineEls.badge.classList.remove("hidden");
+}
+
+function showPipelineResults(pipelineData) {
+  pipelineEls.section.classList.remove("hidden");
+  const label = pipelineData.sourceLabel || "Source";
+  pipelineEls.toggle.textContent = `Show ${label} Insights`;
+  IntelligenceViewer.renderMarkdown(pipelineData.markdown, pipelineEls.content);
+
+  pipelineEls.toggle.addEventListener("click", () => {
+    pipelineEls.content.classList.toggle("hidden");
+    const isHidden = pipelineEls.content.classList.contains("hidden");
+    pipelineEls.toggle.textContent = isHidden ? `Show ${label} Insights` : `Hide ${label} Insights`;
+  });
+}
+
+async function pollForPipelineData(resultId) {
+  const pipelineKey = `${resultId}-pipeline`;
+  for (let i = 0; i < 60; i++) { // ~30 seconds max
+    await sleep(500);
+    const stored = await browser.storage.local.get(pipelineKey);
+    const data = stored[pipelineKey];
+    if (data) {
+      if (data.markdown) showPipelineResults(data);
+      browser.storage.local.remove(pipelineKey);
+      return;
+    }
+  }
 }
 
 function renderSourcesPanel(sources) {

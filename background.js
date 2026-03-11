@@ -488,7 +488,8 @@ async function handleAnalyzeStream(port, message) {
       isSelection: !!message.selectedText
     });
 
-    port.postMessage({
+    const detectedSource = SourcePipelines.detectSourceType(page.url, page);
+    const doneMsg = {
       type: "done",
       model: result.model,
       usage: result.usage,
@@ -496,7 +497,19 @@ async function handleAnalyzeStream(port, message) {
       thinking: result.thinking,
       content: result.content,
       pageTitle: page.title
-    });
+    };
+    if (detectedSource) {
+      doneMsg.sourceType = { id: detectedSource.id, label: detectedSource.label, icon: detectedSource.icon };
+    }
+    port.postMessage(doneMsg);
+
+    // Run specialized pipeline in background (non-blocking enrichment)
+    if (detectedSource && !message.selectedText) {
+      try {
+        const pipelineResult = await SourcePipelines.runPipeline(detectedSource, page, settings);
+        try { port.postMessage({ type: "pipelineData", data: pipelineResult }); } catch(e) {}
+      } catch (e) { console.warn("[Pipeline] Enrichment failed:", e); }
+    }
   } catch (err) {
     try { port.postMessage({ type: "error", error: err.message || "An unexpected error occurred." }); } catch(e) {}
   }
@@ -924,6 +937,12 @@ async function streamAnalysisToStorage(resultId, page, message, settings, preset
       resultData.isResearch = true;
       resultData.sources = page._sources;
     }
+    // Detect source type and attach to result
+    const detectedSource = SourcePipelines.detectSourceType(page.url, page);
+    if (detectedSource) {
+      resultData.sourceType = { id: detectedSource.id, label: detectedSource.label, icon: detectedSource.icon };
+    }
+
     await browser.storage.local.set({ [resultId]: resultData });
 
     await saveToHistory({
@@ -932,6 +951,16 @@ async function streamAnalysisToStorage(resultId, page, message, settings, preset
       content: result.content, thinking: result.thinking, usage: result.usage,
       isSelection: !!message.selectedText
     });
+
+    // Run specialized pipeline in background (non-blocking enrichment)
+    if (detectedSource && !message.selectedText) {
+      try {
+        const pipelineResult = await SourcePipelines.runPipeline(detectedSource, page, settings);
+        // Store under separate key so results page can pick it up even after consuming main result
+        const pipelineKey = `${resultId}-pipeline`;
+        await browser.storage.local.set({ [pipelineKey]: pipelineResult });
+      } catch (e) { console.warn("[Pipeline] Enrichment failed:", e); }
+    }
   } catch (err) {
     await browser.storage.local.set({
       [resultId]: {

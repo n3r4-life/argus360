@@ -51,7 +51,8 @@
       "background-providers.js",
       "background.js",
       "background-osint.js",
-      "background-kg.js"
+      "background-kg.js",
+      "background-pipelines.js"
     ],
     "persistent": true
   },
