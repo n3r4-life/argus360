@@ -385,6 +385,12 @@ async function buildAnalysisPrompts(page, analysisType, customPrompt, settings) 
 // ──────────────────────────────────────────────
 async function saveToHistory(entry) {
   await ArgusDB.History.add(entry);
+  // Extract entities for knowledge graph (non-blocking)
+  try {
+    if (entry.content && entry.pageUrl) {
+      KnowledgeGraph.extractAndUpsert(entry.content, entry.pageUrl, entry.pageTitle, entry.preset);
+    }
+  } catch (e) { console.warn("[KG] entity extraction failed:", e); }
 }
 
 // ──────────────────────────────────────────────
@@ -640,6 +646,17 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "batchAnalyzeProject") return handleBatchAnalyzeProject(message);
   if (message.action === "getBatchStatus") return handleGetBatchStatus();
   if (message.action === "cancelBatch") return handleCancelBatch();
+  // Knowledge Graph
+  if (message.action === "getKGGraph") return KnowledgeGraph.getGraphData(message);
+  if (message.action === "getKGStats") return KnowledgeGraph.getStats();
+  if (message.action === "searchKGNodes") return ArgusDB.KGNodes.search(message.query);
+  if (message.action === "deleteKGNode") return ArgusDB.KGNodes.remove(message.id).then(() => ({ success: true }));
+  if (message.action === "deleteKGEdge") return ArgusDB.KGEdges.remove(message.id).then(() => ({ success: true }));
+  if (message.action === "mergeKGNodes") return KnowledgeGraph.mergeNodes(message.keepId, message.removeId).then(n => ({ success: true, node: n }));
+  if (message.action === "getKGPendingMerges") return KnowledgeGraph.getPendingMerges();
+  if (message.action === "resolveKGMerge") return KnowledgeGraph.resolvePendingMerge(message.mergeId, message.accept);
+  if (message.action === "runKGInference") return KnowledgeGraph.runInferenceRules();
+  if (message.action === "clearKG") return ArgusDB.KGNodes.clear().then(() => ArgusDB.KGEdges.clear()).then(() => ({ success: true }));
   // OSINT tools are handled by background-osint.js's own message listener
   return false;
 });
@@ -1652,6 +1669,13 @@ async function saveBookmark(pageData, options = {}) {
   };
 
   await ArgusDB.Bookmarks.add(bookmark);
+
+  // Extract entities for knowledge graph (non-blocking)
+  try {
+    const kgText = (bookmark.summary || "") + "\n" + (bookmark.text || "").slice(0, 5000);
+    if (kgText.trim()) KnowledgeGraph.extractAndUpsert(kgText, bookmark.url, bookmark.title, null);
+  } catch (e) { console.warn("[KG] bookmark entity extraction failed:", e); }
+
   return bookmark;
 }
 
@@ -2211,6 +2235,12 @@ Summarize the key differences in 2-4 bullet points.`;
 
       await ArgusDB.Changes.add(changeEntry);
 
+      // Extract entities for knowledge graph (non-blocking)
+      try {
+        const kgText = (changeEntry.aiSummary || "") + "\n" + (changeEntry.newSnippet || "");
+        if (kgText.trim()) KnowledgeGraph.extractAndUpsert(kgText, monitor.url, monitor.title, null);
+      } catch (e) { console.warn("[KG] monitor change extraction failed:", e); }
+
       // Store last change summary on the monitor for quick display
       monitor.lastChangeSummary = changeEntry.aiSummary || `Content changed (${new Date(now).toLocaleString()})`;
       monitor.lastChangeAt = now;
@@ -2411,6 +2441,12 @@ Summarize the key differences in 2-4 bullet points.`;
           }
 
           await ArgusDB.Changes.add(changeEntry);
+
+          // Extract entities for knowledge graph (non-blocking)
+          try {
+            const kgText = (changeEntry.aiSummary || "") + "\n" + (changeEntry.newSnippet || "");
+            if (kgText.trim()) KnowledgeGraph.extractAndUpsert(kgText, monitor.url, monitor.title, null);
+          } catch (e) { console.warn("[KG] monitor catchup extraction failed:", e); }
 
           monitor.lastChangeSummary = changeEntry.aiSummary || `Content changed (${new Date(catchupNow).toLocaleString()})`;
           monitor.lastChangeAt = catchupNow;
@@ -2861,6 +2897,14 @@ async function checkFeedForUpdates(feed, allFeeds) {
       const newTagged = newEntries.map(e => ({ ...e, feedId: feed.id }));
       await ArgusDB.FeedEntries.saveMany(newTagged);
 
+      // Extract entities for knowledge graph (non-blocking)
+      try {
+        for (const entry of newTagged.slice(0, 10)) {
+          const kgText = (entry.title || "") + "\n" + (entry.aiSummary || entry.description || "");
+          if (kgText.trim()) KnowledgeGraph.extractAndUpsert(kgText, entry.link || feed.url, entry.title, null);
+        }
+      } catch (e) { console.warn("[KG] feed entry extraction failed:", e); }
+
       // Notification for new entries
       if (newEntries.length > 0) {
         safeNotify(`rss-${feed.id}-${Date.now()}`, {
@@ -2903,6 +2947,15 @@ browser.alarms.onAlarm.addListener(async (alarm) => {
 
   const rssFeeds = await ArgusDB.Feeds.getAll();
   await checkFeedForUpdates(feed, rssFeeds);
+});
+
+// Knowledge Graph inference alarm handler
+browser.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== "kg-inference") return;
+  try {
+    const stats = await KnowledgeGraph.runInferenceRules();
+    if (stats.inferred) console.log("[KG] Periodic inference:", stats.inferred, "new relationships");
+  } catch (e) { console.warn("[KG] Periodic inference error:", e); }
 });
 
 // Restore RSS alarms on startup
@@ -3304,4 +3357,18 @@ function handleCancelBatch() {
       console.log("[ArgusDB] Auto-prune:", stats);
     }
   } catch { /* prune is best-effort */ }
+
+  // Knowledge Graph: backfill from existing history (one-time)
+  try {
+    await KnowledgeGraph.backfillFromHistory();
+  } catch (e) { console.warn("[KG] Backfill error:", e); }
+
+  // Knowledge Graph: run inference rules on startup
+  try {
+    const kgStats = await KnowledgeGraph.runInferenceRules();
+    if (kgStats.inferred) console.log("[KG] Inferred", kgStats.inferred, "new relationships");
+  } catch { /* inference is best-effort */ }
+
+  // Set up periodic inference alarm (every 30 min)
+  browser.alarms.create("kg-inference", { delayInMinutes: 30, periodInMinutes: 30 });
 })();

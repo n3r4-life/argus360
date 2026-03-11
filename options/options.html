@@ -905,6 +905,31 @@
         </div>
       </section>
 
+      <!-- Knowledge Graph -->
+      <section class="card">
+        <h2 class="card-title">Knowledge Graph</h2>
+        <div class="card-body">
+          <p class="info-text">Argus automatically builds a knowledge graph from your analyses, bookmarks, and monitored pages. Entities (people, organizations, locations) are extracted and connected across all your research.</p>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>Graph Stats</label>
+              <span id="kg-stats-display" style="font-size:13px;color:var(--text-secondary);">Loading...</span>
+            </div>
+          </div>
+          <div class="form-row" style="gap:8px;">
+            <button id="kg-open-graph" class="btn btn-secondary">Open Global Graph</button>
+            <button id="kg-run-inference" class="btn btn-secondary">Run Inference</button>
+            <button id="kg-clear" class="btn btn-secondary" style="color:var(--error);">Clear Graph</button>
+          </div>
+          <div id="kg-pending-merges" class="hidden" style="margin-top:12px;">
+            <label>Pending Entity Merges</label>
+            <p class="info-text" style="margin:0 0 6px;">Argus found entities that might be the same. Review and merge or dismiss.</p>
+            <div id="kg-merge-list"></div>
+          </div>
+          <span id="kg-status" class="save-indicator hidden" style="color:var(--success);">Done</span>
+        </div>
+      </section>
+
       <!-- Keyboard Shortcuts -->
       <section class="card">
         <h2 class="card-title">Keyboard Shortcuts</h2>

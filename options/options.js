@@ -2574,6 +2574,23 @@ function initStorageManagement() {
   document.getElementById("purge-history-btn").addEventListener("click", purgeOldHistory);
   document.getElementById("purge-snapshots-btn").addEventListener("click", purgeMonitorSnapshots);
   document.getElementById("purge-cached-btn").addEventListener("click", purgeAllCachedData);
+
+  // Knowledge Graph
+  document.getElementById("kg-open-graph").addEventListener("click", () => {
+    browser.tabs.create({ url: browser.runtime.getURL("osint/graph.html?mode=global") });
+  });
+  document.getElementById("kg-run-inference").addEventListener("click", async () => {
+    const resp = await browser.runtime.sendMessage({ action: "runKGInference" });
+    showKGStatus(resp && resp.inferred ? `Inferred ${resp.inferred} new relationships` : "No new inferences");
+  });
+  document.getElementById("kg-clear").addEventListener("click", async () => {
+    if (!confirm("Clear the entire knowledge graph? This cannot be undone.")) return;
+    await browser.runtime.sendMessage({ action: "clearKG" });
+    showKGStatus("Knowledge graph cleared");
+    updateKGStats();
+  });
+  updateKGStats();
+  loadPendingMerges();
 }
 
 async function updateStorageUsage() {
@@ -2625,4 +2642,86 @@ async function purgeAllCachedData() {
   if (keysToRemove.length) await browser.storage.local.remove(keysToRemove);
   showPurgeStatus(`Removed ${keysToRemove.length} cached entries`);
   updateStorageUsage();
+}
+
+// ──────────────────────────────────────────────
+// Knowledge Graph management
+// ──────────────────────────────────────────────
+
+function showKGStatus(msg) {
+  const status = document.getElementById("kg-status");
+  status.textContent = msg;
+  status.classList.remove("hidden");
+  setTimeout(() => status.classList.add("hidden"), 3000);
+}
+
+async function updateKGStats() {
+  const display = document.getElementById("kg-stats-display");
+  try {
+    const stats = await browser.runtime.sendMessage({ action: "getKGStats" });
+    if (stats && typeof stats.nodeCount === "number") {
+      const parts = [`${stats.nodeCount} entities`, `${stats.edgeCount} connections`];
+      if (stats.typeCounts) {
+        const types = Object.entries(stats.typeCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([t, c]) => `${c} ${t}s`);
+        if (types.length) parts.push(types.join(", "));
+      }
+      display.textContent = parts.join(" | ");
+    } else {
+      display.textContent = "No data yet";
+    }
+  } catch {
+    display.textContent = "Unable to load";
+  }
+}
+
+async function loadPendingMerges() {
+  try {
+    const merges = await browser.runtime.sendMessage({ action: "getKGPendingMerges" });
+    const container = document.getElementById("kg-pending-merges");
+    const list = document.getElementById("kg-merge-list");
+    if (!merges || !merges.length) {
+      container.classList.add("hidden");
+      return;
+    }
+    container.classList.remove("hidden");
+    list.replaceChildren();
+
+    for (const merge of merges) {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;";
+
+      const text = document.createElement("span");
+      text.style.flex = "1";
+      text.textContent = `"${merge.newName}" \u2192 "${merge.existingName}"? (${Math.round(merge.confidence * 100)}%)`;
+      row.appendChild(text);
+
+      const acceptBtn = document.createElement("button");
+      acceptBtn.className = "btn btn-secondary";
+      acceptBtn.style.cssText = "padding:2px 8px;font-size:11px;color:var(--success);";
+      acceptBtn.textContent = "Merge";
+      acceptBtn.addEventListener("click", async () => {
+        await browser.runtime.sendMessage({ action: "resolveKGMerge", mergeId: merge.id, accept: true });
+        row.remove();
+        updateKGStats();
+        if (!list.children.length) container.classList.add("hidden");
+      });
+      row.appendChild(acceptBtn);
+
+      const dismissBtn = document.createElement("button");
+      dismissBtn.className = "btn btn-secondary";
+      dismissBtn.style.cssText = "padding:2px 8px;font-size:11px;";
+      dismissBtn.textContent = "Dismiss";
+      dismissBtn.addEventListener("click", async () => {
+        await browser.runtime.sendMessage({ action: "resolveKGMerge", mergeId: merge.id, accept: false });
+        row.remove();
+        if (!list.children.length) container.classList.add("hidden");
+      });
+      row.appendChild(dismissBtn);
+
+      list.appendChild(row);
+    }
+  } catch { /* non-critical */ }
 }

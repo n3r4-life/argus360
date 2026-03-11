@@ -79,21 +79,90 @@
     return null;
   }
 
+  const EDGE_COLORS = {
+    'mentioned-with':  'rgba(160,160,176,0.3)',
+    'affiliated-with': 'rgba(233,69,96,0.5)',
+    'located-in':      'rgba(76,175,80,0.5)',
+    'invested-in':     'rgba(255,183,77,0.5)',
+    'worked-at':       'rgba(100,181,246,0.5)',
+  };
+
+  let graphMode = 'project'; // 'project' or 'global'
+
   /* ---- Data loading ---- */
   function loadData() {
-    if (typeof browser !== 'undefined' && browser.storage) {
-      browser.storage.local.get('graphData').then(result => {
-        if (result.graphData) initGraph(result.graphData);
-        else initGraph(demoData());
-      });
-    } else if (typeof chrome !== 'undefined' && chrome.storage) {
-      chrome.storage.local.get('graphData', result => {
-        if (result.graphData) initGraph(result.graphData);
+    const params = new URLSearchParams(window.location.search);
+    const storeKey = params.get('id');
+    const mode = params.get('mode') || (storeKey ? 'project' : 'global');
+    setMode(mode);
+
+    if (mode === 'global') {
+      loadGlobalKG();
+    } else if (storeKey && typeof browser !== 'undefined' && browser.storage) {
+      browser.storage.local.get(storeKey).then(result => {
+        if (result[storeKey]) initGraph(result[storeKey]);
         else initGraph(demoData());
       });
     } else {
-      initGraph(demoData());
+      // Fallback: try legacy 'graphData' key or demo
+      if (typeof browser !== 'undefined' && browser.storage) {
+        browser.storage.local.get('graphData').then(result => {
+          if (result.graphData) initGraph(result.graphData);
+          else loadGlobalKG(); // Default to global KG if no project data
+        });
+      } else {
+        initGraph(demoData());
+      }
     }
+  }
+
+  function loadGlobalKG(options) {
+    if (typeof browser === 'undefined' || !browser.runtime) {
+      initGraph(demoData());
+      return;
+    }
+    browser.runtime.sendMessage({ action: 'getKGGraph', ...(options || {}) }).then(resp => {
+      if (resp && resp.nodes && resp.nodes.length) {
+        initGraph(transformKGData(resp));
+      } else {
+        initGraph(demoData());
+      }
+    }).catch(() => initGraph(demoData()));
+  }
+
+  function transformKGData(resp) {
+    return {
+      projectName: 'Global Knowledge Graph',
+      nodes: resp.nodes.map(n => ({
+        id: n.id,
+        label: n.displayName,
+        type: n.type,
+        count: n.mentionCount || 1,
+        pages: (n.sourcePages || []).map(s => s.url),
+        aliases: n.aliases || [],
+        firstSeen: n.firstSeen,
+        attributes: n.attributes || {},
+      })),
+      edges: resp.edges.map(e => ({
+        source: e.sourceId,
+        target: e.targetId,
+        weight: e.weight || 1,
+        relationType: e.relationType || 'mentioned-with',
+        pages: (e.sourcePages || []).map(s => s.url),
+        inferred: e.inferred || false,
+        confidence: e.confidence,
+      }))
+    };
+  }
+
+  function setMode(mode) {
+    graphMode = mode;
+    const btns = document.querySelectorAll('.mode-btn');
+    btns.forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+    // Show/hide KG-specific sidebar details
+    document.querySelectorAll('.kg-detail').forEach(el => {
+      el.classList.toggle('hidden', mode !== 'global');
+    });
   }
 
   function demoData() {
@@ -235,13 +304,16 @@
 
       const isHighlighted = selectedNode && (a === selectedNode || b === selectedNode);
       const lineWidth = Math.max(1, (e.weight || 1) * 1.2);
+      const edgeColor = EDGE_COLORS[e.relationType] || 'rgba(160,160,176,0.2)';
 
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
-      ctx.strokeStyle = isHighlighted ? 'rgba(233,69,96,0.7)' : 'rgba(160,160,176,0.2)';
+      ctx.strokeStyle = isHighlighted ? 'rgba(233,69,96,0.7)' : edgeColor;
       ctx.lineWidth = isHighlighted ? lineWidth + 1 : lineWidth;
+      if (e.inferred) ctx.setLineDash([4, 4]);
       ctx.stroke();
+      if (e.inferred) ctx.setLineDash([]);
     }
 
     // Nodes
@@ -306,6 +378,20 @@
     const connectedEdges = edges.filter(e => e.sourceNode === node || e.targetNode === node);
     document.getElementById('detailConnections').textContent = connectedEdges.length;
 
+    // KG-specific details
+    if (graphMode === 'global') {
+      if (node.aliases && node.aliases.length > 1) {
+        document.getElementById('detailAliases').textContent = node.aliases.join(', ');
+        document.getElementById('detailAliasesRow').classList.remove('hidden');
+      } else {
+        document.getElementById('detailAliasesRow').classList.add('hidden');
+      }
+      if (node.firstSeen) {
+        document.getElementById('detailFirstSeen').textContent = new Date(node.firstSeen).toLocaleDateString();
+        document.getElementById('detailFirstSeenRow').classList.remove('hidden');
+      }
+    }
+
     // Pages
     const pageList = document.getElementById('detailPages');
     pageList.innerHTML = '';
@@ -336,7 +422,8 @@
       nameSpan.textContent = other.label;
       const weightSpan = document.createElement('span');
       weightSpan.className = 'edge-weight';
-      weightSpan.textContent = 'w:' + (e.weight || 1);
+      const relLabel = e.relationType && e.relationType !== 'mentioned-with' ? e.relationType + ' ' : '';
+      weightSpan.textContent = relLabel + 'w:' + (e.weight || 1);
       li.appendChild(nameSpan);
       li.appendChild(weightSpan);
       li.style.cursor = 'pointer';
@@ -381,6 +468,49 @@
         // Restart sim briefly so layout adjusts
         simStep = Math.max(0, simStep - 60);
       });
+    });
+
+    // Mode toggle (project vs global KG)
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.mode;
+        setMode(mode);
+        if (mode === 'global') {
+          loadGlobalKG();
+        } else {
+          // Reload project data
+          const params = new URLSearchParams(window.location.search);
+          const storeKey = params.get('id');
+          if (storeKey && typeof browser !== 'undefined' && browser.storage) {
+            browser.storage.local.get(storeKey).then(result => {
+              if (result[storeKey]) initGraph(result[storeKey]);
+              else initGraph(demoData());
+            });
+          }
+        }
+      });
+    });
+
+    // Search
+    const searchInput = document.getElementById('graphSearch');
+    let searchTimeout = null;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        const q = searchInput.value.trim().toLowerCase();
+        if (!q) { selectedNode = null; hideSidebar(); return; }
+        const match = nodes.find(n =>
+          n.label.toLowerCase().includes(q) ||
+          (n.aliases || []).some(a => a.toLowerCase().includes(q))
+        );
+        if (match) {
+          selectedNode = match;
+          showSidebar(match);
+          // Center camera on the matched node
+          camera.x = match.x;
+          camera.y = match.y;
+        }
+      }, 300);
     });
 
     window.addEventListener('resize', resizeCanvas);

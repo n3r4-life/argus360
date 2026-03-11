@@ -50,7 +50,8 @@
       "background-presets.js",
       "background-providers.js",
       "background.js",
-      "background-osint.js"
+      "background-osint.js",
+      "background-kg.js"
     ],
     "persistent": true
   },
