@@ -13,13 +13,25 @@ const TYPE_COLORS = {
 
 let projectId = null;
 
+function emptyMsg(container, text) {
+  container.textContent = "";
+  const span = document.createElement("span");
+  span.style.cssText = "color:var(--text-secondary);font-size:12px;";
+  span.textContent = text;
+  container.appendChild(span);
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   const params = new URLSearchParams(window.location.search);
   projectId = params.get("projectId");
 
   if (!projectId) {
-    document.getElementById("loadingState").innerHTML =
-      '<p style="color:var(--error)">No project ID provided.</p>';
+    const noIdEl = document.getElementById("loadingState");
+    noIdEl.textContent = "";
+    const noIdP = document.createElement("p");
+    noIdP.style.color = "var(--error)";
+    noIdP.textContent = "No project ID provided.";
+    noIdEl.appendChild(noIdP);
     return;
   }
 
@@ -30,8 +42,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     renderDashboard(resp.dashboard);
   } catch (e) {
-    document.getElementById("loadingState").innerHTML =
-      `<p style="color:var(--error)">Error: ${e.message}</p>`;
+    const loadEl = document.getElementById("loadingState");
+    loadEl.textContent = "";
+    const errP = document.createElement("p");
+    errP.style.color = "var(--error)";
+    errP.textContent = `Error: ${e.message}`;
+    loadEl.appendChild(errP);
   }
 
   // Load digest schedule
@@ -118,7 +134,11 @@ function renderAlerts(trends) {
   for (const alert of trends.alerts) {
     const item = document.createElement("div");
     item.className = "alert-item";
-    item.innerHTML = `<span class="alert-icon">&#9888;</span> ${escapeHtml(alert.message)}`;
+    const icon = document.createElement("span");
+    icon.className = "alert-icon";
+    icon.textContent = "\u26A0";
+    item.appendChild(icon);
+    item.append(" " + alert.message);
     list.appendChild(item);
   }
 }
@@ -127,7 +147,7 @@ function renderActivityChart(hist) {
   const container = document.getElementById("activityChart");
   container.innerHTML = "";
   if (!hist || !hist.length) {
-    container.innerHTML = '<span style="color:var(--text-secondary);font-size:12px;">No activity data</span>';
+    emptyMsg(container, "No activity data");
     return;
   }
 
@@ -147,7 +167,7 @@ function renderTypeBreakdown(breakdown, total) {
   const container = document.getElementById("typeBars");
   container.innerHTML = "";
   if (!breakdown || !Object.keys(breakdown).length) {
-    container.innerHTML = '<span style="color:var(--text-secondary);font-size:12px;">No entities yet</span>';
+    emptyMsg(container, "No entities yet");
     return;
   }
 
@@ -156,13 +176,22 @@ function renderTypeBreakdown(breakdown, total) {
     const row = document.createElement("div");
     row.className = "type-bar-row";
     const pct = (count / maxCount) * 100;
-    row.innerHTML = `
-      <span class="type-bar-label">${escapeHtml(type)}</span>
-      <div class="type-bar-track">
-        <div class="type-bar-fill" style="width:${pct}%;background:${TYPE_COLORS[type] || TYPE_COLORS.other}"></div>
-      </div>
-      <span class="type-bar-count">${count}</span>
-    `;
+    const lbl = document.createElement("span");
+    lbl.className = "type-bar-label";
+    lbl.textContent = type;
+    const track = document.createElement("div");
+    track.className = "type-bar-track";
+    const fill = document.createElement("div");
+    fill.className = "type-bar-fill";
+    fill.style.width = `${pct}%`;
+    fill.style.background = TYPE_COLORS[type] || TYPE_COLORS.other;
+    track.appendChild(fill);
+    const cnt = document.createElement("span");
+    cnt.className = "type-bar-count";
+    cnt.textContent = count;
+    row.appendChild(lbl);
+    row.appendChild(track);
+    row.appendChild(cnt);
     container.appendChild(row);
   }
 }
@@ -171,14 +200,14 @@ function renderCooccurrence(cooccurrence, topEntities) {
   const container = document.getElementById("cooccurrenceGrid");
   container.innerHTML = "";
   if (!cooccurrence || !cooccurrence.length || !topEntities || topEntities.length < 2) {
-    container.innerHTML = '<span style="color:var(--text-secondary);font-size:12px;">Not enough data for co-occurrence</span>';
+    emptyMsg(container, "Not enough data for co-occurrence");
     return;
   }
 
   // Build unique entity names
   const names = [...new Set(cooccurrence.flatMap(c => [c.entityA, c.entityB]))].slice(0, 8);
   if (names.length < 2) {
-    container.innerHTML = '<span style="color:var(--text-secondary);font-size:12px;">Not enough connections</span>';
+    emptyMsg(container, "Not enough connections");
     return;
   }
 
@@ -196,7 +225,7 @@ function renderCooccurrence(cooccurrence, topEntities) {
   const table = document.createElement("table");
   // Header row
   const thead = document.createElement("tr");
-  thead.innerHTML = "<th></th>";
+  thead.appendChild(document.createElement("th"));
   for (const name of names) {
     const th = document.createElement("th");
     th.textContent = name.length > 10 ? name.slice(0, 9) + "\u2026" : name;
@@ -239,20 +268,27 @@ function renderTopEntities(entities) {
   const container = document.getElementById("topEntities");
   container.innerHTML = "";
   if (!entities || !entities.length) {
-    container.innerHTML = '<span style="color:var(--text-secondary);font-size:12px;">No entities</span>';
+    emptyMsg(container, "No entities");
     return;
   }
 
   for (const entity of entities) {
     const item = document.createElement("div");
     item.className = "entity-item";
-    item.innerHTML = `
-      <div>
-        <span class="entity-name">${escapeHtml(entity.name)}</span>
-        <span class="entity-type entity-type-${entity.type}">${entity.type}</span>
-      </div>
-      <span class="entity-mentions">${entity.mentions} mentions</span>
-    `;
+    const infoDiv = document.createElement("div");
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "entity-name";
+    nameSpan.textContent = entity.name;
+    const typeSpan = document.createElement("span");
+    typeSpan.className = `entity-type entity-type-${entity.type}`;
+    typeSpan.textContent = entity.type;
+    infoDiv.appendChild(nameSpan);
+    infoDiv.appendChild(typeSpan);
+    const mentionsSpan = document.createElement("span");
+    mentionsSpan.className = "entity-mentions";
+    mentionsSpan.textContent = `${entity.mentions} mentions`;
+    item.appendChild(infoDiv);
+    item.appendChild(mentionsSpan);
     container.appendChild(item);
   }
 }
@@ -261,7 +297,7 @@ function renderRecentChanges(changes) {
   const container = document.getElementById("recentChanges");
   container.innerHTML = "";
   if (!changes || !changes.length) {
-    container.innerHTML = '<span style="color:var(--text-secondary);font-size:12px;">No changes in the last 7 days</span>';
+    emptyMsg(container, "No changes in the last 7 days");
     return;
   }
 
@@ -269,10 +305,14 @@ function renderRecentChanges(changes) {
     const item = document.createElement("div");
     item.className = "change-item";
     const date = change.addedAt ? new Date(change.addedAt).toLocaleDateString() : "";
-    item.innerHTML = `
-      <strong>${escapeHtml(change.name)}</strong> (${change.type})
-      <span class="change-date">${date}</span>
-    `;
+    const strong = document.createElement("strong");
+    strong.textContent = change.name;
+    item.appendChild(strong);
+    item.append(` (${change.type})`);
+    const dateSpan = document.createElement("span");
+    dateSpan.className = "change-date";
+    dateSpan.textContent = date;
+    item.appendChild(dateSpan);
     container.appendChild(item);
   }
 }
@@ -281,7 +321,7 @@ function renderTrends(trends) {
   const container = document.getElementById("trendsList");
   container.innerHTML = "";
   if (!trends) {
-    container.innerHTML = '<span style="color:var(--text-secondary);font-size:12px;">No trend data yet</span>';
+    emptyMsg(container, "No trend data yet");
     return;
   }
 
@@ -292,7 +332,15 @@ function renderTrends(trends) {
     for (const t of trends.new.slice(0, 5)) {
       const item = document.createElement("div");
       item.className = "trend-item trend-new";
-      item.innerHTML = `<span class="trend-arrow">+</span> New entity: <strong>${escapeHtml(t.name)}</strong> (${t.type})`;
+      const arrow1 = document.createElement("span");
+      arrow1.className = "trend-arrow";
+      arrow1.textContent = "+";
+      item.appendChild(arrow1);
+      item.append(" New entity: ");
+      const bold1 = document.createElement("strong");
+      bold1.textContent = t.name;
+      item.appendChild(bold1);
+      item.append(` (${t.type})`);
       container.appendChild(item);
     }
   }
@@ -302,13 +350,21 @@ function renderTrends(trends) {
     for (const t of trends.rising.slice(0, 5)) {
       const item = document.createElement("div");
       item.className = "trend-item trend-rising";
-      item.innerHTML = `<span class="trend-arrow">&uarr;</span> <strong>${escapeHtml(t.name)}</strong> +${t.delta} mentions`;
+      const arrow2 = document.createElement("span");
+      arrow2.className = "trend-arrow";
+      arrow2.textContent = "\u2191";
+      item.appendChild(arrow2);
+      item.append(" ");
+      const bold2 = document.createElement("strong");
+      bold2.textContent = t.name;
+      item.appendChild(bold2);
+      item.append(` +${t.delta} mentions`);
       container.appendChild(item);
     }
   }
 
   if (!hasItems) {
-    container.innerHTML = '<span style="color:var(--text-secondary);font-size:12px;">No notable trends</span>';
+    emptyMsg(container, "No notable trends");
   }
 }
 
@@ -316,14 +372,15 @@ function renderDigest(digest) {
   const container = document.getElementById("digestContent");
   if (!digest) return;
 
-  const rendered = DOMPurify.sanitize(marked.parse(digest.content));
-  container.innerHTML = `
-    <div class="markdown-body">${rendered}</div>
-    <div class="digest-meta">
-      Generated ${new Date(digest.generatedAt).toLocaleString()} |
-      ${digest.provider} / ${digest.model}
-    </div>
-  `;
+  container.textContent = "";
+  const mdDiv = document.createElement("div");
+  mdDiv.className = "markdown-body";
+  mdDiv.innerHTML = DOMPurify.sanitize(marked.parse(digest.content)); // sanitized
+  const metaDiv = document.createElement("div");
+  metaDiv.className = "digest-meta";
+  metaDiv.textContent = `Generated ${new Date(digest.generatedAt).toLocaleString()} | ${digest.provider} / ${digest.model}`;
+  container.appendChild(mdDiv);
+  container.appendChild(metaDiv);
 }
 
 // ── Report Generation ──
@@ -350,8 +407,7 @@ async function generateReport(sectionType, btn) {
     output.classList.remove("hidden");
     document.getElementById("reportTitle").textContent = sectionLabels[sectionType] || sectionType;
 
-    const rendered = DOMPurify.sanitize(marked.parse(resp.section.content));
-    document.getElementById("reportContent").innerHTML = rendered;
+    document.getElementById("reportContent").innerHTML = DOMPurify.sanitize(marked.parse(resp.section.content)); // sanitized
     document.getElementById("reportMeta").textContent =
       `Generated ${new Date(resp.section.generatedAt).toLocaleString()} | ${resp.section.provider} / ${resp.section.model}`;
 

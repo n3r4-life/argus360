@@ -406,7 +406,12 @@ function showResult(data) {
 }
 
 function showSourceBadge(sourceType) {
-  pipelineEls.badge.innerHTML = `<span class="source-icon">${sourceType.icon || ""}</span>${sourceType.label}`;
+  pipelineEls.badge.textContent = "";
+  const iconSpan = document.createElement("span");
+  iconSpan.className = "source-icon";
+  iconSpan.textContent = sourceType.icon || "";
+  pipelineEls.badge.appendChild(iconSpan);
+  pipelineEls.badge.append(sourceType.label);
   pipelineEls.badge.classList.remove("hidden");
 }
 
