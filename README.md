@@ -1,6 +1,9 @@
 # Argus — Private Intelligence OS in Your Browser
 
-**Bring your own API key. No subscriptions. No accounts. 100% local.**
+Easy to use. Pin it to your toolbar!
+Or Right-Click, and select Argus...
+
+**BYOK, Bring your own API key. No subscriptions. No accounts. 100% local, or BYOC, bring your own cloud**
 
 Argus requires your own API keys from supported AI providers — cheap, easy, and you stay in full control. Most providers offer free tiers or credits to get started, and a typical page analysis costs less than a penny.
 
