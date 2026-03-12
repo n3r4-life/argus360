@@ -55,6 +55,8 @@ function attachListeners() {
     copyBtn: elements.detailCopy,
     mdBtn: elements.detailExportMd,
     htmlBtn: elements.detailExportHtml,
+    txtBtn: document.getElementById("detail-export-txt"),
+    printBtn: document.getElementById("detail-print"),
     getMarkdown: () => currentItem ? currentItem.content : "",
     getTitle: () => currentItem ? (currentItem.pageTitle || "analysis") : "analysis",
   });
@@ -95,6 +97,8 @@ function attachListeners() {
             url: currentItem.pageUrl || "",
             title: currentItem.pageTitle || "Analysis",
             summary: (currentItem.content || "").slice(0, 500),
+            analysisContent: currentItem.content || "",
+            analysisPreset: currentItem.presetLabel || currentItem.preset || "",
             tags: [currentItem.presetLabel || "analysis"]
           }
         });
@@ -108,6 +112,62 @@ function attachListeners() {
     setTimeout(() => document.addEventListener("click", function dismiss(e) {
       if (!picker.contains(e.target) && e.target !== projBtn) { picker.remove(); document.removeEventListener("click", dismiss); }
     }), 0);
+  });
+
+  // ── Share buttons ──
+  function getShareSnippet() {
+    if (!currentItem) return "";
+    const lines = (currentItem.content || "").split("\n")
+      .map(l => l.replace(/^#{1,6}\s+/g, "").replace(/\*\*|__/g, "").replace(/[*_`>\[\]()!]/g, "").replace(/^[-•]\s+/g, "").trim())
+      .filter(l => l.length > 30 && !/^(summary|source|url|article|publication|http)/i.test(l));
+    const snippet = lines.slice(0, 2).join(" ").trim().replace(/—/g, "-");
+    return snippet.length > 180 ? snippet.slice(0, 177) + "..." : snippet;
+  }
+
+  function getShareAttrib() {
+    if (!currentItem) return "Argus";
+    const name = IntelligenceViewer.providerLabel(currentItem.provider);
+    return name ? `Argus w/ ${name}` : "Argus";
+  }
+
+  document.getElementById("detail-share-x").addEventListener("click", () => {
+    if (!currentItem) return;
+    const url = currentItem.pageUrl || "";
+    const title = currentItem.pageTitle || "this page";
+    const attrib = getShareAttrib();
+    const text = url
+      ? `${title}\n\n${getShareSnippet()}\n\n- ${attrib}\n${url}`
+      : `${title}\n\n${getShareSnippet()}\n\n- ${attrib}`;
+    window.open(`https://x.com/intent/post?text=${encodeURIComponent(text)}`, "_blank");
+  });
+
+  document.getElementById("detail-share-reddit").addEventListener("click", () => {
+    if (!currentItem) return;
+    const url = currentItem.pageUrl || "";
+    const attrib = getShareAttrib();
+    const title = `${currentItem.pageTitle || "Analysis"} - ${attrib}`;
+    if (url) {
+      window.open(`https://www.reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`, "_blank");
+    } else {
+      window.open(`https://www.reddit.com/submit?selftext=true&title=${encodeURIComponent(title)}&text=${encodeURIComponent(getShareSnippet() + "\n\n- " + attrib)}`, "_blank");
+    }
+  });
+
+  document.getElementById("detail-share-linkedin").addEventListener("click", () => {
+    if (!currentItem) return;
+    const url = currentItem.pageUrl;
+    if (url) window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`, "_blank");
+  });
+
+  document.getElementById("detail-share-email").addEventListener("click", () => {
+    if (!currentItem) return;
+    const url = currentItem.pageUrl || "";
+    const attrib = getShareAttrib();
+    const subject = `${currentItem.pageTitle || "Analysis"} - ${attrib}`;
+    const body = url
+      ? `${getShareSnippet()}\n\nSource: ${url}\n\n- ${attrib}`
+      : `${getShareSnippet()}\n\n- ${attrib}`;
+    window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
   });
 }
 

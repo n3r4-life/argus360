@@ -63,6 +63,14 @@ const SourcePipelines = (() => {
         return /arxiv\.org|scholar\.google|pubmed|doi\.org|ssrn\.com|researchgate\.net|academia\.edu|\.wiki\//i.test(url);
       },
     },
+    {
+      id: "mediabias",
+      label: "Media Bias Aggregator",
+      icon: "B",
+      detect(url) {
+        return /allsides\.com|ground\.news|mediabiasfactcheck\.com|adfontesmedia\.com/i.test(url);
+      },
+    },
   ];
 
   // ── Detect source type for a page ──
@@ -184,6 +192,80 @@ Be specific about why each indicator is concerning or reassuring.`
       }
     },
 
+    mediabias: {
+      coverage: {
+        system: "You are a media analysis expert specializing in news coverage patterns, source bias, and narrative framing across outlets. Respond ONLY with valid JSON.",
+        prompt: `Analyze this media bias/coverage aggregator page. Extract ALL structured data about the story and its coverage. Return JSON:
+{
+  "story": {
+    "headline": "",
+    "topic": "",
+    "summary": "2-3 sentence summary of the underlying story"
+  },
+  "coverage": {
+    "total_sources": 0,
+    "sources": [
+      {
+        "outlet": "",
+        "headline": "",
+        "bias_rating": "left|lean-left|center|lean-right|right|unknown",
+        "url": "",
+        "stance": "brief description of angle/framing"
+      }
+    ],
+    "breakdown": {
+      "left": 0,
+      "lean_left": 0,
+      "center": 0,
+      "lean_right": 0,
+      "right": 0
+    }
+  },
+  "narrative_analysis": {
+    "left_framing": "how left-leaning outlets frame this story",
+    "right_framing": "how right-leaning outlets frame this story",
+    "center_framing": "how centrist outlets frame this story",
+    "key_disagreements": ["what the outlets disagree about"],
+    "common_ground": ["what all sides agree on"],
+    "missing_context": ["important context that most coverage omits"]
+  },
+  "entities": {
+    "people": [{"name": "", "role": ""}],
+    "organizations": [{"name": "", "role": ""}]
+  },
+  "suggested_deep_dives": [
+    {
+      "topic": "",
+      "why": "reason this deserves further research",
+      "suggested_sources": ["types of sources to check"]
+    }
+  ]
+}
+Extract ALL sources listed on the page. For Ground News, capture the blindspot/coverage data. For AllSides, capture the bias ratings and balanced roundup. Include every article link you can find.`
+      },
+      links: {
+        system: "You are a link extraction specialist. Respond ONLY with valid JSON.",
+        prompt: `Extract ALL article links and source URLs from this media aggregator page. Return JSON:
+{
+  "articles": [
+    {
+      "outlet": "",
+      "headline": "",
+      "url": "",
+      "bias_rating": "left|lean-left|center|lean-right|right|unknown"
+    }
+  ],
+  "related_stories": [
+    {
+      "title": "",
+      "url": ""
+    }
+  ]
+}
+Be thorough — capture every external article link on the page.`
+      }
+    },
+
     research: {
       analyze: {
         system: "You are a research analyst specializing in academic and investigative content. Respond ONLY with valid JSON.",
@@ -237,6 +319,9 @@ Be specific about why each indicator is concerning or reassuring.`
           break;
         case "research":
           await runResearchPipeline(page, settings, results);
+          break;
+        case "mediabias":
+          await runMediaBiasPipeline(page, settings, results);
           break;
       }
     } catch (e) {
@@ -403,6 +488,158 @@ Be specific about why each indicator is concerning or reassuring.`
     }
 
     results.markdown = formatResearchResult(analysis);
+  }
+
+  // ── Media Bias Aggregator Pipeline ──
+
+  async function runMediaBiasPipeline(page, settings, results) {
+    // Stage 1: Coverage analysis — extract sources, bias ratings, narrative framing
+    const coveragePrompt = await getAdvancedPrompt("pipeline.mediabias.coverage", PIPELINE_PROMPTS.mediabias.coverage);
+    const coverageResult = await callPipelineAI(page, coveragePrompt, settings);
+    const coverage = parseJSON(coverageResult.content);
+
+    if (coverage) {
+      results.structuredData = coverage;
+      results.stages.push({ name: "Coverage Analysis", status: "done", data: coverage });
+
+      // Extract entities
+      if (coverage.entities) {
+        for (const p of (coverage.entities.people || [])) {
+          results.entities.push({ name: p.name, type: "person", role: p.role });
+        }
+        for (const o of (coverage.entities.organizations || [])) {
+          results.entities.push({ name: o.name, type: "organization", role: o.role });
+        }
+      }
+      // Also extract outlets as entities for the knowledge graph
+      if (coverage.coverage && coverage.coverage.sources) {
+        for (const s of coverage.coverage.sources) {
+          if (s.outlet) {
+            results.entities.push({ name: s.outlet, type: "organization", context: `News outlet — ${s.bias_rating || "unknown"} bias` });
+          }
+        }
+      }
+    }
+
+    // Stage 2: Link extraction — get all article URLs for deeper research
+    const linksPrompt = await getAdvancedPrompt("pipeline.mediabias.links", PIPELINE_PROMPTS.mediabias.links);
+    const linksResult = await callPipelineAI(page, linksPrompt, settings);
+    const links = parseJSON(linksResult.content);
+
+    if (links) {
+      results.stages.push({ name: "Link Extraction", status: "done", data: links });
+      // Merge links into structured data
+      if (results.structuredData) {
+        results.structuredData._extractedLinks = links;
+      }
+    }
+
+    results.markdown = formatMediaBiasResult(coverage, links);
+  }
+
+  function formatMediaBiasResult(coverage, links) {
+    if (!coverage) return "Failed to analyze this media bias page.";
+
+    let md = "";
+
+    // Story header
+    if (coverage.story) {
+      md += `## ${coverage.story.headline || "Story Analysis"}\n\n`;
+      if (coverage.story.topic) md += `**Topic:** ${coverage.story.topic}\n\n`;
+      if (coverage.story.summary) md += `${coverage.story.summary}\n\n`;
+    }
+
+    // Coverage breakdown
+    if (coverage.coverage) {
+      const c = coverage.coverage;
+      if (c.total_sources) md += `**Total Sources Covering:** ${c.total_sources}\n\n`;
+
+      if (c.breakdown) {
+        const b = c.breakdown;
+        md += `### Coverage Spectrum\n`;
+        md += `| Left | Lean Left | Center | Lean Right | Right |\n`;
+        md += `|:----:|:---------:|:------:|:----------:|:-----:|\n`;
+        md += `| ${b.left || 0} | ${b.lean_left || 0} | ${b.center || 0} | ${b.lean_right || 0} | ${b.right || 0} |\n\n`;
+      }
+
+      // Source table
+      if (c.sources && c.sources.length) {
+        md += `### Sources\n`;
+        md += `| Outlet | Bias | Headline / Angle |\n|--------|------|------------------|\n`;
+        for (const s of c.sources) {
+          const headline = s.headline || s.stance || "—";
+          const link = s.url ? `[${s.outlet}](${s.url})` : s.outlet;
+          md += `| ${link} | ${s.bias_rating || "?"} | ${headline} |\n`;
+        }
+        md += "\n";
+      }
+    }
+
+    // Narrative analysis
+    if (coverage.narrative_analysis) {
+      const na = coverage.narrative_analysis;
+      md += `### Narrative Framing\n\n`;
+      if (na.left_framing) md += `**Left:** ${na.left_framing}\n\n`;
+      if (na.center_framing) md += `**Center:** ${na.center_framing}\n\n`;
+      if (na.right_framing) md += `**Right:** ${na.right_framing}\n\n`;
+
+      if (na.key_disagreements && na.key_disagreements.length) {
+        md += `### Key Disagreements\n`;
+        for (const d of na.key_disagreements) md += `- ${d}\n`;
+        md += "\n";
+      }
+      if (na.common_ground && na.common_ground.length) {
+        md += `### Common Ground\n`;
+        for (const g of na.common_ground) md += `- ${g}\n`;
+        md += "\n";
+      }
+      if (na.missing_context && na.missing_context.length) {
+        md += `### Missing Context\n`;
+        for (const m of na.missing_context) md += `- ${m}\n`;
+        md += "\n";
+      }
+    }
+
+    // Deep dive suggestions
+    if (coverage.suggested_deep_dives && coverage.suggested_deep_dives.length) {
+      md += `### Suggested Deep Dives\n`;
+      for (const dd of coverage.suggested_deep_dives) {
+        md += `- **${dd.topic}** — ${dd.why}`;
+        if (dd.suggested_sources && dd.suggested_sources.length) {
+          md += ` *(check: ${dd.suggested_sources.join(", ")})*`;
+        }
+        md += "\n";
+      }
+      md += "\n";
+    }
+
+    // Extracted article links for further research
+    if (links && links.articles && links.articles.length) {
+      md += `### Article Links (${links.articles.length})\n`;
+      for (const a of links.articles) {
+        const label = a.headline || a.outlet || a.url;
+        const bias = a.bias_rating ? ` [${a.bias_rating}]` : "";
+        if (a.url) {
+          md += `- [${label}](${a.url})${bias}\n`;
+        } else {
+          md += `- ${label}${bias}\n`;
+        }
+      }
+      md += "\n";
+    }
+
+    if (links && links.related_stories && links.related_stories.length) {
+      md += `### Related Stories\n`;
+      for (const rs of links.related_stories) {
+        if (rs.url) {
+          md += `- [${rs.title || rs.url}](${rs.url})\n`;
+        } else {
+          md += `- ${rs.title}\n`;
+        }
+      }
+    }
+
+    return md;
   }
 
   // ── AI call helper ──

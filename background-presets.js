@@ -151,6 +151,32 @@ Key quotes, stances, or public positions.
 Brief analytical assessment of the subject based on available information.
 
 Use markdown formatting. Only include what is supported by the content.`
+  },
+  mediabias: {
+    label: "Media Bias Breakdown",
+    osint: true,
+    system: "You are a media literacy analyst specializing in comparative coverage analysis, editorial framing, and source bias detection. You help users understand how different outlets cover the same story.",
+    prompt: `Analyze this page's coverage of the underlying news story. Produce a comprehensive breakdown:
+
+## Story Overview
+What is this story actually about? Summarize the core facts, stripping away editorial framing.
+
+## Coverage Spectrum
+Map every source/outlet mentioned to a bias position (Left, Lean Left, Center, Lean Right, Right). Present as a table with the outlet name, their headline or angle, and bias rating.
+
+## Framing Analysis
+How does each side frame this story differently? What language choices, emphasis, and omissions reveal editorial perspective?
+
+## Blind Spots
+What important context, perspectives, or facts are missing from the overall coverage? What questions should a reader be asking that no outlet is addressing?
+
+## Source Links
+List every article URL found on this page, grouped by bias lean, so the reader can dig deeper into each perspective.
+
+## Deep Research Leads
+Based on this coverage analysis, suggest specific topics, claims, or entities that deserve independent verification or deeper investigation. For each, explain what to look for and where.
+
+Use markdown formatting. Be thorough — extract every outlet, link, and data point available on the page.`
   }
 };
 

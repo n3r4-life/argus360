@@ -26,7 +26,25 @@ browser.tabs.onRemoved.addListener(tabId => {
 
 browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.url) conversationHistory.delete(tabId);
+  if (changeInfo.url || changeInfo.status === "complete") updateBrowserActionForTab(tabId);
 });
+
+browser.tabs.onActivated.addListener(({ tabId }) => updateBrowserActionForTab(tabId));
+
+function updateBrowserActionForTab(tabId) {
+  browser.tabs.get(tabId).then(tab => {
+    if (!tab?.url) return;
+    const isInternal = tab.url.startsWith("moz-extension://") ||
+                       tab.url.startsWith("about:") ||
+                       tab.url.startsWith("chrome:");
+    if (isInternal) {
+      browser.browserAction.disable(tabId);
+      browser.browserAction.setBadgeText({ text: "", tabId });
+    } else {
+      browser.browserAction.enable(tabId);
+    }
+  }).catch(() => {});
+}
 
 // ──────────────────────────────────────────────
 // Auto-analyze cooldown tracker
@@ -42,7 +60,8 @@ async function createContextMenus() {
   browser.contextMenus.create({
     id: "argus-parent",
     title: "Argus",
-    contexts: ["page", "frame", "selection"]
+    contexts: ["page", "frame", "selection"],
+    documentUrlPatterns: ["http://*/*", "https://*/*", "file://*/*", "ftp://*/*"]
   });
 
   // ── Console & Help ──
@@ -1031,6 +1050,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "getPresets") return handleGetPresets();
   if (message.action === "getProviders") return handleGetProviders();
   if (message.action === "getHistory") return handleGetHistory(message);
+  if (message.action === "getHistoryItem") return handleGetHistoryItem(message);
   if (message.action === "deleteHistoryItem") return handleDeleteHistoryItem(message);
   if (message.action === "clearHistory") return handleClearHistory();
   if (message.action === "searchHistory") return handleSearchHistory(message);
@@ -1208,6 +1228,13 @@ async function handleGetHistory(message) {
     history: all.slice(start, start + perPage),
     total: all.length
   };
+}
+
+async function handleGetHistoryItem(message) {
+  const all = await ArgusDB.History.getAllSorted();
+  const entry = all.find(e => e.id === message.id);
+  if (!entry) return { success: false, error: "History entry not found" };
+  return { success: true, entry };
 }
 
 async function handleDeleteHistoryItem(message) {
@@ -3846,6 +3873,8 @@ async function handleAddProjectItem(message) {
     url: message.item.url || "",
     title: message.item.title || "",
     summary: (message.item.summary || "").slice(0, 500),
+    analysisContent: message.item.analysisContent || "",
+    analysisPreset: message.item.analysisPreset || "",
     notes: message.item.notes || "",
     tags: message.item.tags || [],
     addedAt: new Date().toISOString()
@@ -3864,6 +3893,8 @@ async function handleUpdateProjectItem(message) {
   if (message.notes !== undefined) item.notes = message.notes;
   if (message.tags !== undefined) item.tags = message.tags;
   if (message.title !== undefined) item.title = message.title;
+  if (message.analysisContent !== undefined) item.analysisContent = message.analysisContent;
+  if (message.analysisPreset !== undefined) item.analysisPreset = message.analysisPreset;
   proj.updatedAt = new Date().toISOString();
   await ArgusDB.Projects.save(proj);
   return { success: true, item };
@@ -3884,11 +3915,24 @@ async function handleExportProject(message) {
 
   // Collect related history entries referenced by project items
   const relatedHistory = [];
+  const historyMap = new Map();
   const refIds = proj.items.filter(i => i.refId).map(i => i.refId);
   if (refIds.length) {
     const allHistory = await ArgusDB.History.getAllSorted();
     for (const entry of allHistory) {
-      if (refIds.includes(entry.id)) relatedHistory.push(entry);
+      if (refIds.includes(entry.id)) {
+        relatedHistory.push(entry);
+        historyMap.set(entry.id, entry);
+      }
+    }
+  }
+
+  // Backfill analysisContent from history for items that lack it
+  for (const item of proj.items) {
+    if (!item.analysisContent && item.refId && historyMap.has(item.refId)) {
+      const entry = historyMap.get(item.refId);
+      item.analysisContent = entry.content || "";
+      item.analysisPreset = item.analysisPreset || entry.presetLabel || entry.preset || "";
     }
   }
 
@@ -3919,10 +3963,25 @@ async function handleExportAllProjects() {
     }
   }
   const relatedHistory = [];
+  const historyMap = new Map();
   if (refIds.size) {
     const allHistory = await ArgusDB.History.getAllSorted();
     for (const entry of allHistory) {
-      if (refIds.has(entry.id)) relatedHistory.push(entry);
+      if (refIds.has(entry.id)) {
+        relatedHistory.push(entry);
+        historyMap.set(entry.id, entry);
+      }
+    }
+  }
+
+  // Backfill analysisContent from history for items that lack it
+  for (const proj of projects) {
+    for (const item of (proj.items || [])) {
+      if (!item.analysisContent && item.refId && historyMap.has(item.refId)) {
+        const entry = historyMap.get(item.refId);
+        item.analysisContent = entry.content || "";
+        item.analysisPreset = item.analysisPreset || entry.presetLabel || entry.preset || "";
+      }
     }
   }
 

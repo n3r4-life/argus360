@@ -291,6 +291,17 @@ body {
   gap: 8px;
   padding: 16px 20px;
   border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+  align-items: center;
+}
+.detail-share-row {
+  padding-top: 8px;
+  border-top: none;
+}
+.share-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-right: 4px;
 }
 
 /* Markdown body */

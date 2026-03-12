@@ -192,7 +192,9 @@ document.addEventListener("DOMContentLoaded", () => {
               refId: resultId,
               url,
               title: pageTitle,
-              summary: rawMarkdown.slice(0, 500)
+              summary: rawMarkdown.slice(0, 500),
+              analysisContent: rawMarkdown,
+              analysisPreset: elements.presetLabel.textContent || ""
             }
           });
           projPicker.classList.add("hidden");
@@ -420,6 +422,24 @@ function showPipelineResults(pipelineData) {
   const label = pipelineData.sourceLabel || "Source";
   pipelineEls.toggle.textContent = `Show ${label} Insights`;
   IntelligenceViewer.renderMarkdown(pipelineData.markdown, pipelineEls.content);
+
+  // Add "Research Further" search links if we have structured data with a topic/headline
+  const sd = pipelineData.structuredData;
+  const searchQuery = sd?.story?.headline || sd?.headline || sd?.title || sd?.topic || pageTitle;
+  if (searchQuery) {
+    const q = encodeURIComponent(searchQuery);
+    const researchDiv = document.createElement("div");
+    researchDiv.className = "pipeline-research-links";
+    researchDiv.innerHTML = `
+      <span class="research-label">Research Further:</span>
+      <a href="https://news.google.com/search?q=${q}" target="_blank" class="research-link">Google News</a>
+      <a href="https://duckduckgo.com/?q=${q}&iar=news&ia=news" target="_blank" class="research-link">DuckDuckGo</a>
+      <a href="https://www.bing.com/news/search?q=${q}" target="_blank" class="research-link">Bing News</a>
+      <a href="https://ground.news/find?query=${q}" target="_blank" class="research-link">Ground News</a>
+      <a href="https://www.allsides.com/search?search_api_fulltext=${q}" target="_blank" class="research-link">AllSides</a>
+    `;
+    pipelineEls.content.prepend(researchDiv);
+  }
 
   pipelineEls.toggle.addEventListener("click", () => {
     pipelineEls.content.classList.toggle("hidden");

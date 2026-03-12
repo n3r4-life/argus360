@@ -1,0 +1,46 @@
+{
+  "manifest": {
+    "format": "argusproj",
+    "version": 1,
+    "exportedAt": "2026-03-12T03:55:47.123Z",
+    "argusVersion": "360.1.0.2",
+    "projectCount": 1,
+    "historyCount": 0
+  },
+  "projects": [
+    {
+      "id": "proj-1773287394355-i21y8o",
+      "name": "iran war",
+      "description": "",
+      "starred": false,
+      "color": "#e94560",
+      "createdAt": "2026-03-12T03:49:54.355Z",
+      "updatedAt": "2026-03-12T03:51:46.391Z",
+      "items": [
+        {
+          "id": "item-1773287506390-381vyn",
+          "type": "analysis",
+          "refId": "tl-result-1773287490839",
+          "url": "https://www.foxnews.com/live-news/us-iran-israel-war-latest-march-11-live-updates",
+          "title": "LIVE UPDATES: Cargo ship struck in Strait of Hormuz as Iran launches drone, missile attacks | Fox News Digital",
+          "summary": "## Overview\n- A cargo ship (Thai-flagged Mayuree Naree) was struck by an unidentified projectile in the Strait of Hormuz off Oman, setting it ablaze; this occurred amid Iranian attacks on commercial ships and Dubai airport.\n- Iran launched fresh drone and missile attacks across the Middle East, targeting Israel, Qatar, UAE, and others in response to US-led Operation Epic Fury.\n- US Central Command reports Iranian ballistic missile and drone attacks have \"dropped drastically\" since the start of O",
+          "notes": "",
+          "tags": [],
+          "addedAt": "2026-03-12T03:51:46.391Z"
+        },
+        {
+          "id": "item-1773287445695-51mtoy",
+          "type": "url",
+          "refId": null,
+          "url": "https://www.foxnews.com/live-news/us-iran-israel-war-latest-march-11-live-updates",
+          "title": "LIVE UPDATES: Cargo ship struck in Strait of Hormuz as Iran launches drone, missile attacks | Fox News Digital",
+          "summary": "",
+          "notes": "",
+          "tags": [],
+          "addedAt": "2026-03-12T03:50:45.695Z"
+        }
+      ]
+    }
+  ],
+  "history": []
+}

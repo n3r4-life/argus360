@@ -102,6 +102,33 @@ body {
   padding: 0 16px 16px;
   font-size: 14px;
 }
+.pipeline-research-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 0 14px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.research-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.research-link {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  background: rgba(233, 69, 96, 0.1);
+  color: var(--accent);
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.research-link:hover {
+  background: rgba(233, 69, 96, 0.25);
+  color: var(--accent-hover);
+}
 
 /* Page info bar */
 .page-info {

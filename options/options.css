@@ -39,8 +39,8 @@ body::before {
   transform: translate(-50%, -50%);
   width: 80vh;
   height: 80vh;
-  background: url("../argus-bg.png") center / contain no-repeat;
-  opacity: 0.45;
+  background: url("../icons/icon-16.png") center / contain no-repeat;
+  opacity: 0.25;
   pointer-events: none;
   z-index: 0;
 }

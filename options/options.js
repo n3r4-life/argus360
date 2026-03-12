@@ -3146,16 +3146,17 @@ function projRenderItems(proj) {
     }
     const metaDiv = document.createElement("div");
     metaDiv.className = "proj-item-meta";
-    const typeBadge = document.createElement("span");
-    typeBadge.className = "proj-type-badge " + item.type;
-    typeBadge.textContent = item.type;
-    metaDiv.appendChild(typeBadge);
     if (item.analysisPreset) {
-      const analyzedSpan = document.createElement("span");
-      analyzedSpan.className = "proj-type-badge analysis";
-      analyzedSpan.title = "Analyzed with " + item.analysisPreset;
-      analyzedSpan.textContent = "analyzed";
-      metaDiv.appendChild(analyzedSpan);
+      // Show the actual preset name (e.g. "Fact-Check", "Summary") instead of generic "analysis" + "analyzed"
+      const presetBadge = document.createElement("span");
+      presetBadge.className = "proj-type-badge analysis";
+      presetBadge.textContent = item.analysisPreset;
+      metaDiv.appendChild(presetBadge);
+    } else {
+      const typeBadge = document.createElement("span");
+      typeBadge.className = "proj-type-badge " + item.type;
+      typeBadge.textContent = item.type;
+      metaDiv.appendChild(typeBadge);
     }
     const dateSpan = document.createElement("span");
     dateSpan.textContent = new Date(item.addedAt).toLocaleDateString();
@@ -3164,7 +3165,7 @@ function projRenderItems(proj) {
     card.appendChild(bodyDiv);
     const actionsDiv2 = document.createElement("div");
     actionsDiv2.className = "proj-item-actions";
-    if (item.analysisContent) {
+    if (item.analysisContent || item.refId) {
       const viewBtn2 = document.createElement("button");
       viewBtn2.className = "proj-item-view-btn";
       viewBtn2.title = "View analysis";
@@ -3209,21 +3210,63 @@ function projRenderItems(proj) {
     actionsDiv2.appendChild(removeBtn);
     card.appendChild(actionsDiv2);
 
+    async function openItemAnalysis() {
+      let content = item.analysisContent;
+      let preset = item.analysisPreset || "Analysis";
+
+      // Backfill from history if content missing but we have a refId
+      if (!content && item.refId) {
+        try {
+          const resp = await browser.runtime.sendMessage({ action: "getHistoryItem", id: item.refId });
+          if (resp?.success && resp.entry?.content) {
+            content = resp.entry.content;
+            preset = resp.entry.presetLabel || resp.entry.preset || preset;
+            // Cache it on the item so we don't fetch again
+            item.analysisContent = content;
+            item.analysisPreset = preset;
+            // Persist the backfill
+            await browser.runtime.sendMessage({
+              action: "updateProjectItem",
+              projectId: proj.id,
+              itemId: item.id,
+              analysisContent: content,
+              analysisPreset: preset
+            });
+          }
+        } catch (e) {
+          console.warn("[Argus] Failed to fetch history for project item:", e);
+        }
+      }
+
+      if (!content) {
+        alert("Analysis content not found. The history entry may have been deleted.");
+        return;
+      }
+
+      const resultId = `proj-view-${Date.now()}`;
+      await browser.storage.local.set({
+        [resultId]: {
+          status: "done",
+          content,
+          pageTitle: item.title || item.url,
+          pageUrl: item.url,
+          presetLabel: preset
+        }
+      });
+      browser.tabs.create({ url: browser.runtime.getURL(`results/results.html?id=${encodeURIComponent(resultId)}`) });
+    }
+
     const viewBtn = card.querySelector(".proj-item-view-btn");
     if (viewBtn) {
-      viewBtn.addEventListener("click", () => {
-        // Open analysis in a results-like view
-        const resultId = `proj-view-${Date.now()}`;
-        browser.storage.local.set({
-          [resultId]: {
-            status: "done",
-            content: item.analysisContent,
-            pageTitle: item.title || item.url,
-            pageUrl: item.url,
-            presetLabel: item.analysisPreset || "Analysis"
-          }
-        });
-        browser.tabs.create({ url: browser.runtime.getURL(`results/results.html?id=${encodeURIComponent(resultId)}`) });
+      viewBtn.addEventListener("click", openItemAnalysis);
+    }
+
+    // Make the card body clickable to view analysis
+    if (item.analysisContent || item.refId) {
+      bodyDiv.style.cursor = "pointer";
+      bodyDiv.addEventListener("click", (e) => {
+        if (e.target.closest("a")) return;
+        openItemAnalysis();
       });
     }
 
