@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Argus - Pulse Check</title>
+  <link rel="stylesheet" href="downdetector.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+</head>
+<body>
+  <script src="../shared/ribbon.js"></script>
+  <header class="header">
+    <div class="header-left">
+      <img src="../icons/icon-32.png" alt="" class="header-icon">
+      <h1 class="header-title">Pulse Check</h1>
+    </div>
+    <div class="header-right">
+      <span id="last-checked" class="last-checked"></span>
+      <button id="check-all-btn" class="btn btn-primary">Check All</button>
+    </div>
+  </header>
+
+  <section class="input-bar">
+    <input type="text" id="url-input" class="url-input" placeholder="Enter domain or URL (e.g. google.com)" spellcheck="false">
+    <button id="check-btn" class="btn btn-primary">Check</button>
+    <button id="add-btn" class="btn btn-secondary" title="Add to watchlist">+ Save</button>
+  </section>
+
+  <section class="stats-bar" id="stats-bar">
+    <div class="stat-badge stat-up">
+      <span class="stat-value" id="stat-up">0</span>
+      <span class="stat-label">Up</span>
+    </div>
+    <div class="stat-badge stat-slow">
+      <span class="stat-value" id="stat-slow">0</span>
+      <span class="stat-label">Slow</span>
+    </div>
+    <div class="stat-badge stat-down">
+      <span class="stat-value" id="stat-down">0</span>
+      <span class="stat-label">Down</span>
+    </div>
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-total">0</span>
+      <span class="stat-label">Total</span>
+    </div>
+  </section>
+
+  <main id="results-grid" class="results-grid">
+    <div class="empty-state" id="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3">
+        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+      </svg>
+      <p>Enter a URL above or add sites to your watchlist</p>
+    </div>
+  </main>
+
+  <script src="downdetector.js"></script>
+</body>
+</html>

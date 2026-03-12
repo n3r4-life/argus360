@@ -27,6 +27,9 @@ const elements = {
   monitorBtn: document.getElementById("monitor-btn"),
   modeAuto: document.getElementById("mode-auto"),
   bookmarkBtn: document.getElementById("bookmark-btn"),
+  contextPanel: document.getElementById("context-panel"),
+  contextEnabled: document.getElementById("context-enabled"),
+  contextProject: document.getElementById("context-project"),
 };
 
 let providerData = {};
@@ -47,6 +50,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadSettings();
   await populatePresets();
   await checkSelection();
+  await initContextPanel();
   attachEventListeners();
   await checkAutoAnalyzeStatus();
   await checkPreviousAnalysis();
@@ -151,6 +155,41 @@ async function checkSelection() {
   } else if (resp?.tabId) {
     currentTabId = resp.tabId;
   }
+}
+
+async function initContextPanel() {
+  try {
+    const resp = await browser.runtime.sendMessage({ action: "getProjects" });
+    if (!resp || !resp.success || !resp.projects.length) return;
+
+    // Populate project dropdown
+    elements.contextProject.replaceChildren();
+    for (const proj of resp.projects) {
+      const opt = document.createElement("option");
+      opt.value = proj.id;
+      opt.textContent = proj.name;
+      elements.contextProject.appendChild(opt);
+    }
+
+    // Restore saved state
+    const { contextualMode } = await browser.storage.local.get({ contextualMode: { enabled: false, projectId: null } });
+    elements.contextEnabled.checked = contextualMode.enabled;
+    if (contextualMode.projectId && elements.contextProject.querySelector(`option[value="${contextualMode.projectId}"]`)) {
+      elements.contextProject.value = contextualMode.projectId;
+    }
+
+    // Persist on change
+    const saveState = () => {
+      browser.storage.local.set({
+        contextualMode: { enabled: elements.contextEnabled.checked, projectId: elements.contextProject.value }
+      });
+    };
+    elements.contextEnabled.addEventListener("change", saveState);
+    elements.contextProject.addEventListener("change", saveState);
+
+    // Show panel
+    elements.contextPanel.classList.remove("hidden");
+  } catch { /* no projects or error — panel stays hidden */ }
 }
 
 async function checkAutoAnalyzeStatus() {
@@ -666,6 +705,17 @@ function attachEventListeners() {
       showToast("No Wayback Machine snapshot found", "error");
     }
   });
+
+  // Down Detector / Pulse
+  document.getElementById("osint-downdetector").addEventListener("click", async () => {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+    const domain = (tab?.url && !tab.url.startsWith("about:") && !tab.url.startsWith("moz-extension:"))
+      ? new URL(tab.url).hostname : "";
+    const params = domain ? `?domain=${encodeURIComponent(domain)}` : "";
+    browser.tabs.create({ url: browser.runtime.getURL(`osint/downdetector.html${params}`) });
+    window.close();
+  });
 }
 
 // ──────────────────────────────────────────────
@@ -723,6 +773,12 @@ async function runAnalysis() {
     provider,
     tabId: currentTabId
   };
+
+  // Project context injection
+  if (elements.contextEnabled.checked && elements.contextProject.value) {
+    message.contextualMode = true;
+    message.projectId = elements.contextProject.value;
+  }
 
   if (activeMode === "selection" && selectedText) {
     message.selectedText = selectedText;

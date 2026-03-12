@@ -3,6 +3,8 @@
 // Presets & provider config: background-presets.js
 // Provider API calls: background-providers.js
 // Permission helpers: background-permissions.js
+const ARGUS_BG_VERSION = "2026-03-11a";
+console.log(`[Argus] background.js loaded — version ${ARGUS_BG_VERSION}`);
 // OSINT tools: background-osint.js
 // ──────────────────────────────────────────────
 
@@ -354,30 +356,81 @@ async function extractPdfContent(url) {
 
   // Step 1: Fetch the PDF bytes
   let response;
-  try {
-    response = await fetch(url, {
-      redirect: "follow",
-      headers: { "Accept": "application/pdf, */*" },
-      credentials: "omit",
-    });
-  } catch (fetchErr) {
-    throw new Error(`PDF fetch network error: ${fetchErr.message}`);
+  let arrayBuffer;
+  let contentType;
+
+  for (const creds of ["omit", "include"]) {
+    try {
+      response = await fetch(url, {
+        redirect: "follow",
+        headers: { "Accept": "application/pdf, */*" },
+        credentials: creds,
+      });
+      if (!response.ok) {
+        console.warn(`[Argus PDF] Fetch with credentials=${creds} returned ${response.status}`);
+        continue;
+      }
+
+      contentType = response.headers.get("content-type") || "";
+      arrayBuffer = await response.arrayBuffer();
+
+      // Check if we actually got a PDF
+      const firstBytes = new Uint8Array((arrayBuffer || new ArrayBuffer(0)).slice(0, 5));
+      const header = String.fromCharCode(...firstBytes);
+
+      if (header.startsWith("%PDF")) {
+        console.log(`[Argus PDF] Got PDF (${arrayBuffer.byteLength} bytes) with credentials=${creds}`);
+        break; // We have the PDF
+      }
+
+      // Got HTML instead of PDF — possibly an age-verify/login gate
+      if (contentType.includes("text/html") && response.url !== url) {
+        console.warn(`[Argus PDF] Redirected to gate page: ${response.url} — trying to pass gate...`);
+        // Visit the gate page (accept cookies), then retry the original URL
+        try {
+          await fetch(response.url, { credentials: "include" });
+          const retry = await fetch(url, {
+            redirect: "follow",
+            headers: { "Accept": "application/pdf, */*" },
+            credentials: "include",
+          });
+          if (retry.ok) {
+            contentType = retry.headers.get("content-type") || "";
+            arrayBuffer = await retry.arrayBuffer();
+            const retryHeader = String.fromCharCode(...new Uint8Array(arrayBuffer.slice(0, 5)));
+            if (retryHeader.startsWith("%PDF")) {
+              console.log(`[Argus PDF] Gate bypass worked! Got PDF (${arrayBuffer.byteLength} bytes)`);
+              break;
+            }
+          }
+        } catch (gateErr) {
+          console.warn("[Argus PDF] Gate bypass failed:", gateErr.message);
+        }
+      }
+
+      // Not a PDF — clear and try next credential mode
+      console.warn(`[Argus PDF] Got ${contentType} (${arrayBuffer?.byteLength || 0} bytes), not PDF, with credentials=${creds}`);
+      arrayBuffer = null;
+    } catch (fetchErr) {
+      console.warn(`[Argus PDF] Fetch with credentials=${creds} failed:`, fetchErr.message);
+      if (creds === "include") throw new Error(`PDF fetch network error: ${fetchErr.message}`);
+    }
   }
-  if (!response.ok) throw new Error(`PDF fetch HTTP error: ${response.status} ${response.statusText}`);
 
-  console.log("[Argus PDF] Fetch OK, status:", response.status, "type:", response.headers.get("content-type"));
+  if (!arrayBuffer || arrayBuffer.byteLength < 100) {
+    const finalType = contentType || "unknown";
+    const wasRedirect = response && response.url !== url;
+    throw new Error(
+      wasRedirect
+        ? `PDF is behind a gate/login page (redirected to ${new URL(response.url).pathname}). Try: open the PDF in your browser first, then retry.`
+        : `PDF fetch failed (got ${finalType} instead of PDF).`
+    );
+  }
 
-  const contentType = response.headers.get("content-type") || "";
-  const arrayBuffer = await response.arrayBuffer();
-  if (!arrayBuffer || arrayBuffer.byteLength < 100) throw new Error("PDF response was empty or too small");
-
-  console.log("[Argus PDF] Got", arrayBuffer.byteLength, "bytes");
-
-  // Sanity check: make sure we got a PDF, not an HTML error page
   const firstBytes = new Uint8Array(arrayBuffer.slice(0, 5));
   const header = String.fromCharCode(...firstBytes);
-  if (!header.startsWith("%PDF") && contentType.includes("text/html")) {
-    throw new Error("Server returned HTML instead of PDF (possible redirect or captcha)");
+  if (!header.startsWith("%PDF")) {
+    throw new Error("Server returned non-PDF content. Try downloading and opening the file locally.");
   }
 
   console.log("[Argus PDF] Header:", header, "— parsing with pdf.js...");
@@ -420,6 +473,7 @@ async function extractPdfContent(url) {
 // Content extraction from active tab
 // ──────────────────────────────────────────────
 async function extractPageContent(tabId) {
+  console.log("[Argus] extractPageContent — tabId:", tabId);
   let tab;
   if (tabId) {
     tab = await browser.tabs.get(tabId);
@@ -429,7 +483,7 @@ async function extractPageContent(tabId) {
     tab = tabs[0];
   }
 
-  console.log("[Argus] extractPageContent — tab URL:", tab.url, "title:", tab.title);
+  console.log("[Argus] tab URL:", tab.url, "title:", tab.title);
 
   if (tab.url && (tab.url.startsWith("about:") ||
                   tab.url.startsWith("moz-extension:") ||
@@ -440,9 +494,10 @@ async function extractPageContent(tabId) {
   // PDF detection: check URL, title, or content-type hints
   const looksLikePdf = isPdfUrl(tab.url)
     || (tab.url && tab.title && tab.title.toLowerCase().endsWith(".pdf"))
-    || (tab.url && /\.pdf(\?|#|$)/i.test(tab.url));
+    || (tab.url && /\.pdf(\?|#|$)/i.test(tab.url))
+    || (tab.url && tab.title && /\.pdf\s*(-|$)/i.test(tab.title));
 
-  console.log("[Argus] looksLikePdf:", looksLikePdf, "pdfjsLib available:", typeof pdfjsLib !== "undefined");
+  console.log(`[Argus] looksLikePdf: ${looksLikePdf}, pdfjsLib: ${typeof pdfjsLib !== "undefined"}, url: ${tab.url}`);
 
   if (looksLikePdf) {
     // Step 1: Try direct fetch with pdf.js (works for most remote PDFs)
@@ -550,23 +605,24 @@ async function extractPageContent(tabId) {
       `
     });
   } catch (scriptError) {
-    // executeScript fails on PDF viewer or restricted pages — try PDF extraction
-    if (tab.url && typeof pdfjsLib !== "undefined") {
+    console.log(`[Argus] executeScript FAILED: "${scriptError.message}" — URL: ${tab.url}, looksLikePdf: ${looksLikePdf}`);
+    // executeScript fails on PDF viewer or restricted pages — always try PDF extraction
+    if (tab.url && !tab.url.startsWith("file:") && typeof pdfjsLib !== "undefined") {
       try {
         const pdfResult = await extractPdfContent(tab.url);
         return { ...pdfResult, tabId: tab.id };
       } catch (pdfErr) {
-        // If both executeScript AND PDF fetch failed, give a helpful error
-        if (looksLikePdf) {
-          throw new Error(`Cannot extract this PDF. Try: (1) scroll down in the PDF so text layers load, then retry, or (2) download the PDF and open the local file. (fetch: ${pdfErr.message}; script: ${scriptError.message})`);
-        }
-        /* fall through to original error */
+        console.warn("[Argus] PDF fetch fallback also failed:", pdfErr.message);
       }
     }
-    if (looksLikePdf) {
-      throw new Error(`Cannot extract this PDF. Try: (1) scroll down in the PDF so text layers load, then retry, or (2) download the PDF and open the local file. (${scriptError.message})`);
+    // file:// PDFs need the permission prompt
+    if (tab.url && tab.url.startsWith("file:")) {
+      throw new Error(`Cannot access file:// PDF. In about:addons → Argus → Permissions, enable "Access your data for all websites", or open the PDF from a web URL instead. (${scriptError.message})`);
     }
-    throw new Error(`Missing host permission for the tab. Try clicking the Argus icon directly on this page, or refresh the page first. (${scriptError.message})`);
+    if (looksLikePdf) {
+      throw new Error(`Cannot extract this PDF (v${ARGUS_BG_VERSION}). Try downloading the PDF and opening the local file. (fetch failed; script: ${scriptError.message})`);
+    }
+    throw new Error(`Cannot extract page content (v${ARGUS_BG_VERSION}, url: ${(tab.url || "").substring(0, 80)}, pdf: ${looksLikePdf}). Try refreshing the page and retrying. (${scriptError.message})`);
   }
 
   if (!results || !results[0]) throw new Error("Failed to extract page content.");
@@ -632,7 +688,74 @@ function buildMessages(systemPrompt, userPrompt) {
   ];
 }
 
-async function buildAnalysisPrompts(page, analysisType, customPrompt, settings) {
+// ──────────────────────────────────────────────
+// Contextual analysis — gather project context
+// ──────────────────────────────────────────────
+async function gatherProjectContext(projectId, currentUrl, charBudget) {
+  if (!projectId || charBudget < 200) return "";
+
+  const project = await ArgusDB.Projects.get(projectId);
+  if (!project || !project.items.length) return "";
+
+  const summaryBudget = Math.floor(charBudget * 0.6);
+  const kgBudget = charBudget - summaryBudget;
+  const parts = [];
+
+  // Part 1: Project item summaries
+  const otherItems = project.items.filter(item => item.url !== currentUrl);
+  if (otherItems.length) {
+    let summaryText = "";
+    for (const item of otherItems) {
+      const text = item.summary || item.title || "";
+      if (!text) continue;
+      const line = `- ${item.title || "Untitled"} (${item.url ? new URL(item.url).hostname : "no url"}): ${text}\n`;
+      if (summaryText.length + line.length > summaryBudget) break;
+      summaryText += line;
+    }
+    if (summaryText) {
+      parts.push(`Previous Findings (${otherItems.length} items in "${project.name}"):\n${summaryText}`);
+    }
+  }
+
+  // Part 2: KG entities scoped to this project
+  try {
+    const graphData = await KnowledgeGraph.getGraphData({ projectId });
+    if (graphData && graphData.nodes.length) {
+      const sorted = graphData.nodes.sort((a, b) => (b.mentionCount || 0) - (a.mentionCount || 0));
+      const edgeMap = new Map();
+      for (const edge of graphData.edges) {
+        if (!edgeMap.has(edge.sourceId)) edgeMap.set(edge.sourceId, []);
+        if (!edgeMap.has(edge.targetId)) edgeMap.set(edge.targetId, []);
+        edgeMap.get(edge.sourceId).push(edge);
+        edgeMap.get(edge.targetId).push(edge);
+      }
+
+      let kgText = "";
+      const nodeNames = new Map(sorted.map(n => [n.id, n.displayName]));
+      for (const node of sorted) {
+        const edges = edgeMap.get(node.id) || [];
+        const connections = edges.slice(0, 3).map(e => {
+          const otherId = e.sourceId === node.id ? e.targetId : e.sourceId;
+          return nodeNames.get(otherId) || "?";
+        });
+        const connStr = connections.length ? ` -- linked to: ${connections.join(", ")}` : "";
+        const line = `- [${node.type}] ${node.displayName} (${node.mentionCount || 1}x)${connStr}\n`;
+        if (kgText.length + line.length > kgBudget) break;
+        kgText += line;
+      }
+      if (kgText) {
+        parts.push(`Known Entities (Knowledge Graph):\n${kgText}`);
+      }
+    }
+  } catch (e) {
+    console.warn("[Argus] KG context gathering failed:", e.message);
+  }
+
+  if (!parts.length) return "";
+  return `\n--- Prior Project Context ---\n${parts.join("\n")}\n---\n\n`;
+}
+
+async function buildAnalysisPrompts(page, analysisType, customPrompt, settings, contextOptions) {
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const defaultPreset = ANALYSIS_PRESETS[analysisType];
   const customPreset = settings.customPresets[analysisType];
@@ -657,12 +780,30 @@ async function buildAnalysisPrompts(page, analysisType, customPrompt, settings) 
 
   const resolvedInstruction = resolveVariables(analysisInstruction, vars);
   const resolvedSystem = resolveVariables(systemPrompt, vars);
-  const truncatedText = truncateText(page.text, settings.maxInputChars);
+
+  // Gather project context if enabled
+  let contextBlock = "";
+  let textBudget = settings.maxInputChars;
+  if (contextOptions?.enabled && contextOptions?.projectId) {
+    const contextBudget = Math.floor(settings.maxInputChars * 0.2);
+    try {
+      contextBlock = await gatherProjectContext(contextOptions.projectId, page.url, contextBudget);
+      if (contextBlock) {
+        textBudget = settings.maxInputChars - contextBlock.length;
+        console.log(`[Argus] Context injected: ${contextBlock.length} chars, text budget: ${textBudget}`);
+      }
+    } catch (e) {
+      console.warn("[Argus] Failed to gather project context:", e.message);
+    }
+  }
+
+  const truncatedText = truncateText(page.text, textBudget);
 
   const userPrompt =
     `**Page Title:** ${page.title}\n` +
     `**URL:** ${page.url}\n` +
     (page.description ? `**Description:** ${page.description}\n` : "") +
+    contextBlock +
     `\n---\n\n${resolvedInstruction}\n\n---\n\n${truncatedText}`;
 
   return { systemPrompt: resolvedSystem, userPrompt };
@@ -739,7 +880,8 @@ async function handleAnalyzeStream(port, message) {
     }
 
     const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
-    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings);
+    const contextOptions = message.contextualMode ? { enabled: true, projectId: message.projectId } : null;
+    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings, contextOptions);
     const messages = buildMessages(systemPrompt, userPrompt);
 
     port.postMessage({ type: "start", provider: settings.provider, model: settings.model, pageTitle: page.title });
@@ -1214,7 +1356,8 @@ async function handleAnalyzeInTab(message) {
 
     return { success: true };
   } catch (err) {
-    return { success: false, error: err.message };
+    console.error("[Argus AnalyzeInTab] Error:", err.message, err.stack);
+    return { success: false, error: `[AnalyzeInTab] ${err.message}` };
   }
 }
 
@@ -1256,7 +1399,8 @@ async function handleCompareInTab(message) {
 async function streamAnalysisToStorage(resultId, page, message, settings, presetLabel) {
   try {
     const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
-    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings);
+    const contextOptions = message.contextualMode ? { enabled: true, projectId: message.projectId } : null;
+    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, message.analysisType, message.customPrompt, settings, contextOptions);
     const messages = buildMessages(systemPrompt, userPrompt);
 
     let streamedContent = "";
@@ -1316,9 +1460,10 @@ async function streamAnalysisToStorage(resultId, page, message, settings, preset
       } catch (e) { console.warn("[Pipeline] Enrichment failed:", e); }
     }
   } catch (err) {
+    console.error("[Argus Stream] Error:", err.message, err.stack);
     await browser.storage.local.set({
       [resultId]: {
-        status: "error", error: err.message || "An unexpected error occurred.",
+        status: "error", error: `[Stream] ${err.message}` || "An unexpected error occurred.",
         presetLabel, pageTitle: page.title, pageUrl: page.url
       }
     });
@@ -1897,7 +2042,13 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
         text: info.selectionText
       };
     } else {
-      page = await extractFrameContent(tab.id, info.frameId);
+      // Try frame extraction first; if it fails on a PDF, use extractPageContent which has PDF fallbacks
+      try {
+        page = await extractFrameContent(tab.id, info.frameId);
+      } catch (frameErr) {
+        console.warn("[Argus] Frame extraction failed, trying page extraction:", frameErr.message);
+        page = await extractPageContent(tab.id);
+      }
     }
 
     const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
@@ -1955,10 +2106,11 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
       isSelection: !!info.selectionText
     });
   } catch (err) {
+    console.error("[Argus contextMenu] Error:", err.message, err.stack);
     await browser.storage.local.set({
       [resultId]: {
         status: "error",
-        error: err.message || "An unexpected error occurred.",
+        error: `[ContextMenu] ${err.message}` || "An unexpected error occurred.",
         presetLabel: preset.label || presetKey,
         pageTitle: tab.title || "Untitled Page",
         pageUrl: tab.url || ""
@@ -2150,8 +2302,9 @@ const autoAnalyzeCallback = async (details) => {
         content: result.content, usage: result.usage, autoAnalyzed: true
       });
     } catch (err) {
+      console.error("[Argus AutoAnalyze] Error:", err.message, err.stack);
       await browser.storage.local.set({
-        [resultId]: { status: "error", error: err.message, presetLabel: preset?.label || presetKey, pageTitle: tab.title, pageUrl: tab.url }
+        [resultId]: { status: "error", error: `[AutoAnalyze] ${err.message}`, presetLabel: preset?.label || presetKey, pageTitle: tab.title, pageUrl: tab.url }
       });
     }
 
@@ -3660,6 +3813,7 @@ async function handleCreateProject(message) {
     items: []
   };
   await ArgusDB.Projects.save(project);
+  createContextMenus(); // Rebuild so new project appears in right-click menu
   return { success: true, project };
 }
 
@@ -3672,11 +3826,13 @@ async function handleUpdateProject(message) {
   if (message.color !== undefined) proj.color = message.color;
   proj.updatedAt = new Date().toISOString();
   await ArgusDB.Projects.save(proj);
+  createContextMenus(); // Rebuild so renamed project updates in right-click menu
   return { success: true, project: proj };
 }
 
 async function handleDeleteProject(message) {
   await ArgusDB.Projects.remove(message.projectId);
+  createContextMenus(); // Rebuild so deleted project is removed from right-click menu
   return { success: true };
 }
 

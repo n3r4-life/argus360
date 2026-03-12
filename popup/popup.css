@@ -317,6 +317,39 @@ textarea {
   white-space: nowrap;
 }
 
+/* Project context panel */
+.context-panel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 16px 8px;
+  font-size: 12px;
+}
+
+.context-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.context-toggle input:checked + span {
+  color: var(--accent);
+}
+
+.context-project-select {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  padding: 2px 4px;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
 /* Thinking container */
 .thinking-container {
   padding: 0 16px 8px;

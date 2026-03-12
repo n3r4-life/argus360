@@ -186,6 +186,15 @@
       <span id="selection-text-preview"></span>
     </div>
 
+    <!-- Project context toggle -->
+    <div id="context-panel" class="context-panel hidden">
+      <label class="context-toggle">
+        <input type="checkbox" id="context-enabled">
+        <span>Project context</span>
+      </label>
+      <select id="context-project" class="context-project-select" title="Select project for context"></select>
+    </div>
+
     <div class="form-group btn-row btn-row-equal">
       <button id="analyze-btn" class="btn btn-primary">
         <span class="btn-text">Analyze This Page</span>
@@ -248,6 +257,12 @@
           <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
         </svg>
         <span>Wayback</span>
+      </button>
+      <button id="osint-downdetector" class="btn btn-osint" title="Check if sites are up or down">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+        </svg>
+        <span>Pulse</span>
       </button>
     </div>
 

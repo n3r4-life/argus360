@@ -1909,6 +1909,94 @@ async function handleBuildGeomap(message) {
 
 
 // ──────────────────────────────────────────────
+// Down Detector / Pulse Check
+// ──────────────────────────────────────────────
+
+async function handlePulseCheck(message) {
+  const urls = message.urls || [];
+  if (!urls.length) return { success: false, error: "No URLs to check" };
+
+  const results = await Promise.all(urls.map(async (url) => {
+    // Normalize URL
+    let target = url.trim();
+    if (!/^https?:\/\//i.test(target)) target = `https://${target}`;
+    try { new URL(target); } catch { return { url: target, status: "invalid", error: "Invalid URL" }; }
+
+    const entry = { url: target, domain: new URL(target).hostname };
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      const start = performance.now();
+
+      // Try HEAD first (lighter), fall back to GET if HEAD is blocked (405, etc.)
+      let resp;
+      try {
+        resp = await fetch(target, {
+          method: "HEAD",
+          mode: "no-cors",
+          credentials: "omit",
+          redirect: "follow",
+          signal: controller.signal
+        });
+      } catch {
+        resp = await fetch(target, {
+          method: "GET",
+          mode: "no-cors",
+          credentials: "omit",
+          redirect: "follow",
+          signal: controller.signal
+        });
+      }
+
+      const elapsed = Math.round(performance.now() - start);
+      clearTimeout(timeout);
+
+      // no-cors gives opaque responses (status 0) — that still means the server responded
+      const httpStatus = resp.status || 0;
+      const isOpaque = resp.type === "opaque";
+
+      let status;
+      if (isOpaque) {
+        // Opaque = server responded but CORS blocked details — treat as up
+        status = elapsed > 5000 ? "slow" : "up";
+      } else if (httpStatus >= 200 && httpStatus < 400) {
+        status = elapsed > 5000 ? "slow" : "up";
+      } else if (httpStatus >= 500) {
+        status = "down";
+      } else if (httpStatus >= 400) {
+        status = "degraded";
+      } else {
+        status = "unknown";
+      }
+
+      return { ...entry, status, httpStatus, responseTime: elapsed, isOpaque, checkedAt: Date.now() };
+    } catch (err) {
+      const isTimeout = err.name === "AbortError";
+      return {
+        ...entry,
+        status: isTimeout ? "timeout" : "down",
+        error: isTimeout ? "Request timed out (15s)" : err.message,
+        checkedAt: Date.now()
+      };
+    }
+  }));
+
+  return { success: true, results };
+}
+
+async function handlePulseListGet() {
+  const data = await browser.storage.local.get("argus-pulse-list");
+  return { success: true, urls: data["argus-pulse-list"] || [] };
+}
+
+async function handlePulseListSave(message) {
+  await browser.storage.local.set({ "argus-pulse-list": message.urls || [] });
+  return { success: true };
+}
+
+
+// ──────────────────────────────────────────────
 // Message handler registration
 // ──────────────────────────────────────────────
 // Extends the existing browser.runtime.onMessage — MV2 supports
@@ -1955,6 +2043,11 @@ browser.runtime.onMessage.addListener((message, sender) => {
 
     // Anomaly Scan
     case "anomalyScan":         return handleAnomalyScan(message);
+
+    // Down Detector / Pulse
+    case "pulseCheck":          return handlePulseCheck(message);
+    case "pulseListGet":        return handlePulseListGet();
+    case "pulseListSave":       return handlePulseListSave(message);
   }
 
   // Not our message — return undefined so other listeners can handle it
