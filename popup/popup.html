@@ -10,6 +10,12 @@
   <header class="header">
     <button id="settings-toggle" class="header-title-btn" title="Quick Settings">Argus</button>
     <div style="display:flex;gap:3px;align-items:center;">
+      <button id="osint-subscribe" class="feed-subscribe-btn hidden" title="RSS feed detected — click to subscribe!">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5"/>
+        </svg>
+        <span>RSS</span>
+      </button>
       <button id="open-resources" class="icon-btn" title="Resources">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="2">
@@ -130,8 +136,35 @@
         </svg>
         <span>Help</span>
       </button>
+      <button id="quick-wipe-btn" class="quick-nav-btn quick-nav-wipe" title="Wipe all Argus data">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          <line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+        </svg>
+        <span>Wipe</span>
+      </button>
     </div>
   </section>
+
+  <!-- Wipe confirmation modal -->
+  <div id="wipe-modal" class="wipe-modal hidden">
+    <div class="wipe-modal-box">
+      <h3>Wipe All Argus Data?</h3>
+      <p>This will <strong>permanently delete</strong> all your data:</p>
+      <ul>
+        <li>Projects, bookmarks, monitors, feeds</li>
+        <li>Analysis history & knowledge graph</li>
+        <li>All settings (API keys included)</li>
+        <li>OPFS snapshots & cached results</li>
+      </ul>
+      <p>This action <strong>cannot be undone</strong>. Consider downloading a backup first.</p>
+      <p>After wiping, the Firefox extension manager will open so you can remove Argus completely.</p>
+      <div class="wipe-modal-actions">
+        <button id="wipe-cancel" class="btn btn-secondary">Cancel</button>
+        <button id="wipe-confirm" class="btn btn-wipe">Wipe Everything</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Previous analysis indicator -->
   <div id="prev-analysis" class="prev-analysis hidden"></div>

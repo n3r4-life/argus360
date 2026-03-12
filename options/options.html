@@ -438,8 +438,8 @@
           <div class="rule-form">
             <div class="form-row">
               <div class="form-group flex-2">
-                <label for="route-keywords">Keywords <span class="hint">(comma-separated, supports regex with /pattern/)</span></label>
-                <input type="text" id="route-keywords" placeholder="trump, russia, /ukraine.*conflict/i">
+                <label for="route-keywords">Keywords <span class="hint">(comma-separated)</span></label>
+                <input type="text" id="route-keywords" placeholder="trump, !tariff, biden">
               </div>
               <div class="form-group flex-1">
                 <label for="route-project">Target Project</label>
@@ -461,6 +461,11 @@
                 <button id="add-feed-route" class="btn btn-secondary btn-sm">Add Route</button>
               </div>
             </div>
+            <p class="info-text" style="margin-top:6px;font-size:11px;opacity:0.7;">
+              <strong>keyword</strong> = include (OR) &mdash; matches if entry contains any keyword.<br>
+              <strong>!keyword</strong> = exclude &mdash; rejects entry if that word appears, even if other keywords match.<br>
+              Example: <code>trump, biden, !tariff</code> = entries with "trump" or "biden", but never "tariff".
+            </p>
           </div>
         </div>
       </section>
@@ -766,6 +771,19 @@
         </h2>
         <div class="card-body">
           <p class="info-text">Subscribe to RSS/Atom feeds for lightweight content monitoring. Argus auto-discovers feeds from page URLs. Optionally use AI to summarize new entries.</p>
+
+          <!-- Detected feeds picker (shown when popup sends multi-feed list) -->
+          <div id="detected-feeds-picker" class="hidden" style="margin-bottom:12px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <strong style="color:var(--accent);">Detected Feeds</strong>
+              <span style="display:flex;gap:6px;">
+                <button id="detected-feeds-select-all" class="btn btn-secondary btn-sm">Select All</button>
+                <button id="detected-feeds-subscribe" class="btn btn-secondary btn-sm" style="color:var(--success);">Subscribe Selected</button>
+                <button id="detected-feeds-dismiss" class="btn btn-secondary btn-sm" style="opacity:0.6;">Dismiss</button>
+              </span>
+            </div>
+            <div id="detected-feeds-list" class="rules-list" style="max-height:240px;overflow-y:auto;"></div>
+          </div>
 
           <div id="feed-list" class="rules-list"></div>
 

@@ -58,6 +58,18 @@ body {
   background: var(--bg-surface);
   color: var(--accent);
 }
+.header-title-btn.btn-flash {
+  animation: btn-flash 4s ease-in-out;
+}
+@keyframes btn-flash {
+  0%   { color: #fff; background: #00e676; }
+  20%  { color: #fff; background: #00e676; }
+  30%  { color: var(--text-primary); background: transparent; }
+  50%  { color: #fff; background: #00e676; }
+  70%  { color: #fff; background: #00e676; }
+  80%  { color: var(--text-primary); background: transparent; }
+  100% { color: var(--text-primary); background: transparent; }
+}
 
 /* Buttons */
 .btn {
@@ -716,6 +728,50 @@ textarea {
   border-color: var(--accent);
   background: rgba(233, 69, 96, 0.1);
 }
+/* RSS subscribe button in header */
+.feed-subscribe-btn {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border: 1.5px solid #ff9800;
+  border-radius: 10px;
+  background: rgba(255, 152, 0, 0.15);
+  color: #ff9800;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font);
+  cursor: pointer;
+  animation: feed-pulse 2s ease-in-out infinite;
+  transition: all 0.2s;
+}
+.feed-subscribe-btn svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+.feed-subscribe-btn:hover {
+  background: #ff9800;
+  color: #fff;
+  animation: none;
+}
+/* Subscribed state — quiet green, no pulse */
+.feed-subscribe-btn.feed-subscribed {
+  border-color: #4caf50;
+  background: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+  animation: none;
+  cursor: default;
+  opacity: 0.7;
+}
+.feed-subscribe-btn.feed-subscribed:hover {
+  background: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+}
+@keyframes feed-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.4); }
+  50%      { box-shadow: 0 0 6px 2px rgba(255, 152, 0, 0.3); }
+}
 
 /* Error */
 .error-text {
@@ -867,6 +923,75 @@ textarea {
   color: var(--text-primary);
   border-color: var(--accent);
   background: rgba(233, 69, 96, 0.1);
+}
+
+/* Wipe button danger style */
+.quick-nav-wipe {
+  color: var(--error) !important;
+  border-color: rgba(255, 82, 82, 0.3) !important;
+  background: rgba(255, 82, 82, 0.05) !important;
+}
+.quick-nav-wipe:hover {
+  color: #fff !important;
+  background: var(--error) !important;
+  border-color: var(--error) !important;
+}
+
+/* Wipe confirmation modal */
+.wipe-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wipe-modal-box {
+  background: var(--bg-secondary);
+  border: 1px solid var(--error);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  max-width: 360px;
+  width: 90%;
+}
+.wipe-modal-box h3 {
+  color: var(--error);
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.wipe-modal-box p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+.wipe-modal-box ul {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding-left: 18px;
+  margin-bottom: 10px;
+}
+.wipe-modal-box li {
+  margin-bottom: 2px;
+}
+.wipe-modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.wipe-modal-actions .btn {
+  flex: 1;
+  padding: 8px;
+  font-size: 13px;
+}
+.btn-wipe {
+  background: var(--error) !important;
+  color: #fff !important;
+  border: none;
+}
+.btn-wipe:hover {
+  background: #ff1744 !important;
 }
 
 /* Popup section divider */

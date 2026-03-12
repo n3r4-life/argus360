@@ -1969,6 +1969,7 @@ function attachListeners() {
 
   // RSS Feeds
   renderFeeds();
+  checkDetectedFeeds();
   el.addFeed.addEventListener("click", addFeedHandler);
   el.openFeedReader.addEventListener("click", () => {
     browser.tabs.create({ url: browser.runtime.getURL("feeds/feeds.html") });
@@ -2401,6 +2402,109 @@ async function addFeedHandler() {
   }
 
   setTimeout(() => { el.feedStatus.textContent = ""; }, 3000);
+}
+
+// ──────────────────────────────────────────────
+// Detected feeds picker (from popup multi-feed detection)
+// ──────────────────────────────────────────────
+async function checkDetectedFeeds() {
+  const { _detectedFeeds } = await browser.storage.local.get("_detectedFeeds");
+  if (!_detectedFeeds || !_detectedFeeds.length) return;
+
+  // Clear immediately so it doesn't show again on reload
+  await browser.storage.local.remove("_detectedFeeds");
+
+  // Get existing feeds to filter out already-subscribed
+  const resp = await browser.runtime.sendMessage({ action: "getFeeds" });
+  const existingUrls = new Set((resp?.feeds || []).map(f => f.url.replace(/\/+$/, "").toLowerCase()));
+  const feeds = _detectedFeeds.filter(f => !existingUrls.has(f.url.replace(/\/+$/, "").toLowerCase()));
+  if (!feeds.length) return;
+
+  const picker = document.getElementById("detected-feeds-picker");
+  const list = document.getElementById("detected-feeds-list");
+  list.replaceChildren();
+
+  feeds.forEach((feed, i) => {
+    const row = document.createElement("label");
+    row.className = "rule-item";
+    row.style.cursor = "pointer";
+    row.style.gap = "8px";
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.dataset.idx = i;
+    cb.className = "detected-feed-cb";
+
+    const info = document.createElement("div");
+    info.className = "rule-info";
+    info.style.minWidth = "0";
+
+    const title = document.createElement("strong");
+    title.textContent = feed.title || new URL(feed.url).pathname;
+    title.style.wordBreak = "break-all";
+    info.appendChild(title);
+
+    const meta = document.createElement("span");
+    meta.className = "rule-meta";
+    meta.textContent = feed.url;
+    meta.style.wordBreak = "break-all";
+    info.appendChild(meta);
+
+    row.append(cb, info);
+    list.appendChild(row);
+  });
+
+  picker.classList.remove("hidden");
+
+  // Select All
+  document.getElementById("detected-feeds-select-all").onclick = () => {
+    const cbs = list.querySelectorAll(".detected-feed-cb");
+    const allChecked = [...cbs].every(c => c.checked);
+    cbs.forEach(c => { c.checked = !allChecked; });
+  };
+
+  // Dismiss
+  document.getElementById("detected-feeds-dismiss").onclick = () => {
+    picker.classList.add("hidden");
+  };
+
+  // Subscribe selected
+  document.getElementById("detected-feeds-subscribe").onclick = async () => {
+    const cbs = list.querySelectorAll(".detected-feed-cb:checked");
+    if (!cbs.length) return;
+
+    const btn = document.getElementById("detected-feeds-subscribe");
+    btn.disabled = true;
+    btn.textContent = `Subscribing (0/${cbs.length})...`;
+
+    let success = 0;
+    for (const cb of cbs) {
+      const feed = feeds[parseInt(cb.dataset.idx, 10)];
+      const resp = await browser.runtime.sendMessage({
+        action: "addFeed",
+        url: feed.url,
+        title: feed.title || "",
+        intervalMinutes: 60
+      });
+      if (resp?.success) {
+        success++;
+        cb.closest(".rule-item").style.opacity = "0.4";
+        cb.disabled = true;
+      }
+      btn.textContent = `Subscribing (${success}/${cbs.length})...`;
+    }
+
+    btn.textContent = `Subscribed ${success} feed${success !== 1 ? "s" : ""}!`;
+    btn.style.color = "var(--success)";
+    setTimeout(() => {
+      picker.classList.add("hidden");
+      btn.disabled = false;
+      btn.textContent = "Subscribe Selected";
+      btn.style.color = "";
+    }, 2000);
+
+    renderFeeds();
+  };
 }
 
 // ──────────────────────────────────────────────

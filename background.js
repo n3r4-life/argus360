@@ -66,23 +66,96 @@ async function detectFeedOnTab(tabId) {
     const tab = await browser.tabs.get(tabId);
     if (!tab?.url || tab.url.startsWith("about:") || tab.url.startsWith("moz-extension:") || tab.url.startsWith("chrome:")) return;
 
-    const results = await browser.tabs.executeScript(tabId, {
-      code: `(function() {
-        const links = document.querySelectorAll('link[type="application/rss+xml"], link[type="application/atom+xml"], link[type="application/feed+json"]');
-        if (!links.length) return null;
-        const feeds = [];
-        for (const l of links) {
-          if (l.href) feeds.push({ url: l.href, title: l.title || "" });
-        }
-        return feeds.length ? feeds : null;
-      })();`
-    });
+    // Phase 1: scan <link> tags and <a> tags in the page DOM
+    let results = null;
+    try {
+      results = await browser.tabs.executeScript(tabId, {
+        code: `(function() {
+          const feeds = [];
+          const seen = new Set();
 
-    const feeds = results && results[0];
+          // Standard <link> tags — match by type OR by rel=alternate with feed-like href
+          const links = document.querySelectorAll('link[type="application/rss+xml"], link[type="application/atom+xml"], link[type="application/feed+json"], link[rel="alternate"][href*="feed"], link[rel="alternate"][href*="rss"], link[rel="alternate"][href*=".xml"]');
+          for (const l of links) {
+            if (l.href && !seen.has(l.href)) {
+              seen.add(l.href);
+              feeds.push({ url: l.href, title: l.title || "", source: "link" });
+            }
+          }
+
+          // Scan <a> tags for common feed URL patterns
+          const feedRx = /(\\/feed\\/?$|\\/rss\\/?$|\\/atom\\/?$|\\.rss$|\\.xml$|\\/feeds?\\/|\\/rss\\/|feed\\.xml|rss\\.xml|atom\\.xml|index\\.rss|\\/syndication|feedburner\\.com|feeds\\.feedburner|google-publisher)/i;
+          const anchors = document.querySelectorAll('a[href]');
+          for (const a of anchors) {
+            try {
+              const href = a.href;
+              if (!href || seen.has(href) || href.startsWith("javascript:")) continue;
+              if (feedRx.test(href)) {
+                seen.add(href);
+                feeds.push({ url: href, title: a.textContent.trim().slice(0, 80) || "", source: "anchor" });
+              }
+            } catch {}
+          }
+
+          return feeds.length ? feeds : null;
+        })();`
+      });
+    } catch (e) {
+      console.log("[Feed] Phase 1 script injection failed:", e.message);
+    }
+
+    let feeds = results && results[0];
+    console.log("[Feed] Phase 1 result:", feeds ? feeds.length + " found" : "none");
+
+    // Phase 2: if nothing found, probe common feed paths on the domain
+    if (!feeds || !feeds.length) {
+      try {
+        const url = new URL(tab.url);
+        const origin = url.origin;
+        const probePaths = ["/feed", "/feed/", "/rss", "/rss/", "/feed.xml", "/rss.xml", "/atom.xml", "/index.xml", "/feeds/posts/default", "/blog/feed"];
+        const probed = [];
+        for (const path of probePaths) {
+          try {
+            const probeUrl = origin + path;
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 3000);
+            const resp = await fetch(probeUrl, {
+              method: "GET", redirect: "follow", signal: controller.signal,
+              headers: { "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml" }
+            });
+            clearTimeout(timeout);
+            if (!resp.ok) continue;
+            const ct = resp.headers.get("content-type") || "";
+            if (ct.includes("xml") || ct.includes("rss") || ct.includes("atom")) {
+              probed.push({ url: probeUrl, title: path.slice(1).replace(/\/$/, ""), source: "probe" });
+              console.log("[Feed] Probe hit (content-type):", probeUrl, ct);
+              break;
+            }
+            // Peek at first 500 chars for feed markers
+            const text = await resp.text();
+            const head = text.slice(0, 500);
+            if (head.includes("<rss") || head.includes("<feed") || head.includes("<channel>")) {
+              probed.push({ url: probeUrl, title: path.slice(1).replace(/\/$/, ""), source: "probe" });
+              console.log("[Feed] Probe hit (body):", probeUrl);
+              break;
+            }
+          } catch {}
+        }
+        if (probed.length) feeds = probed;
+      } catch (e) {
+        console.log("[Feed] Phase 2 probe failed:", e.message);
+      }
+    }
+    console.log(`[Feed] Final for tab ${tabId}: ${feeds ? feeds.length + " feed(s)" : "none"}`, feeds || "");
+
     if (feeds && feeds.length) {
       feedDetectionCache.set(tabId, feeds);
+      // Show badge on toolbar icon
+      browser.browserAction.setBadgeText({ text: "RSS", tabId });
+      browser.browserAction.setBadgeBackgroundColor({ color: "#ff9800", tabId });
     } else {
       feedDetectionCache.delete(tabId);
+      browser.browserAction.setBadgeText({ text: "", tabId });
     }
   } catch { /* content script injection may fail on restricted pages */ }
 }
@@ -1143,12 +1216,13 @@ browser.runtime.onMessage.addListener((message, sender) => {
   }
   if (message.action === "getFeedDetection") {
     const feeds = feedDetectionCache.get(message.tabId);
-    // Also check if already subscribed
     if (!feeds || !feeds.length) return Promise.resolve({ success: true, feeds: null });
     return (async () => {
-      const existingFeeds = await ArgusDB.Feeds.list();
-      const subscribedUrls = new Set(existingFeeds.map(f => f.url));
-      const available = feeds.filter(f => !subscribedUrls.has(f.url));
+      const existingFeeds = await ArgusDB.Feeds.getAll();
+      // Normalize URLs for comparison (strip trailing slash, lowercase)
+      const norm = u => u.replace(/\/+$/, "").toLowerCase();
+      const subscribedUrls = new Set(existingFeeds.map(f => norm(f.url)));
+      const available = feeds.filter(f => !subscribedUrls.has(norm(f.url)));
       return { success: true, feeds: available.length ? available : null, allSubscribed: available.length === 0 && feeds.length > 0 };
     })();
   }
@@ -4037,15 +4111,28 @@ async function applyKeywordRoutes(entries, feedId, notify) {
       // Skip if already routed to this project
       if (entry.routedTo && entry.routedTo.includes(route.projectId)) continue;
 
-      const matchedKws = route.keywords.filter(kw => {
+      // Split keywords into include and exclude (prefixed with !)
+      const includeKws = route.keywords.filter(kw => !kw.startsWith("!"));
+      const excludeKws = route.keywords.filter(kw => kw.startsWith("!")).map(kw => kw.slice(1));
+
+      const testKw = (kw, text) => {
         const rxMatch = kw.match(/^\/(.+)\/([gimsuy]*)$/);
         if (rxMatch) {
-          try { return new RegExp(rxMatch[1], rxMatch[2]).test(scanText); } catch { return false; }
+          try { return new RegExp(rxMatch[1], rxMatch[2]).test(text); } catch { return false; }
         }
-        return scanText.includes(kw.toLowerCase());
-      });
+        return text.includes(kw.toLowerCase());
+      };
+
+      // Check excludes first — if any exclusion keyword matches, skip this entry
+      const excluded = excludeKws.some(kw => testKw(kw, scanText));
+      if (excluded) {
+        if (entries.indexOf(entry) < 3) console.log(`[Routes] Excluded "${entry.title?.slice(0, 60)}" by !keyword`);
+        continue;
+      }
+
+      const matchedKws = includeKws.filter(kw => testKw(kw, scanText));
       if (!matchedKws.length && entries.indexOf(entry) < 3) {
-        console.log(`[Routes] No match for "${entry.title?.slice(0, 60)}" against [${route.keywords.join(", ")}]`);
+        console.log(`[Routes] No match for "${entry.title?.slice(0, 60)}" against [${includeKws.join(", ")}]`);
       }
       if (matchedKws.length > 0) {
         // Mark entry as routed

@@ -39,6 +39,20 @@ let activeMode = "normal"; // normal, selection, compare, multipage
 let currentTabId = null;
 let selectedText = "";
 
+// Focus existing console tab or create a new one (prevents duplicate tabs)
+async function focusOrCreateConsole(hash) {
+  const consoleUrl = browser.runtime.getURL("options/options.html");
+  const tabs = await browser.tabs.query({ url: consoleUrl + "*" });
+  if (tabs.length > 0) {
+    const tab = tabs[0];
+    await browser.tabs.update(tab.id, { active: true, url: consoleUrl + (hash ? "#" + hash : "") });
+    await browser.windows.update(tab.windowId, { focused: true });
+  } else {
+    await browser.tabs.create({ url: consoleUrl + (hash ? "#" + hash : "") });
+  }
+  window.close();
+}
+
 // ──────────────────────────────────────────────
 // Initialization
 // ──────────────────────────────────────────────
@@ -332,39 +346,97 @@ async function checkFeedAvailability() {
     if (!tab || !tab.url || tab.url.startsWith("about:") || tab.url.startsWith("moz-extension:")) return;
 
     const resp = await browser.runtime.sendMessage({ action: "getFeedDetection", tabId: tab.id });
-    if (!resp?.feeds?.length) return;
 
     const feedEl = document.getElementById("feed-detected");
-    feedEl.textContent = "";
+    const osintFeedBtn = document.getElementById("osint-subscribe");
 
+    // All detected feeds are already subscribed — show quiet "subscribed" state
+    if (resp?.allSubscribed) {
+      feedEl.textContent = "";
+      const dot = document.createElement("span");
+      dot.className = "archive-dot";
+      dot.style.background = "#4caf50";
+      const text = document.createElement("span");
+      text.textContent = "RSS feed subscribed";
+      text.style.opacity = "0.7";
+      feedEl.append(dot, text);
+      feedEl.classList.remove("hidden");
+      // Show button in subscribed state (no pulse)
+      if (osintFeedBtn) {
+        osintFeedBtn.classList.remove("hidden");
+        osintFeedBtn.classList.add("feed-subscribed");
+        osintFeedBtn.title = "Already subscribed to this feed";
+        osintFeedBtn.querySelector("span").textContent = "✓";
+      }
+      return;
+    }
+
+    if (!resp?.feeds?.length) return;
+
+    const feeds = resp.feeds;
+    feedEl.textContent = "";
     const dot = document.createElement("span");
     dot.className = "archive-dot";
     dot.style.background = "#ff9800";
 
     const text = document.createElement("span");
-    text.textContent = resp.feeds.length === 1
-      ? `RSS feed available${resp.feeds[0].title ? ": " + resp.feeds[0].title : ""}`
-      : `${resp.feeds.length} RSS feeds available`;
 
-    const subBtn = document.createElement("a");
-    subBtn.textContent = "Subscribe";
-    subBtn.style.cursor = "pointer";
-    subBtn.addEventListener("click", async () => {
-      const feedUrl = resp.feeds[0].url;
-      const subResp = await browser.runtime.sendMessage({ action: "addFeed", url: feedUrl, intervalMinutes: 60 });
-      if (subResp?.success) {
-        subBtn.textContent = "Subscribed!";
-        subBtn.style.color = "#4caf50";
-        subBtn.style.pointerEvents = "none";
-      } else {
-        subBtn.textContent = subResp?.error || "Failed";
-        subBtn.style.color = "#f44336";
+    if (feeds.length === 1) {
+      // Single feed — show quick subscribe
+      text.textContent = `RSS feed available${feeds[0].title ? ": " + feeds[0].title : ""}`;
+
+      const subBtn = document.createElement("a");
+      subBtn.textContent = "Subscribe";
+      subBtn.style.cursor = "pointer";
+      subBtn.addEventListener("click", async () => {
+        const subResp = await browser.runtime.sendMessage({ action: "addFeed", url: feeds[0].url, intervalMinutes: 60 });
+        if (subResp?.success) {
+          subBtn.textContent = "Subscribed!";
+          subBtn.style.color = "#4caf50";
+          subBtn.style.pointerEvents = "none";
+          if (osintFeedBtn) {
+            osintFeedBtn.classList.add("feed-subscribed");
+            osintFeedBtn.querySelector("span").textContent = "✓";
+          }
+        } else {
+          subBtn.textContent = subResp?.error || "Failed";
+          subBtn.style.color = "#f44336";
+        }
+      });
+
+      feedEl.append(dot, text, subBtn);
+
+      // Header button — quick subscribe for single feed
+      if (osintFeedBtn) {
+        osintFeedBtn.classList.remove("hidden");
+        osintFeedBtn._feedUrl = feeds[0].url;
       }
-    });
+    } else {
+      // Multiple feeds — show count + link to Feeds tab with picker
+      text.textContent = `${feeds.length} RSS feeds found`;
 
-    feedEl.append(dot, text, subBtn);
+      const viewBtn = document.createElement("a");
+      viewBtn.textContent = "View all";
+      viewBtn.style.cursor = "pointer";
+      viewBtn.addEventListener("click", async () => {
+        // Store detected feeds so console can show picker
+        await browser.storage.local.set({ _detectedFeeds: feeds });
+        focusOrCreateConsole("feeds");
+      });
+
+      feedEl.append(dot, text, viewBtn);
+
+      // Header button — opens feeds tab with picker
+      if (osintFeedBtn) {
+        osintFeedBtn.classList.remove("hidden");
+        osintFeedBtn._feedUrl = null;
+        osintFeedBtn.title = `${feeds.length} RSS feeds found — click to view`;
+        osintFeedBtn._multiFeeds = feeds;
+      }
+    }
+
     feedEl.classList.remove("hidden");
-  } catch { /* ignore */ }
+  } catch (e) { console.error("[Feed-Popup] checkFeedAvailability error:", e); }
 }
 
 // ──────────────────────────────────────────────
@@ -433,57 +505,88 @@ function attachEventListeners() {
     }
   });
 
-  // Quick nav buttons → open console at specific tab
-  document.querySelectorAll(".quick-nav-btn").forEach(btn => {
+  // Quick nav buttons → open console at specific tab (skip wipe button)
+  document.querySelectorAll(".quick-nav-btn[data-tab]").forEach(btn => {
     btn.addEventListener("click", () => {
-      const tab = btn.dataset.tab;
-      browser.tabs.create({ url: browser.runtime.getURL(`options/options.html#${tab}`) });
-      window.close();
+      focusOrCreateConsole(btn.dataset.tab);
     });
+  });
+
+  // Wipe Everything button + modal
+  const wipeModal = document.getElementById("wipe-modal");
+  document.getElementById("quick-wipe-btn").addEventListener("click", () => {
+    wipeModal.classList.remove("hidden");
+  });
+  document.getElementById("wipe-cancel").addEventListener("click", () => {
+    wipeModal.classList.add("hidden");
+  });
+  document.getElementById("wipe-confirm").addEventListener("click", async () => {
+    const btn = document.getElementById("wipe-confirm");
+    btn.disabled = true;
+    btn.textContent = "Wiping...";
+    try {
+      await browser.runtime.sendMessage({ action: "wipeEverything" });
+      btn.textContent = "Done. Opening extension manager...";
+      setTimeout(() => {
+        browser.tabs.create({ url: "about:addons" });
+        window.close();
+      }, 1500);
+    } catch (e) {
+      btn.textContent = "Failed: " + e.message;
+      btn.disabled = false;
+    }
   });
 
   document.getElementById("help-get-key").addEventListener("click", (e) => {
     e.preventDefault();
-    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#help-getting-started") });
-    window.close();
+    focusOrCreateConsole("help-getting-started");
   });
 
   document.getElementById("open-options").addEventListener("click", () => {
-    browser.runtime.openOptionsPage();
-    window.close();
+    focusOrCreateConsole();
   });
 
   document.getElementById("open-resources").addEventListener("click", () => {
-    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#resources") });
-    window.close();
+    focusOrCreateConsole("resources");
   });
 
   document.getElementById("open-projects").addEventListener("click", () => {
-    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#projects") });
-    window.close();
+    focusOrCreateConsole("projects");
   });
 
   document.getElementById("open-osint").addEventListener("click", () => {
-    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#osint") });
-    window.close();
+    focusOrCreateConsole("osint");
   });
 
-  document.getElementById("open-feeds").addEventListener("click", () => {
-    browser.tabs.create({ url: browser.runtime.getURL("feeds/feeds.html") });
+  document.getElementById("open-feeds").addEventListener("click", async () => {
+    const feedsUrl = browser.runtime.getURL("feeds/feeds.html");
+    const existing = await browser.tabs.query({ url: feedsUrl + "*" });
+    if (existing.length > 0) {
+      await browser.tabs.update(existing[0].id, { active: true });
+      await browser.windows.update(existing[0].windowId, { focused: true });
+    } else {
+      await browser.tabs.create({ url: feedsUrl });
+    }
     window.close();
   });
 
   document.getElementById("open-automation").addEventListener("click", async () => {
     let prefillUrl = "";
     try {
-      const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-      if (tabs[0]?.url && !tabs[0].url.startsWith("about:") && !tabs[0].url.startsWith("moz-extension:")) {
-        prefillUrl = tabs[0].url;
+      const activeTabs = await browser.tabs.query({ active: true, currentWindow: true });
+      if (activeTabs[0]?.url && !activeTabs[0].url.startsWith("about:") && !activeTabs[0].url.startsWith("moz-extension:")) {
+        prefillUrl = activeTabs[0].url;
       }
     } catch {}
-    const base = browser.runtime.getURL("options/options.html");
+    const consoleUrl = browser.runtime.getURL("options/options.html");
     const param = prefillUrl ? `?prefillRule=${encodeURIComponent(prefillUrl)}` : "";
-    browser.tabs.create({ url: `${base}${param}#automation` });
+    const existing = await browser.tabs.query({ url: consoleUrl + "*" });
+    if (existing.length > 0) {
+      await browser.tabs.update(existing[0].id, { active: true, url: `${consoleUrl}${param}#automation` });
+      await browser.windows.update(existing[0].windowId, { focused: true });
+    } else {
+      await browser.tabs.create({ url: `${consoleUrl}${param}#automation` });
+    }
     window.close();
   });
 
@@ -524,8 +627,15 @@ function attachEventListeners() {
     });
   })();
 
-  document.getElementById("open-history").addEventListener("click", () => {
-    browser.tabs.create({ url: browser.runtime.getURL("history/history.html") });
+  document.getElementById("open-history").addEventListener("click", async () => {
+    const histUrl = browser.runtime.getURL("history/history.html");
+    const existing = await browser.tabs.query({ url: histUrl + "*" });
+    if (existing.length > 0) {
+      await browser.tabs.update(existing[0].id, { active: true });
+      await browser.windows.update(existing[0].windowId, { focused: true });
+    } else {
+      await browser.tabs.create({ url: histUrl });
+    }
     window.close();
   });
 
@@ -545,9 +655,18 @@ function attachEventListeners() {
     };
     await browser.storage.local.set({ defaultProvider: providerKey, providers: currentProviders });
     updateAnalysisProviderOptions();
-    elements.settingsStatus.textContent = "Settings saved.";
-    elements.settingsStatus.style.color = "var(--success)";
-    setTimeout(() => { elements.settingsStatus.textContent = ""; }, 2000);
+
+    const hasAnyKey = Object.values(currentProviders).some(p => p.apiKey);
+    if (hasAnyKey) {
+      // Hide settings panel, flash the Argus button to hint it's now a nav button
+      elements.settingsPanel.classList.add("hidden");
+      elements.settingsToggle.classList.add("btn-flash");
+      setTimeout(() => elements.settingsToggle.classList.remove("btn-flash"), 4000);
+    } else {
+      elements.settingsStatus.textContent = "Settings saved.";
+      elements.settingsStatus.style.color = "var(--success)";
+      setTimeout(() => { elements.settingsStatus.textContent = ""; }, 2000);
+    }
   });
 
   elements.analysisType.addEventListener("change", () => {
@@ -778,6 +897,33 @@ function attachEventListeners() {
     const params = domain ? `?domain=${encodeURIComponent(domain)}` : "";
     browser.tabs.create({ url: browser.runtime.getURL(`osint/downdetector.html${params}`) });
     window.close();
+  });
+
+  // Quick subscribe button (shown when feed detected)
+  document.getElementById("osint-subscribe").addEventListener("click", async () => {
+    const btn = document.getElementById("osint-subscribe");
+    if (btn.classList.contains("feed-subscribed")) return;
+    // Multi-feed mode — store feeds and open picker
+    if (btn._multiFeeds) {
+      browser.storage.local.set({ _detectedFeeds: btn._multiFeeds }).then(() => {
+        focusOrCreateConsole("feeds");
+      });
+      return;
+    }
+    const feedUrl = btn._feedUrl;
+    if (!feedUrl) return;
+    btn.querySelector("span").textContent = "...";
+    const resp = await browser.runtime.sendMessage({ action: "addFeed", url: feedUrl, intervalMinutes: 60 });
+    if (resp?.success) {
+      btn.querySelector("span").textContent = "✓";
+      btn.classList.add("feed-subscribed");
+      btn.title = "Already subscribed to this feed";
+    } else {
+      btn.querySelector("span").textContent = resp?.error?.includes("already") ? "✓" : "✗";
+      if (resp?.error?.includes("already")) btn.classList.add("feed-subscribed");
+      else btn.style.color = "#f44336";
+      btn.style.animation = "none";
+    }
   });
 }
 
