@@ -53,6 +53,7 @@
       "lib/cloud-providers.js",
       "lib/cloud-backup.js",
       "background-permissions.js",
+      "lib/argus-structured.js",
       "background-presets.js",
       "background-providers.js",
       "background.js",

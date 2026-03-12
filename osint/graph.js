@@ -26,6 +26,13 @@
   let edges = [];
   let visibleTypes = new Set(Object.keys(TYPE_COLORS));
 
+  // Project overlay filter
+  let allProjects = [];           // [{ id, name, color, urls: Set }]
+  let nodeProjectMap = new Map(); // nodeId → Set of projectIds
+  let projectFilterActive = false; // false = show everything (no project filtering)
+  let visibleProjects = new Set(); // which project IDs are toggled on
+  let showUnassigned = true;       // show nodes not in any project
+
   let canvas, ctx;
   let width, height;
 
@@ -70,7 +77,7 @@
     const w = screenToWorld(sx, sy);
     for (let i = nodes.length - 1; i >= 0; i--) {
       const n = nodes[i];
-      if (!visibleTypes.has(n.type)) continue;
+      if (!visibleTypes.has(n.type) || !isNodeVisibleByProject(n)) continue;
       const r = nodeRadius(n);
       const dx = w.x - n.x;
       const dy = w.y - n.y;
@@ -155,6 +162,95 @@
     };
   }
 
+  // ── Project overlay ──
+
+  async function loadProjects() {
+    if (typeof browser === 'undefined' || !browser.runtime) return;
+    try {
+      const resp = await browser.runtime.sendMessage({ action: 'getProjects' });
+      if (!resp || !resp.success || !resp.projects) return;
+      allProjects = resp.projects.map(p => ({
+        id: p.id,
+        name: p.name,
+        color: p.color || '#e94560',
+        urls: new Set((p.items || []).map(i => i.url).filter(Boolean))
+      }));
+      visibleProjects = new Set(allProjects.map(p => p.id));
+      // If graph already loaded, rebuild mapping now
+      if (nodes.length) {
+        buildNodeProjectMap();
+        buildProjectPanel();
+      }
+    } catch (e) {
+      console.warn('[Graph] Failed to load projects:', e);
+    }
+  }
+
+  function buildNodeProjectMap() {
+    nodeProjectMap.clear();
+    for (const n of nodes) {
+      const nodePages = n.pages || [];
+      const projIds = new Set();
+      for (const p of allProjects) {
+        if (nodePages.some(url => p.urls.has(url))) {
+          projIds.add(p.id);
+        }
+      }
+      nodeProjectMap.set(n.id, projIds);
+    }
+  }
+
+  function isNodeVisibleByProject(n) {
+    if (!projectFilterActive) return true;
+    const projIds = nodeProjectMap.get(n.id);
+    if (!projIds || projIds.size === 0) return showUnassigned;
+    for (const pid of projIds) {
+      if (visibleProjects.has(pid)) return true;
+    }
+    return false;
+  }
+
+  function buildProjectPanel() {
+    const body = document.getElementById('projectPanelBody');
+    // Clear existing project toggles (keep the "All" toggle)
+    const existing = body.querySelectorAll('.project-toggle:not(:first-child)');
+    existing.forEach(el => el.remove());
+
+    if (!allProjects.length) return;
+
+    for (const proj of allProjects) {
+      // Count how many current nodes belong to this project
+      let count = 0;
+      for (const n of nodes) {
+        const pids = nodeProjectMap.get(n.id);
+        if (pids && pids.has(proj.id)) count++;
+      }
+
+      const label = document.createElement('label');
+      label.className = 'project-toggle';
+      label.innerHTML = `<input type="checkbox" data-project="${proj.id}" checked>` +
+        `<span class="project-dot" style="background:${proj.color}"></span>` +
+        `<span class="project-toggle-label">${proj.name}</span>` +
+        `<span class="project-toggle-count">${count}</span>`;
+      body.appendChild(label);
+
+      const cb = label.querySelector('input');
+      cb.addEventListener('change', () => {
+        if (cb.checked) visibleProjects.add(proj.id);
+        else visibleProjects.delete(proj.id);
+        updateProjectFilterState();
+        simStep = Math.max(0, simStep - 60);
+      });
+    }
+
+  }
+
+  function updateProjectFilterState() {
+    // Project filtering is active if any project is toggled off or unassigned is toggled off
+    projectFilterActive = !showUnassigned ||
+      visibleProjects.size < allProjects.length;
+  }
+
   function setMode(mode) {
     graphMode = mode;
     const btns = document.querySelectorAll('.mode-btn');
@@ -217,6 +313,11 @@
     })).filter(e => e.sourceNode && e.targetNode);
 
     simStep = 0;
+    // Project map may need rebuilding (if projects loaded before or after graph data)
+    if (allProjects.length) {
+      buildNodeProjectMap();
+      buildProjectPanel();
+    }
     runSimulation();
 
     // Build comprehensive graph context for AI chat
@@ -251,7 +352,7 @@
 
   /* ---- Physics ---- */
   function simulate() {
-    const visible = nodes.filter(n => visibleTypes.has(n.type));
+    const visible = nodes.filter(n => visibleTypes.has(n.type) && isNodeVisibleByProject(n));
 
     // Repulsion (all pairs)
     for (let i = 0; i < visible.length; i++) {
@@ -276,6 +377,7 @@
       const a = e.sourceNode;
       const b = e.targetNode;
       if (!visibleTypes.has(a.type) || !visibleTypes.has(b.type)) continue;
+      if (!isNodeVisibleByProject(a) || !isNodeVisibleByProject(b)) continue;
       let dx = b.x - a.x;
       let dy = b.y - a.y;
       let dist = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -330,6 +432,7 @@
       const a = e.sourceNode;
       const b = e.targetNode;
       if (!visibleTypes.has(a.type) || !visibleTypes.has(b.type)) continue;
+      if (!isNodeVisibleByProject(a) || !isNodeVisibleByProject(b)) continue;
 
       const isHighlighted = selectedNode && (a === selectedNode || b === selectedNode);
       const lineWidth = Math.max(1, (e.weight || 1) * 1.2);
@@ -346,7 +449,7 @@
     }
 
     // Nodes (draw selected last so its label is always on top)
-    const sortedNodes = nodes.filter(n => visibleTypes.has(n.type));
+    const sortedNodes = nodes.filter(n => visibleTypes.has(n.type) && isNodeVisibleByProject(n));
     if (selectedNode) {
       const idx = sortedNodes.indexOf(selectedNode);
       if (idx > -1) {
@@ -422,7 +525,10 @@
   }
 
   /* ---- Sidebar ---- */
+  let sidebarCollapsed = false; // when true, clicking nodes won't auto-open sidebar
+
   function showSidebar(node) {
+    if (sidebarCollapsed) return; // user collapsed it, don't auto-open
     const sidebar = document.getElementById('sidebar');
     document.getElementById('sidebarTitle').textContent = node.label;
     document.getElementById('detailType').textContent = node.type.charAt(0).toUpperCase() + node.type.slice(1);
@@ -492,7 +598,21 @@
 
   function hideSidebar() {
     document.getElementById('sidebar').classList.remove('open');
+    sidebarCollapsed = true; // stay closed until user toggles back
     selectedNode = null;
+  }
+
+  function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar.classList.contains('open')) {
+      hideSidebar();
+    } else {
+      sidebarCollapsed = false;
+      // If a node is selected, re-show its details
+      if (selectedNode) {
+        showSidebar(selectedNode);
+      }
+    }
   }
 
   /* ---- Event handlers ---- */
@@ -505,6 +625,13 @@
     canvas.addEventListener('dblclick', onDblClick);
 
     document.getElementById('sidebarClose').addEventListener('click', hideSidebar);
+    document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar.classList.contains('open')) hideSidebar();
+      }
+    });
     document.getElementById('zoomIn').addEventListener('click', () => zoomBy(1.25));
     document.getElementById('zoomOut').addEventListener('click', () => zoomBy(0.8));
     document.getElementById('zoomReset').addEventListener('click', () => {
@@ -521,6 +648,24 @@
         // Restart sim briefly so layout adjusts
         simStep = Math.max(0, simStep - 60);
       });
+    });
+
+    // Project panel toggle
+    document.getElementById('projectPanelToggle').addEventListener('click', () => {
+      const panel = document.getElementById('projectPanel');
+      const isOpen = panel.classList.contains('open');
+      panel.classList.toggle('hidden', isOpen);
+      panel.classList.toggle('open', !isOpen);
+    });
+    document.getElementById('projectPanelClose').addEventListener('click', () => {
+      const panel = document.getElementById('projectPanel');
+      panel.classList.add('hidden');
+      panel.classList.remove('open');
+    });
+    document.getElementById('projToggleAll').addEventListener('change', (e) => {
+      showUnassigned = e.target.checked;
+      updateProjectFilterState();
+      simStep = Math.max(0, simStep - 60);
     });
 
     // Mode toggle (project vs global KG)
@@ -670,6 +815,7 @@
     ctx = canvas.getContext('2d');
     resizeCanvas();
     setupEvents();
+    loadProjects(); // fetch projects for overlay filter
     loadData();
   }
 

@@ -480,15 +480,27 @@ const KnowledgeGraph = (() => {
       // Must start uppercase
       if (w[0] !== w[0].toUpperCase()) return false;
     }
-    // Check that the last word looks plausible (not a common noun)
-    const lastWord = words[words.length - 1].toLowerCase();
-    if (inDict(KG_COMMON_NOUNS, _userCustomNouns, lastWord)) return false;
+    // Check ALL words against common nouns — real person names don't contain them
+    // (Exception: very short words like "May", "Grant", "Faith" which are also names)
+    for (const w of words) {
+      const wl = w.toLowerCase();
+      if (wl.length > 3 && inDict(KG_COMMON_NOUNS, _userCustomNouns, wl)) return false;
+    }
     // Check against the not-person-phrases dictionary
     const nameLower = name.toLowerCase();
     if (KG_NOT_PERSON_PHRASES.has(nameLower)) return false;
-    // Boost confidence if first word is a known real first name
-    // (still allow through — this is just a positive signal, not blocking)
-    // Check first word isn't a common prefix/adjective (already covered by NOT_PERSON_FIRST_WORDS above)
+    // Check against noise entities too
+    if (inDict(KG_NOISE_ENTITIES, _userCustomNoise, nameLower)) return false;
+    // Require at least one word to be a known first name for 2-word names
+    // (loosened for 3+ word names which may include middle names)
+    if (words.length === 2) {
+      const firstName = words[0].toLowerCase();
+      if (!KG_VALID_FIRST_NAMES.has(firstName)) {
+        // Not a known first name — check if first word is in not-first-words (already done above)
+        // Additional check: if first word looks like a tech/business term, reject
+        if (inDict(KG_COMMON_NOUNS, _userCustomNouns, firstName)) return false;
+      }
+    }
 
     return true;
   }
@@ -508,8 +520,36 @@ const KnowledgeGraph = (() => {
     return false;
   }
 
-  function extractEntitiesRegex(text) {
+  // Strip Argus-internal terms that leak into AI output
+  const ARGUS_INTERNAL_TERMS = /\b(Sentiment Analysis Tone|Entity Extraction|Provider Binding Create|Provider Get|Research Report Multi|Source Credibility|Critical Analysis|Custom Preset[s]?|Analysis Preset[s]?|Org Profile Structured|Action Items Extracts?|Check Identifies|Your Living Knowledge Base|Your Browser Easy|Customer Preset|Ad Sales|Batch Analysis|Summary Concise|Provider Binding|Provider Create|Fact Check Identifies|Narrative Analysis|Crisis Monitor|Deep ?fake Flags?|Hostile Language|Legal Compliance|Accessibility Check|Historical Context|Comparative Analysis|Satire Detection)\b/gi;
+
+  // Build a set of Title Case phrases from the prompt/system text.
+  // Any entity the AI outputs that matches one of these is echo, not discovery.
+  function buildPromptExclusions(promptText) {
+    if (!promptText) return null;
+    const exclusions = new Set();
+    const nameRegex = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b/g;
+    let m;
+    while ((m = nameRegex.exec(promptText)) !== null) {
+      exclusions.add(m[1].toLowerCase());
+    }
+    // Also grab single capitalized words that are clearly framework terms
+    // (words > 5 chars that aren't common English — these are preset/UI terms)
+    const singleCap = /\b([A-Z][a-z]{5,})\b/g;
+    while ((m = singleCap.exec(promptText)) !== null) {
+      const w = m[1].toLowerCase();
+      // Skip words that could be real entity parts (common proper nouns)
+      if (!KG_VALID_FIRST_NAMES.has(w) && !KG_KNOWN_LOCATIONS.has(w)) {
+        exclusions.add(w);
+      }
+    }
+    return exclusions.size > 0 ? exclusions : null;
+  }
+
+  function extractEntitiesRegex(text, promptExclusions) {
     if (!text) return [];
+    // Pre-strip known Argus UI/preset terms to prevent them becoming entities
+    text = text.replace(ARGUS_INTERNAL_TERMS, "");
     const entities = [];
     const seen = new Set();
 
@@ -524,6 +564,8 @@ const KnowledgeGraph = (() => {
       if (/^(The |This |That |These |Those |Some |Many |Most |Last |First |Next |New |Old )/i.test(name)) continue;
       if (name.split(/\s+/).length < 2) continue;
       if (isNoiseEntity(name)) continue;
+      // Prompt-diff filter: if this phrase appeared in the prompt, it's echo not discovery
+      if (promptExclusions && promptExclusions.has(key)) continue;
       seen.add(key);
 
       // Guess type — check known sets first, then keyword heuristics, then fallback
@@ -604,18 +646,38 @@ const KnowledgeGraph = (() => {
 
   // ── Main extraction + upsert pipeline ──
 
-  async function extractAndUpsert(content, url, title, preset) {
+  async function extractAndUpsert(content, url, title, preset, promptText, structuredData) {
     if (!content || content.length < 20) return { nodes: 0, edges: 0 };
 
-    // Choose extraction method
     let entities;
-    if (preset === "entities") {
+
+    // Priority 1: Use structured data entities if available (from ARGUS_DATA block)
+    // These are curated by the AI specifically as real-world entities — no regex needed
+    if (structuredData && Array.isArray(structuredData.entities) && structuredData.entities.length > 0) {
+      entities = structuredData.entities
+        .filter(e => e && e.name && typeof e.name === "string")
+        .map(e => ({
+          name: e.name.trim(),
+          type: normalizeType(e.type),
+          context: e.context
+        }));
+      console.log(`[KG] Using ${entities.length} structured entities from ARGUS_DATA block`);
+    }
+    // Priority 2: Entities preset returns pure JSON
+    else if (preset === "entities") {
       entities = parseEntitiesPresetOutput(content);
-    } else {
-      entities = extractEntitiesRegex(content);
+    }
+    // Priority 3: Fallback to regex extraction with prompt-diff filtering
+    else {
+      const promptExclusions = promptText ? buildPromptExclusions(promptText) : null;
+      entities = extractEntitiesRegex(content, promptExclusions);
+      // Apply prompt echo filter
+      if (promptExclusions) {
+        entities = entities.filter(e => !promptExclusions.has(e.name.toLowerCase()));
+      }
     }
 
-    // Filter noise from both extraction paths
+    // Filter noise from all extraction paths
     entities = entities.filter(e => e.name && !isNoiseEntity(e.name));
 
     if (!entities.length) return { nodes: 0, edges: 0 };

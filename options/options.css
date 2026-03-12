@@ -925,9 +925,12 @@ textarea {
 }
 
 .proj-type-badge.analysis { background: rgba(233, 69, 96, 0.15); color: #e94560; }
+.proj-type-badge.multi-analysis { background: rgba(156, 39, 176, 0.15); color: #ce93d8; }
+.proj-type-badge.thread { background: rgba(0, 188, 212, 0.15); color: #4dd0e1; }
 .proj-type-badge.bookmark { background: rgba(100, 180, 255, 0.15); color: #64b4ff; }
 .proj-type-badge.note { background: rgba(245, 166, 35, 0.15); color: #f5a623; }
 .proj-type-badge.url { background: rgba(80, 200, 120, 0.15); color: #50c878; }
+.proj-type-badge.feed { background: rgba(255, 152, 0, 0.15); color: #ff9800; }
 
 .proj-item-actions {
   display: flex;

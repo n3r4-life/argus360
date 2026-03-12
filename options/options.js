@@ -3792,8 +3792,14 @@ function projRenderItems(proj) {
     }
     const metaDiv = document.createElement("div");
     metaDiv.className = "proj-item-meta";
-    if (item.analysisPreset) {
-      // Show the actual preset name (e.g. "Fact-Check", "Summary") instead of generic "analysis" + "analyzed"
+    const analysisCount = item.analyses ? item.analyses.length : (item.analysisContent ? 1 : 0);
+    const hasConversations = item.conversations && item.conversations.length > 0;
+    if (analysisCount > 1) {
+      const multiBadge = document.createElement("span");
+      multiBadge.className = "proj-type-badge multi-analysis";
+      multiBadge.textContent = `${analysisCount} analyses`;
+      metaDiv.appendChild(multiBadge);
+    } else if (item.analysisPreset) {
       const presetBadge = document.createElement("span");
       presetBadge.className = "proj-type-badge analysis";
       presetBadge.textContent = item.analysisPreset;
@@ -3803,6 +3809,12 @@ function projRenderItems(proj) {
       typeBadge.className = "proj-type-badge " + item.type;
       typeBadge.textContent = item.type;
       metaDiv.appendChild(typeBadge);
+    }
+    if (hasConversations) {
+      const threadBadge = document.createElement("span");
+      threadBadge.className = "proj-type-badge thread";
+      threadBadge.textContent = item.conversations.length === 1 ? "thread" : `${item.conversations.length} threads`;
+      metaDiv.appendChild(threadBadge);
     }
     const dateSpan = document.createElement("span");
     dateSpan.textContent = new Date(item.addedAt).toLocaleDateString();
@@ -3876,10 +3888,8 @@ function projRenderItems(proj) {
           if (resp?.success && resp.entry?.content) {
             content = resp.entry.content;
             preset = resp.entry.presetLabel || resp.entry.preset || preset;
-            // Cache it on the item so we don't fetch again
             item.analysisContent = content;
             item.analysisPreset = preset;
-            // Persist the backfill
             await browser.runtime.sendMessage({
               action: "updateProjectItem",
               projectId: proj.id,
@@ -3898,14 +3908,40 @@ function projRenderItems(proj) {
         return;
       }
 
+      // Build stacked content: all analyses + saved conversations
+      const analyses = item.analyses || [];
+      let stackedContent = "";
+      if (analyses.length > 1) {
+        // Show all analyses with headers
+        for (const a of analyses) {
+          stackedContent += `## ${a.presetLabel || a.preset} — ${new Date(a.timestamp).toLocaleString()}\n\n${a.content}\n\n---\n\n`;
+        }
+      } else {
+        stackedContent = content;
+      }
+
+      // Append saved conversations
+      if (item.conversations && item.conversations.length) {
+        for (const conv of item.conversations) {
+          stackedContent += `\n\n---\n\n## Follow-up Thread — ${new Date(conv.timestamp).toLocaleString()}\n\n`;
+          for (const msg of conv.messages) {
+            if (msg.role === "user") stackedContent += `**You:** ${msg.content}\n\n`;
+            else stackedContent += `${msg.content}\n\n`;
+          }
+        }
+      }
+
       const resultId = `proj-view-${Date.now()}`;
       await browser.storage.local.set({
         [resultId]: {
           status: "done",
-          content,
+          content: stackedContent,
           pageTitle: item.title || item.url,
           pageUrl: item.url,
-          presetLabel: preset
+          presetLabel: analyses.length > 1 ? `${analyses.length} analyses` : preset,
+          // Project context for "Save to Project" on follow-ups
+          projectId: proj.id,
+          projectItemId: item.id
         }
       });
       browser.tabs.create({ url: browser.runtime.getURL(`results/results.html?id=${encodeURIComponent(resultId)}`) });
@@ -4849,6 +4885,13 @@ function initStorageManagement() {
     if (resp?.fixed) parts.push(`Re-typed ${resp.fixed}`);
     if (resp?.pruned) parts.push(`pruned ${resp.pruned} noise`);
     showKGStatus(parts.length ? parts.join(", ") : "All entities already correct");
+    updateKGStats();
+  });
+  document.getElementById("kg-reindex").addEventListener("click", async () => {
+    if (!confirm("Re-index the knowledge graph from all analysis history? This may take a moment.")) return;
+    showKGStatus("Re-indexing…");
+    const resp = await browser.runtime.sendMessage({ action: "reindexKG" });
+    showKGStatus(resp?.processed ? `Re-indexed ${resp.processed} history items` : "Re-index complete");
     updateKGStats();
   });
   document.getElementById("kg-clear").addEventListener("click", async () => {

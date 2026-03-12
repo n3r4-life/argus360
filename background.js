@@ -916,8 +916,10 @@ async function buildAnalysisPrompts(page, analysisType, customPrompt, settings, 
 
   const baseSystem = customPreset?.system || defaultPreset?.system || "You are a helpful assistant that analyzes web content.";
   const langInstruction = await getLanguageInstruction();
-  const sharelineInstruction = ' At the very end of your response, include a single catchy shareable one-liner (under 180 characters) on its own line prefixed with exactly "SHARELINE:" — this will be hidden from the user and only used for social sharing.';
-  const systemPrompt = `Today's date is ${today}. ${baseSystem}${langInstruction}${sharelineInstruction}`;
+  const sharelineInstruction = ' At the very end of your prose analysis (before any structured data block), include a single catchy shareable one-liner (under 180 characters) on its own line prefixed with exactly "SHARELINE:" — this will be hidden from the user and only used for social sharing.';
+  // Append structured data instruction for all presets except 'entities' (which already returns pure JSON)
+  const structuredInstruction = analysisType !== "entities" ? buildStructuredDataInstruction(analysisType) : "";
+  const systemPrompt = `Today's date is ${today}. ${baseSystem}${langInstruction}${sharelineInstruction}${structuredInstruction}`;
 
   const analysisInstruction = customPrompt
     ? customPrompt
@@ -967,11 +969,29 @@ async function buildAnalysisPrompts(page, analysisType, customPrompt, settings, 
 // History management
 // ──────────────────────────────────────────────
 async function saveToHistory(entry) {
+  const promptText = entry.promptText;
+  delete entry.promptText; // don't persist prompt text in history DB
+
+  // Parse structured data block from AI response (if present)
+  if (entry.content && ArgusStructured.hasBlock(entry.content)) {
+    const { prose, data } = ArgusStructured.parse(entry.content);
+    // Strip the SHARELINE from prose (it may now be before the structured block)
+    entry.content = prose;
+    if (data) {
+      entry.structuredData = ArgusStructured.normalize(data);
+    }
+  }
+
   await ArgusDB.History.add(entry);
+
   // Extract entities for knowledge graph (non-blocking)
   try {
     if (entry.content && entry.pageUrl) {
-      KnowledgeGraph.extractAndUpsert(entry.content, entry.pageUrl, entry.pageTitle, entry.preset);
+      // Prefer structured entities if available — no regex needed
+      KnowledgeGraph.extractAndUpsert(
+        entry.content, entry.pageUrl, entry.pageTitle, entry.preset,
+        promptText, entry.structuredData
+      );
     }
   } catch (e) { console.warn("[KG] entity extraction failed:", e); }
 }
@@ -1069,7 +1089,8 @@ async function handleAnalyzeStream(port, message) {
       content: result.content,
       thinking: result.thinking,
       usage: result.usage,
-      isSelection: !!message.selectedText
+      isSelection: !!message.selectedText,
+      promptText: systemPrompt + "\n" + userPrompt
     });
 
     const detectedSource = SourcePipelines.detectSourceType(page.url, page);
@@ -1230,6 +1251,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "getOpenTabs") return handleGetOpenTabs();
   if (message.action === "getConversationState") return handleGetConversationState(message);
   if (message.action === "analyzeInTab") return handleAnalyzeInTab(message);
+  if (message.action === "initConversation") return handleInitConversation(message);
   if (message.action === "followUp") return handleFollowUp(message);
   if (message.action === "startConversation") return handleStartConversation(message);
   if (message.action === "reAnalyze") return handleReAnalyze(message);
@@ -1305,6 +1327,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "batchAnalyzeProject") return handleBatchAnalyzeProject(message);
   if (message.action === "getBatchStatus") return handleGetBatchStatus();
   if (message.action === "cancelBatch") return handleCancelBatch();
+  if (message.action === "saveConversationToProject") return handleSaveConversationToProject(message);
   // Knowledge Graph
   if (message.action === "getKGGraph") return KnowledgeGraph.getGraphData(message);
   if (message.action === "getKGStats") return KnowledgeGraph.getStats();
@@ -1317,7 +1340,8 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "runKGInference") return KnowledgeGraph.runInferenceRules();
   if (message.action === "pruneKGNoise") return KnowledgeGraph.pruneNoiseEntities().then(r => ({ success: true, ...r }));
   if (message.action === "retypeKGEntities") return KnowledgeGraph.retypeEntities().then(r => ({ success: true, ...r }));
-  if (message.action === "clearKG") return ArgusDB.KGNodes.clear().then(() => ArgusDB.KGEdges.clear()).then(() => ({ success: true }));
+  if (message.action === "clearKG") return ArgusDB.KGNodes.clear().then(() => ArgusDB.KGEdges.clear()).then(() => browser.storage.local.remove("_kg_backfill_done")).then(() => ({ success: true }));
+  if (message.action === "reindexKG") return browser.storage.local.remove(["_kg_backfill_done", "_kg_backfill_at"]).then(() => KnowledgeGraph.backfillFromHistory()).then(r => ({ success: true, ...r }));
   if (message.action === "wipeEverything") return handleWipeEverything();
   if (message.action === "buildProjectSkeleton") return handleBuildProjectSkeleton(message.projectId);
   // Cloud Backup
@@ -1646,7 +1670,8 @@ async function handleAnalyze(message) {
     await saveToHistory({
       pageTitle: page.title, pageUrl: page.url, provider: settings.provider,
       model: result.model, preset: message.analysisType, presetLabel,
-      content: result.content, thinking: result.thinking, usage: result.usage
+      content: result.content, thinking: result.thinking, usage: result.usage,
+      promptText: systemPrompt + "\n" + userPrompt
     });
 
     return {
@@ -1819,7 +1844,8 @@ async function streamAnalysisToStorage(resultId, page, message, settings, preset
       pageTitle: page.title, pageUrl: page.url, provider: settings.provider,
       model: result.model, preset: message.analysisType, presetLabel,
       content: result.content, thinking: result.thinking, usage: result.usage,
-      isSelection: !!message.selectedText
+      isSelection: !!message.selectedText,
+      promptText: systemPrompt + "\n" + userPrompt
     });
 
     // Run specialized pipeline in background (non-blocking enrichment)
@@ -1840,6 +1866,31 @@ async function streamAnalysisToStorage(resultId, page, message, settings, preset
       }
     });
   }
+}
+
+// Initialize conversation history for pre-existing analyses (e.g. project item views)
+// so that follow-up questions work even when no live API call created the history.
+async function handleInitConversation(message) {
+  const { resultId, content, pageTitle, pageUrl } = message;
+  if (conversationHistory.has(resultId)) return { success: true, existing: true };
+
+  const settings = await getProviderSettings(null);
+  const langInst = await getLanguageInstruction();
+
+  const systemPrompt = `You are Argus, an intelligent analysis assistant. The user is reviewing a previous analysis${pageTitle ? ` of "${pageTitle}"` : ""}${pageUrl ? ` (${pageUrl})` : ""}. Answer follow-up questions about the analysis below. Be concise and insightful.${langInst}
+
+--- Previous Analysis ---
+${content}
+--- End Analysis ---`;
+
+  conversationHistory.set(resultId, {
+    provider: settings.provider,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "assistant", content: content }
+    ]
+  });
+  return { success: true };
 }
 
 async function handleFollowUp(message) {
@@ -3061,7 +3112,52 @@ async function fetchPageText(url) {
 
   const response = await fetch(fetchUrl === archiveUrl ? url : fetchUrl);
   const html = await response.text();
-  return extractTextFromHtml(html);
+  let text = extractTextFromHtml(html);
+
+  // If content is too thin, check for JS/meta redirects and follow them
+  if (text.length < 50) {
+    const redirectUrl = extractRedirectUrl(html, url);
+    if (redirectUrl && redirectUrl !== url) {
+      console.log(`[Fetch] Thin content (${text.length} chars), following redirect → ${redirectUrl}`);
+      try {
+        const redirResp = await fetch(redirectUrl);
+        if (redirResp.ok) {
+          const redirHtml = await redirResp.text();
+          const redirText = extractTextFromHtml(redirHtml);
+          if (redirText.length > text.length) text = redirText;
+        }
+      } catch { /* redirect fetch failed */ }
+    }
+  }
+
+  return text;
+}
+
+// Extract redirect URL from JS redirects, meta refresh, or canonical links
+function extractRedirectUrl(html, baseUrl) {
+  try {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    // Meta refresh: <meta http-equiv="refresh" content="0;url=...">
+    const metaRefresh = doc.querySelector('meta[http-equiv="refresh"]');
+    if (metaRefresh) {
+      const match = metaRefresh.content.match(/url\s*=\s*['"]?([^'";\s]+)/i);
+      if (match) return new URL(match[1], baseUrl).href;
+    }
+    // Canonical link (sometimes points to the real page)
+    const canonical = doc.querySelector('link[rel="canonical"]');
+    if (canonical?.href && canonical.href !== baseUrl) {
+      return new URL(canonical.getAttribute("href"), baseUrl).href;
+    }
+    // JS redirects: window.location = "...", window.location.href = "...", location.replace("...")
+    const scripts = doc.querySelectorAll("script");
+    for (const s of scripts) {
+      const text = s.textContent || "";
+      const jsMatch = text.match(/(?:window\.)?location(?:\.href)?\s*=\s*['"]([^'"]+)['"]/) ||
+                       text.match(/location\.replace\s*\(\s*['"]([^'"]+)['"]\s*\)/);
+      if (jsMatch) return new URL(jsMatch[1], baseUrl).href;
+    }
+  } catch { /* parsing failed */ }
+  return null;
 }
 
 function extractTextFromHtml(html) {
@@ -4607,22 +4703,51 @@ async function handleBatchAnalyzeProjectItem(message) {
     const item = proj.items.find(i => i.id === itemId);
     if (!item || !item.url) return { success: false, error: "Item has no URL" };
 
+    // Initialize analyses array if not present (backward compat)
+    if (!item.analyses) {
+      item.analyses = [];
+      // Migrate existing single analysis into the array
+      if (item.analysisContent) {
+        item.analyses.push({
+          preset: item.analysisPreset || "unknown",
+          presetLabel: ANALYSIS_PRESETS[item.analysisPreset]?.label || item.analysisPreset || "Analysis",
+          content: item.analysisContent,
+          summary: item.summary || "",
+          timestamp: item.addedAt || new Date().toISOString()
+        });
+      }
+    }
+
     // Check history first — reuse existing analysis if available
-    const analysisHistory = await ArgusDB.History.getAllSorted();
-    const existingAnalysis = analysisHistory.find(h =>
-      h.pageUrl === item.url && h.presetKey === presetKey
-    );
-    if (existingAnalysis && existingAnalysis.content) {
-      item.summary = humanSummaryFromContent(existingAnalysis.content);
-      item.analysisContent = existingAnalysis.content;
-      item.analysisPreset = presetKey;
-      proj.updatedAt = new Date().toISOString();
-      await ArgusDB.Projects.save(proj);
-      return { success: true, cached: true };
+    // But only if this preset hasn't already been run on this item
+    const alreadyHasPreset = item.analyses.some(a => a.preset === presetKey);
+    if (!alreadyHasPreset) {
+      const analysisHistory = await ArgusDB.History.getAllSorted();
+      const existingAnalysis = analysisHistory.find(h =>
+        h.pageUrl === item.url && h.presetKey === presetKey
+      );
+      if (existingAnalysis && existingAnalysis.content) {
+        const cleanContent = existingAnalysis.content.replace(/\n?SHARELINE:\s*.+$/m, "");
+        item.analyses.push({
+          preset: presetKey,
+          presetLabel: ANALYSIS_PRESETS[presetKey]?.label || presetKey,
+          content: cleanContent,
+          summary: humanSummaryFromContent(cleanContent),
+          timestamp: new Date().toISOString()
+        });
+        // Update top-level fields for backward compat
+        item.analysisContent = cleanContent;
+        item.analysisPreset = presetKey;
+        item.summary = humanSummaryFromContent(cleanContent);
+        proj.updatedAt = new Date().toISOString();
+        await ArgusDB.Projects.save(proj);
+        return { success: true, cached: true };
+      }
     }
 
     // Fetch page and analyze
     const text = await fetchPageText(item.url);
+    console.log(`[Batch] fetchPageText for "${item.url}": ${text ? text.length + " chars" : "null"}`, text ? text.slice(0, 200) : "");
     if (!text || text.length < 20) return { success: false, error: "Could not fetch page content" };
 
     const page = { url: item.url, title: item.title || item.url, description: "", text };
@@ -4636,11 +4761,30 @@ async function handleBatchAnalyzeProjectItem(message) {
       extendedThinking: settings.extendedThinking
     });
 
-    // Update project item with analysis
-    const cleanContent = result.content.replace(/\n?SHARELINE:\s*.+$/m, "");
-    item.summary = humanSummaryFromContent(cleanContent);
+    // Strip shareline and structured data block from content for display
+    let cleanContent = result.content.replace(/\n?SHARELINE:\s*.+$/m, "");
+    let structuredData = null;
+    if (ArgusStructured.hasBlock(cleanContent)) {
+      const parsed = ArgusStructured.parse(cleanContent);
+      cleanContent = parsed.prose;
+      if (parsed.data) structuredData = ArgusStructured.normalize(parsed.data);
+    }
+
+    // Stack the new analysis
+    const analysisEntry = {
+      preset: presetKey,
+      presetLabel: ANALYSIS_PRESETS[presetKey]?.label || presetKey,
+      content: cleanContent,
+      summary: humanSummaryFromContent(cleanContent),
+      timestamp: new Date().toISOString()
+    };
+    if (structuredData) analysisEntry.structuredData = structuredData;
+    item.analyses.push(analysisEntry);
+
+    // Update top-level fields for backward compat (latest analysis)
     item.analysisContent = cleanContent;
     item.analysisPreset = presetKey;
+    item.summary = humanSummaryFromContent(cleanContent);
     proj.updatedAt = new Date().toISOString();
     await ArgusDB.Projects.save(proj);
 
@@ -4654,10 +4798,38 @@ async function handleBatchAnalyzeProjectItem(message) {
       thinking: result.thinking || null,
       provider: settings.provider,
       model: settings.model,
-      usage: result.usage
+      usage: result.usage,
+      promptText: systemPrompt + "\n" + userPrompt
     });
 
     return { success: true, cached: false };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ──────────────────────────────────────────────
+// Save follow-up conversation thread to a project item
+// ──────────────────────────────────────────────
+async function handleSaveConversationToProject(message) {
+  try {
+    const { projectId, itemId, conversation } = message;
+    const proj = await ArgusDB.Projects.get(projectId);
+    if (!proj) return { success: false, error: "Project not found" };
+    const item = proj.items.find(i => i.id === itemId);
+    if (!item) return { success: false, error: "Item not found" };
+
+    if (!item.conversations) item.conversations = [];
+    item.conversations.push({
+      id: genId("conv"),
+      messages: conversation, // array of { role, content }
+      timestamp: new Date().toISOString()
+    });
+
+    proj.updatedAt = new Date().toISOString();
+    await ArgusDB.Projects.save(proj);
+    notifyDataChanged("projects");
+    return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
   }
@@ -4766,26 +4938,34 @@ function handleCancelBatch() {
     console.warn("[ArgusDB] Migration error (will retry next startup):", e);
   }
 
-  // Clean up stale temporary result keys (these stay in browser.storage.local)
+  // Clean up stale temporary keys from browser.storage.local
   try {
     const all = await browser.storage.local.get(null);
     const staleKeys = [];
-    const maxAge = 24 * 60 * 60 * 1000; // 24 hours
     const now = Date.now();
+    const MAX_AGE = 2 * 60 * 60 * 1000; // 2 hours
 
     for (const [key, val] of Object.entries(all)) {
-      if (!key.startsWith("tl-result-")) continue;
-      if (!val || typeof val !== "object") continue;
-
-      if (val.status === "done" || val.status === "error") {
-        staleKeys.push(key);
-      } else if (val.timestamp && now - val.timestamp > maxAge) {
+      // Ephemeral result entries — purge completed, errored, or old stuck ones
+      if (key.startsWith("tl-result-") || key.startsWith("proj-view-")) {
+        if (!val || typeof val !== "object") { staleKeys.push(key); continue; }
+        if (val.status === "done" || val.status === "error") { staleKeys.push(key); continue; }
+        // Extract timestamp from key for stuck streaming/loading entries
+        const tsMatch = key.match(/(\d{13})/);
+        if (tsMatch && now - Number(tsMatch[1]) > MAX_AGE) { staleKeys.push(key); continue; }
+        continue;
+      }
+      // Pipeline enrichment data, OSINT tool results — always ephemeral
+      if (key.endsWith("-pipeline") || key.startsWith("techstack-") ||
+          key.startsWith("metadata-") || key.startsWith("linkmap-") ||
+          key.startsWith("whois-") || key.startsWith("result-")) {
         staleKeys.push(key);
       }
     }
 
     if (staleKeys.length) {
       await browser.storage.local.remove(staleKeys);
+      console.log(`[Startup] Purged ${staleKeys.length} stale temporary keys`);
     }
   } catch { /* startup cleanup is best-effort */ }
 

@@ -633,6 +633,93 @@ That's it. No extra commentary. Keep the entire response under 150 words.`
 };
 
 // ──────────────────────────────────────────────
+// Structured response schema
+// ──────────────────────────────────────────────
+// Every AI response ends with a <!--ARGUS_DATA:{json}:ARGUS_DATA--> block.
+// The prose analysis is rendered to the user; the JSON is parsed for KG, filtering, and aggregation.
+
+const ARGUS_STRUCTURED_DELIMITER_START = "<!--ARGUS_DATA:";
+const ARGUS_STRUCTURED_DELIMITER_END = ":ARGUS_DATA-->";
+
+// Base schema — every preset includes these fields
+const ARGUS_BASE_SCHEMA = {
+  entities: [{ name: "string", type: "person|organization|location|date|event|other" }],
+  confidence: "number 0.0-1.0 — how confident you are in your analysis",
+  topics: ["string — 2-5 main topics/themes covered"]
+};
+
+// Per-preset schema extensions (merged with base)
+const ARGUS_PRESET_SCHEMAS = {
+  sentiment: {
+    sentiment: "positive|negative|neutral|mixed",
+    sentiment_score: "number -1.0 to 1.0"
+  },
+  factcheck: {
+    claims: [{ claim: "string", verdict: "verified|unverified|false|misleading", evidence: "string" }]
+  },
+  credibility: {
+    credibility_score: "number 1-10",
+    bias_direction: "left|lean-left|center|lean-right|right|unclear"
+  },
+  threatassessment: {
+    threat_level: "low|medium|high|critical",
+    threat_actors: ["string"]
+  },
+  crisismonitor: {
+    status: "developing|escalating|stabilizing|resolved",
+    severity: "low|medium|high|critical"
+  },
+  deepfakeflags: {
+    authenticity: "likely-authentic|suspicious|likely-manipulated|insufficient-data",
+    manipulation_indicators: ["string"]
+  },
+  propaganda: {
+    techniques: [{ technique: "string", example: "string" }],
+    persuasion_intensity: "low|medium|high"
+  },
+  legalrisk: {
+    risk_areas: [{ category: "string", severity: "low|medium|high" }]
+  },
+  financialanalysis: {
+    financial_metrics: [{ metric: "string", value: "string", trend: "up|down|stable|unknown" }]
+  },
+  competitorintel: {
+    signals: [{ type: "string", description: "string", significance: "low|medium|high" }]
+  },
+  timeline: {
+    events: [{ date: "string", event: "string", significance: "string" }]
+  }
+};
+
+// Build the system prompt suffix that instructs the AI to append structured data
+function buildStructuredDataInstruction(presetKey) {
+  // Merge base + preset-specific schema
+  const schema = { ...ARGUS_BASE_SCHEMA };
+  if (ARGUS_PRESET_SCHEMAS[presetKey]) {
+    Object.assign(schema, ARGUS_PRESET_SCHEMAS[presetKey]);
+  }
+
+  const schemaStr = JSON.stringify(schema, null, 2);
+
+  return `
+
+IMPORTANT — Structured Data Requirement:
+After your complete analysis, you MUST append a structured data block on its own line using this exact format:
+${ARGUS_STRUCTURED_DELIMITER_START}{your JSON here}${ARGUS_STRUCTURED_DELIMITER_END}
+
+The JSON must conform to this schema:
+${schemaStr}
+
+Rules for the structured data:
+- The "entities" array must contain ONLY real-world entities (people, organizations, locations, dates, events) found in the SOURCE CONTENT you analyzed. Do NOT include analytical terms, framework names, section headings, or abstract concepts.
+- Each entity needs a "name" (proper noun as it appears) and "type" (one of: person, organization, location, date, event, other).
+- "confidence" is your confidence in the overall analysis (0.0-1.0).
+- "topics" are 2-5 high-level themes/subjects of the source content.
+- This block must be the VERY LAST thing in your response, after all prose analysis.
+- Output valid JSON only inside the delimiters — no markdown fences, no extra text.`;
+}
+
+// ──────────────────────────────────────────────
 // Language preference
 // ──────────────────────────────────────────────
 const BROWSER_LANG_MAP = {

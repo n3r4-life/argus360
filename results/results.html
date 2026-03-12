@@ -99,6 +99,10 @@
       </select>
       <button id="reanalyze-btn" class="btn btn-secondary btn-small followup-btn">Re-Analyze</button>
     </div>
+    <div id="save-to-project-row" class="reanalyze-row hidden">
+      <button id="save-thread-btn" class="btn btn-secondary btn-small followup-btn" style="color:var(--success);">Save Thread to Project</button>
+      <span id="save-thread-status" style="font-size:12px;opacity:0.7;"></span>
+    </div>
   </div>
 
   <div id="argus-chat-container" class="hidden" style="padding:0 20px 20px;"></div>
@@ -111,6 +115,7 @@
   <script src="../lib/purify.min.js"></script>
   <script src="../lib/marked.min.js"></script>
   <script src="../lib/export-utils.js"></script>
+  <script src="../lib/argus-structured.js"></script>
   <script src="../lib/intelligence-viewer.js"></script>
   <script src="../lib/argus-chat.js"></script>
   <script src="results.js"></script>

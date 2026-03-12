@@ -36,6 +36,8 @@ let resultId = null;
 let analysisProvider = "";
 let analysisModel = "";
 let shareline = "";
+let projectContext = null; // { projectId, projectItemId } if opened from a project
+let followupMessages = []; // track conversation for "Save to Project"
 
 // Unified viewer instance
 const viewer = IntelligenceViewer.create({
@@ -281,6 +283,32 @@ document.addEventListener("DOMContentLoaded", () => {
   loadReanalyzePresets();
 
   elements.reanalyzeBtn.addEventListener("click", sendReAnalyze);
+
+  // Save conversation thread back to project
+  document.getElementById("save-thread-btn").addEventListener("click", async () => {
+    if (!projectContext || !followupMessages.length) return;
+    const btn = document.getElementById("save-thread-btn");
+    const status = document.getElementById("save-thread-status");
+    btn.disabled = true;
+    status.textContent = "Saving...";
+    const resp = await browser.runtime.sendMessage({
+      action: "saveConversationToProject",
+      projectId: projectContext.projectId,
+      itemId: projectContext.projectItemId,
+      conversation: followupMessages
+    });
+    if (resp?.success) {
+      status.textContent = "Saved to project!";
+      status.style.color = "var(--success)";
+      btn.textContent = "Saved ✓";
+      // Clear tracked messages so they don't double-save
+      followupMessages = [];
+    } else {
+      status.textContent = resp?.error || "Failed to save";
+      status.style.color = "var(--error)";
+      btn.disabled = false;
+    }
+  });
 });
 
 async function pollForResult(id) {
@@ -308,8 +336,9 @@ async function pollForResult(id) {
       viewer.showResults(true);
       viewer.setStreaming(true);
 
-      // Strip shareline from streaming display so it doesn't flash
-      const streamContent = (data.content || "").replace(/\n?SHARELINE:\s*.+$/m, "");
+      // Strip shareline and structured data block from streaming display
+      let streamContent = (data.content || "").replace(/\n?SHARELINE:\s*.+$/m, "");
+      streamContent = ArgusStructured.stripBlock(streamContent);
       rawMarkdown = streamContent;
       viewer.setRawMarkdown(rawMarkdown);
       IntelligenceViewer.renderMarkdown(streamContent, elements.resultContent);
@@ -360,11 +389,14 @@ function updatePageInfo(data) {
 }
 
 function extractShareline(text) {
+  // Strip structured data block first (before shareline extraction)
+  const { prose, data: structuredData } = ArgusStructured.parse(text);
+  text = prose;
   const match = text.match(/\n?SHARELINE:\s*(.+)$/m);
   if (match) {
-    return { cleaned: text.replace(/\n?SHARELINE:\s*.+$/m, "").trimEnd(), shareline: match[1].trim().replace(/—/g, "-") };
+    return { cleaned: text.replace(/\n?SHARELINE:\s*.+$/m, "").trimEnd(), shareline: match[1].trim().replace(/—/g, "-"), structuredData };
   }
-  return { cleaned: text, shareline: "" };
+  return { cleaned: text, shareline: "", structuredData };
 }
 
 function showResult(data) {
@@ -372,6 +404,10 @@ function showResult(data) {
   shareline = extracted.shareline;
   rawMarkdown = extracted.cleaned;
   pageTitle = data.pageTitle || pageTitle;
+  // Store structured data for potential future use (confidence badge, etc.)
+  if (extracted.structuredData) {
+    data._structuredData = ArgusStructured.normalize(extracted.structuredData);
+  }
 
   viewer.setTitle(pageTitle);
   viewer.setContent(rawMarkdown);
@@ -405,6 +441,21 @@ function showResult(data) {
 
   // Show follow-up input
   elements.followupContainer.classList.remove("hidden");
+
+  // If opened from a project, enable "Save to Project" for follow-ups
+  if (data.projectId && data.projectItemId) {
+    projectContext = { projectId: data.projectId, projectItemId: data.projectItemId };
+  }
+
+  // Seed conversation history so follow-up questions work on pre-existing analyses
+  // (e.g. project item views where no live API call created the history)
+  browser.runtime.sendMessage({
+    action: "initConversation",
+    resultId,
+    content: rawMarkdown,
+    pageTitle: data.pageTitle,
+    pageUrl: data.pageUrl
+  }).catch(() => {}); // Non-critical — follow-ups just won't work if this fails
 }
 
 function showSourceBadge(sourceType) {
@@ -611,8 +662,18 @@ async function sendFollowUp() {
     return;
   }
 
+  // Track the question for conversation saving
+  followupMessages.push({ role: "user", content: savedQuestion });
+
   // Poll for follow-up result
-  await pollForFollowUp(response.followupResultId, answerDiv);
+  const answerContent = await pollForFollowUp(response.followupResultId, answerDiv);
+  if (answerContent) {
+    followupMessages.push({ role: "assistant", content: answerContent });
+    // Show "Save to Project" button if this came from a project
+    if (projectContext) {
+      document.getElementById("save-to-project-row").classList.remove("hidden");
+    }
+  }
   elements.followupSend.disabled = false;
 }
 
@@ -652,7 +713,7 @@ async function pollForFollowUp(followupId, answerDiv) {
       viewer.appendThinking(data.thinking);
 
       browser.storage.local.remove(followupId);
-      return;
+      return data.content;
     }
 
     if (data.status === "error") {

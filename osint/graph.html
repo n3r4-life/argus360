@@ -57,6 +57,24 @@
     </div>
   </header>
 
+  <!-- Project overlay panel -->
+  <div class="project-panel hidden" id="projectPanel">
+    <div class="project-panel-header">
+      <span class="project-panel-title">Projects</span>
+      <button class="project-panel-close" id="projectPanelClose">&times;</button>
+    </div>
+    <div class="project-panel-body" id="projectPanelBody">
+      <label class="project-toggle">
+        <input type="checkbox" id="projToggleAll" checked>
+        <span class="project-dot" style="background:var(--text-secondary)"></span>
+        <span class="project-toggle-label">All (unassigned)</span>
+      </label>
+    </div>
+  </div>
+  <button class="project-panel-tab" id="projectPanelToggle" title="Toggle project filter">
+    <span class="tab-icon">&#9776;</span>
+  </button>
+
   <main class="graph-container">
     <canvas id="graphCanvas"></canvas>
   </main>
@@ -97,6 +115,10 @@
       </div>
     </div>
   </aside>
+
+  <button class="sidebar-toggle-tab" id="sidebarToggle" title="Toggle details panel">
+    <span class="tab-arrow">&#9654;</span>
+  </button>
 
   <div id="argus-chat-container" style="padding:16px 20px;"></div>
 
