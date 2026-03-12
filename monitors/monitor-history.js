@@ -262,9 +262,11 @@ function renderTimeline(snapshots) {
 // Diff view
 // ──────────────────────────────────────────────
 async function loadDiffSnapshots() {
-  const key = `monitor-snapshots-${monitorId}`;
-  const data = await browser.storage.local.get(key);
-  const snapshots = data[key] || [];
+  const response = await browser.runtime.sendMessage({
+    action: "getMonitorSnapshots",
+    monitorId
+  });
+  const snapshots = (response && response.success) ? response.snapshots : [];
 
   elements.diffSnapshotA.replaceChildren();
   elements.diffSnapshotB.replaceChildren();
@@ -279,7 +281,7 @@ async function loadDiffSnapshots() {
   }
 
   snapshots.forEach((snap, idx) => {
-    const label = `#${snapshots.length - idx} - ${new Date(snap.timestamp).toLocaleString()}${snap.changed ? " (changed)" : ""}`;
+    const label = `#${snapshots.length - idx} - ${new Date(snap.capturedAt || snap.timestamp).toLocaleString()}${snap.changed ? " (changed)" : ""}`;
     const optA = document.createElement("option");
     optA.value = idx;
     optA.textContent = label;

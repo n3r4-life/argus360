@@ -1726,8 +1726,8 @@ async function renderMonitors() {
 
     const historyBtn = document.createElement("button");
     historyBtn.className = "btn btn-sm btn-secondary";
-    historyBtn.textContent = "Compare";
-    historyBtn.title = "Compare page snapshots and view diffs";
+    historyBtn.textContent = "Changes";
+    historyBtn.title = "View detected changes and compare snapshots";
     historyBtn.addEventListener("click", () => {
       browser.tabs.create({
         url: browser.runtime.getURL(`monitors/monitor-history.html?id=${encodeURIComponent(monitor.id)}&title=${encodeURIComponent(monitor.title || monitor.url)}`)
@@ -3032,6 +3032,70 @@ async function projPopulateAutomations(projectId) {
   });
 }
 
+// Convert entity JSON summary to readable text for project cards
+function projSummarizeForCard(text) {
+  if (!text) return "";
+  const trimmed = text.trim();
+
+  // Try to find and parse JSON (may be raw, in code fences, or with surrounding text)
+  let json = null;
+  // Direct parse
+  try { json = JSON.parse(trimmed); } catch {}
+  // Strip code fences
+  if (!json) {
+    const fenced = trimmed.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/, "");
+    try { json = JSON.parse(fenced); } catch {}
+  }
+  // Find first { to last }
+  if (!json) {
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try { json = JSON.parse(trimmed.slice(start, end + 1)); } catch {}
+    }
+  }
+
+  if (json && (json.people || json.organizations || json.locations || json.claims)) {
+    const parts = [];
+    if (json.people && json.people.length) {
+      parts.push(`People: ${json.people.map(p => p.name).join(", ")}`);
+    }
+    if (json.organizations && json.organizations.length) {
+      parts.push(`Orgs: ${json.organizations.map(o => o.name).join(", ")}`);
+    }
+    if (json.locations && json.locations.length) {
+      parts.push(`Locations: ${json.locations.map(l => l.name).join(", ")}`);
+    }
+    if (json.claims && json.claims.length) {
+      parts.push(`${json.claims.length} claim(s)`);
+    }
+    if (json.dates && json.dates.length) {
+      parts.push(`${json.dates.length} date(s)`);
+    }
+    if (json.contact && json.contact.length) {
+      parts.push(`${json.contact.length} contact(s)`);
+    }
+    if (parts.length) return parts.join(" | ");
+  }
+
+  // Fallback: if it looks like entity JSON but couldn't parse (truncated),
+  // extract names via regex
+  if (trimmed.startsWith("{") && /"name"\s*:/.test(trimmed)) {
+    const names = [];
+    const nameRe = /"name"\s*:\s*"([^"]+)"/g;
+    let m;
+    while ((m = nameRe.exec(trimmed)) !== null) {
+      names.push(m[1]);
+    }
+    if (names.length) {
+      return `Entities found: ${names.join(", ")}`;
+    }
+  }
+
+  // Not entity JSON — return as-is
+  return trimmed;
+}
+
 function projRenderItems(proj) {
   if (proj.items.length === 0) {
     projEl.itemsList.textContent = "";
@@ -3067,10 +3131,11 @@ function projRenderItems(proj) {
       urlDiv.textContent = item.url;
       bodyDiv.appendChild(urlDiv);
     }
-    if (item.summary) {
+    if (item.summary || item.analysisContent) {
       const summDiv = document.createElement("div");
       summDiv.className = "proj-item-summary";
-      summDiv.textContent = item.summary.slice(0, 200);
+      // Use full analysisContent first — summary may be truncated JSON that can't be parsed
+      summDiv.textContent = projSummarizeForCard(item.analysisContent || item.summary).slice(0, 300);
       bodyDiv.appendChild(summDiv);
     }
     if (item.notes) {

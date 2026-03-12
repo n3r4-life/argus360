@@ -308,6 +308,34 @@ if (typeof pdfjsLib !== "undefined") {
   pdfjsLib.GlobalWorkerOptions.workerSrc = browser.runtime.getURL("lib/pdf.worker.min.js");
 }
 
+// Extract a human-readable summary from analysis content (handles entity JSON)
+function humanSummaryFromContent(content) {
+  if (!content) return "";
+  const trimmed = content.trim();
+  if (trimmed.startsWith("{")) {
+    try {
+      const json = JSON.parse(trimmed);
+      if (json.people || json.organizations || json.locations || json.claims) {
+        const parts = [];
+        if (json.people && json.people.length) {
+          parts.push(`People: ${json.people.map(p => p.name).join(", ")}`);
+        }
+        if (json.organizations && json.organizations.length) {
+          parts.push(`Orgs: ${json.organizations.map(o => o.name).join(", ")}`);
+        }
+        if (json.locations && json.locations.length) {
+          parts.push(`Locations: ${json.locations.map(l => l.name).join(", ")}`);
+        }
+        if (json.claims && json.claims.length) {
+          parts.push(`${json.claims.length} claim(s)`);
+        }
+        return parts.join(" | ").slice(0, 500) || trimmed.slice(0, 500);
+      }
+    } catch { /* not JSON, fall through */ }
+  }
+  return trimmed.slice(0, 500);
+}
+
 function isPdfUrl(url) {
   if (!url) return false;
   try {
@@ -322,30 +350,68 @@ function isPdfUrl(url) {
 }
 
 async function extractPdfContent(url) {
-  // Some PDF URLs need decoding or have redirects — try fetching with follow
-  const response = await fetch(url, {
-    redirect: "follow",
-    headers: { "Accept": "application/pdf, */*" },
-  });
-  if (!response.ok) throw new Error(`Failed to fetch PDF: ${response.status} ${response.statusText}`);
+  console.log("[Argus PDF] Starting extraction for:", url);
 
+  // Step 1: Fetch the PDF bytes
+  let response;
+  try {
+    response = await fetch(url, {
+      redirect: "follow",
+      headers: { "Accept": "application/pdf, */*" },
+      credentials: "omit",
+    });
+  } catch (fetchErr) {
+    throw new Error(`PDF fetch network error: ${fetchErr.message}`);
+  }
+  if (!response.ok) throw new Error(`PDF fetch HTTP error: ${response.status} ${response.statusText}`);
+
+  console.log("[Argus PDF] Fetch OK, status:", response.status, "type:", response.headers.get("content-type"));
+
+  const contentType = response.headers.get("content-type") || "";
   const arrayBuffer = await response.arrayBuffer();
   if (!arrayBuffer || arrayBuffer.byteLength < 100) throw new Error("PDF response was empty or too small");
 
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  console.log("[Argus PDF] Got", arrayBuffer.byteLength, "bytes");
 
+  // Sanity check: make sure we got a PDF, not an HTML error page
+  const firstBytes = new Uint8Array(arrayBuffer.slice(0, 5));
+  const header = String.fromCharCode(...firstBytes);
+  if (!header.startsWith("%PDF") && contentType.includes("text/html")) {
+    throw new Error("Server returned HTML instead of PDF (possible redirect or captcha)");
+  }
+
+  console.log("[Argus PDF] Header:", header, "— parsing with pdf.js...");
+
+  // Step 2: Parse with pdf.js
+  let pdf;
+  try {
+    pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+  } catch (parseErr) {
+    throw new Error(`pdf.js parse failed: ${parseErr.message}`);
+  }
+
+  console.log("[Argus PDF] Parsed OK, pages:", pdf.numPages);
+
+  // Step 3: Extract text from pages
   const pages = [];
   for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const strings = content.items.map(item => item.str);
-    pages.push(strings.join(" "));
+    try {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const strings = content.items.map(item => item.str);
+      pages.push(strings.join(" "));
+    } catch (pageErr) {
+      console.warn(`[Argus PDF] Page ${i} extraction failed:`, pageErr.message);
+      pages.push(`[Page ${i}: extraction failed]`);
+    }
   }
 
   const text = pages.join("\n\n");
   const metadata = await pdf.getMetadata().catch(() => null);
-  const title = metadata?.info?.Title || url.split("/").pop().replace(/\.pdf$/i, "") || "PDF Document";
+  const title = metadata?.info?.Title || decodeURIComponent(url.split("/").pop()).replace(/\.pdf$/i, "") || "PDF Document";
   const description = metadata?.info?.Subject || metadata?.info?.Keywords || "";
+
+  console.log("[Argus PDF] Extraction complete,", text.length, "chars from", pdf.numPages, "pages");
 
   return { title, url, description, text, selection: "", isPdf: true, pdfPages: pdf.numPages };
 }
@@ -363,6 +429,8 @@ async function extractPageContent(tabId) {
     tab = tabs[0];
   }
 
+  console.log("[Argus] extractPageContent — tab URL:", tab.url, "title:", tab.title);
+
   if (tab.url && (tab.url.startsWith("about:") ||
                   tab.url.startsWith("moz-extension:") ||
                   tab.url.startsWith("chrome:"))) {
@@ -373,19 +441,25 @@ async function extractPageContent(tabId) {
   const looksLikePdf = isPdfUrl(tab.url)
     || (tab.url && tab.title && tab.title.toLowerCase().endsWith(".pdf"))
     || (tab.url && /\.pdf(\?|#|$)/i.test(tab.url));
-  if (looksLikePdf && !tab.url.startsWith("file:")) {
-    try {
-      const pdfResult = await extractPdfContent(tab.url);
-      return { ...pdfResult, tabId: tab.id };
-    } catch (e) {
-      // Don't give up yet — fall through to try executeScript on the viewer,
-      // then the catch block there will retry PDF extraction too
-      console.warn("[Argus] Direct PDF fetch failed, trying viewer extraction:", e.message);
-    }
-  }
 
-  // For file:// PDFs, extract from Firefox's built-in PDF.js viewer
-  if (looksLikePdf && tab.url.startsWith("file:")) {
+  console.log("[Argus] looksLikePdf:", looksLikePdf, "pdfjsLib available:", typeof pdfjsLib !== "undefined");
+
+  if (looksLikePdf) {
+    // Step 1: Try direct fetch with pdf.js (works for most remote PDFs)
+    if (!tab.url.startsWith("file:") && typeof pdfjsLib !== "undefined") {
+      try {
+        const pdfResult = await extractPdfContent(tab.url);
+        return { ...pdfResult, tabId: tab.id };
+      } catch (e) {
+        console.warn("[Argus] Direct PDF fetch failed:", e.message, "URL:", tab.url);
+      }
+    } else {
+      console.warn("[Argus] PDF fetch skipped — file URL:", tab.url.startsWith("file:"), "pdfjsLib:", typeof pdfjsLib);
+    }
+
+    // Step 2: Try extracting from Firefox's built-in PDF.js viewer
+    // Firefox renders PDFs (both file:// and https://) using its internal PDF.js viewer
+    // which puts text in .textLayer span elements
     try {
       const pdfViewerResults = await browser.tabs.executeScript(tab.id, {
         code: `
@@ -410,7 +484,7 @@ async function extractPageContent(tabId) {
                 pages: pageTexts.length
               };
             }
-            // Fallback: grab all visible text
+            // Fallback: grab all visible text from the viewer
             return {
               title: document.title || "PDF Document",
               url: window.location.href,
@@ -430,7 +504,11 @@ async function extractPageContent(tabId) {
         };
       }
     } catch (e) {
-      throw new Error(`Cannot access file:// PDF. In about:addons → Argus → Permissions, enable "Access your data for all websites", or open the PDF from a web URL instead. (${e.message})`);
+      if (tab.url.startsWith("file:")) {
+        throw new Error(`Cannot access file:// PDF. In about:addons → Argus → Permissions, enable "Access your data for all websites", or open the PDF from a web URL instead. (${e.message})`);
+      }
+      console.warn("[Argus] PDF viewer extraction failed:", e.message);
+      // Fall through to generic extraction as last resort
     }
   }
 
@@ -479,11 +557,14 @@ async function extractPageContent(tabId) {
         return { ...pdfResult, tabId: tab.id };
       } catch (pdfErr) {
         // If both executeScript AND PDF fetch failed, give a helpful error
-        if (isPdfUrl(tab.url)) {
-          throw new Error(`Cannot extract PDF content. The server may be blocking direct access. Try downloading the PDF and opening it locally. (${pdfErr.message})`);
+        if (looksLikePdf) {
+          throw new Error(`Cannot extract this PDF. Try: (1) scroll down in the PDF so text layers load, then retry, or (2) download the PDF and open the local file. (fetch: ${pdfErr.message}; script: ${scriptError.message})`);
         }
         /* fall through to original error */
       }
+    }
+    if (looksLikePdf) {
+      throw new Error(`Cannot extract this PDF. Try: (1) scroll down in the PDF so text layers load, then retry, or (2) download the PDF and open the local file. (${scriptError.message})`);
     }
     throw new Error(`Missing host permission for the tab. Try clicking the Argus icon directly on this page, or refresh the page first. (${scriptError.message})`);
   }
@@ -509,10 +590,15 @@ async function extractPageContent(tabId) {
 // Selection extraction
 // ──────────────────────────────────────────────
 async function extractSelection(tabId) {
-  const results = await browser.tabs.executeScript(tabId || undefined, {
-    code: `window.getSelection().toString();`
-  });
-  return results && results[0] ? results[0] : "";
+  try {
+    const results = await browser.tabs.executeScript(tabId || undefined, {
+      code: `window.getSelection().toString();`
+    });
+    return results && results[0] ? results[0] : "";
+  } catch {
+    // executeScript fails on PDF viewer and other restricted pages — no selection available
+    return "";
+  }
 }
 
 // ──────────────────────────────────────────────
@@ -864,6 +950,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "clearMonitorUnread") return clearMonitorUnread(message.monitorId).then(() => ({ success: true }));
   if (message.action === "getMonitorUnreads") return browser.storage.local.get({ monitorUnreads: {} }).then(r => ({ success: true, unreads: r.monitorUnreads }));
   if (message.action === "getMonitorSnapshots") return handleGetMonitorSnapshots(message);
+  if (message.action === "getMonitorDiff") return handleGetMonitorDiff(message);
   if (message.action === "getMonitorStorageUsage") return handleGetMonitorStorageUsage();
   if (message.action === "getArchiveSettings") return browser.storage.local.get({ archiveRedirect: { enabled: false, domains: DEFAULT_ARCHIVE_DOMAINS, providerUrl: "https://archive.is/" } }).then(r => ({ success: true, ...r.archiveRedirect }));
   if (message.action === "saveArchiveSettings") return browser.storage.local.set({ archiveRedirect: { enabled: message.enabled, domains: message.domains, providerUrl: message.providerUrl || "https://archive.is/" } }).then(() => ({ success: true }));
@@ -2607,6 +2694,8 @@ async function handleGetMonitorSnapshots(message) {
   return { success: true, snapshots };
 }
 
+
+
 async function handleGetMonitorStorageUsage() {
   const pageMonitors = await ArgusDB.Monitors.getAll();
   let totalBytes = JSON.stringify(pageMonitors).length;
@@ -3766,7 +3855,7 @@ async function handleBatchAnalyzeProjectItem(message) {
       h.pageUrl === item.url && h.presetKey === presetKey
     );
     if (existingAnalysis && existingAnalysis.content) {
-      item.summary = existingAnalysis.content.slice(0, 500);
+      item.summary = humanSummaryFromContent(existingAnalysis.content);
       item.analysisContent = existingAnalysis.content;
       item.analysisPreset = presetKey;
       proj.updatedAt = new Date().toISOString();
@@ -3790,8 +3879,9 @@ async function handleBatchAnalyzeProjectItem(message) {
     });
 
     // Update project item with analysis
-    item.summary = result.content.replace(/\n?SHARELINE:\s*.+$/m, "").slice(0, 500);
-    item.analysisContent = result.content.replace(/\n?SHARELINE:\s*.+$/m, "");
+    const cleanContent = result.content.replace(/\n?SHARELINE:\s*.+$/m, "");
+    item.summary = humanSummaryFromContent(cleanContent);
+    item.analysisContent = cleanContent;
     item.analysisPreset = presetKey;
     proj.updatedAt = new Date().toISOString();
     await ArgusDB.Projects.save(proj);
@@ -3841,6 +3931,8 @@ async function handleBatchAnalyzeProject(message) {
 }
 
 async function runBatchLoop(itemIds, projectId, presetKey) {
+  const ITEM_TIMEOUT = 60000; // 60s max per item
+
   for (const itemId of itemIds) {
     if (batchState.cancelled) break;
 
@@ -3852,7 +3944,10 @@ async function runBatchLoop(itemIds, projectId, presetKey) {
     batchState.current = item.title || item.url;
 
     try {
-      const resp = await handleBatchAnalyzeProjectItem({ projectId, itemId, presetKey });
+      const resp = await Promise.race([
+        handleBatchAnalyzeProjectItem({ projectId, itemId, presetKey }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timed out after 60s")), ITEM_TIMEOUT))
+      ]);
       if (!resp.success) {
         batchState.errors.push(`${item.title || item.url}: ${resp.error}`);
       }
@@ -3861,6 +3956,11 @@ async function runBatchLoop(itemIds, projectId, presetKey) {
     }
 
     batchState.done++;
+
+    // Brief pause between items to avoid rate limits
+    if (!batchState.cancelled) {
+      await new Promise(r => setTimeout(r, 1000));
+    }
   }
 
   batchState.running = false;

@@ -136,14 +136,20 @@ async function populatePresets() {
 }
 
 async function checkSelection() {
+  // Always get the current tab ID, even if selection extraction fails (e.g., on PDF pages)
+  try {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    if (tabs && tabs[0]) currentTabId = tabs[0].id;
+  } catch { /* fallback below */ }
+
   const resp = await browser.runtime.sendMessage({ action: "getSelection" });
   if (resp && resp.success && resp.selection && resp.selection.trim().length > 5) {
     selectedText = resp.selection;
-    currentTabId = resp.tabId;
+    currentTabId = resp.tabId || currentTabId;
     elements.selectionTextPreview.textContent = `Selected: "${selectedText.substring(0, 80)}${selectedText.length > 80 ? "..." : ""}"`;
     setMode("selection");
-  } else {
-    currentTabId = resp?.tabId || null;
+  } else if (resp?.tabId) {
+    currentTabId = resp.tabId;
   }
 }
 

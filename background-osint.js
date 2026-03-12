@@ -783,9 +783,7 @@ async function handleGetMonitorDiff(message) {
     const { monitorId, snapshotIndex1, snapshotIndex2 } = message;
     if (!monitorId) return { success: false, error: "monitorId is required" };
 
-    const key = `monitor-snapshots-${monitorId}`;
-    const stored = await browser.storage.local.get({ [key]: [] });
-    const snapshots = stored[key];
+    const snapshots = await ArgusDB.Snapshots.getByMonitor(monitorId);
 
     const idx1 = snapshotIndex1 ?? 0;
     const idx2 = snapshotIndex2 ?? 1;
