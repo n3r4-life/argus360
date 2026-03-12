@@ -121,38 +121,101 @@
            <span class="meta-label">HTTP</span>
          </div>` : "";
 
-    const opaqueNote = result?.isOpaque
-      ? `<div class="meta-item"><span class="meta-label" title="CORS blocked details — status inferred from reachability">opaque</span></div>` : "";
+    card.textContent = "";
 
-    const errorHtml = result?.error
-      ? `<p class="error-text">${escapeHtml(result.error)}</p>` : "";
+    // Status dot
+    const dot = document.createElement("div");
+    dot.className = `status-dot ${status}`;
+    card.appendChild(dot);
 
-    const savedBadge = isSaved ? `<span class="saved-badge">saved</span>` : "";
+    // Site info
+    const infoDiv = document.createElement("div");
+    infoDiv.className = "site-info";
+    const domainDiv = document.createElement("div");
+    domainDiv.className = "site-domain";
+    domainDiv.textContent = domain;
+    if (isSaved) {
+      const badge = document.createElement("span");
+      badge.className = "saved-badge";
+      badge.textContent = "saved";
+      domainDiv.appendChild(badge);
+    }
+    infoDiv.appendChild(domainDiv);
+    const urlDiv = document.createElement("div");
+    urlDiv.className = "site-url";
+    urlDiv.textContent = url;
+    infoDiv.appendChild(urlDiv);
+    if (result?.error) {
+      const errP = document.createElement("p");
+      errP.className = "error-text";
+      errP.textContent = result.error;
+      infoDiv.appendChild(errP);
+    }
+    card.appendChild(infoDiv);
 
-    const removeBtn = isSaved
-      ? `<button class="btn btn-danger" data-action="remove" data-url="${escapeAttr(key)}" title="Remove from watchlist">Remove</button>`
-      : `<button class="btn btn-danger" data-action="save" data-url="${escapeAttr(key)}" title="Add to watchlist">+ Save</button>`;
+    // Meta
+    const metaDiv = document.createElement("div");
+    metaDiv.className = "site-meta";
+    if (result?.responseTime != null) {
+      const rtDiv = document.createElement("div");
+      rtDiv.className = "meta-item";
+      const rtVal = document.createElement("span");
+      rtVal.className = `meta-value ${result.responseTime < 1000 ? "fast" : result.responseTime < 3000 ? "medium" : "slow"}`;
+      rtVal.textContent = result.responseTime + "ms";
+      const rtLabel = document.createElement("span");
+      rtLabel.className = "meta-label";
+      rtLabel.textContent = "Response";
+      rtDiv.appendChild(rtVal);
+      rtDiv.appendChild(rtLabel);
+      metaDiv.appendChild(rtDiv);
+    }
+    if (result?.httpStatus) {
+      const httpDiv = document.createElement("div");
+      httpDiv.className = "meta-item";
+      const httpVal = document.createElement("span");
+      httpVal.className = "meta-value";
+      httpVal.textContent = result.httpStatus;
+      const httpLabel = document.createElement("span");
+      httpLabel.className = "meta-label";
+      httpLabel.textContent = "HTTP";
+      httpDiv.appendChild(httpVal);
+      httpDiv.appendChild(httpLabel);
+      metaDiv.appendChild(httpDiv);
+    }
+    if (result?.isOpaque) {
+      const oDiv = document.createElement("div");
+      oDiv.className = "meta-item";
+      const oLabel = document.createElement("span");
+      oLabel.className = "meta-label";
+      oLabel.title = "CORS blocked details — status inferred from reachability";
+      oLabel.textContent = "opaque";
+      oDiv.appendChild(oLabel);
+      metaDiv.appendChild(oDiv);
+    }
+    const statusSpan = document.createElement("span");
+    statusSpan.className = `status-label ${status}`;
+    statusSpan.textContent = statusText(status);
+    metaDiv.appendChild(statusSpan);
+    card.appendChild(metaDiv);
 
-    const recheckBtn = `<button class="btn btn-danger" data-action="recheck" data-url="${escapeAttr(key)}" title="Re-check this site">Recheck</button>`;
-
-    card.innerHTML = `
-      <div class="status-dot ${status}"></div>
-      <div class="site-info">
-        <div class="site-domain">${escapeHtml(domain)}${savedBadge}</div>
-        <div class="site-url">${escapeHtml(url)}</div>
-        ${errorHtml}
-      </div>
-      <div class="site-meta">
-        ${responseTimeHtml}
-        ${httpStatusHtml}
-        ${opaqueNote}
-        <span class="status-label ${status}">${statusText(status)}</span>
-      </div>
-      <div class="site-actions">
-        ${recheckBtn}
-        ${removeBtn}
-      </div>
-    `;
+    // Actions
+    const actionsDiv = document.createElement("div");
+    actionsDiv.className = "site-actions";
+    const recheckBtn = document.createElement("button");
+    recheckBtn.className = "btn btn-danger";
+    recheckBtn.dataset.action = "recheck";
+    recheckBtn.dataset.url = key;
+    recheckBtn.title = "Re-check this site";
+    recheckBtn.textContent = "Recheck";
+    actionsDiv.appendChild(recheckBtn);
+    const toggleBtn = document.createElement("button");
+    toggleBtn.className = "btn btn-danger";
+    toggleBtn.dataset.action = isSaved ? "remove" : "save";
+    toggleBtn.dataset.url = key;
+    toggleBtn.title = isSaved ? "Remove from watchlist" : "Add to watchlist";
+    toggleBtn.textContent = isSaved ? "Remove" : "+ Save";
+    actionsDiv.appendChild(toggleBtn);
+    card.appendChild(actionsDiv);
   }
 
   function statusText(s) {
@@ -241,17 +304,6 @@
     else if (action === "save") saveUrl(url);
     else if (action === "recheck") runChecks([url]);
   });
-
-  // ── Helpers ──
-  function escapeHtml(s) {
-    const d = document.createElement("div");
-    d.textContent = s;
-    return d.innerHTML;
-  }
-
-  function escapeAttr(s) {
-    return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
-  }
 
   init();
 })();

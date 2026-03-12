@@ -1,0 +1,260 @@
+{
+  "version": 1,
+  "updated": "2026-03-12",
+  "categories": [
+    {
+      "id": "network",
+      "title": "Network & Privacy Diagnostics",
+      "icon": "shield",
+      "description": "Check your network exposure and privacy posture before research sessions.",
+      "links": [
+        { "name": "DNS Leak Test", "url": "https://www.dnsleaktest.com/", "desc": "Check if your DNS queries leak outside your VPN" },
+        { "name": "IPLeak.net", "url": "https://ipleak.net/", "desc": "Full leak check — IP, DNS, WebRTC, geolocation" },
+        { "name": "SSL/TLS Fingerprint", "url": "https://www.ssllabs.com/ssltest/viewMyClient.html", "desc": "See your browser's TLS client fingerprint" },
+        { "name": "IPv6 Test", "url": "https://test-ipv6.com/", "desc": "Check IPv6 connectivity and readiness" },
+        { "name": "rDNS Lookup", "url": "http://www.nsupdate.info/", "desc": "Reverse DNS lookup for your current IP" },
+        { "name": "BrowserLeaks", "url": "https://browserleaks.com/", "desc": "Comprehensive browser fingerprint analysis" },
+        { "name": "Whoer.net", "url": "https://whoer.net/", "desc": "Anonymity check — IP, DNS, browser fingerprint" }
+      ]
+    },
+    {
+      "id": "archive",
+      "title": "Archiving & Paywall Bypass",
+      "icon": "archive",
+      "description": "Freeze pages for evidence or bypass soft paywalls for research access.",
+      "links": [
+        { "name": "Archive.is", "url": "https://archive.is/", "desc": "Freeze any webpage as a permanent snapshot" },
+        { "name": "Wayback Machine", "url": "https://web.archive.org/", "desc": "Internet Archive — historical snapshots of any site" },
+        { "name": "12ft Ladder", "url": "https://12ft.io/", "desc": "Bypass soft paywalls for research" },
+        { "name": "1ft.io", "url": "https://1ft.io/", "desc": "Alternative paywall bypass service" },
+        { "name": "Google Cache", "url": "https://webcache.googleusercontent.com/search?q=cache:", "desc": "Google's cached version of pages" },
+        { "name": "CachedView", "url": "https://cachedview.nl/", "desc": "Find cached versions across multiple services" }
+      ]
+    },
+    {
+      "id": "search",
+      "title": "Privacy-First Search",
+      "icon": "search",
+      "description": "Alternative search engines that don't track your queries. Use for sensitive research.",
+      "note": "For .onion mirrors, use Tor Browser.",
+      "links": [
+        { "name": "DuckDuckGo", "url": "https://duckduckgo.com/", "desc": "Privacy-focused search with !bang shortcuts" },
+        { "name": "Startpage", "url": "https://startpage.com/", "desc": "Google results without Google tracking" },
+        { "name": "Swisscows", "url": "https://swisscows.com/", "desc": "Swiss-hosted semantic search" },
+        { "name": "Mojeek", "url": "https://www.mojeek.com/", "desc": "Independent crawler, no tracking" },
+        { "name": "SearX", "url": "https://searx.org/", "desc": "Open-source meta-search engine" },
+        { "name": "MetaGer", "url": "https://metager.org/", "desc": "German non-profit meta-search" },
+        { "name": "Brave Search", "url": "https://search.brave.com/", "desc": "Independent index, privacy-focused" }
+      ]
+    },
+    {
+      "id": "geospatial",
+      "title": "Geospatial & Tracking",
+      "icon": "globe",
+      "description": "Real-time tracking and geospatial intelligence for ships, aircraft, railways, and satellites.",
+      "links": [
+        { "name": "Marine Traffic", "url": "https://www.marinetraffic.com/", "desc": "Live ship tracking worldwide (AIS)" },
+        { "name": "Flightradar24", "url": "https://www.flightradar24.com/", "desc": "Real-time flight tracking" },
+        { "name": "ADS-B Exchange", "url": "https://globe.adsbexchange.com/", "desc": "Unfiltered aircraft tracking — no military censorship" },
+        { "name": "OpenRailwayMap", "url": "https://www.openrailwaymap.org/", "desc": "Worldwide railway infrastructure map" },
+        { "name": "Satellites.pro", "url": "https://satellites.pro/", "desc": "High-res satellite imagery viewer" },
+        { "name": "Sentinel Hub", "url": "https://apps.sentinel-hub.com/eo-browser/", "desc": "ESA Earth observation satellite browser" },
+        { "name": "NASA Worldview", "url": "https://worldview.earthdata.nasa.gov/", "desc": "NASA near-real-time satellite imagery" }
+      ]
+    },
+    {
+      "id": "polls",
+      "title": "Polls & Surveys",
+      "icon": "chart",
+      "description": "Public opinion research, polling data, and survey results from major organizations.",
+      "links": [
+        { "name": "Gallup", "url": "https://www.gallup.com/", "desc": "Global polling and analytics" },
+        { "name": "Pew Research", "url": "https://www.pewresearch.org/", "desc": "Nonpartisan fact tank — public opinion, demographics" },
+        { "name": "RealClearPolling", "url": "https://www.realclearpolling.com/", "desc": "Poll aggregation and averages" },
+        { "name": "538 Polls", "url": "https://projects.fivethirtyeight.com/polls/", "desc": "Statistical polling analysis" },
+        { "name": "Ipsos", "url": "https://www.ipsos.com/", "desc": "Global market research and polling" },
+        { "name": "Morning Consult", "url": "https://morningconsult.com/", "desc": "Daily tracking polls and data intelligence" },
+        { "name": "Rasmussen", "url": "https://www.rasmussenreports.com/", "desc": "Daily presidential tracking and public opinion" },
+        { "name": "YouGov", "url": "https://today.yougov.com/", "desc": "International opinion polling and data" },
+        { "name": "Quinnipiac", "url": "https://www.quinnipiac.edu/news-and-events/quinnipiac-university-poll/", "desc": "University polling institute" },
+        { "name": "Monmouth", "url": "https://www.monmouth.edu/polling-institute/", "desc": "University polling and public opinion" }
+      ]
+    },
+    {
+      "id": "federal",
+      "title": "US Federal Data",
+      "icon": "government",
+      "description": "Official US government data sources — census, labor, economic, crime, financial, and legislative.",
+      "links": [
+        { "name": "Data.gov", "url": "https://www.data.gov/", "desc": "Federal open data portal — 250K+ datasets" },
+        { "name": "Census Bureau", "url": "https://www.census.gov/", "desc": "Population, demographics, economic data" },
+        { "name": "Bureau of Labor Statistics", "url": "https://www.bls.gov/", "desc": "Employment, wages, CPI, productivity" },
+        { "name": "Bureau of Economic Analysis", "url": "https://www.bea.gov/", "desc": "GDP, trade, industry, regional economics" },
+        { "name": "CDC Data", "url": "https://www.cdc.gov/datastatistics/", "desc": "Health statistics, disease tracking, mortality" },
+        { "name": "FBI UCR (Crime)", "url": "https://www.fbi.gov/how-we-can-help-you/more-fbi-services-and-information/ucr", "desc": "Uniform Crime Reporting — national crime stats" },
+        { "name": "Federal Reserve", "url": "https://www.federalreserve.gov/data.htm", "desc": "Monetary policy, banking, financial data" },
+        { "name": "FRED", "url": "https://fred.stlouisfed.org/", "desc": "800K+ economic data series — the gold standard" },
+        { "name": "SEC EDGAR", "url": "https://www.sec.gov/edgar/searchedgar/companysearch", "desc": "Public company filings, 10-K, insider trades" },
+        { "name": "USAspending.gov", "url": "https://www.usaspending.gov/", "desc": "Federal spending transparency" },
+        { "name": "FEC", "url": "https://www.fec.gov/", "desc": "Campaign finance, PAC data, donor records" },
+        { "name": "OpenSecrets", "url": "https://www.opensecrets.org/", "desc": "Money in politics — lobbying, donors, dark money" },
+        { "name": "Congress.gov", "url": "https://www.congress.gov/", "desc": "Bills, votes, members, committee records" },
+        { "name": "GAO Reports", "url": "https://www.gao.gov/", "desc": "Government accountability audits and investigations" },
+        { "name": "EIA", "url": "https://www.eia.gov/", "desc": "Energy data — oil, gas, electricity, renewables" },
+        { "name": "EPA Data", "url": "https://www.epa.gov/data", "desc": "Environmental data, pollution, enforcement" },
+        { "name": "NCES", "url": "https://nces.ed.gov/", "desc": "Education statistics — schools, enrollment, outcomes" },
+        { "name": "Google Public Data", "url": "https://www.google.com/publicdata/directory", "desc": "Curated public datasets with visualization" }
+      ]
+    },
+    {
+      "id": "states",
+      "title": "US State & DC Data Portals",
+      "icon": "map",
+      "description": "Official state open data, GIS, and transparency portals. Types vary — Socrata catalogs, GIS hubs, or financial transparency sites.",
+      "note": "Tip: Also search for SOS business entity lookups, court case searches, property assessor records, and professional license databases per state.",
+      "masterList": "https://s3-us-gov-west-1.amazonaws.com/cg-0817d6e3-93c4-4de8-8b32-da6919464e61/open_data_us.csv",
+      "links": [
+        { "name": "Alabama", "url": "https://open.alabama.gov/" },
+        { "name": "Alaska", "url": "https://gis.data.alaska.gov/", "desc": "GIS-focused" },
+        { "name": "Arizona", "url": "https://openbooks.az.gov/" },
+        { "name": "Arkansas", "url": "https://transparency.arkansas.gov/" },
+        { "name": "California", "url": "https://data.ca.gov/" },
+        { "name": "Colorado", "url": "https://data.colorado.gov/" },
+        { "name": "Connecticut", "url": "https://data.ct.gov/" },
+        { "name": "Delaware", "url": "https://data.delaware.gov/" },
+        { "name": "DC", "url": "https://opendata.dc.gov/" },
+        { "name": "Florida", "url": "https://www.floridahasarighttoknow.com/" },
+        { "name": "Georgia", "url": "https://open.ga.gov/" },
+        { "name": "Hawaii", "url": "https://data.hawaii.gov/" },
+        { "name": "Idaho", "url": "https://gis.idaho.gov/", "desc": "GIS-focused" },
+        { "name": "Illinois", "url": "https://data.illinois.gov/" },
+        { "name": "Indiana", "url": "https://www.stats.indiana.edu/" },
+        { "name": "Iowa", "url": "https://data.iowa.gov/" },
+        { "name": "Kansas", "url": "https://ag.ks.gov/open-government" },
+        { "name": "Kentucky", "url": "https://transparency.ky.gov/" },
+        { "name": "Louisiana", "url": "https://wwwcfprd.doa.louisiana.gov/latrac/portal.cfm" },
+        { "name": "Maine", "url": "https://www.maine.gov/geolib/catalog.html", "desc": "GIS catalog" },
+        { "name": "Maryland", "url": "https://opendata.maryland.gov/" },
+        { "name": "Massachusetts", "url": "https://www.mass.gov/get-massgis-geospatial-data", "desc": "GIS-focused" },
+        { "name": "Michigan", "url": "https://www.michigan.gov/data/" },
+        { "name": "Minnesota", "url": "https://mn.gov/portal/" },
+        { "name": "Mississippi", "url": "https://opendata.gis.ms.gov/", "desc": "GIS-focused" },
+        { "name": "Missouri", "url": "https://data.mo.gov/" },
+        { "name": "Montana", "url": "https://data.mt.gov/" },
+        { "name": "Nebraska", "url": "https://www.nebraska.gov/government/open-data/" },
+        { "name": "Nevada", "url": "https://open.nv.gov/" },
+        { "name": "New Hampshire", "url": "https://www.doit.nh.gov/" },
+        { "name": "New Jersey", "url": "https://data.nj.gov/" },
+        { "name": "New Mexico", "url": "https://ssp.nm.gov/" },
+        { "name": "New York", "url": "https://data.ny.gov/" },
+        { "name": "North Carolina", "url": "https://www.nc.gov/government/open-budget" },
+        { "name": "North Dakota", "url": "https://www.gis.nd.gov/", "desc": "GIS Hub" },
+        { "name": "Ohio", "url": "https://ohio.gov/government/topic-hubs/transparency" },
+        { "name": "Oklahoma", "url": "https://data.ok.gov/" },
+        { "name": "Oregon", "url": "https://data.oregon.gov/" },
+        { "name": "Pennsylvania", "url": "https://data.pa.gov/" },
+        { "name": "Rhode Island", "url": "https://www.ri.gov/data/" },
+        { "name": "South Carolina", "url": "https://sc.gov/data-and-transparency" },
+        { "name": "South Dakota", "url": "https://open.sd.gov/" },
+        { "name": "Tennessee", "url": "https://tn-tnmap.opendata.arcgis.com/", "desc": "ArcGIS/TNMap" },
+        { "name": "Texas", "url": "https://data.texas.gov/" },
+        { "name": "Utah", "url": "https://opendata.utah.gov/" },
+        { "name": "Vermont", "url": "https://data.vermont.gov/" },
+        { "name": "Virginia", "url": "https://data.virginia.gov/" },
+        { "name": "Washington", "url": "https://data.wa.gov/" },
+        { "name": "West Virginia", "url": "https://www.mapwv.gov/", "desc": "GIS clearinghouse" },
+        { "name": "Wisconsin", "url": "https://dnr.wisconsin.gov/", "desc": "DNR — no centralized portal" },
+        { "name": "Wyoming", "url": "https://www.wyopen.gov/" }
+      ]
+    },
+    {
+      "id": "international",
+      "title": "International & UN",
+      "icon": "world",
+      "description": "Global data from international organizations and national open data portals worldwide.",
+      "links": [
+        { "name": "UN Statistics", "url": "https://unstats.un.org/UNSDWebsite/", "desc": "United Nations statistical databases" },
+        { "name": "World Bank Data", "url": "https://data.worldbank.org/", "desc": "Development indicators for every country" },
+        { "name": "IMF Data", "url": "https://data.imf.org/", "desc": "International monetary and financial statistics" },
+        { "name": "OECD Data", "url": "https://data.oecd.org/", "desc": "Economic data for developed nations" },
+        { "name": "WHO Data", "url": "https://data.who.int/", "desc": "Global health statistics and disease data" },
+        { "name": "Eurostat", "url": "https://ec.europa.eu/eurostat", "desc": "European Union statistics" },
+        { "name": "EU Open Data", "url": "https://data.europa.eu/", "desc": "EU open data portal" },
+        { "name": "UK Data", "url": "https://data.gov.uk/", "desc": "UK government open data" },
+        { "name": "Canada Open Data", "url": "https://open.canada.ca/data/", "desc": "Canadian federal datasets" },
+        { "name": "Australia Data", "url": "https://data.gov.au/", "desc": "Australian government open data" },
+        { "name": "India Open Data", "url": "https://data.gov.in/", "desc": "Indian government datasets" },
+        { "name": "Mexico Open Data", "url": "https://datos.gob.mx/", "desc": "Mexican government open data" },
+        { "name": "Brazil Open Data", "url": "https://dados.gov.br/", "desc": "Brazilian government datasets" },
+        { "name": "Japan Open Data", "url": "https://data.go.jp/", "desc": "Japanese government data catalog" },
+        { "name": "South Korea Data", "url": "https://data.go.kr/", "desc": "Korean public data portal" },
+        { "name": "Transparency Int'l", "url": "https://www.transparency.org/", "desc": "Corruption Perceptions Index, global rankings" },
+        { "name": "Freedom House", "url": "https://freedomhouse.org/", "desc": "Freedom ratings for every country" },
+        { "name": "RSF Press Freedom", "url": "https://rsf.org/", "desc": "Reporters Without Borders — press freedom index" },
+        { "name": "World Population Review", "url": "https://worldpopulationreview.com/", "desc": "Population statistics, rankings, demographics" }
+      ]
+    },
+    {
+      "id": "economic",
+      "title": "Economic & Financial",
+      "icon": "trending",
+      "description": "Economic indicators, market data, and financial statistics from global sources.",
+      "links": [
+        { "name": "Knoema", "url": "https://knoema.com/", "desc": "World data atlas — 3B+ data points" },
+        { "name": "Statista", "url": "https://www.statista.com/", "desc": "Statistics and studies from 22,500+ sources" },
+        { "name": "Trading Economics", "url": "https://tradingeconomics.com/", "desc": "20M+ indicators for 196 countries" },
+        { "name": "Our World in Data", "url": "https://ourworldindata.org/", "desc": "Research and visualizations on global problems" },
+        { "name": "Gapminder", "url": "https://www.gapminder.org/data/", "desc": "Hans Rosling's global development data" },
+        { "name": "BIS Statistics", "url": "https://www.bis.org/statistics/", "desc": "Bank for International Settlements — banking stats" },
+        { "name": "Harvard Growth Lab", "url": "https://atlas.cid.harvard.edu/", "desc": "Atlas of Economic Complexity" }
+      ]
+    },
+    {
+      "id": "research",
+      "title": "Research & Academic",
+      "icon": "book",
+      "description": "Academic papers, think tanks, and research institutions across the political spectrum.",
+      "links": [
+        { "name": "Google Scholar", "url": "https://scholar.google.com/", "desc": "Academic paper search across all disciplines" },
+        { "name": "JSTOR", "url": "https://www.jstor.org/", "desc": "Digital library of academic journals and books" },
+        { "name": "arXiv", "url": "https://arxiv.org/", "desc": "Open-access preprints — physics, math, CS, bio" },
+        { "name": "PubMed", "url": "https://pubmed.ncbi.nlm.nih.gov/", "desc": "Biomedical literature — 36M+ citations" },
+        { "name": "Semantic Scholar", "url": "https://www.semanticscholar.org/", "desc": "AI-powered academic paper search" },
+        { "name": "RAND", "url": "https://www.rand.org/", "desc": "Policy research — defense, health, education" },
+        { "name": "Brookings", "url": "https://www.brookings.edu/", "desc": "Center-left policy research" },
+        { "name": "Heritage Foundation", "url": "https://www.heritage.org/", "desc": "Conservative policy research" },
+        { "name": "Cato Institute", "url": "https://www.cato.org/", "desc": "Libertarian policy research" },
+        { "name": "CFR", "url": "https://www.cfr.org/", "desc": "Council on Foreign Relations — international affairs" }
+      ]
+    },
+    {
+      "id": "crime",
+      "title": "Crime & Local Intel",
+      "icon": "alert",
+      "description": "Real-time incident and crime data for situational awareness.",
+      "links": [
+        { "name": "Citizen", "url": "https://citizen.com/", "desc": "Real-time safety alerts and incidents" },
+        { "name": "HeyJackass", "url": "https://heyjackass.com/", "desc": "Chicago crime stats and tracking" },
+        { "name": "CrimeIsDown", "url": "https://crimeisdown.com/", "desc": "Chicago scanner feeds and data tools" },
+        { "name": "SpotCrime", "url": "https://spotcrime.com/", "desc": "Crime mapping for US neighborhoods" },
+        { "name": "CrimeMapping.com", "url": "https://www.crimemapping.com/", "desc": "Law enforcement crime data visualization" }
+      ]
+    },
+    {
+      "id": "osint",
+      "title": "OSINT Quick-Hits",
+      "icon": "target",
+      "description": "Essential tools for open source intelligence gathering and reconnaissance.",
+      "links": [
+        { "name": "Shodan", "url": "https://www.shodan.io/", "desc": "Search engine for internet-connected devices" },
+        { "name": "Hunter.io", "url": "https://hunter.io/", "desc": "Find email addresses for any domain" },
+        { "name": "IntelTechniques", "url": "https://inteltechniques.com/tools/Search.html", "desc": "Michael Bazzell's OSINT search tools" },
+        { "name": "Google Dorks Guide", "url": "https://moz.com/learn/seo/search-operators", "desc": "Advanced Google search operators reference" },
+        { "name": "Wayback Machine", "url": "https://web.archive.org/", "desc": "Historical snapshots of any website" },
+        { "name": "BuiltWith", "url": "https://builtwith.com/", "desc": "Technology profiler for any website" },
+        { "name": "SecurityTrails", "url": "https://securitytrails.com/", "desc": "DNS and domain intelligence" },
+        { "name": "Have I Been Pwned", "url": "https://haveibeenpwned.com/", "desc": "Check if emails appear in data breaches" }
+      ]
+    }
+  ]
+}

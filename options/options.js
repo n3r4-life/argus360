@@ -61,6 +61,86 @@ const DEFAULT_PRESETS = {
     label: "Person/Org Profile",
     system: "You are an OSINT research analyst who builds comprehensive profiles from available information.",
     prompt: "Build a structured intelligence profile based on this page content. Include profile summary, key details, activity & history, network & associations, notable statements, and assessment. Use markdown formatting."
+  },
+  mediabias: {
+    label: "Media Bias Breakdown",
+    system: "You are a media literacy analyst specializing in comparative coverage analysis, editorial framing, and source bias detection.",
+    prompt: "Analyze this page's coverage of the underlying news story. Produce a breakdown: story overview, coverage spectrum (map outlets to bias positions), framing analysis, blind spots, source links, and deep research leads. Use markdown formatting."
+  },
+  competitorintel: {
+    label: "Competitor Intel",
+    system: "You are a competitive intelligence analyst with expertise in market positioning, strategic moves, and business signal detection.",
+    prompt: "Analyze this page for competitive intelligence signals: company/product overview, strategic signals, strengths & vulnerabilities, market implications, and actionable takeaways. Use markdown formatting."
+  },
+  financialanalysis: {
+    label: "Financial Analysis",
+    system: "You are a financial analyst skilled at extracting and interpreting financial data, market signals, and economic indicators from text.",
+    prompt: "Extract and analyze all financial information: financial summary, numbers & data table, market signals, comparison context, and red flags. Use markdown formatting."
+  },
+  supplychainrisk: {
+    label: "Supply Chain Risk",
+    system: "You are a supply chain risk analyst specializing in identifying vulnerabilities, dependencies, and disruption signals across global supply networks.",
+    prompt: "Analyze this page for supply chain intelligence: entities involved, risk signals, dependencies map, disruption indicators, and mitigation considerations. Use markdown formatting."
+  },
+  threatassessment: {
+    label: "Threat Assessment",
+    system: "You are a security analyst specializing in threat intelligence, risk assessment, and situational awareness.",
+    prompt: "Perform a threat assessment: situation overview, threat actors, risk factors, indicators & warnings, information gaps, and recommended actions. Use markdown formatting."
+  },
+  crisismonitor: {
+    label: "Crisis Monitor",
+    system: "You are a crisis monitoring analyst who tracks developing situations, extracts key updates, and provides situational awareness briefings.",
+    prompt: "Analyze this page as a developing crisis: situation status, what happened, impact assessment, response actions, key unknowns, next expected developments, and source reliability. Use markdown formatting."
+  },
+  deepfakeflags: {
+    label: "Deepfake / Manipulation Flags",
+    system: "You are a digital forensics and media manipulation expert.",
+    prompt: "Analyze this page for manipulation and authenticity red flags: content authenticity assessment, red flags detected, source verification, provenance trail, and confidence assessment. Use markdown formatting."
+  },
+  propaganda: {
+    label: "Propaganda Detection",
+    system: "You are an expert in propaganda analysis, influence operations, and persuasion techniques.",
+    prompt: "Analyze this page for propaganda and persuasion techniques: techniques identified with quotes, target audience, narrative framework, what's missing, and effectiveness assessment. Use markdown formatting."
+  },
+  influencermap: {
+    label: "Influencer / Network Map",
+    system: "You are a social network analyst specializing in mapping influence networks and relationship dynamics.",
+    prompt: "Map the influence network: key actors, relationship map, power structure, information flow, hidden connections, and network vulnerabilities. Use markdown formatting."
+  },
+  technicalbreakdown: {
+    label: "Technical Breakdown",
+    system: "You are a senior technical analyst who breaks down complex technical content for both technical and non-technical audiences.",
+    prompt: "Provide a technical breakdown: TL;DR, technical details, how it works, dependencies & requirements, strengths & limitations, practical implications, and related technologies. Use markdown formatting."
+  },
+  timeline: {
+    label: "Timeline Reconstruction",
+    system: "You are a chronological analyst who reconstructs timelines from scattered information.",
+    prompt: "Reconstruct a detailed timeline: events in chronological order with dates, pre-history, gaps, causal chain, and key turning points. Use markdown formatting."
+  },
+  dataextraction: {
+    label: "Data Extraction",
+    system: "You are a data extraction specialist who pulls structured data from unstructured text.",
+    prompt: "Extract all structured data: statistics & numbers table, dates & deadlines, named entities, lists & categories, quotes, and URLs & references. Use markdown formatting."
+  },
+  legalrisk: {
+    label: "Legal / Regulatory Risk",
+    system: "You are a legal risk analyst who identifies regulatory exposure and compliance concerns.",
+    prompt: "Analyze for legal and regulatory risk: jurisdiction, risk areas, compliance concerns, liability exposure, pending litigation, and recommended review areas. This is analysis, not legal advice. Use markdown formatting."
+  },
+  comparecontrast: {
+    label: "Compare & Contrast",
+    system: "You are an analytical comparison expert who identifies similarities, differences, and trade-offs.",
+    prompt: "Produce a structured comparison: items being compared, comparison matrix table, key similarities, key differences, trade-offs, winner by category, and missing comparisons. Use markdown formatting."
+  },
+  narrativeanalysis: {
+    label: "Narrative Analysis",
+    system: "You are a narrative analyst who deconstructs how stories are told — structure, framing, rhetoric, and authorial choices.",
+    prompt: "Deconstruct the narrative: narrative summary, structure & framing, rhetorical devices, voice & perspective, audience & intent, subtext, and effectiveness. Use markdown formatting."
+  },
+  tldr: {
+    label: "TLDR Briefing",
+    system: "You are an expert at distilling complex content into ultra-concise briefings. Every word counts.",
+    prompt: "Give the fastest possible briefing: TLDR (one sentence), Key Facts (3-5 bullets), So What? (one sentence), What's Next? (one sentence). Keep under 150 words."
   }
 };
 
@@ -461,7 +541,403 @@ document.addEventListener("DOMContentLoaded", async () => {
   initHelpBackToTop();
   initWatchlist();
   initStorageManagement();
+
+  // Live data refresh — listen for background data changes
+  let _refreshDebounce = {};
+  browser.runtime.onMessage.addListener((message) => {
+    if (message.type !== "argusDataChanged") return;
+    const store = message.store;
+    if (_refreshDebounce[store]) clearTimeout(_refreshDebounce[store]);
+    _refreshDebounce[store] = setTimeout(() => {
+      delete _refreshDebounce[store];
+      if (store === "projects" && typeof projLoadProjects === "function") projLoadProjects();
+      if (store === "feeds" && typeof renderFeeds === "function") renderFeeds();
+      if (store === "monitors" && typeof renderMonitors === "function") renderMonitors();
+      if (store === "history") { /* history page handles its own refresh */ }
+      updateTabBadges();
+    }, 500);
+  });
+
+  // Resources tab — IP fetch
+  initResourcesTab();
+  updateTabBadges();
 });
+
+// ── Tab Badges ──
+async function updateTabBadges() {
+  const badges = {
+    bookmarks: 0, projects: 0, monitors: 0, feeds: 0, osint: 0, automation: 0
+  };
+  try {
+    const [bkResp, prResp, moResp, fdResp, kgStats, auResp] = await Promise.all([
+      browser.runtime.sendMessage({ action: "getBookmarks" }),
+      browser.runtime.sendMessage({ action: "getProjects" }),
+      browser.runtime.sendMessage({ action: "getMonitors" }),
+      browser.runtime.sendMessage({ action: "getFeeds" }),
+      browser.runtime.sendMessage({ action: "getKGStats" }).catch(() => null),
+      browser.runtime.sendMessage({ action: "getAutomations" }).catch(() => null)
+    ]);
+    if (bkResp && bkResp.total != null) badges.bookmarks = bkResp.total;
+    if (prResp && Array.isArray(prResp.projects)) badges.projects = prResp.projects.length;
+    if (moResp && Array.isArray(moResp.monitors)) badges.monitors = moResp.monitors.length;
+    if (fdResp && Array.isArray(fdResp.feeds)) badges.feeds = fdResp.feeds.length;
+    if (kgStats && typeof kgStats.nodeCount === "number") badges.osint = kgStats.nodeCount;
+    if (auResp && Array.isArray(auResp.automations)) badges.automation = auResp.automations.length;
+  } catch (e) { console.warn("[Badges] Failed to fetch counts:", e); }
+
+  for (const [tab, count] of Object.entries(badges)) {
+    const el = document.getElementById(`badge-${tab}`);
+    if (!el) continue;
+    if (count > 0) {
+      el.textContent = count > 999 ? "999+" : count;
+      el.classList.add("visible");
+    } else {
+      el.textContent = "";
+      el.classList.remove("visible");
+    }
+  }
+}
+
+// ── Resources Tab (dynamic from JSON) ──
+function initResourcesTab() {
+  const ipEl = document.getElementById("res-ip-value");
+  const copyBtn = document.getElementById("res-ip-copy");
+  const refreshBtn = document.getElementById("res-ip-refresh");
+  const grid = document.getElementById("res-grid");
+  const versionInfo = document.getElementById("res-version-info");
+  const checkUpdatesBtn = document.getElementById("res-check-updates");
+  const resetBtn = document.getElementById("res-reset-stock");
+  if (!grid) return;
+
+  // ── IP fetch ──
+  let cachedIp = null;
+  let cacheTime = 0;
+  const CACHE_TTL = 5 * 60 * 1000;
+
+  async function fetchIp() {
+    if (!ipEl) return;
+    if (cachedIp && Date.now() - cacheTime < CACHE_TTL) { ipEl.textContent = cachedIp; return; }
+    ipEl.textContent = "checking...";
+    try {
+      const resp = await fetch("https://ifconfig.me/ip", { cache: "no-store" });
+      const ip = (await resp.text()).trim();
+      if (ip) { cachedIp = ip; cacheTime = Date.now(); ipEl.textContent = ip; }
+      else { ipEl.textContent = "unavailable"; }
+    } catch {
+      try {
+        const resp = await fetch("https://api.ipify.org?format=text", { cache: "no-store" });
+        const ip = (await resp.text()).trim();
+        cachedIp = ip; cacheTime = Date.now(); ipEl.textContent = ip;
+      } catch { ipEl.textContent = "unavailable"; }
+    }
+  }
+
+  if (copyBtn) copyBtn.addEventListener("click", () => {
+    if (cachedIp) {
+      navigator.clipboard.writeText(cachedIp);
+      copyBtn.textContent = "Copied!";
+      setTimeout(() => { copyBtn.textContent = "Copy"; }, 1500);
+    }
+  });
+  if (refreshBtn) refreshBtn.addEventListener("click", () => { cachedIp = null; cacheTime = 0; fetchIp(); });
+  fetchIp();
+
+  // ── Icon map for card headers ──
+  const ICONS = {
+    shield: "\uD83D\uDEE1\uFE0F", archive: "\uD83D\uDCE6", search: "\uD83D\uDD0D", globe: "\uD83C\uDF0D",
+    chart: "\uD83D\uDCCA", government: "\uD83C\uDFDB\uFE0F", map: "\uD83D\uDDFA\uFE0F", world: "\uD83C\uDF10",
+    trending: "\uD83D\uDCC8", book: "\uD83D\uDCDA", alert: "\uD83D\uDEA8", target: "\uD83C\uDFAF"
+  };
+
+  // ── Load resources (cached update > bundled) ──
+  async function loadResources() {
+    // Check for user-fetched update in storage
+    const { resourcesJsonCache } = await browser.storage.local.get({ resourcesJsonCache: null });
+    if (resourcesJsonCache && resourcesJsonCache.data) {
+      renderGrid(resourcesJsonCache.data);
+      if (versionInfo) versionInfo.textContent = `v${resourcesJsonCache.data.version || "?"} (updated ${resourcesJsonCache.data.updated || "?"})`;
+      if (resetBtn) resetBtn.style.display = "";
+      return;
+    }
+    // Fall back to bundled JSON
+    try {
+      const resp = await fetch(browser.runtime.getURL("data/resources.json"));
+      const data = await resp.json();
+      renderGrid(data);
+      if (versionInfo) versionInfo.textContent = `v${data.version || "?"} (bundled)`;
+    } catch (err) {
+      grid.textContent = "";
+      const errEl = document.createElement("p");
+      errEl.className = "info-text";
+      errEl.textContent = "Failed to load resources: " + err.message;
+      grid.appendChild(errEl);
+    }
+  }
+
+  // ── Render the dashboard grid ──
+  function renderGrid(data) {
+    grid.textContent = "";
+    if (!data.categories || !data.categories.length) {
+      const empty = document.createElement("p");
+      empty.className = "info-text";
+      empty.textContent = "No resource categories found.";
+      grid.appendChild(empty);
+      return;
+    }
+
+    for (const cat of data.categories) {
+      const card = document.createElement("div");
+      card.className = "res-card";
+
+      // Header
+      const header = document.createElement("div");
+      header.className = "res-card-header";
+      const icon = document.createElement("span");
+      icon.className = "res-card-icon";
+      icon.textContent = ICONS[cat.icon] || "\uD83D\uDCC1";
+      header.appendChild(icon);
+      const titleWrap = document.createElement("div");
+      const title = document.createElement("h3");
+      title.className = "res-card-title";
+      title.textContent = cat.title;
+      titleWrap.appendChild(title);
+      if (cat.description) {
+        const desc = document.createElement("p");
+        desc.className = "res-card-desc";
+        desc.textContent = cat.description;
+        titleWrap.appendChild(desc);
+      }
+      header.appendChild(titleWrap);
+      const count = document.createElement("span");
+      count.className = "res-card-count";
+      count.textContent = cat.links.length;
+      count.title = cat.links.length + " links";
+      header.appendChild(count);
+      card.appendChild(header);
+
+      // Note
+      if (cat.note) {
+        const note = document.createElement("p");
+        note.className = "res-card-note";
+        note.textContent = cat.note;
+        card.appendChild(note);
+      }
+
+      // Links list
+      const list = document.createElement("div");
+      list.className = "res-card-links";
+      for (const link of cat.links) {
+        const item = document.createElement("a");
+        item.href = link.url;
+        item.target = "_blank";
+        item.className = "res-link-item";
+        const name = document.createElement("span");
+        name.className = "res-link-name";
+        name.textContent = link.name;
+        item.appendChild(name);
+        if (link.desc) {
+          const desc = document.createElement("span");
+          desc.className = "res-link-desc";
+          desc.textContent = link.desc;
+          item.appendChild(desc);
+        }
+        list.appendChild(item);
+      }
+      card.appendChild(list);
+
+      // Master list link (e.g. state portals CSV)
+      if (cat.masterList) {
+        const ml = document.createElement("a");
+        ml.href = cat.masterList;
+        ml.target = "_blank";
+        ml.className = "res-card-master";
+        ml.textContent = "View master data list (CSV)";
+        card.appendChild(ml);
+      }
+
+      grid.appendChild(card);
+    }
+  }
+
+  // ── Check for updates (user-initiated fetch from remote JSON) ──
+  if (checkUpdatesBtn) checkUpdatesBtn.addEventListener("click", async () => {
+    checkUpdatesBtn.disabled = true;
+    checkUpdatesBtn.textContent = "Checking...";
+    try {
+      // Fetch from the Argus GitHub repo — user can configure this URL
+      const { resourcesUpdateUrl } = await browser.storage.local.get({
+        resourcesUpdateUrl: "https://raw.githubusercontent.com/user/argus-resources/main/resources.json"
+      });
+      const resp = await fetch(resourcesUpdateUrl, { cache: "no-store" });
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      const data = await resp.json();
+      if (!data.categories || !Array.isArray(data.categories)) throw new Error("Invalid format");
+      await browser.storage.local.set({ resourcesJsonCache: { data, fetchedAt: Date.now() } });
+      renderGrid(data);
+      if (versionInfo) versionInfo.textContent = `v${data.version || "?"} (updated ${data.updated || "?"})`;
+      if (resetBtn) resetBtn.style.display = "";
+      checkUpdatesBtn.textContent = "Updated!";
+      setTimeout(() => { checkUpdatesBtn.textContent = "Check for Updates"; checkUpdatesBtn.disabled = false; }, 2000);
+    } catch (err) {
+      checkUpdatesBtn.textContent = "Update failed";
+      console.warn("[Resources] Update check failed:", err);
+      setTimeout(() => { checkUpdatesBtn.textContent = "Check for Updates"; checkUpdatesBtn.disabled = false; }, 2000);
+    }
+  });
+
+  // ── Reset to bundled ──
+  if (resetBtn) resetBtn.addEventListener("click", async () => {
+    await browser.storage.local.remove("resourcesJsonCache");
+    if (resetBtn) resetBtn.style.display = "none";
+    loadResources();
+  });
+
+  loadResources();
+
+  // ── Custom Sources ──
+  const customContainer = document.getElementById("res-custom-sources");
+  const customTopContainer = document.getElementById("res-custom-top");
+  const customTopLinks = document.getElementById("res-custom-top-links");
+  const customUrlInput = document.getElementById("res-custom-url");
+  const customLabelInput = document.getElementById("res-custom-label");
+  const customDescInput = document.getElementById("res-custom-desc");
+  const customAddBtn = document.getElementById("res-custom-add");
+  if (!customContainer || !customAddBtn) return;
+
+  // Smooth scroll for "Add more" link
+  const addLink = document.getElementById("res-custom-add-link");
+  if (addLink) addLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    document.getElementById("res-custom-add-section")?.scrollIntoView({ behavior: "smooth" });
+  });
+
+  async function loadCustomSources() {
+    const { resourceCustomSources: sources } = await browser.storage.local.get({ resourceCustomSources: [] });
+    renderCustomSources(sources || []);
+  }
+
+  async function saveCustomSources(sources) {
+    await browser.storage.local.set({ resourceCustomSources: sources });
+    renderCustomSources(sources);
+  }
+
+  function renderCustomSources(sources) {
+    customContainer.textContent = "";
+
+    // Top display card — read-only, same style as JSON-driven resource links
+    if (customTopContainer && customTopLinks) {
+      customTopLinks.textContent = "";
+      if (sources.length) {
+        customTopContainer.style.display = "";
+        for (const src of sources) {
+          const item = document.createElement("a");
+          item.href = src.url;
+          item.target = "_blank";
+          item.className = "res-link-item";
+          const name = document.createElement("span");
+          name.className = "res-link-name";
+          name.textContent = src.label || src.url;
+          item.appendChild(name);
+          if (src.desc) {
+            const desc = document.createElement("span");
+            desc.className = "res-link-desc";
+            desc.textContent = src.desc;
+            item.appendChild(desc);
+          }
+          customTopLinks.appendChild(item);
+        }
+      } else {
+        customTopContainer.style.display = "none";
+      }
+    }
+
+    // Bottom management card — editable rows
+    if (!sources.length) {
+      const empty = document.createElement("span");
+      empty.className = "info-text";
+      empty.style.fontSize = "12px";
+      empty.textContent = "No custom sources added yet.";
+      customContainer.appendChild(empty);
+      return;
+    }
+    for (let i = 0; i < sources.length; i++) {
+      const src = sources[i];
+      const row = document.createElement("div");
+      row.className = "res-edit-row";
+
+      const labelInput = document.createElement("input");
+      labelInput.type = "text";
+      labelInput.className = "res-edit-field res-edit-label";
+      labelInput.value = src.label || "";
+      labelInput.placeholder = "Label";
+
+      const urlInput = document.createElement("input");
+      urlInput.type = "text";
+      urlInput.className = "res-edit-field res-edit-url";
+      urlInput.value = src.url || "";
+      urlInput.placeholder = "URL";
+
+      const descInput = document.createElement("input");
+      descInput.type = "text";
+      descInput.className = "res-edit-field res-edit-desc";
+      descInput.value = src.desc || "";
+      descInput.placeholder = "Description";
+
+      const saveBtn = document.createElement("button");
+      saveBtn.className = "btn btn-secondary btn-sm res-edit-btn";
+      saveBtn.textContent = "Save";
+      saveBtn.addEventListener("click", async () => {
+        let newUrl = urlInput.value.trim();
+        if (!newUrl) return;
+        if (!/^https?:\/\//i.test(newUrl)) newUrl = "https://" + newUrl;
+        const { resourceCustomSources: current } = await browser.storage.local.get({ resourceCustomSources: [] });
+        const updated = current || [];
+        if (updated[i]) {
+          updated[i] = { url: newUrl, label: labelInput.value.trim() || new URL(newUrl).hostname, desc: descInput.value.trim() };
+          saveBtn.textContent = "Saved!";
+          setTimeout(() => { saveBtn.textContent = "Save"; }, 1000);
+          await saveCustomSources(updated);
+        }
+      });
+
+      const removeBtn = document.createElement("button");
+      removeBtn.className = "btn btn-secondary btn-sm res-edit-btn";
+      removeBtn.style.color = "var(--error, #f44336)";
+      removeBtn.textContent = "Remove";
+      removeBtn.addEventListener("click", async () => {
+        const { resourceCustomSources: current } = await browser.storage.local.get({ resourceCustomSources: [] });
+        const updated = (current || []).filter((_, idx) => idx !== i);
+        await saveCustomSources(updated);
+      });
+
+      row.appendChild(labelInput);
+      row.appendChild(urlInput);
+      row.appendChild(descInput);
+      row.appendChild(saveBtn);
+      row.appendChild(removeBtn);
+      customContainer.appendChild(row);
+    }
+  }
+
+  customAddBtn.addEventListener("click", async () => {
+    let url = customUrlInput.value.trim();
+    const label = customLabelInput.value.trim();
+    const desc = customDescInput ? customDescInput.value.trim() : "";
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    const { resourceCustomSources: current } = await browser.storage.local.get({ resourceCustomSources: [] });
+    const sources = current || [];
+    if (sources.some(s => s.url === url)) return;
+    sources.push({ url, label: label || new URL(url).hostname, desc });
+    await browser.storage.local.set({ resourceCustomSources: sources });
+    customUrlInput.value = "";
+    customLabelInput.value = "";
+    if (customDescInput) customDescInput.value = "";
+    renderCustomSources(sources);
+  });
+
+  loadCustomSources();
+}
 
 function loadVersion() {
   const manifest = browser.runtime.getManifest();
@@ -1506,6 +1982,18 @@ function attachListeners() {
   renderFeedRoutes();
   el.addFeedRoute.addEventListener("click", addFeedRoute);
 
+  // Jump link: Feeds tab → Keyword Routes on Automate tab
+  const feedRouteLink = document.getElementById("feed-route-link");
+  if (feedRouteLink) {
+    feedRouteLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      document.querySelector('[data-tab="automation"]').click();
+      setTimeout(() => {
+        document.getElementById("feed-route-list")?.closest(".card")?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+    });
+  }
+
   // Archive Redirect
   loadArchiveSettings();
   el.archiveSave.addEventListener("click", saveArchiveSettings);
@@ -2039,6 +2527,13 @@ function addFeedRoute() {
   el.routeKeywords.value = "";
   renderFeedRoutes();
   scheduleSave();
+
+  // Trigger retroactive scan of existing feed entries against the new route
+  browser.runtime.sendMessage({ action: "feedRouteRescan" }).then(resp => {
+    if (resp?.routed > 0) {
+      console.log(`[Routes] Retroactive scan routed ${resp.routed} existing entries`);
+    }
+  }).catch(() => {});
 }
 
 // ──────────────────────────────────────────────
@@ -2782,6 +3277,7 @@ function initProjects() {
   projEl.itemNotes = document.getElementById("proj-item-notes");
 
   document.getElementById("proj-new").addEventListener("click", () => projOpenModal());
+  document.getElementById("proj-refresh").addEventListener("click", () => projLoadProjects());
   document.getElementById("proj-import").addEventListener("click", projImport);
   document.getElementById("proj-export-all").addEventListener("click", projExportAll);
   document.getElementById("proj-add-note").addEventListener("click", () => projAddItem("note"));
@@ -2827,9 +3323,16 @@ async function checkRunningBatch() {
     if (s && s.success && s.running) {
       const runBtn = document.getElementById("proj-batch-run");
       const statusEl = document.getElementById("proj-batch-status");
+      const progressEl = document.getElementById("proj-batch-progress");
+      const barEl = document.getElementById("proj-batch-bar");
+      const pctEl = document.getElementById("proj-batch-pct");
       runBtn.textContent = "Cancel";
       runBtn.onclick = projCancelBatch;
-      statusEl.textContent = `Analyzing ${s.done + 1} of ${s.total}: ${s.current}...`;
+      const pct = s.total > 0 ? Math.round((s.done / s.total) * 100) : 0;
+      progressEl.classList.remove("hidden", "proj-batch-done");
+      barEl.style.width = pct + "%";
+      pctEl.textContent = pct + "%";
+      statusEl.textContent = `Analyzing ${s.done + 1} of ${s.total}: ${s.current}`;
       batchPollTimer = setInterval(() => pollBatchStatus(), 1500);
     }
   } catch { /* ignore */ }
@@ -3186,8 +3689,17 @@ function projRenderItems(proj) {
       autoBtn.title = "Run automation on this item";
       autoBtn.textContent = "Automate";
       autoBtn.addEventListener("click", async () => {
-        const autoId = document.getElementById("proj-automation-select")?.value;
-        if (!autoId) { alert("Select an automation from the toolbar above."); return; }
+        const autoSelect = document.getElementById("proj-automation-select");
+        const autoToolbar = document.getElementById("proj-automation-toolbar");
+        const autoId = autoSelect?.value;
+        if (!autoId) {
+          if (autoToolbar?.classList.contains("hidden")) {
+            alert("No automations available.\n\nCreate an automation on the Automate tab first, then enable 'Manual trigger' so it appears here.");
+          } else {
+            alert("Select an automation from the Automations toolbar above, then click this button.");
+          }
+          return;
+        }
         autoBtn.disabled = true;
         autoBtn.textContent = "Running...";
         const statusEl = document.getElementById("proj-automation-status");
@@ -3467,8 +3979,9 @@ async function projBatchAnalyze() {
   const statusEl = document.getElementById("proj-batch-status");
   const runBtn = document.getElementById("proj-batch-run");
 
-  // Check if unsummarized items exist; if not, offer re-analyze
-  const unsummarized = proj.items.filter(i => i.url && !i.summary);
+  // Check if unanalyzed items exist — use analysisContent (AI output), not summary
+  // (summary may be pre-populated from feed descriptions or page excerpts)
+  const unsummarized = proj.items.filter(i => i.url && !i.analysisContent);
   const allWithUrl = proj.items.filter(i => i.url);
   let reanalyze = false;
 
@@ -3477,7 +3990,7 @@ async function projBatchAnalyze() {
       statusEl.textContent = "No items with URLs to analyze.";
       return;
     }
-    if (!confirm(`All ${allWithUrl.length} items already have summaries. Re-analyze them all?`)) return;
+    if (!confirm(`All ${allWithUrl.length} items have been analyzed. Re-analyze them all?`)) return;
     reanalyze = true;
   }
 
@@ -3494,10 +4007,16 @@ async function projBatchAnalyze() {
     return;
   }
 
-  runBtn.disabled = true;
   runBtn.textContent = "Cancel";
-  runBtn.disabled = false;
   runBtn.onclick = projCancelBatch;
+
+  // Show progress bar
+  const progressEl = document.getElementById("proj-batch-progress");
+  const barEl = document.getElementById("proj-batch-bar");
+  const pctEl = document.getElementById("proj-batch-pct");
+  progressEl.classList.remove("hidden", "proj-batch-done");
+  barEl.style.width = "0%";
+  pctEl.textContent = "0%";
 
   // Poll for progress
   batchPollTimer = setInterval(() => pollBatchStatus(), 1500);
@@ -3507,25 +4026,38 @@ async function projBatchAnalyze() {
 async function pollBatchStatus() {
   const statusEl = document.getElementById("proj-batch-status");
   const runBtn = document.getElementById("proj-batch-run");
+  const progressEl = document.getElementById("proj-batch-progress");
+  const barEl = document.getElementById("proj-batch-bar");
+  const pctEl = document.getElementById("proj-batch-pct");
 
   try {
     const s = await browser.runtime.sendMessage({ action: "getBatchStatus" });
     if (!s.success) return;
 
+    // Update progress bar
+    const pct = s.total > 0 ? Math.round((s.done / s.total) * 100) : 0;
+    barEl.style.width = pct + "%";
+    pctEl.textContent = pct + "%";
+
     if (s.running) {
-      statusEl.textContent = `Analyzing ${s.done + 1} of ${s.total}: ${s.current}...`;
+      statusEl.textContent = `Analyzing ${s.done + 1} of ${s.total}: ${s.current}`;
     } else {
       // Finished
       clearInterval(batchPollTimer);
       batchPollTimer = null;
 
+      // Fill bar to 100%
+      barEl.style.width = "100%";
+      pctEl.textContent = "100%";
+      progressEl.classList.add("proj-batch-done");
+
       const errCount = s.errors.length;
       if (s.cancelled) {
         statusEl.textContent = `Cancelled after ${s.done} of ${s.total} items.`;
       } else if (errCount > 0) {
-        statusEl.textContent = `Done - analyzed ${s.done} item(s), ${errCount} error(s).`;
+        statusEl.textContent = `Complete — analyzed ${s.done} item(s), ${errCount} error(s).`;
       } else {
-        statusEl.textContent = `Done - analyzed ${s.done} item(s).`;
+        statusEl.textContent = `Complete — all ${s.done} item(s) analyzed successfully.`;
       }
 
       runBtn.textContent = "Run Batch";
@@ -3534,7 +4066,13 @@ async function pollBatchStatus() {
       // Refresh project display
       await projLoadProjects();
       projSelectProject(projState.activeProjectId);
-      setTimeout(() => { statusEl.textContent = ""; }, 5000);
+
+      // Hide progress bar after a while, keep status text longer
+      setTimeout(() => {
+        progressEl.classList.add("hidden");
+        progressEl.classList.remove("proj-batch-done");
+      }, 8000);
+      setTimeout(() => { statusEl.textContent = ""; }, 15000);
     }
   } catch { /* ignore */ }
 }
@@ -3837,6 +4375,25 @@ function initStorageManagement() {
   document.getElementById("purge-snapshots-btn").addEventListener("click", purgeMonitorSnapshots);
   document.getElementById("purge-cached-btn").addEventListener("click", purgeAllCachedData);
 
+  // Wipe Everything
+  const wipeBtn = document.getElementById("wipe-everything-btn");
+  const wipeConfirm = document.getElementById("wipe-confirm");
+  wipeBtn.addEventListener("click", () => wipeConfirm.classList.remove("hidden"));
+  document.getElementById("wipe-confirm-no").addEventListener("click", () => wipeConfirm.classList.add("hidden"));
+  document.getElementById("wipe-confirm-yes").addEventListener("click", async () => {
+    wipeBtn.disabled = true;
+    wipeConfirm.classList.add("hidden");
+    showPurgeStatus("Wiping all data...");
+    const resp = await browser.runtime.sendMessage({ action: "wipeEverything" });
+    if (resp && resp.success) {
+      showPurgeStatus("All Argus data has been permanently deleted.");
+      setTimeout(() => location.reload(), 2000);
+    } else {
+      showPurgeStatus("Wipe failed: " + (resp?.error || "unknown error"));
+      wipeBtn.disabled = false;
+    }
+  });
+
   // Knowledge Graph
   document.getElementById("kg-open-graph").addEventListener("click", () => {
     browser.tabs.create({ url: browser.runtime.getURL("osint/graph.html?mode=global") });
@@ -3866,6 +4423,146 @@ function initStorageManagement() {
   });
   updateKGStats();
   loadPendingMerges();
+
+  // ── Entity Dictionary Editor ──
+  {
+    let _dictCurrentTab = "noise";
+    let _dictData = { noise: [], notPersonFirstWords: [], commonNouns: [], locations: [], orgs: [] };
+    const dictLabels = {
+      noise: "Noise Phrases", notPersonFirstWords: "Not-Person First Words",
+      commonNouns: "Common Nouns (not last names)", locations: "Known Locations", orgs: "Known Organizations"
+    };
+    const dictItems = document.getElementById("kg-dict-items");
+    const dictInput = document.getElementById("kg-dict-input");
+    const dictAddBtn = document.getElementById("kg-dict-add");
+    const dictStatus = document.getElementById("kg-dict-status");
+    const dictStatsEl = document.getElementById("kg-dict-stats");
+    const dictReprocess = document.getElementById("kg-dict-reprocess");
+
+    function showDictStatus(msg) {
+      if (!dictStatus) return;
+      dictStatus.textContent = msg;
+      dictStatus.classList.remove("hidden");
+      setTimeout(() => dictStatus.classList.add("hidden"), 2500);
+    }
+
+    async function loadDictStats() {
+      try {
+        const stats = await browser.runtime.sendMessage({ action: "getKGDictionaryStats" });
+        if (stats && dictStatsEl) {
+          const parts = [
+            `Noise: ${stats.noise}`, `Not-Person: ${stats.notPersonFirstWords}`,
+            `Nouns: ${stats.commonNouns}`, `Locations: ${stats.locations}`,
+            `Orgs: ${stats.orgs}`, `First Names: ${stats.validFirstNames}`,
+            `Phrases: ${stats.notPersonPhrases}`
+          ];
+          dictStatsEl.textContent = "Built-in: " + parts.join(" · ");
+        }
+      } catch (e) { console.warn("[DictUI] Stats error:", e); }
+    }
+
+    async function loadDictData() {
+      try {
+        _dictData = await browser.runtime.sendMessage({ action: "getKGDictionaries" });
+        if (!_dictData || typeof _dictData !== "object") {
+          _dictData = { noise: [], notPersonFirstWords: [], commonNouns: [], locations: [], orgs: [] };
+        }
+      } catch (e) { console.warn("[DictUI] Load error:", e); }
+      renderDictItems();
+    }
+
+    function renderDictItems() {
+      if (!dictItems) return;
+      const entries = _dictData[_dictCurrentTab] || [];
+      dictItems.textContent = "";
+      if (!entries.length) {
+        const empty = document.createElement("div");
+        empty.style.cssText = "font-size:12px;color:var(--text-muted);padding:8px;";
+        empty.textContent = `No custom ${dictLabels[_dictCurrentTab] || _dictCurrentTab} entries. Built-in dictionary is still active.`;
+        dictItems.appendChild(empty);
+        return;
+      }
+      for (const entry of entries) {
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:4px 8px;border-bottom:1px solid var(--border);font-size:12px;";
+        const label = document.createElement("span");
+        label.textContent = entry;
+        label.style.color = "var(--text-primary)";
+        const removeBtn = document.createElement("button");
+        removeBtn.textContent = "×";
+        removeBtn.title = "Remove";
+        removeBtn.style.cssText = "background:none;border:none;color:var(--error);font-size:16px;cursor:pointer;padding:0 4px;line-height:1;";
+        removeBtn.addEventListener("click", async () => {
+          _dictData[_dictCurrentTab] = _dictData[_dictCurrentTab].filter(e => e !== entry);
+          await saveDictData();
+          renderDictItems();
+        });
+        row.appendChild(label);
+        row.appendChild(removeBtn);
+        dictItems.appendChild(row);
+      }
+    }
+
+    async function saveDictData() {
+      try {
+        await browser.runtime.sendMessage({ action: "saveKGDictionaries", dictionaries: _dictData });
+        showDictStatus("Saved");
+      } catch (e) { showDictStatus("Error saving"); }
+    }
+
+    // Tab switching
+    document.querySelectorAll(".kg-dict-tab").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".kg-dict-tab").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        _dictCurrentTab = btn.dataset.dict;
+        if (dictInput) dictInput.placeholder = `Add ${dictLabels[_dictCurrentTab] || "entry"}...`;
+        renderDictItems();
+      });
+    });
+
+    // Add entry
+    if (dictAddBtn && dictInput) {
+      const addEntry = async () => {
+        const val = dictInput.value.trim().toLowerCase();
+        if (!val) return;
+        if (!_dictData[_dictCurrentTab]) _dictData[_dictCurrentTab] = [];
+        if (_dictData[_dictCurrentTab].includes(val)) {
+          showDictStatus("Already exists");
+          return;
+        }
+        _dictData[_dictCurrentTab].push(val);
+        _dictData[_dictCurrentTab].sort();
+        dictInput.value = "";
+        await saveDictData();
+        renderDictItems();
+      };
+      dictAddBtn.addEventListener("click", addEntry);
+      dictInput.addEventListener("keydown", (e) => { if (e.key === "Enter") addEntry(); });
+    }
+
+    // Re-type all entities with updated dictionaries
+    if (dictReprocess) {
+      dictReprocess.addEventListener("click", async () => {
+        dictReprocess.disabled = true;
+        dictReprocess.textContent = "Processing...";
+        try {
+          const resp = await browser.runtime.sendMessage({ action: "retypeKGEntities" });
+          const parts = [];
+          if (resp?.fixed) parts.push(`Re-typed ${resp.fixed}`);
+          if (resp?.pruned) parts.push(`pruned ${resp.pruned} noise`);
+          showDictStatus(parts.length ? parts.join(", ") : "All entities correct");
+          updateKGStats();
+          updateTabBadges();
+        } catch (e) { showDictStatus("Error"); }
+        dictReprocess.disabled = false;
+        dictReprocess.textContent = "Re-type All Entities";
+      });
+    }
+
+    loadDictStats();
+    loadDictData();
+  }
 
   // OSINT Quick Tools (on OSINT tab)
   const osintLaunch = (tool) => async () => {

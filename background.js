@@ -3,8 +3,11 @@
 // Presets & provider config: background-presets.js
 // Provider API calls: background-providers.js
 // Permission helpers: background-permissions.js
-const ARGUS_BG_VERSION = "2026-03-11a";
+const ARGUS_BG_VERSION = "2026-03-12a";
 console.log(`[Argus] background.js loaded — version ${ARGUS_BG_VERSION}`);
+
+// Remind users to wipe data before uninstalling (Firefox doesn't auto-clear extension data)
+try { browser.runtime.setUninstallURL("about:blank"); } catch(e) { /* optional */ }
 // OSINT tools: background-osint.js
 // ──────────────────────────────────────────────
 
@@ -22,11 +25,20 @@ const conversationHistory = new Map();
 // Clean up on tab close/navigate
 browser.tabs.onRemoved.addListener(tabId => {
   conversationHistory.delete(tabId);
+  feedDetectionCache.delete(tabId);
 });
 
+// ── RSS/Atom feed detection cache (tabId → { feedUrl, feedTitle }) ──
+const feedDetectionCache = new Map();
+
 browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  if (changeInfo.url) conversationHistory.delete(tabId);
+  if (changeInfo.url) {
+    conversationHistory.delete(tabId);
+    feedDetectionCache.delete(tabId);
+  }
   if (changeInfo.url || changeInfo.status === "complete") updateBrowserActionForTab(tabId);
+  // Auto-detect RSS/Atom feeds when page finishes loading
+  if (changeInfo.status === "complete") detectFeedOnTab(tabId);
 });
 
 browser.tabs.onActivated.addListener(({ tabId }) => updateBrowserActionForTab(tabId));
@@ -47,9 +59,45 @@ function updateBrowserActionForTab(tabId) {
 }
 
 // ──────────────────────────────────────────────
+// RSS/Atom feed auto-detection on page load
+// ──────────────────────────────────────────────
+async function detectFeedOnTab(tabId) {
+  try {
+    const tab = await browser.tabs.get(tabId);
+    if (!tab?.url || tab.url.startsWith("about:") || tab.url.startsWith("moz-extension:") || tab.url.startsWith("chrome:")) return;
+
+    const results = await browser.tabs.executeScript(tabId, {
+      code: `(function() {
+        const links = document.querySelectorAll('link[type="application/rss+xml"], link[type="application/atom+xml"], link[type="application/feed+json"]');
+        if (!links.length) return null;
+        const feeds = [];
+        for (const l of links) {
+          if (l.href) feeds.push({ url: l.href, title: l.title || "" });
+        }
+        return feeds.length ? feeds : null;
+      })();`
+    });
+
+    const feeds = results && results[0];
+    if (feeds && feeds.length) {
+      feedDetectionCache.set(tabId, feeds);
+    } else {
+      feedDetectionCache.delete(tabId);
+    }
+  } catch { /* content script injection may fail on restricted pages */ }
+}
+
+// ──────────────────────────────────────────────
 // Auto-analyze cooldown tracker
 // ──────────────────────────────────────────────
 const autoAnalyzeCooldown = new Map();
+
+// ──────────────────────────────────────────────
+// Live data refresh — notify open options/history pages of data changes
+// ──────────────────────────────────────────────
+function notifyDataChanged(store) {
+  browser.runtime.sendMessage({ type: "argusDataChanged", store }).catch(() => {});
+}
 
 // ──────────────────────────────────────────────
 // Context menu setup
@@ -98,6 +146,13 @@ async function createContextMenus() {
     id: "argus-monitor",
     parentId: "argus-parent",
     title: "\uD83D\uDC41\uFE0F Monitor This Page",
+    contexts: ["page", "frame"]
+  });
+
+  browser.contextMenus.create({
+    id: "argus-snapshot",
+    parentId: "argus-parent",
+    title: "\uD83D\uDCF8 Snapshot This Page",
     contexts: ["page", "frame"]
   });
 
@@ -237,12 +292,19 @@ async function createContextMenus() {
     contexts: ["page", "frame", "selection"]
   });
 
-  // ── Analysis Presets ──
+  // ── Analysis Presets (submenu) ──
+  browser.contextMenus.create({
+    id: "argus-analyze-parent",
+    parentId: "argus-parent",
+    title: "\uD83D\uDCCA Analyze",
+    contexts: ["page", "frame", "selection"]
+  });
+
   // Default presets
   for (const [key, preset] of Object.entries(ANALYSIS_PRESETS)) {
     browser.contextMenus.create({
       id: `argus-analyze-${key}`,
-      parentId: "argus-parent",
+      parentId: "argus-analyze-parent",
       title: preset.label,
       contexts: ["page", "frame", "selection"]
     });
@@ -254,7 +316,7 @@ async function createContextMenus() {
     if (preset.isCustom) {
       browser.contextMenus.create({
         id: `argus-analyze-${key}`,
-        parentId: "argus-parent",
+        parentId: "argus-analyze-parent",
         title: preset.label || key,
         contexts: ["page", "frame", "selection"]
       });
@@ -1079,6 +1141,17 @@ browser.runtime.onMessage.addListener((message, sender) => {
       } catch (err) { return { success: false, error: err.message }; }
     })();
   }
+  if (message.action === "getFeedDetection") {
+    const feeds = feedDetectionCache.get(message.tabId);
+    // Also check if already subscribed
+    if (!feeds || !feeds.length) return Promise.resolve({ success: true, feeds: null });
+    return (async () => {
+      const existingFeeds = await ArgusDB.Feeds.list();
+      const subscribedUrls = new Set(existingFeeds.map(f => f.url));
+      const available = feeds.filter(f => !subscribedUrls.has(f.url));
+      return { success: true, feeds: available.length ? available : null, allSubscribed: available.length === 0 && feeds.length > 0 };
+    })();
+  }
   if (message.action === "getSelection") return handleGetSelection(message);
   if (message.action === "getOpenTabs") return handleGetOpenTabs();
   if (message.action === "getConversationState") return handleGetConversationState(message);
@@ -1114,6 +1187,9 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "getMonitorSnapshots") return handleGetMonitorSnapshots(message);
   if (message.action === "getMonitorDiff") return handleGetMonitorDiff(message);
   if (message.action === "getMonitorStorageUsage") return handleGetMonitorStorageUsage();
+  if (message.action === "snapshotPage") return handleSnapshotPage(message);
+  if (message.action === "getSnapshotScreenshot") return handleGetSnapshotScreenshot(message);
+  if (message.action === "getSnapshotHtml") return handleGetSnapshotHtml(message);
   if (message.action === "getArchiveSettings") return browser.storage.local.get({ archiveRedirect: { enabled: false, domains: DEFAULT_ARCHIVE_DOMAINS, providerUrl: "https://archive.is/" } }).then(r => ({ success: true, ...r.archiveRedirect }));
   if (message.action === "saveArchiveSettings") return browser.storage.local.set({ archiveRedirect: { enabled: message.enabled, domains: message.domains, providerUrl: message.providerUrl || "https://archive.is/" } }).then(() => ({ success: true }));
   // Re-init auto-analyze after permission grant
@@ -1138,6 +1214,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "refreshFeed") return handleRefreshFeed(message);
   if (message.action === "summarizeFeedEntry") return handleSummarizeFeedEntry(message);
   if (message.action === "discoverFeed") return handleDiscoverFeed(message);
+  if (message.action === "feedRouteRescan") return handleFeedRouteRescan();
   if (message.action === "analyzeBookmarks") return handleAnalyzeBookmarks(message);
   // Projects
   if (message.action === "getProjects") return handleGetProjects(message);
@@ -1167,6 +1244,11 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "pruneKGNoise") return KnowledgeGraph.pruneNoiseEntities().then(r => ({ success: true, ...r }));
   if (message.action === "retypeKGEntities") return KnowledgeGraph.retypeEntities().then(r => ({ success: true, ...r }));
   if (message.action === "clearKG") return ArgusDB.KGNodes.clear().then(() => ArgusDB.KGEdges.clear()).then(() => ({ success: true }));
+  if (message.action === "wipeEverything") return handleWipeEverything();
+  // KG Dictionaries
+  if (message.action === "getKGDictionaries") return KnowledgeGraph.getUserDictionaries();
+  if (message.action === "saveKGDictionaries") return KnowledgeGraph.saveUserDictionaries(message.dictionaries);
+  if (message.action === "getKGDictionaryStats") return KnowledgeGraph.getBuiltinDictionaryStats();
   // Agentic Automation
   if (message.action === "getDashboardData") return AgentEngine.getDashboardData(message.projectId);
   if (message.action === "generateDigest") return AgentEngine.generateProjectDigest(message.projectId);
@@ -1245,6 +1327,33 @@ async function handleDeleteHistoryItem(message) {
 async function handleClearHistory() {
   await ArgusDB.History.clear();
   return { success: true };
+}
+
+async function handleWipeEverything() {
+  console.log("[Argus] Wiping all data...");
+  try {
+    // Clear all IndexedDB stores
+    await Promise.all([
+      ArgusDB.History.clear(),
+      ArgusDB.Bookmarks.clear(),
+      ArgusDB.Projects.clear(),
+      ArgusDB.Monitors.clear(),
+      ArgusDB.Feeds.clear(), // also clears feedEntries
+      ArgusDB.Changes.clear(),
+      ArgusDB.Watchlist.clear(),
+      ArgusDB.KGNodes.clear(),
+      ArgusDB.KGEdges.clear(),
+    ]);
+    // Clear OPFS snapshots
+    await OpfsStorage.deleteAll();
+    // Clear all browser.storage.local
+    await browser.storage.local.clear();
+    console.log("[Argus] All data wiped successfully");
+    return { success: true };
+  } catch (e) {
+    console.error("[Argus] Wipe failed:", e);
+    return { success: false, error: e.message };
+  }
 }
 
 async function handleSearchHistory(message) {
@@ -1814,6 +1923,29 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
         iconUrl: "icons/icon-96.png",
         title: "Argus — Error",
         message: `Failed to add monitor: ${err.message}`
+      });
+    }
+    return;
+  }
+
+  // Handle snapshot context menu
+  if (info.menuItemId === "argus-snapshot") {
+    try {
+      const result = await handleSnapshotPage({ tabId: tab.id, url: tab.url, title: tab.title });
+      safeNotify(null, {
+        type: "basic",
+        iconUrl: "icons/icon-96.png",
+        title: "Argus",
+        message: result.success
+          ? `Snapshot saved: ${tab.title || tab.url}`
+          : `Snapshot failed: ${result.error}`
+      });
+    } catch (err) {
+      safeNotify(null, {
+        type: "basic",
+        iconUrl: "icons/icon-96.png",
+        title: "Argus — Error",
+        message: `Snapshot failed: ${err.message}`
       });
     }
     return;
@@ -2722,6 +2854,64 @@ function extractTextFromHtml(html) {
   return bestText;
 }
 
+// Manual page snapshot — captures screenshot + full HTML via OPFS
+async function handleSnapshotPage(message) {
+  try {
+    const { tabId, url, title } = message;
+
+    // Capture screenshot of visible tab
+    let screenshotBlob = null;
+    try {
+      const dataUrl = await browser.tabs.captureVisibleTab(null, { format: "png" });
+      const resp = await fetch(dataUrl);
+      screenshotBlob = await resp.blob();
+    } catch (e) {
+      console.warn("[Snapshot] Screenshot capture failed:", e.message);
+    }
+
+    // Fetch page HTML
+    let html = null;
+    try {
+      const resp = await fetch(url);
+      html = await resp.text();
+    } catch (e) {
+      console.warn("[Snapshot] HTML fetch failed:", e.message);
+    }
+
+    // Extract text for metadata
+    const text = html ? extractTextFromHtml(html) : "";
+    const hash = await hashText(text);
+
+    // Create snapshot metadata in IndexedDB
+    const snapshotId = `snap-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const snapshot = {
+      id: snapshotId,
+      monitorId: "manual",
+      capturedAt: new Date().toISOString(),
+      hash,
+      text: text.slice(0, 5000),
+      changed: false,
+      isInitial: false,
+      url: url,
+      title: title || url,
+      hasScreenshot: !!screenshotBlob,
+      hasFullHtml: !!html,
+      manual: true
+    };
+    await ArgusDB.Snapshots.add(snapshot);
+
+    // Write binary files to OPFS
+    if (typeof OpfsStorage !== "undefined" && (html || screenshotBlob)) {
+      await OpfsStorage.writeSnapshot(snapshotId, { html, screenshotBlob });
+    }
+
+    return { success: true, snapshotId };
+  } catch (err) {
+    console.error("[Snapshot] Failed:", err);
+    return { success: false, error: err.message };
+  }
+}
+
 async function handleAddMonitor(message) {
   try {
     const pageMonitors = await ArgusDB.Monitors.getAll();
@@ -2781,6 +2971,7 @@ async function handleAddMonitor(message) {
       periodInMinutes: monitor.intervalMinutes
     });
 
+    notifyDataChanged("monitors");
     return { success: true, monitor };
   } catch (err) {
     return { success: false, error: err.message };
@@ -2845,6 +3036,7 @@ async function handleDeleteMonitor(message) {
   }
   // ArgusDB.Monitors.remove also cleans up snapshots and changes
   await ArgusDB.Monitors.remove(message.id);
+  notifyDataChanged("monitors");
   return { success: true };
 }
 
@@ -2898,7 +3090,27 @@ async function handleGetMonitorStorageUsage() {
     });
   }
 
-  return { success: true, totalBytes, perMonitor };
+  // Include OPFS usage if available
+  let opfsBytes = 0;
+  if (typeof OpfsStorage !== "undefined") {
+    try { opfsBytes = await OpfsStorage.getUsage(); } catch { /* */ }
+  }
+  totalBytes += opfsBytes;
+
+  return { success: true, totalBytes, opfsBytes, perMonitor };
+}
+
+// OPFS snapshot retrieval handlers
+async function handleGetSnapshotScreenshot(message) {
+  if (typeof OpfsStorage === "undefined") return { success: false, error: "OPFS not available" };
+  const url = await OpfsStorage.readScreenshot(message.snapshotId);
+  return url ? { success: true, url } : { success: false, error: "Screenshot not found" };
+}
+
+async function handleGetSnapshotHtml(message) {
+  if (typeof OpfsStorage === "undefined") return { success: false, error: "OPFS not available" };
+  const html = await OpfsStorage.readHtml(message.snapshotId);
+  return html ? { success: true, html } : { success: false, error: "HTML not found" };
 }
 
 // Alarm handler for periodic page checks
@@ -2928,19 +3140,35 @@ browser.alarms.onAlarm.addListener(async (alarm) => {
     monitor.lastChecked = now;
 
     // Always save a snapshot for the timeline (even if no change)
+    const changed = newHash !== monitor.lastHash;
+    const snapshotId = `snap-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const snapshot = {
-      id: `snap-${Date.now()}`,
+      id: snapshotId,
       monitorId: monitor.id,
       capturedAt: now,
       hash: newHash,
       text: newText.slice(0, 5000),
-      changed: newHash !== monitor.lastHash
+      changed,
+      hasScreenshot: false,
+      hasFullHtml: false
     };
+
+    // On change: archive full HTML to OPFS
+    if (changed && typeof OpfsStorage !== "undefined") {
+      try {
+        const resp = await fetch(monitor.url);
+        const fullHtml = await resp.text();
+        await OpfsStorage.writeSnapshot(snapshotId, { html: fullHtml, screenshotBlob: null });
+        snapshot.hasFullHtml = true;
+        console.log(`[Monitor] Archived HTML for ${monitor.title} → OPFS (${snapshotId})`);
+      } catch (e) { console.warn("[Monitor] OPFS archive failed:", e.message); }
+    }
+
     await ArgusDB.Snapshots.add(snapshot);
     // Keep last 100 snapshots per monitor
     await ArgusDB.Snapshots.pruneForMonitor(monitor.id, 100);
 
-    if (newHash !== monitor.lastHash) {
+    if (changed) {
       monitor.changeCount++;
       const oldText = monitor.lastText;
       monitor.lastHash = newHash;
@@ -3501,6 +3729,7 @@ async function handleAddFeed(message) {
       periodInMinutes: feed.checkIntervalMinutes
     });
 
+    notifyDataChanged("feeds");
     return { success: true, feed };
   } catch (err) {
     return { success: false, error: err.message };
@@ -3630,6 +3859,97 @@ async function handleDiscoverFeed(message) {
   return { success: true, feedUrl };
 }
 
+// Shared keyword route matching — works on any set of feed entries
+async function applyKeywordRoutes(entries, feedId, notify) {
+  if (!entries.length) return;
+  const { feedKeywordRoutes: routes } = await browser.storage.local.get({ feedKeywordRoutes: [] });
+  console.log(`[Routes] Checking ${entries.length} entries against ${(routes || []).length} total routes (feedId: ${feedId})`);
+  const activeRoutes = (routes || []).filter(r => r.enabled !== false && (!r.feedId || r.feedId === feedId));
+  if (!activeRoutes.length) { console.log("[Routes] No active routes match this feedId"); return; }
+  console.log(`[Routes] ${activeRoutes.length} active routes:`, activeRoutes.map(r => ({ keywords: r.keywords, feedId: r.feedId, projectId: r.projectId })));
+
+  let matched = false;
+  for (const entry of entries) {
+    const scanText = ((entry.title || "") + " " + (entry.description || "")).toLowerCase();
+    for (const route of activeRoutes) {
+      // Skip if already routed to this project
+      if (entry.routedTo && entry.routedTo.includes(route.projectId)) continue;
+
+      const matchedKws = route.keywords.filter(kw => {
+        const rxMatch = kw.match(/^\/(.+)\/([gimsuy]*)$/);
+        if (rxMatch) {
+          try { return new RegExp(rxMatch[1], rxMatch[2]).test(scanText); } catch { return false; }
+        }
+        return scanText.includes(kw.toLowerCase());
+      });
+      if (!matchedKws.length && entries.indexOf(entry) < 3) {
+        console.log(`[Routes] No match for "${entry.title?.slice(0, 60)}" against [${route.keywords.join(", ")}]`);
+      }
+      if (matchedKws.length > 0) {
+        // Mark entry as routed
+        entry.routedTo = entry.routedTo || [];
+        entry.routedTo.push(route.projectId);
+        entry.routeKeywords = entry.routeKeywords || [];
+        entry.routeKeywords.push(...matchedKws);
+        matched = true;
+        // Add to project (dedup by URL)
+        const proj = await ArgusDB.Projects.get(route.projectId);
+        if (proj && !proj.items.some(i => i.url === entry.link)) {
+          await handleAddProjectItem({
+            projectId: route.projectId,
+            item: {
+              type: "feed",
+              url: entry.link || "",
+              title: entry.title || "Feed Entry",
+              summary: (entry.description || "").slice(0, 500),
+              tags: ["feed", "auto-routed", ...matchedKws.slice(0, 3).map(k => k.replace(/^\/|\/[gimsuy]*$/g, ""))]
+            }
+          });
+          console.log(`[RSS] Routed "${entry.title}" → project ${proj.name} (keywords: ${matchedKws.join(", ")})`);
+        }
+        // Notify if enabled
+        if (notify && route.notify) {
+          const projName = proj?.name || "project";
+          safeNotify(`fkr-${entry.id}-${Date.now()}`, {
+            type: "basic",
+            iconUrl: "icons/icon-96.png",
+            title: `Feed match → ${projName}`,
+            message: entry.title || "New matching entry"
+          });
+        }
+      }
+    }
+  }
+  // Re-save entries with route metadata
+  if (matched) {
+    await ArgusDB.FeedEntries.saveMany(entries);
+    notifyDataChanged("projects");
+  }
+}
+
+// Rescan ALL existing feed entries against keyword routes (called when a route is added/updated)
+async function handleFeedRouteRescan() {
+  try {
+    const allFeeds = await ArgusDB.Feeds.getAll();
+    let totalRouted = 0;
+    for (const feed of allFeeds) {
+      const entries = await ArgusDB.FeedEntries.getByFeed(feed.id);
+      const unrouted = entries.filter(e => !e.routedTo || e.routedTo.length === 0);
+      if (unrouted.length > 0) {
+        const before = unrouted.filter(e => e.routedTo?.length > 0).length;
+        await applyKeywordRoutes(unrouted, feed.id, false);
+        const after = unrouted.filter(e => e.routedTo?.length > 0).length;
+        totalRouted += (after - before);
+      }
+    }
+    console.log(`[RSS] Route rescan complete: ${totalRouted} entries routed`);
+    return { success: true, routed: totalRouted };
+  } catch (e) {
+    console.warn("[RSS] Route rescan failed:", e);
+    return { success: false, error: e.message };
+  }
+}
+
 async function checkFeedForUpdates(feed, allFeeds) {
   try {
     const resp = await fetch(feed.url);
@@ -3640,6 +3960,7 @@ async function checkFeedForUpdates(feed, allFeeds) {
     const existingIds = new Set(existingEntries.map(e => e.id));
 
     const newEntries = parsed.entries.filter(e => !existingIds.has(e.id));
+    console.log(`[RSS] Feed "${feed.title}": ${parsed.entries.length} total, ${existingEntries.length} existing, ${newEntries.length} new`);
 
     if (newEntries.length > 0) {
       // AI summarize new entries if enabled
@@ -3678,62 +3999,9 @@ async function checkFeedForUpdates(feed, allFeeds) {
         }
       } catch (e) { console.warn("[KG] feed entry extraction failed:", e); }
 
-      // Keyword route matching — auto-add to projects
+      // Keyword route matching — auto-add to projects (new entries)
       try {
-        const { feedKeywordRoutes: routes } = await browser.storage.local.get({ feedKeywordRoutes: [] });
-        const activeRoutes = (routes || []).filter(r => r.enabled !== false && (!r.feedId || r.feedId === feed.id));
-        if (activeRoutes.length > 0) {
-          for (const entry of newTagged) {
-            const scanText = ((entry.title || "") + " " + (entry.description || "")).toLowerCase();
-            for (const route of activeRoutes) {
-              const matched = route.keywords.some(kw => {
-                // Support regex patterns wrapped in /pattern/flags
-                const rxMatch = kw.match(/^\/(.+)\/([gimsuy]*)$/);
-                if (rxMatch) {
-                  try { return new RegExp(rxMatch[1], rxMatch[2]).test(scanText); } catch { return false; }
-                }
-                return scanText.includes(kw.toLowerCase());
-              });
-              if (matched) {
-                // Mark entry as routed
-                entry.routedTo = entry.routedTo || [];
-                entry.routedTo.push(route.projectId);
-                entry.routeKeywords = entry.routeKeywords || [];
-                entry.routeKeywords.push(...route.keywords.filter(kw => {
-                  const rxMatch = kw.match(/^\/(.+)\/([gimsuy]*)$/);
-                  if (rxMatch) { try { return new RegExp(rxMatch[1], rxMatch[2]).test(scanText); } catch { return false; } }
-                  return scanText.includes(kw.toLowerCase());
-                }));
-                // Add to project (dedup by URL)
-                const proj = await ArgusDB.Projects.get(route.projectId);
-                if (proj && !proj.items.some(i => i.url === entry.link)) {
-                  await handleAddProjectItem({
-                    projectId: route.projectId,
-                    item: {
-                      type: "feed",
-                      url: entry.link || "",
-                      title: entry.title || "Feed Entry",
-                      summary: (entry.description || "").slice(0, 500),
-                      tags: ["feed", "auto-routed", ...route.keywords.slice(0, 3).map(k => k.replace(/^\/|\/[gimsuy]*$/g, ""))]
-                    }
-                  });
-                }
-                // Notify if enabled
-                if (route.notify) {
-                  const projName = proj?.name || "project";
-                  safeNotify(`fkr-${entry.id}-${Date.now()}`, {
-                    type: "basic",
-                    iconUrl: "icons/icon-96.png",
-                    title: `Feed match → ${projName}`,
-                    message: entry.title || "New matching entry"
-                  });
-                }
-              }
-            }
-          }
-          // Re-save entries with route metadata
-          await ArgusDB.FeedEntries.saveMany(newTagged);
-        }
+        await applyKeywordRoutes(newTagged, feed.id, true);
       } catch (e) { console.warn("[RSS] Keyword route matching failed:", e); }
 
       // Notification for new entries
@@ -3758,6 +4026,15 @@ async function checkFeedForUpdates(feed, allFeeds) {
         }
       }
     }
+
+    // Scan existing unrouted entries against keyword routes on EVERY check (not just when new entries arrive)
+    try {
+      const allEntries = await ArgusDB.FeedEntries.getByFeed(feed.id);
+      const unrouted = allEntries.filter(e => !e.routedTo || e.routedTo.length === 0);
+      if (unrouted.length > 0) {
+        await applyKeywordRoutes(unrouted, feed.id, false);
+      }
+    } catch (e) { console.warn("[RSS] Retroactive keyword route scan failed:", e); }
 
     // Update feed metadata
     feed.lastFetched = new Date().toISOString();
@@ -3841,6 +4118,7 @@ async function handleCreateProject(message) {
   };
   await ArgusDB.Projects.save(project);
   createContextMenus(); // Rebuild so new project appears in right-click menu
+  notifyDataChanged("projects");
   return { success: true, project };
 }
 
@@ -3854,12 +4132,14 @@ async function handleUpdateProject(message) {
   proj.updatedAt = new Date().toISOString();
   await ArgusDB.Projects.save(proj);
   createContextMenus(); // Rebuild so renamed project updates in right-click menu
+  notifyDataChanged("projects");
   return { success: true, project: proj };
 }
 
 async function handleDeleteProject(message) {
   await ArgusDB.Projects.remove(message.projectId);
   createContextMenus(); // Rebuild so deleted project is removed from right-click menu
+  notifyDataChanged("projects");
   return { success: true };
 }
 
@@ -3882,6 +4162,7 @@ async function handleAddProjectItem(message) {
   proj.items.unshift(item);
   proj.updatedAt = new Date().toISOString();
   await ArgusDB.Projects.save(proj);
+  notifyDataChanged("projects");
   return { success: true, item };
 }
 
@@ -3906,6 +4187,7 @@ async function handleRemoveProjectItem(message) {
   proj.items = proj.items.filter(i => i.id !== message.itemId);
   proj.updatedAt = new Date().toISOString();
   await ArgusDB.Projects.save(proj);
+  notifyDataChanged("projects");
   return { success: true };
 }
 
@@ -4134,7 +4416,7 @@ async function handleBatchAnalyzeProject(message) {
 
   const targets = reanalyze
     ? proj.items.filter(i => i.url)
-    : proj.items.filter(i => i.url && !i.summary);
+    : proj.items.filter(i => i.url && !i.analysisContent);
   if (targets.length === 0) return { success: false, error: "No items to analyze." };
 
   batchState = { running: true, projectId, total: targets.length, done: 0, current: "", errors: [], cancelled: false };

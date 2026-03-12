@@ -24,27 +24,27 @@
       <div class="nav-row">
         <button class="nav-tab active" data-tab="bookmarks">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-          <span>Bookmarks</span>
+          <span>Bookmarks</span><span class="nav-badge" id="badge-bookmarks"></span>
         </button>
         <button class="nav-tab" data-tab="projects">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-          <span>Projects</span>
+          <span>Projects</span><span class="nav-badge" id="badge-projects"></span>
         </button>
         <button class="nav-tab" data-tab="monitors">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          <span>Monitors</span>
+          <span>Monitors</span><span class="nav-badge" id="badge-monitors"></span>
         </button>
         <button class="nav-tab" data-tab="feeds">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
-          <span>Feeds</span>
+          <span>Feeds</span><span class="nav-badge" id="badge-feeds"></span>
         </button>
         <button class="nav-tab" data-tab="osint">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <span>OSINT</span>
+          <span>OSINT</span><span class="nav-badge" id="badge-osint"></span>
         </button>
         <button class="nav-tab" data-tab="automation">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          <span>Automate</span>
+          <span>Automate</span><span class="nav-badge" id="badge-automation"></span>
         </button>
         <button class="nav-tab" data-tab="archive">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
@@ -59,6 +59,10 @@
         <button class="nav-tab" data-tab="providers">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
           <span>Providers</span>
+        </button>
+        <button class="nav-tab" data-tab="resources">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          <span>Resources</span>
         </button>
         <button class="nav-tab" data-tab="settings">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
@@ -421,6 +425,46 @@
         </div>
       </section>
 
+      <!-- Feed Keyword Routes -->
+      <section class="card">
+        <h2 class="card-title">Keyword Routes
+          <span class="badge">Auto-file</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Automatically route matching feed entries to projects. When new entries arrive, Argus scans headlines and descriptions for your keywords. Matches are flagged and auto-added to the target project.</p>
+
+          <div id="feed-route-list" class="rules-list"></div>
+
+          <div class="rule-form">
+            <div class="form-row">
+              <div class="form-group flex-2">
+                <label for="route-keywords">Keywords <span class="hint">(comma-separated, supports regex with /pattern/)</span></label>
+                <input type="text" id="route-keywords" placeholder="trump, russia, /ukraine.*conflict/i">
+              </div>
+              <div class="form-group flex-1">
+                <label for="route-project">Target Project</label>
+                <select id="route-project"><option value="">Select project...</option></select>
+              </div>
+              <div class="form-group flex-1">
+                <label for="route-feed">Feed (optional)</label>
+                <select id="route-feed"><option value="">All feeds</option></select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label class="toggle-label">
+                  <input type="checkbox" id="route-notify" checked>
+                  <span>Notify on match</span>
+                </label>
+              </div>
+              <div class="form-group flex-1" style="justify-content:flex-end;">
+                <button id="add-feed-route" class="btn btn-secondary btn-sm">Add Route</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Automation Run Log -->
       <section class="card" id="automation-log-card">
         <h2 class="card-title">Run Log</h2>
@@ -510,6 +554,7 @@
 
           <div class="proj-toolbar">
             <input type="text" id="proj-search" class="proj-search" placeholder="Search projects...">
+            <button id="proj-refresh" class="btn btn-secondary btn-sm" title="Refresh project list">Refresh</button>
             <button id="proj-new" class="btn btn-secondary btn-sm">+ New Project</button>
             <button id="proj-import" class="btn btn-secondary btn-sm">Import</button>
             <button id="proj-export-all" class="btn btn-secondary btn-sm">Export All</button>
@@ -536,6 +581,12 @@
                     <option value="">Analyze Project...</option>
                   </select>
                   <button id="proj-batch-run" class="btn btn-accent btn-sm">Run</button>
+                </div>
+                <div id="proj-batch-progress" class="proj-batch-progress hidden">
+                  <div class="proj-batch-bar-bg">
+                    <div id="proj-batch-bar" class="proj-batch-bar" style="width:0%"></div>
+                  </div>
+                  <span id="proj-batch-pct" class="proj-batch-pct">0%</span>
                 </div>
                 <div id="proj-batch-status" class="prompt-status" style="padding:4px 0;font-size:12px;"></div>
                 <!-- OSINT Project Tools -->
@@ -763,45 +814,9 @@
         </div>
       </section>
 
-      <!-- Feed Keyword Routes -->
-      <section class="card">
-        <h2 class="card-title">Keyword Routes
-          <span class="badge">Auto-file</span>
-        </h2>
-        <div class="card-body">
-          <p class="info-text">Automatically route matching feed entries to projects. When new entries arrive, Argus scans headlines and descriptions for your keywords. Matches are flagged and auto-added to the target project.</p>
-
-          <div id="feed-route-list" class="rules-list"></div>
-
-          <div class="rule-form">
-            <div class="form-row">
-              <div class="form-group flex-2">
-                <label for="route-keywords">Keywords <span class="hint">(comma-separated, supports regex with /pattern/)</span></label>
-                <input type="text" id="route-keywords" placeholder="trump, russia, /ukraine.*conflict/i">
-              </div>
-              <div class="form-group flex-1">
-                <label for="route-project">Target Project</label>
-                <select id="route-project"><option value="">Select project...</option></select>
-              </div>
-              <div class="form-group flex-1">
-                <label for="route-feed">Feed (optional)</label>
-                <select id="route-feed"><option value="">All feeds</option></select>
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group flex-1">
-                <label class="toggle-label">
-                  <input type="checkbox" id="route-notify" checked>
-                  <span>Notify on match</span>
-                </label>
-              </div>
-              <div class="form-group flex-1" style="justify-content:flex-end;">
-                <button id="add-feed-route" class="btn btn-secondary btn-sm">Add Route</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      <p style="padding:0 4px;margin-top:4px;">
+        <a href="#" id="feed-route-link" class="bm-sidebar-link">Keyword Routes (Automate tab) &rarr;</a>
+      </p>
 
     </div>
 
@@ -836,6 +851,37 @@
             <div id="kg-merge-list"></div>
           </div>
           <span id="kg-status" class="save-indicator hidden" style="color:var(--success);">Done</span>
+        </div>
+      </section>
+
+      <!-- Entity Dictionaries -->
+      <section class="card">
+        <h2 class="card-title">Entity Dictionaries
+          <span class="badge">Filters</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Customize how entities are classified. Built-in dictionaries ship with Argus; your custom entries are merged on top. Add words or phrases to improve extraction accuracy.</p>
+          <div id="kg-dict-stats" style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Loading stats...</div>
+          <div class="kg-dict-tabs" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;">
+            <button class="btn btn-secondary btn-sm kg-dict-tab active" data-dict="noise">Noise Phrases</button>
+            <button class="btn btn-secondary btn-sm kg-dict-tab" data-dict="notPersonFirstWords">Not-Person Words</button>
+            <button class="btn btn-secondary btn-sm kg-dict-tab" data-dict="commonNouns">Common Nouns</button>
+            <button class="btn btn-secondary btn-sm kg-dict-tab" data-dict="locations">Locations</button>
+            <button class="btn btn-secondary btn-sm kg-dict-tab" data-dict="orgs">Organizations</button>
+          </div>
+          <div id="kg-dict-editor">
+            <div id="kg-dict-items" class="rules-list" style="max-height:240px;overflow-y:auto;margin-bottom:8px;"></div>
+            <div class="form-row" style="gap:6px;">
+              <div class="form-group flex-2" style="margin:0;">
+                <input type="text" id="kg-dict-input" placeholder="Add word or phrase...">
+              </div>
+              <button id="kg-dict-add" class="btn btn-secondary btn-sm">Add</button>
+            </div>
+          </div>
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+            <button id="kg-dict-reprocess" class="btn btn-secondary btn-sm">Re-type All Entities</button>
+            <span id="kg-dict-status" class="save-indicator hidden" style="color:var(--success);">Saved</span>
+          </div>
         </div>
       </section>
 
@@ -962,6 +1008,92 @@
           </div>
         </div>
       </section>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- TAB: Resources                               -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="resources">
+
+      <!-- IP Bar + Update controls -->
+      <div class="res-toolbar">
+        <div class="res-ip-row">
+          <span class="res-ip-label">Your IP:</span>
+          <code id="res-ip-value">—</code>
+          <button id="res-ip-copy" class="btn btn-secondary btn-sm" title="Copy IP">Copy</button>
+          <button id="res-ip-refresh" class="btn btn-secondary btn-sm" title="Refresh IP">Refresh</button>
+        </div>
+        <div class="res-update-row">
+          <span id="res-version-info" class="res-version-info"></span>
+          <button id="res-check-updates" class="btn btn-secondary btn-sm">Check for Updates</button>
+          <button id="res-reset-stock" class="btn btn-secondary btn-sm" style="display:none;">Reset to Bundled</button>
+        </div>
+      </div>
+
+      <!-- Custom sources display (top, hidden if empty) -->
+      <div id="res-custom-top" class="res-custom-top" style="display:none;">
+        <div class="res-custom-top-header">
+          <h3 class="res-custom-top-title">Your Sources</h3>
+          <a href="#res-custom-add-section" id="res-custom-add-link" class="res-custom-add-link">+ Add more</a>
+        </div>
+        <div id="res-custom-top-links" class="resource-links"></div>
+      </div>
+
+      <!-- Dynamic resource cards grid -->
+      <div id="res-grid" class="res-grid">
+        <div class="loading-text">Loading resources...</div>
+      </div>
+
+      <!-- Custom Sources management (bottom) -->
+      <section id="res-custom-add-section" class="card" style="margin-top:16px;">
+        <h2 class="card-title">Manage Custom Sources</h2>
+        <div class="card-body">
+          <div id="res-custom-sources" style="margin-bottom:12px;"></div>
+          <div class="form-row" style="gap:8px;align-items:flex-end;">
+            <div class="form-group flex-2" style="margin:0;">
+              <label for="res-custom-url" style="font-size:11px;">URL</label>
+              <input type="text" id="res-custom-url" placeholder="https://..." style="font-size:12px;padding:4px 8px;">
+            </div>
+            <div class="form-group flex-1" style="margin:0;">
+              <label for="res-custom-label" style="font-size:11px;">Label</label>
+              <input type="text" id="res-custom-label" placeholder="Name" style="font-size:12px;padding:4px 8px;">
+            </div>
+            <div class="form-group flex-2" style="margin:0;">
+              <label for="res-custom-desc" style="font-size:11px;">Description</label>
+              <input type="text" id="res-custom-desc" placeholder="Short description..." style="font-size:12px;padding:4px 8px;">
+            </div>
+            <button id="res-custom-add" class="btn btn-secondary btn-sm" style="padding:4px 12px;font-size:12px;white-space:nowrap;">+ Add</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Companion Extensions -->
+      <div class="res-companions" style="margin-top:20px;">
+        <p class="res-companions-disclaimer">Argus is not affiliated with or endorsed by these projects. We simply recommend them as useful companions for research workflows.</p>
+        <div class="res-companions-row">
+          <a href="https://addons.mozilla.org/en-US/firefox/addon/ublock-origin/" target="_blank" class="res-companion" title="uBlock Origin — Cleaner pages mean better analysis">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span>uBlock Origin</span>
+          </a>
+          <a href="https://addons.mozilla.org/en-US/firefox/addon/darkreader/" target="_blank" class="res-companion" title="Dark Reader — Easier on the eyes during long research sessions">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            <span>Dark Reader</span>
+          </a>
+          <a href="https://addons.mozilla.org/en-US/firefox/addon/single-file/" target="_blank" class="res-companion" title="SingleFile — Save complete offline page copies">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span>SingleFile</span>
+          </a>
+          <a href="https://addons.mozilla.org/en-US/firefox/addon/violentmonkey/" target="_blank" class="res-companion" title="Violentmonkey — Custom userscripts for advanced extraction">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            <span>Violentmonkey</span>
+          </a>
+          <a href="https://addons.mozilla.org/en-US/firefox/addon/cookie-autodelete/" target="_blank" class="res-companion" title="Cookie AutoDelete — Fresh sessions between research contexts">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+            <span>Cookie AutoDelete</span>
+          </a>
+        </div>
+      </div>
 
     </div>
 
@@ -1166,6 +1298,17 @@
             </div>
           </div>
           <span id="storage-purge-status" class="save-indicator hidden" style="color:var(--success);">Done</span>
+          <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+          <label style="color:var(--error);font-weight:600;">Wipe Everything</label>
+          <p class="info-text" style="margin:0 0 6px;">Permanently deletes all Argus data: projects, bookmarks, monitors, feeds, history, knowledge graph, snapshots, settings, and cached results. This cannot be undone. Use before uninstalling to leave no traces.</p>
+          <button id="wipe-everything-btn" class="btn btn-secondary" style="color:var(--error);border-color:var(--error);">Wipe Everything</button>
+          <div id="wipe-confirm" class="hidden" style="margin-top:8px;padding:10px;border:1px solid var(--error);border-radius:6px;background:var(--bg-secondary);">
+            <p style="margin:0 0 8px;color:var(--error);font-weight:600;">Are you sure? This will permanently delete ALL Argus data.</p>
+            <div style="display:flex;gap:8px;">
+              <button id="wipe-confirm-yes" class="btn btn-secondary" style="color:var(--error);border-color:var(--error);">Yes, Wipe Everything</button>
+              <button id="wipe-confirm-no" class="btn btn-secondary">Cancel</button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1191,6 +1334,7 @@
           <p class="info-text" style="margin-top:12px;">To customize shortcuts, go to <strong>about:addons</strong> &rarr; Gear icon &rarr; <strong>Manage Extension Shortcuts</strong>.</p>
         </div>
       </section>
+
 
       <!-- About -->
       <section class="card">

@@ -1,12 +1,12 @@
 {
   "manifest_version": 2,
-  "name": "Argus",
-  "version": "360.1.0.2",
+  "name": "Argus Beta",
+  "version": "360.2.0.0",
   "description": "Analyze any webpage using Grok, ChatGPT, Claude, or Gemini. Custom prompts, OSINT tools, streaming responses, multi-provider comparison, analysis history, and more.",
 
   "browser_specific_settings": {
     "gecko": {
-      "id": "argus@local",
+      "id": "argus-beta@local",
       "strict_min_version": "142.0",
       "data_collection_permissions": {
         "required": ["none"]
@@ -46,12 +46,14 @@
   "background": {
     "scripts": [
       "lib/storage-db.js",
+      "lib/opfs-storage.js",
       "lib/pdf.min.js",
       "background-permissions.js",
       "background-presets.js",
       "background-providers.js",
       "background.js",
       "background-osint.js",
+      "data/kg-dictionaries.js",
       "background-kg.js",
       "background-pipelines.js",
       "background-agents.js",
@@ -61,7 +63,8 @@
   },
 
   "web_accessible_resources": [
-    "lib/pdf.worker.min.js"
+    "lib/pdf.worker.min.js",
+    "data/resources.json"
   ],
 
   "options_ui": {

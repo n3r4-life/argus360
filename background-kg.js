@@ -391,190 +391,66 @@ const KnowledgeGraph = (() => {
 
   // ── Regex-based entity extraction (fast, no API) ──
 
-  // Common noise phrases from page boilerplate, nav, sidebars, CTAs
-  const NOISE_ENTITIES = new Set([
-    // Navigation & UI
-    "watch live", "read more", "sign up", "log in", "sign in", "subscribe now",
-    "click here", "learn more", "get started", "view all", "see more", "show more",
-    "load more", "read full", "full story", "breaking news", "latest news",
-    "top stories", "trending now", "most popular", "most read", "editors picks",
-    "related stories", "related articles", "recommended for you", "you may like",
-    "more stories", "more from", "whats new", "just in", "live updates",
-    "share this", "print this", "email this", "save article",
-    "go back", "come back", "right now", "find out", "check out",
-    "turn off", "turn on", "opt out", "opt in", "pick up",
-    "stand by", "move on", "carry on", "set up", "shut down",
-    "take action", "stay tuned", "coming soon", "starts here",
-    "watch now", "listen now", "buy now", "shop now", "order now",
-    "try free", "free trial", "no thanks", "not now", "maybe later",
-    "tap here", "swipe up", "scroll down",
-    // Social / sharing
-    "follow us", "like us", "share on", "tweet this", "send email",
-    "facebook share", "twitter share", "copy link",
-    // Common section headers
-    "table of contents", "about us", "contact us", "privacy policy",
-    "terms of service", "terms and conditions", "cookie policy", "cookie settings",
-    "advertise with us", "work with us", "careers at", "join our team",
-    // Media / video boilerplate
-    "skip to content", "skip to main", "skip navigation", "back to top",
-    "now playing", "up next", "auto play", "full screen",
-    "closed captions", "picture in picture",
-    // Newsletter / subscription
-    "daily newsletter", "weekly newsletter", "morning newsletter",
-    "evening newsletter", "breaking alerts", "news alerts",
-    "enter your email", "your email address",
-    // Generic actions
-    "add comment", "post comment", "leave reply", "report abuse",
-    "flag content", "download app", "get app", "open app",
-    // Common false-positive multi-word capitalized phrases
-    "united states", "read the full", "according to", "in addition to",
-    "on the other", "at the same", "for the first", "by the end",
-    "save lake michigan", "attention rand paul",
-    // News / media jargon that gets capitalized
-    "press release", "press conference", "white paper", "case study",
-    "fact sheet", "executive summary", "annual report", "fiscal year",
-    "public opinion", "popular vote", "swing state", "swing states",
-    "exit poll", "exit polls", "poll numbers", "opinion piece",
-    "open letter", "cover story", "special report", "exclusive interview",
-    "developing story", "staff writer", "guest contributor",
-    "photo credit", "image credit", "file photo", "stock photo",
-    "editor note", "editors note", "authors note", "correction notice",
-    // Common filler phrases that appear capitalized in headlines/titles
-    "big deal", "big picture", "bottom line", "game changer",
-    "long term", "short term", "real time", "high profile",
-    "deep dive", "fast track", "front page", "front line",
-    "ground zero", "prime time", "status quo", "tipping point",
-    "turning point", "wake up call", "talking point", "talking points",
-    // Sensationalized / headline phrases that get capitalized
-    "unconditional surrender", "total war", "cold war", "world war",
-    "civil war", "trade war", "class war", "culture war",
-    "regime change", "power struggle", "arms race", "space race",
-    "nuclear deal", "peace deal", "trade deal", "cease fire", "ceasefire",
-    "martial law", "state emergency", "national emergency",
-    "mass shooting", "school shooting", "active shooter",
-    "death toll", "body count", "kill list", "hit list",
-    "red line", "red flag", "green light", "black market",
-    "dark web", "deep state", "shadow government", "lone wolf",
-    "false flag", "inside job", "cover up", "witch hunt",
-    "fake news", "open source", "closed door", "behind closed",
-    "no comment", "last resort", "worst case", "best case",
-    "direct action", "joint statement", "official statement",
-    "public hearing", "closed session", "executive order",
-    "breaking point", "flash point", "focal point", "starting point",
-    "strong hold", "strong man", "front runner", "dark horse",
-    "wild card", "power play", "end game", "zero sum",
-    "collateral damage", "friendly fire", "surgical strike",
-    "shock and awe", "scorched earth", "boots on ground",
-    // Common compound nouns / concepts capitalized in titles
-    "social media", "artificial intelligence", "machine learning",
-    "climate change", "global warming", "mental health", "public health",
-    "real estate", "stock market", "housing market", "job market",
-    "labor market", "free trade", "fair trade", "minimum wage",
-    "living wage", "death penalty", "capital punishment",
-    "gun control", "border control", "birth control", "crowd control",
-    "remote work", "gig economy", "sharing economy",
-    "net worth", "gdp growth", "interest rate", "inflation rate",
-    "unemployment rate", "crime rate", "poverty rate",
-    "data breach", "cyber attack", "identity theft",
-    "human trafficking", "drug trafficking", "money laundering",
-    "insider trading", "price fixing", "market manipulation",
-    "plea deal", "plea bargain", "grand jury", "hung jury",
-    "bail reform", "prison reform", "police reform", "tax reform",
-    "health care", "child care", "elder care",
-    "task force", "work force", "labor force", "air strike",
-    "drone strike", "counter attack", "preemptive strike",
-    "search warrant", "arrest warrant", "travel ban", "import ban",
-    // Tech / product phrases
-    "open source", "user interface", "user experience",
-    "data center", "cloud computing", "block chain", "smart contract",
-    "virtual reality", "augmented reality", "mixed reality",
-    "self driving", "electric vehicle", "autonomous vehicle",
-    // Generic role/title phrases (not person names)
-    "prime minister", "vice president", "chief executive",
-    "secretary state", "attorney general", "surgeon general",
-    "speaker house", "majority leader", "minority leader",
-    "chief staff", "press secretary", "national security",
-    "foreign minister", "defense minister", "finance minister",
-    "head state", "commander chief", "joint chiefs",
-  ]);
+  // Merge built-in dictionaries (from data/kg-dictionaries.js) with user custom entries
+  // User custom entries are loaded from storage.local on init and can be edited in the console
+  let _userCustomNoise = new Set();
+  let _userCustomNotPerson = new Set();
+  let _userCustomNouns = new Set();
+  let _userCustomLocations = new Set();
+  let _userCustomOrgs = new Set();
 
-  // Well-known locations without keyword hints (countries, territories, famous places)
-  const KNOWN_LOCATIONS = new Set([
-    // Countries commonly in news
-    "united states", "united kingdom", "south korea", "north korea",
-    "saudi arabia", "south africa", "sri lanka", "costa rica",
-    "puerto rico", "hong kong", "new zealand", "el salvador",
-    "sierra leone", "burkina faso", "ivory coast", "czech republic",
-    "dominican republic", "papua new guinea", "trinidad tobago",
-    "bosnia herzegovina", "antigua barbuda", "solomon islands",
-    // US states / territories
-    "rhode island", "american samoa", "us virgin islands",
-    // Famous places / landmarks
-    "white house", "wall street", "silicon valley", "capitol hill",
-    "camp david", "pearl harbor", "times square", "ground zero",
-    "oval office", "downing street", "red square", "tiananmen square",
-    "gaza strip", "west bank", "golan heights", "crimean peninsula",
-    "suez canal", "panama canal", "strait hormuz", "taiwan strait",
-    "korean peninsula", "arabian peninsula", "iberian peninsula",
-    "french riviera", "ivory coast", "cape town",
-    "buenos aires", "rio janeiro", "sao paulo", "kuala lumpur",
-    "tel aviv", "addis ababa", "dar salaam",
-    "las vegas", "los angeles", "san francisco", "san diego",
-    "san antonio", "san jose", "santa monica", "santa cruz",
-    "el paso", "baton rouge", "des moines", "corpus christi",
-    "little rock", "grand rapids", "fort worth", "fort lauderdale",
-    "long beach", "virginia beach", "palm beach", "myrtle beach",
-    "salt lake", "ann arbor", "palo alto", "santa barbara",
-    "santa fe", "monte carlo", "vatican city",
-  ]);
+  // Load user dictionary customizations from storage
+  async function loadUserDictionaries() {
+    try {
+      const data = await browser.storage.local.get("kgUserDictionaries");
+      const d = data.kgUserDictionaries || {};
+      _userCustomNoise = new Set(d.noise || []);
+      _userCustomNotPerson = new Set(d.notPersonFirstWords || []);
+      _userCustomNouns = new Set(d.commonNouns || []);
+      _userCustomLocations = new Set(d.locations || []);
+      _userCustomOrgs = new Set(d.orgs || []);
+      console.log("[KG] User dictionaries loaded:", {
+        noise: _userCustomNoise.size, notPerson: _userCustomNotPerson.size,
+        nouns: _userCustomNouns.size, locations: _userCustomLocations.size,
+        orgs: _userCustomOrgs.size
+      });
+    } catch (e) { console.warn("[KG] Failed to load user dictionaries:", e); }
+  }
+  loadUserDictionaries();
 
-  // Well-known organizations that lack keyword hints
-  const KNOWN_ORGS = new Set([
-    "white house", // also a location, but often used as org
-    "supreme court", "pentagon", "capitol hill",
-    "wall street", // also location, but often metonym for finance
-    "red cross", "amnesty international", "doctors without borders",
-    "world health", "world trade", "world economic",
-    "human rights", "civil liberties", "planned parenthood",
-    "secret service", "coast guard", "air force", "space force",
-    "marine corps", "national guard", "peace corps",
-    "state department", "justice department", "defense department",
-    "homeland security", "foreign affairs",
-    "federal reserve", "fed reserve",
-    "internal revenue", "social security",
-    "fox news", "sky news", "al jazeera",
-    "associated press", "reuters news",
-    "lone star", "blue origin", "space exploration",
-  ]);
+  // Helper — check membership across built-in + user sets
+  function inDict(builtIn, userSet, val) {
+    return builtIn.has(val) || userSet.has(val);
+  }
 
-  // Words that never start a real person's name
-  const NOT_PERSON_FIRST_WORDS = new Set([
-    "big", "small", "long", "short", "old", "young", "good", "bad", "real", "fake",
-    "full", "half", "hard", "soft", "high", "low", "hot", "cold", "dark", "light",
-    "early", "late", "fast", "slow", "open", "close", "top", "main", "key", "raw",
-    "due", "own", "fair", "rare", "wide", "deep", "flat", "thin", "bold", "wild",
-    "pure", "core", "true", "false", "free", "safe", "live", "dead", "rich", "poor",
-    "next", "past", "left", "right", "same", "such", "much", "very", "just", "also",
-    "even", "still", "back", "away", "down", "well", "most", "more", "less", "only",
-    "ever", "each", "both", "sure", "near", "far", "other", "total", "final", "last",
-    "first", "second", "third", "double", "triple", "single", "joint", "global",
-    "local", "national", "international", "federal", "state", "public", "private",
-    "general", "special", "major", "minor", "direct", "mass", "civil", "royal",
-    "nuclear", "solar", "digital", "virtual", "mobile", "social", "fiscal", "legal",
-    "mental", "moral", "vital", "fatal", "mutual", "racial", "rural", "urban",
-    "annual", "daily", "weekly", "monthly", "hostile", "active", "passive", "native",
-    "foreign", "domestic", "internal", "external", "central", "primary", "secondary",
-    "critical", "essential", "potential", "possible", "probable", "apparent", "alleged",
-    "former", "current", "recent", "sudden", "gradual", "complete", "partial",
-    "extreme", "severe", "intense", "massive", "enormous", "record", "historic",
-    "unprecedented", "unconditional", "preemptive", "collateral", "systematic",
-    "ongoing", "emerging", "growing", "rising", "falling", "leading", "breaking",
-    "burning", "running", "working", "living", "moving", "missing", "lasting",
-    "standing", "pending", "remaining", "increasing", "mounting", "looming",
-    "sweeping", "stunning", "shocking", "alarming", "concerning", "devastating",
-    "explosive", "exclusive", "controversial", "bipartisan", "bilateral",
-  ]);
+  // Expose for message handlers
+  function getUserDictionaries() {
+    return browser.storage.local.get("kgUserDictionaries").then(d => d.kgUserDictionaries || {
+      noise: [], notPersonFirstWords: [], commonNouns: [], locations: [], orgs: []
+    });
+  }
+  function saveUserDictionaries(dict) {
+    return browser.storage.local.set({ kgUserDictionaries: dict }).then(() => {
+      loadUserDictionaries();
+      return { success: true };
+    });
+  }
+  function getBuiltinDictionaryStats() {
+    return {
+      noise: KG_NOISE_ENTITIES.size,
+      notPersonFirstWords: KG_NOT_PERSON_FIRST_WORDS.size,
+      commonNouns: KG_COMMON_NOUNS.size,
+      locations: KG_KNOWN_LOCATIONS.size,
+      orgs: KG_KNOWN_ORGS.size,
+      validFirstNames: KG_VALID_FIRST_NAMES.size,
+      titlePrefixes: KG_TITLE_PREFIXES.size,
+      notPersonPhrases: KG_NOT_PERSON_PHRASES.size,
+    };
+  }
 
+  // Dictionaries now loaded from data/kg-dictionaries.js (globals):
+  // KG_NOISE_ENTITIES, KG_KNOWN_LOCATIONS, KG_KNOWN_ORGS, KG_NOT_PERSON_FIRST_WORDS,
+  // KG_COMMON_NOUNS, KG_VALID_FIRST_NAMES, KG_TITLE_PREFIXES, KG_NOT_PERSON_PHRASES
 
   function looksLikePersonName(name) {
     if (!name) return false;
@@ -582,7 +458,7 @@ const KnowledgeGraph = (() => {
     // Person names are typically 2-3 words
     if (words.length < 2 || words.length > 4) return false;
     // Must not start with a known non-name word
-    if (NOT_PERSON_FIRST_WORDS.has(words[0].toLowerCase())) return false;
+    if (inDict(KG_NOT_PERSON_FIRST_WORDS, _userCustomNotPerson, words[0].toLowerCase())) return false;
     // Must not contain numbers
     if (/\d/.test(name)) return false;
     // Must not contain all-caps words (acronyms) unless single letter (middle initial)
@@ -606,44 +482,21 @@ const KnowledgeGraph = (() => {
     }
     // Check that the last word looks plausible (not a common noun)
     const lastWord = words[words.length - 1].toLowerCase();
-    const COMMON_NOUNS = new Set([
-      "war", "deal", "act", "law", "ban", "tax", "aid", "oil", "gas", "gun",
-      "vote", "bill", "plan", "rate", "debt", "cost", "sale", "risk", "loss",
-      "gain", "rise", "fall", "drop", "push", "pull", "move", "step", "turn",
-      "call", "talk", "meet", "fight", "strike", "attack", "threat", "crisis",
-      "reform", "policy", "market", "growth", "change", "control", "power",
-      "force", "order", "state", "system", "media", "trade", "peace", "fire",
-      "alert", "surge", "shift", "clash", "fraud", "abuse", "trial", "crime",
-      "death", "health", "care", "work", "land", "zone", "line", "rule",
-      "code", "case", "unit", "base", "team", "group", "front", "wave",
-      "storm", "flood", "drought", "famine", "plague", "virus", "strain",
-      "variant", "threat", "warning", "impact", "effect", "result", "source",
-      "report", "study", "data", "index", "score", "count", "total", "record",
-      "summit", "debate", "hearing", "session", "term", "era", "age", "period",
-      "phase", "round", "stage", "level", "point", "mark", "target", "goal",
-      "effort", "strategy", "approach", "response", "action", "measure",
-      "sanction", "embargo", "boycott", "protest", "rally", "march",
-      "surrender", "retreat", "defeat", "victory", "triumph",
-      "scandal", "controversy", "backlash", "fallout", "aftermath",
-      "intelligence", "security", "defense", "offense", "resistance",
-      "interference", "influence", "corruption", "conspiracy",
-    ]);
-    if (COMMON_NOUNS.has(lastWord)) return false;
-    // Check first word isn't a common non-name word (broader than the Set check above)
-    const firstLower = words[0].toLowerCase();
-    const COMMON_ADJ_NOUNS = new Set([
-      "super", "ultra", "mega", "mini", "micro", "macro", "multi",
-      "counter", "anti", "pro", "non", "self", "cross", "over", "under",
-      "upper", "lower", "inner", "outer", "after", "before", "post", "pre",
-    ]);
-    if (COMMON_ADJ_NOUNS.has(firstLower)) return false;
+    if (inDict(KG_COMMON_NOUNS, _userCustomNouns, lastWord)) return false;
+    // Check against the not-person-phrases dictionary
+    const nameLower = name.toLowerCase();
+    if (KG_NOT_PERSON_PHRASES.has(nameLower)) return false;
+    // Boost confidence if first word is a known real first name
+    // (still allow through — this is just a positive signal, not blocking)
+    // Check first word isn't a common prefix/adjective (already covered by NOT_PERSON_FIRST_WORDS above)
 
     return true;
   }
 
   function isNoiseEntity(name) {
     const lower = name.toLowerCase().trim();
-    if (NOISE_ENTITIES.has(lower)) return true;
+    if (inDict(KG_NOISE_ENTITIES, _userCustomNoise, lower)) return true;
+    if (KG_NOT_PERSON_PHRASES.has(lower)) return true;
     // Single common words that get through as 2-word with article/preposition
     if (lower.length < 4) return true;
     // Very short "entities" (< 3 chars per word average)
@@ -651,7 +504,7 @@ const KnowledgeGraph = (() => {
     const avgLen = lower.replace(/\s+/g, "").length / words.length;
     if (avgLen < 3) return true;
     // Phrases that start with a known non-name adjective/modifier
-    if (words.length >= 2 && NOT_PERSON_FIRST_WORDS.has(words[0])) return true;
+    if (words.length >= 2 && inDict(KG_NOT_PERSON_FIRST_WORDS, _userCustomNotPerson, words[0])) return true;
     return false;
   }
 
@@ -676,8 +529,8 @@ const KnowledgeGraph = (() => {
       // Guess type — check known sets first, then keyword heuristics, then fallback
       const nameLower = name.toLowerCase();
       let type = "other";
-      if (KNOWN_LOCATIONS.has(nameLower)) type = "location";
-      else if (KNOWN_ORGS.has(nameLower)) type = "organization";
+      if (inDict(KG_KNOWN_LOCATIONS, _userCustomLocations, nameLower)) type = "location";
+      else if (inDict(KG_KNOWN_ORGS, _userCustomOrgs, nameLower)) type = "organization";
       else if (ORG_SUFFIXES.test(name)) type = "organization";
       else if (/\b(University|Institute|Foundation|Association|Agency|Department|Ministry|Committee|Commission|Bureau|Council|Board|Party|Union|Bank|Fund|Alliance|Network|Society|Federation|Authority|Office|Service|Corps|Regiment|Brigade|Fleet|Squadron|Church|Temple|Mosque|Synagogue|Cathedral|Hospital|Clinic|School|Academy|College|Library|Museum|Theater|Theatre|Stadium|Center|Centre|Palace|Embassy|Consulate|Court|Police|Guard|Force|Corps|Command|Intelligence|Security|Administration|Commission|Tribunal|Legislature|Parliament|Congress|Senate|Assembly)\b/i.test(name)) type = "organization";
       else if (/\b(City|County|State|Province|Region|District|Township|Village|Island|Islands|Mountain|Mountains|River|Lake|Ocean|Sea|Bay|Gulf|Peninsula|Valley|Desert|Forest|Park|Beach|Coast|Harbor|Harbour|Port|Cape|Creek|Falls|Springs|Canyon|Plateau|Basin|Strait|Channel|North|South|East|West|Northern|Southern|Eastern|Western|Central|Republic|Kingdom|Emirates|Federation|Town|Heights|Plains|Hills|Ridge|Crossing|Landing|Point|Cove|Bluff|Bend|Hollow|Grove|Meadow|Manor|Haven|Dale|Glen)\b/i.test(name)) type = "location";
@@ -1015,8 +868,8 @@ const KnowledgeGraph = (() => {
       const name = node.displayName;
       const nameLower = name.toLowerCase();
       let newType = "other";
-      if (KNOWN_LOCATIONS.has(nameLower)) newType = "location";
-      else if (KNOWN_ORGS.has(nameLower)) newType = "organization";
+      if (inDict(KG_KNOWN_LOCATIONS, _userCustomLocations, nameLower)) newType = "location";
+      else if (inDict(KG_KNOWN_ORGS, _userCustomOrgs, nameLower)) newType = "organization";
       else if (ORG_SUFFIXES.test(name)) newType = "organization";
       else if (/\b(University|Institute|Foundation|Association|Agency|Department|Ministry|Committee|Commission|Bureau|Council|Board|Party|Union|Bank|Fund|Alliance|Network|Society|Federation|Authority|Office|Service|Corps|Regiment|Brigade|Fleet|Squadron|Church|Temple|Mosque|Synagogue|Cathedral|Hospital|Clinic|School|Academy|College|Library|Museum|Theater|Theatre|Stadium|Center|Centre|Palace|Embassy|Consulate|Court|Police|Guard|Force|Corps|Command|Intelligence|Security|Administration|Commission|Tribunal|Legislature|Parliament|Congress|Senate|Assembly)\b/i.test(name)) newType = "organization";
       else if (/\b(City|County|State|Province|Region|District|Township|Village|Island|Islands|Mountain|Mountains|River|Lake|Ocean|Sea|Bay|Gulf|Peninsula|Valley|Desert|Forest|Park|Beach|Coast|Harbor|Harbour|Port|Cape|Creek|Falls|Springs|Canyon|Plateau|Basin|Strait|Channel|North|South|East|West|Northern|Southern|Eastern|Western|Central|Republic|Kingdom|Emirates|Federation|Town|Heights|Plains|Hills|Ridge|Crossing|Landing|Point|Cove|Bluff|Bend|Hollow|Grove|Meadow|Manor|Haven|Dale|Glen)\b/i.test(name)) newType = "location";
@@ -1078,5 +931,9 @@ const KnowledgeGraph = (() => {
     normalizeName,
     canonicalize,
     nodeId,
+    getUserDictionaries,
+    saveUserDictionaries,
+    getBuiltinDictionaryStats,
+    loadUserDictionaries,
   };
 })();

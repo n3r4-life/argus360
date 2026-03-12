@@ -1,0 +1,43 @@
+{
+  "manifest": {
+    "format": "argusproj",
+    "version": 1,
+    "exportedAt": "2026-03-12T14:25:40.413Z",
+    "argusVersion": "360.2.0.0",
+    "projectCount": 3,
+    "historyCount": 0
+  },
+  "projects": [
+    {
+      "id": "proj-1773325486493-0mvet7",
+      "name": "Iran War",
+      "description": "Iran war analysis",
+      "starred": false,
+      "color": "#e94560",
+      "createdAt": "2026-03-12T14:24:46.493Z",
+      "updatedAt": "2026-03-12T14:24:46.493Z",
+      "items": []
+    },
+    {
+      "id": "proj-1773325503691-oa1gvg",
+      "name": "Trump Derangement Syndrome",
+      "description": "TDS",
+      "starred": false,
+      "color": "#f9f06b",
+      "createdAt": "2026-03-12T14:25:03.691Z",
+      "updatedAt": "2026-03-12T14:25:03.691Z",
+      "items": []
+    },
+    {
+      "id": "proj-1773325528974-jr7i4g",
+      "name": "Epstein List",
+      "description": "The Epstein Files",
+      "starred": false,
+      "color": "#865e3c",
+      "createdAt": "2026-03-12T14:25:28.975Z",
+      "updatedAt": "2026-03-12T14:25:28.975Z",
+      "items": []
+    }
+  ],
+  "history": []
+}

@@ -56,6 +56,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await checkPreviousAnalysis();
   await checkArchiveAvailability();
   await checkWaybackAvailability();
+  await checkFeedAvailability();
 });
 
 async function loadSettings() {
@@ -323,6 +324,48 @@ async function checkWaybackAvailability() {
   } catch { /* ignore */ }
 }
 
+async function checkFeedAvailability() {
+  try {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+    if (!tab || !tab.url || tab.url.startsWith("about:") || tab.url.startsWith("moz-extension:")) return;
+
+    const resp = await browser.runtime.sendMessage({ action: "getFeedDetection", tabId: tab.id });
+    if (!resp?.feeds?.length) return;
+
+    const feedEl = document.getElementById("feed-detected");
+    feedEl.textContent = "";
+
+    const dot = document.createElement("span");
+    dot.className = "archive-dot";
+    dot.style.background = "#ff9800";
+
+    const text = document.createElement("span");
+    text.textContent = resp.feeds.length === 1
+      ? `RSS feed available${resp.feeds[0].title ? ": " + resp.feeds[0].title : ""}`
+      : `${resp.feeds.length} RSS feeds available`;
+
+    const subBtn = document.createElement("a");
+    subBtn.textContent = "Subscribe";
+    subBtn.style.cursor = "pointer";
+    subBtn.addEventListener("click", async () => {
+      const feedUrl = resp.feeds[0].url;
+      const subResp = await browser.runtime.sendMessage({ action: "addFeed", url: feedUrl, intervalMinutes: 60 });
+      if (subResp?.success) {
+        subBtn.textContent = "Subscribed!";
+        subBtn.style.color = "#4caf50";
+        subBtn.style.pointerEvents = "none";
+      } else {
+        subBtn.textContent = subResp?.error || "Failed";
+        subBtn.style.color = "#f44336";
+      }
+    });
+
+    feedEl.append(dot, text, subBtn);
+    feedEl.classList.remove("hidden");
+  } catch { /* ignore */ }
+}
+
 // ──────────────────────────────────────────────
 // Mode management
 // ──────────────────────────────────────────────
@@ -385,13 +428,8 @@ function attachEventListeners() {
     window.close();
   });
 
-  document.getElementById("open-bookmarks").addEventListener("click", () => {
-    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#bookmarks") });
-    window.close();
-  });
-
-  document.getElementById("open-monitors").addEventListener("click", () => {
-    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#monitors") });
+  document.getElementById("open-resources").addEventListener("click", () => {
+    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#resources") });
     window.close();
   });
 
