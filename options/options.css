@@ -593,6 +593,19 @@ textarea {
   color: var(--accent);
 }
 
+/* ═══ Detected feeds picker ═══ */
+#detected-feeds-picker {
+  background: rgba(255, 152, 0, 0.06);
+  border: 1px solid rgba(255, 152, 0, 0.25);
+  border-radius: 8px;
+  padding: 12px;
+}
+#detected-feeds-list {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  padding: 4px;
+}
+
 /* ═══ Rules & monitors lists ═══ */
 .rules-list {
   margin-bottom: 16px;

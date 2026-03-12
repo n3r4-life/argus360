@@ -2966,6 +2966,10 @@ function switchMainTab(tabName, tabs, panels) {
   if (tabName === "projects" && !projState.initialized) {
     initProjects();
   }
+  // Check for detected feeds when switching to feeds tab
+  if (tabName === "feeds") {
+    checkDetectedFeeds();
+  }
 }
 
 function handleHashNav(hash, tabs, panels) {

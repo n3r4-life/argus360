@@ -4678,6 +4678,10 @@ async function handleBatchAnalyzeProject(message) {
   const targets = reanalyze
     ? proj.items.filter(i => i.url)
     : proj.items.filter(i => i.url && !i.analysisContent);
+
+  console.log(`[Batch] Starting: ${targets.length} items, preset=${presetKey}, reanalyze=${reanalyze}`);
+  console.log(`[Batch] Total project items: ${proj.items.length}, with URL: ${proj.items.filter(i => i.url).length}, unanalyzed: ${proj.items.filter(i => i.url && !i.analysisContent).length}`);
+
   if (targets.length === 0) return { success: false, error: "No items to analyze." };
 
   batchState = { running: true, projectId, total: targets.length, done: 0, current: "", errors: [], cancelled: false };
@@ -4702,14 +4706,19 @@ async function runBatchLoop(itemIds, projectId, presetKey) {
     batchState.current = item.title || item.url;
 
     try {
+      console.log(`[Batch] Analyzing ${batchState.done + 1}/${batchState.total}: ${item.title || item.url}`);
       const resp = await Promise.race([
         handleBatchAnalyzeProjectItem({ projectId, itemId, presetKey }),
         new Promise((_, reject) => setTimeout(() => reject(new Error("Timed out after 60s")), ITEM_TIMEOUT))
       ]);
       if (!resp.success) {
+        console.warn(`[Batch] Failed: ${item.title || item.url} — ${resp.error}`);
         batchState.errors.push(`${item.title || item.url}: ${resp.error}`);
+      } else {
+        console.log(`[Batch] Done: ${item.title || item.url} (cached=${resp.cached})`);
       }
     } catch (err) {
+      console.error(`[Batch] Error: ${item.title || item.url} — ${err.message}`);
       batchState.errors.push(`${item.title || item.url}: ${err.message}`);
     }
 
