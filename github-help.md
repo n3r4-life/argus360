@@ -15,8 +15,10 @@ Jump to:
 - [Redirects](#help-archive)
 - [OSINT Tools](#help-osint)
 - [Knowledge Graph](#help-kg)
+- [Entity Dictionaries](#help-dictionaries)
 - [Source Pipelines](#help-pipelines)
 - [Dashboard & Digests](#help-dashboard)
+- [Cloud Backup](#help-cloud-backup)
 - [Provider Features](#help-providers)
 - [Exporting](#help-export)
 - [Config Reference](#help-config)
@@ -449,6 +451,55 @@ The Knowledge Graph card is on the **OSINT** tab. From there you can:
 
 Project-level graphs are also available from each project's toolbar (Graph button).
 
+### Project Skeleton View
+
+Click the **Skeleton** button in a project's OSINT toolbar to see a structural overview of everything connected to that project:
+- **Items** -- all URLs, notes, and analyses in the project
+- **Feeds** -- RSS feeds routed to this project via keyword routing
+- **Bookmarks** -- bookmarks matching project item URLs
+- **Monitors** -- page monitors watching project URLs
+- **Entities** -- knowledge graph entities extracted from project items, sorted by mention count
+- **Keywords** -- keyword routes targeting this project
+
+This gives you an at-a-glance "X-ray" of the investigation -- what data exists, what's linked, and where to dig deeper.
+
+[Back to top](#help-top)
+
+---
+
+<a id="help-dictionaries"></a>
+## Entity Dictionaries
+
+The Knowledge Graph uses built-in dictionaries (~2,500+ entries across 8 categories) to classify entities and filter noise during extraction. Common false positives like "Read More" or "Subscribe" being classified as person names are eliminated.
+
+### Built-in Dictionary Categories
+
+| Dictionary | Purpose | Example entries |
+| --- | --- | --- |
+| **Noise Entities** | Phrases to always exclude | "Read More", "Subscribe Now", "Breaking News" |
+| **Known Locations** | Multi-word place names | "New York City", "Silicon Valley", "Hong Kong" |
+| **Known Organizations** | Companies, institutions, agencies | "Federal Reserve", "Reuters", "Associated Press" |
+| **Not-Person Words** | Words that never start a real person name | "Download", "Premium", "Featured", "Updated" |
+| **Valid First Names** | Real first names across cultures | Used for person-name validation |
+
+### Customizing Dictionaries
+
+Go to the **OSINT tab → Entity Dictionaries** card to:
+1. Select a dictionary tab (Noise, Locations, Orgs, Not-Person, First Names)
+2. View existing entries (built-in count shown)
+3. Add custom entries -- type a word or phrase and click Add
+4. Remove custom entries (built-in entries cannot be removed)
+5. Click **Re-type All Entities** to reclassify existing KG entities using the updated dictionaries
+
+Custom entries are stored locally and merged with the built-in dictionaries at runtime.
+
+### Example: Reducing false positives
+
+If your research domain produces entities like "Market Analysis" being classified as a person:
+1. Go to OSINT tab → Entity Dictionaries → **Not-Person** tab
+2. Add "Market" to the not-person words list
+3. Click **Re-type All Entities** to fix existing entries
+
 [Back to top](#help-top)
 
 ---
@@ -563,6 +614,95 @@ Flag SEC-relevant disclosures. Respond ONLY with valid JSON.
 
 ---
 
+<a id="help-cloud-backup"></a>
+## Cloud Backup & Data Sovereignty
+
+Back up your entire Argus workspace to your own cloud storage. You provide your own credentials -- no data ever flows through Argus infrastructure.
+
+### Supported Providers
+
+| Provider | Auth | Setup complexity |
+| --- | --- | --- |
+| **Google Drive** | OAuth2 with your own GCP Client ID | Medium (requires GCP project) |
+| **Dropbox** | OAuth2 PKCE with your own App Key | Easy (create app, copy key) |
+| **WebDAV** | URL + username + password | Easy (Nextcloud, ownCloud, Synology, any NAS) |
+| **S3-compatible** | Endpoint + access key + secret key | Easy (Backblaze B2, Wasabi, Cloudflare R2, MinIO, AWS S3) |
+
+### Setting Up Google Drive Backup
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) and create a new project
+2. Search for and enable the **Google Drive API**
+3. Go to **OAuth consent screen** → External → fill required fields
+4. Under **Test users**, add your own Google email address
+5. Go to **Credentials** → Create **OAuth client ID** → **Web application**
+6. Add the redirect URI shown in Argus (Settings → Cloud Backup → Google Drive → Setup Guide)
+7. Copy the **Client ID** and paste it into Argus
+8. Click **Connect** → authorize in the popup
+
+### Setting Up Dropbox Backup
+
+1. Go to the [Dropbox App Console](https://www.dropbox.com/developers/apps/create)
+2. Choose **Scoped access** → **App folder**
+3. Under Permissions, enable `files.content.write` and `files.content.read`
+4. Copy the **App Key** and paste it into Argus
+5. Click **Connect** → authorize in the popup
+
+### Setting Up WebDAV Backup (Nextcloud Example)
+
+1. Enter your WebDAV URL: `https://cloud.example.com/remote.php/dav/files/username/Argus/`
+2. For Nextcloud: go to Settings → Security → create an **App password**
+3. Enter username + app password in Argus
+4. Click **Test Connection** to verify, then **Connect**
+
+### Setting Up S3-Compatible Backup (Backblaze B2 Example)
+
+1. Create a bucket in Backblaze B2
+2. Create an application key with read/write access to the bucket
+3. Enter endpoint: `https://s3.us-west-004.backblazeb2.com`
+4. Enter bucket name, access key, and secret key in Argus
+5. Click **Test Connection** to verify, then **Connect**
+
+### What's Included in a Backup?
+
+Everything: projects, bookmarks, monitors, feeds + entries, analysis history, knowledge graph (nodes + edges), watchlist, automations, and settings. **API keys are excluded by default** for security.
+
+Backups are standard ZIP files containing JSON:
+```
+argus-backup-2026-03-12T14-30-00/
+  manifest.json       -- backup metadata, version, store counts
+  projects.json       -- all projects with items
+  bookmarks.json      -- all smart bookmarks
+  monitors.json       -- all page monitors
+  feeds.json          -- all RSS feeds
+  feed-entries.json   -- all feed entries
+  history.json        -- analysis history
+  kg-nodes.json       -- knowledge graph entities
+  kg-edges.json       -- knowledge graph relationships
+  watchlist.json      -- keyword watchlist
+  settings.json       -- extension settings (no API keys)
+```
+
+### Backup Controls
+
+- **Backup Now** -- creates a backup and uploads to all connected providers
+- **Download Local Backup** -- saves the ZIP to your computer (no cloud needed)
+- **Restore from File** -- restore from a local ZIP backup
+- **Auto-backup** -- schedule automatic backups every 6h, 12h, 24h, 48h, or weekly
+- **Restore from Cloud** -- select a provider, list available backups, restore any one
+
+### Wipe Everything
+
+The **Wipe Everything** button in Settings → Storage Management permanently deletes:
+- All IndexedDB stores (projects, bookmarks, monitors, feeds, history, KG, watchlist)
+- All OPFS snapshot data (monitor screenshots)
+- All `browser.storage.local` data (settings, cached results, OAuth tokens)
+
+Use this before uninstalling Argus. Firefox does not automatically clear extension data on uninstall.
+
+[Back to top](#help-top)
+
+---
+
 <a id="help-providers"></a>
 ## Provider-Specific Features
 
@@ -600,6 +740,9 @@ Use the **Settings** tab to export/import your full Argus configuration (API key
 ### Exporting Bookmarks
 Use the **"Export JSON"** button in the Bookmarks tab to download all your smart bookmarks as a JSON file.
 
+### Cloud Backup
+For a complete backup of **all** Argus data (projects, bookmarks, monitors, feeds, history, knowledge graph, settings), use the **Cloud Backup** feature in Settings. Supports Google Drive, Dropbox, WebDAV, and S3-compatible storage. See the [Cloud Backup](#help-cloud-backup) section for details.
+
 [Back to top](#help-top)
 
 ---
@@ -634,7 +777,7 @@ Use the **"Export JSON"** button in the Bookmarks tab to download all your smart
 - **No accounts required** -- there is nothing to sign up for because there is no service behind this extension
 - **Fully auditable** -- Argus is open source. Every line of code is available for you to read, verify, and modify
 
-The only network requests Argus makes are to the AI provider APIs you configure (xAI, OpenAI, Anthropic, Google, or your custom endpoint), RSS feed URLs you subscribe to, archive redirect URLs if you enable that feature, RDAP (rdap.org) for whois lookups, Google DNS (dns.google) for DNS records, and the Wayback Machine API (archive.org) for availability checks. That's it.
+The only network requests Argus makes are to the AI provider APIs you configure (xAI, OpenAI, Anthropic, Google, or your custom endpoint), RSS feed URLs you subscribe to, archive redirect URLs if you enable that feature, RDAP (rdap.org) for whois lookups, Google DNS (dns.google) for DNS records, the Wayback Machine API (archive.org) for availability checks, and cloud backup providers you configure (Google Drive, Dropbox, WebDAV, S3) using your own credentials. That's it. Cloud backups go directly from your browser to your own storage account -- Argus has no servers and never sees your data.
 
 [Back to top](#help-top)
 

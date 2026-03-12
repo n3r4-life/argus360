@@ -45,8 +45,15 @@ Full OSINT & Monitoring Suite
 - "Discuss with AI" chat on every result and OSINT page
 - Again, add customized prompts!
 
+Cloud Backup & Data Sovereignty
+- Back up everything to your own Google Drive, Dropbox, WebDAV (Nextcloud, Synology, any NAS), or S3-compatible storage (Backblaze B2, Wasabi, Cloudflare R2)
+- You provide your own credentials - no data flows through Argus infrastructure
+- Scheduled auto-backups (6h to weekly) + one-click manual backup + local .zip download
+- Restore from any provider or a local backup file
+- "Wipe Everything" button for complete cleanup before uninstalling
+
 All results exportable as Markdown, HTML, or plain text.
-Full searchable history. Everything stays 100% local in your browser - no servers, no telemetry, no Argus account. Aggressive compression & pruning defaults keep storage manageable.
+Full searchable history. Everything stays 100% local in your browser - no servers, no telemetry, no Argus account. Cloud backup goes directly to YOUR storage, not ours. Aggressive compression & pruning defaults keep storage manageable.
 
 Argus is free, open-source (MIT), and attempting to be fully customizable.
 get it here at GitHub: github.com/n3r4-life/argus360

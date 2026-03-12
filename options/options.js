@@ -2820,6 +2820,17 @@ function initMainTabs() {
     });
   });
 
+  // Handle hash changes (e.g. from popup quick-nav links)
+  window.addEventListener("hashchange", () => {
+    const h = window.location.hash.replace("#", "");
+    if (h) handleHashNav(h, tabs, panels);
+  });
+
+  // Also handle sub-anchors on initial load (e.g. #help-getting-started)
+  if (hash && hash.includes("-")) {
+    handleHashNav(hash, tabs, panels);
+  }
+
   // History icon button (not a tab — opens history page)
   const histNavBtn = document.getElementById("open-history-nav");
   if (histNavBtn) {
@@ -2850,6 +2861,28 @@ function switchMainTab(tabName, tabs, panels) {
   }
   if (tabName === "projects" && !projState.initialized) {
     initProjects();
+  }
+}
+
+function handleHashNav(hash, tabs, panels) {
+  // Check if hash is a direct tab name (e.g. "help", "settings", "presets")
+  const directTab = [...tabs].find(t => t.dataset.tab === hash);
+  if (directTab) {
+    switchMainTab(hash, tabs, panels);
+    sessionStorage.setItem("argus-activeTab", hash);
+    return;
+  }
+
+  // Sub-anchor: e.g. "help-getting-started" → switch to "help" tab, scroll to element
+  const tabName = hash.split("-")[0];
+  const tabMatch = [...tabs].find(t => t.dataset.tab === tabName);
+  if (tabMatch) {
+    switchMainTab(tabName, tabs, panels);
+    sessionStorage.setItem("argus-activeTab", tabName);
+    requestAnimationFrame(() => {
+      const el = document.getElementById(hash);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 }
 

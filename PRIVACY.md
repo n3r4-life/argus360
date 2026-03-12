@@ -1,6 +1,6 @@
 # Argus Privacy Policy
 
-**Last updated:** March 11, 2026
+**Last updated:** March 12, 2026
 **Developer:** n3r4-life
 
 ## Summary
@@ -21,7 +21,7 @@ All extension data is stored in your browser's local storage (`browser.storage.l
 - Geocoding cache (location name to coordinates)
 - Extension settings and preferences
 
-This data never leaves your browser except as described below. You can clear all stored data at any time through the extension settings or by uninstalling the extension.
+This data never leaves your browser except as described below. You can clear all stored data at any time using the **"Wipe Everything"** button in extension settings. Note: Firefox does not automatically clear extension data on uninstall — use "Wipe Everything" before uninstalling to leave no traces.
 
 ## External Services
 
@@ -46,6 +46,18 @@ When you use the Geolocation Map OSINT tool, location names extracted from your 
 ### Archive.is and Internet Archive (optional)
 
 When enabled, Argus checks whether archived versions of visited pages exist on archive.is and/or the Internet Archive Wayback Machine. Only the page URL is sent — no page content. These checks can be disabled in settings.
+
+### Cloud Backup Providers (user-configured, optional)
+
+If you enable cloud backup, Argus connects to cloud storage services **using credentials you provide**. Argus does not operate any servers — your data goes directly from your browser to your own cloud storage account.
+
+Supported providers:
+- **Google Drive** — uses OAuth2 with your own GCP Client ID. Argus requests `drive.file` scope (access only to files it creates). Backups are stored in a `Google Drive/Argus Backups/` folder.
+- **Dropbox** — uses OAuth2 PKCE with your own Dropbox App Key. Backups are stored in `/Apps/Argus/`.
+- **WebDAV** — connects to any WebDAV server (Nextcloud, ownCloud, Synology, etc.) using URL + username + password you provide.
+- **S3-compatible** — connects to any S3-compatible storage (Backblaze B2, Wasabi, Cloudflare R2, AWS S3, MinIO) using endpoint URL + access key + secret key you provide.
+
+OAuth tokens are stored locally in `browser.storage.local`. The "Wipe Everything" button revokes tokens and clears all stored credentials. API keys for AI providers are **excluded** from backups by default.
 
 ### RSS Feeds (user-configured)
 
@@ -72,8 +84,9 @@ Argus requests the following browser permissions:
 - **webRequest / webRequestBlocking** — for archive.is redirect feature
 - **webNavigation** — for page monitor and archive availability checks
 - **downloads** — to export files (CSV, Markdown, etc.)
-- **alarms** — for scheduled page monitoring and feed checks
+- **alarms** — for scheduled page monitoring, feed checks, and cloud backup schedule
 - **notifications** — to alert on keyword watchlist matches and monitor changes
+- **identity** — for OAuth2 authentication with cloud backup providers (Google Drive, Dropbox)
 - **host permissions (`<all_urls>`)** — to analyze any webpage and connect to AI provider APIs
 
 ## Contact

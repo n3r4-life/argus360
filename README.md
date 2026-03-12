@@ -232,8 +232,14 @@ Argus/
 │   ├── geomap.*               # Geolocation map
 │   └── techstack.*            # Tech stack detection
 ├── shared/                    # Shared UI components (nav ribbon)
+├── data/
+│   └── kg-dictionaries.js     # KG entity classification dictionaries (~2,500 entries)
 ├── lib/
 │   ├── storage-db.js          # IndexedDB storage (ArgusDB)
+│   ├── opfs-storage.js        # OPFS binary storage (monitor snapshots)
+│   ├── cloud-providers.js     # Cloud storage backends (Google Drive, Dropbox, WebDAV, S3)
+│   ├── cloud-backup.js        # Backup engine (ZIP create/restore, scheduled uploads)
+│   ├── fflate.min.js          # ZIP compression library
 │   ├── intelligence-viewer.js # Unified rendering component
 │   ├── argus-chat.js          # Reusable "Discuss with AI" chat component
 │   ├── pdf.min.js             # Mozilla pdf.js (PDF text extraction)
@@ -246,13 +252,61 @@ Argus/
 
 ---
 
+## Cloud Backup & Data Sovereignty
+
+Back up your entire Argus workspace to your own cloud storage — **you provide your own credentials**, and no data ever flows through Argus infrastructure.
+
+| Provider | Auth method | Examples |
+|----------|------------|---------|
+| **Google Drive** | OAuth2 (your own GCP Client ID) | Google Drive |
+| **Dropbox** | OAuth2 PKCE (your own App Key) | Dropbox |
+| **WebDAV** | URL + username + password | Nextcloud, ownCloud, Synology, any NAS |
+| **S3-compatible** | Endpoint + access key + secret | Backblaze B2, Wasabi, Cloudflare R2, MinIO, AWS S3 |
+
+- **Scheduled auto-backups** (every 6h, 12h, 24h, 48h, or weekly)
+- **One-click Backup Now** to all connected providers simultaneously
+- **Download local backup** as a `.zip` file — no cloud required
+- **Restore from any provider** or a local `.zip` file
+- **Wipe Everything** button for complete data cleanup before uninstalling
+
+### What's included in a backup?
+
+Projects, bookmarks, monitors, feeds + entries, analysis history, knowledge graph (nodes + edges), watchlist, automations, and settings (API keys excluded by default).
+
+### Example: Setting up Google Drive backup
+
+1. Create a project in [Google Cloud Console](https://console.cloud.google.com/)
+2. Enable the Google Drive API
+3. Set up OAuth consent screen → add yourself as a test user
+4. Create OAuth credentials → Web application → add the redirect URI shown in Argus
+5. Paste the Client ID in Argus Settings → Cloud Backup → Connect
+6. Click **Backup Now** — your data appears in a `Google Drive/Argus Backups/` folder
+
+---
+
+## Entity Dictionaries
+
+The Knowledge Graph uses comprehensive built-in dictionaries (~2,500+ entries across 8 categories) to classify entities and filter noise. You can customize these through the **OSINT tab → Entity Dictionaries** editor:
+
+- **Noise phrases** — terms to always exclude (e.g., "Read More", "Subscribe Now")
+- **Known locations** — multi-word places (e.g., "New York City", "Silicon Valley")
+- **Known organizations** — companies and institutions (e.g., "Federal Reserve", "Reuters")
+- **Not-person words** — words that never start a real person name (e.g., "Download", "Premium")
+- **Valid first names** — real first names across cultures for person detection
+
+Add custom entries to any dictionary — they're stored locally and merged with the built-ins.
+
+---
+
 ## Privacy
 
 - **API keys are stored locally** in your browser's extension storage — never transmitted anywhere except to the provider you choose
 - **No telemetry or analytics** — Argus does not phone home
 - **No data collection** — declared in `manifest.json` under `data_collection_permissions`
 - Page content is sent only to the AI provider you select for analysis
+- **Cloud backup connects only to providers you configure** using your own credentials — Argus has no servers and never sees your backup data
 - OSINT tools make requests to **rdap.org** (whois), **dns.google** (DNS), and **archive.org** (Wayback) — these contain only the domain or URL being looked up, no personal data
+- **Wipe Everything** in Settings permanently deletes all local data (IndexedDB, OPFS snapshots, browser storage)
 - Aggressive compression & pruning defaults keep storage manageable
 
 ---

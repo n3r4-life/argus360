@@ -1,6 +1,7 @@
 const elements = {
   settingsToggle: document.getElementById("settings-toggle"),
   settingsPanel: document.getElementById("settings-panel"),
+  quickNavPanel: document.getElementById("quick-nav-panel"),
   providerSelect: document.getElementById("provider-select"),
   apiKey: document.getElementById("api-key"),
   toggleKeyVis: document.getElementById("toggle-key-visibility"),
@@ -420,7 +421,31 @@ async function loadOpenTabs() {
 // ──────────────────────────────────────────────
 function attachEventListeners() {
   elements.settingsToggle.addEventListener("click", () => {
-    elements.settingsPanel.classList.toggle("hidden");
+    const hasAnyKey = Object.values(currentProviders).some(p => p.apiKey);
+    if (hasAnyKey) {
+      // Toggle quick nav panel, ensure settings panel hidden
+      elements.settingsPanel.classList.add("hidden");
+      elements.quickNavPanel.classList.toggle("hidden");
+    } else {
+      // Toggle API setup panel, ensure quick nav hidden
+      elements.quickNavPanel.classList.add("hidden");
+      elements.settingsPanel.classList.toggle("hidden");
+    }
+  });
+
+  // Quick nav buttons → open console at specific tab
+  document.querySelectorAll(".quick-nav-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.tab;
+      browser.tabs.create({ url: browser.runtime.getURL(`options/options.html#${tab}`) });
+      window.close();
+    });
+  });
+
+  document.getElementById("help-get-key").addEventListener("click", (e) => {
+    e.preventDefault();
+    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#help-getting-started") });
+    window.close();
   });
 
   document.getElementById("open-options").addEventListener("click", () => {

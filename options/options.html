@@ -1551,8 +1551,10 @@
         <a href="#help-archive">Redirects</a>
         <a href="#help-osint">OSINT Tools</a>
         <a href="#help-kg">Knowledge Graph</a>
+        <a href="#help-dictionaries">Entity Dictionaries</a>
         <a href="#help-pipelines">Source Pipelines</a>
         <a href="#help-dashboard">Dashboard &amp; Digests</a>
+        <a href="#help-cloud-backup">Cloud Backup</a>
         <a href="#help-providers">Provider Features</a>
         <a href="#help-export">Exporting</a>
         <a href="#help-config">Config Reference</a>
@@ -2022,6 +2024,29 @@ Steps:
             <li><strong>Clear Graph</strong> — reset the knowledge graph entirely</li>
           </ul>
           <p>Project-level graphs are also available from each project's toolbar (Graph button).</p>
+
+          <h3>Project Skeleton View</h3>
+          <p>Click the <strong>Skeleton</strong> button in a project's OSINT toolbar to see a structural overview of everything connected to that project: items, feeds, bookmarks, monitors, entities, and keywords. This gives you an at-a-glance "X-ray" of the investigation.</p>
+        </div>
+      </section>
+
+      <!-- Entity Dictionaries -->
+      <section class="card" id="help-dictionaries">
+        <h2 class="card-title">Entity Dictionaries</h2>
+        <div class="card-body help-content">
+          <p>The Knowledge Graph uses built-in dictionaries (~2,500+ entries) to classify entities and filter noise. Go to the <strong>OSINT tab &rarr; Entity Dictionaries</strong> card to customize them.</p>
+          <h3>Dictionary Categories</h3>
+          <ul>
+            <li><strong>Noise Entities</strong> — phrases to always exclude (e.g., "Read More", "Subscribe Now")</li>
+            <li><strong>Known Locations</strong> — multi-word places (e.g., "New York City", "Silicon Valley")</li>
+            <li><strong>Known Organizations</strong> — companies and institutions (e.g., "Federal Reserve", "Reuters")</li>
+            <li><strong>Not-Person Words</strong> — words that never start a person name (e.g., "Download", "Premium")</li>
+            <li><strong>Valid First Names</strong> — real first names across cultures for person detection</li>
+          </ul>
+          <h3>Customizing</h3>
+          <p>Select a tab, add custom entries, and click <strong>Re-type All Entities</strong> to reclassify existing KG entities. Custom entries are stored locally and merged with built-ins.</p>
+          <h3>Example</h3>
+          <p>If "Market Analysis" keeps appearing as a person: go to <strong>Not-Person</strong> tab, add "Market", then click <strong>Re-type All Entities</strong>.</p>
         </div>
       </section>
 
@@ -2137,6 +2162,47 @@ Flag SEC-relevant disclosures. Respond ONLY with valid JSON.</pre>
         </div>
       </section>
 
+      <!-- Cloud Backup -->
+      <section class="card" id="help-cloud-backup">
+        <h2 class="card-title">Cloud Backup &amp; Data Sovereignty</h2>
+        <div class="card-body help-content">
+          <p>Back up your entire Argus workspace to your own cloud storage. You provide your own credentials &mdash; no data flows through Argus infrastructure.</p>
+
+          <h3>Supported Providers</h3>
+          <ul>
+            <li><strong>Google Drive</strong> &mdash; OAuth2 with your own GCP Client ID</li>
+            <li><strong>Dropbox</strong> &mdash; OAuth2 PKCE with your own App Key</li>
+            <li><strong>WebDAV</strong> &mdash; Nextcloud, ownCloud, Synology, any NAS (URL + username + password)</li>
+            <li><strong>S3-compatible</strong> &mdash; Backblaze B2, Wasabi, Cloudflare R2, MinIO, AWS S3 (endpoint + access key + secret)</li>
+          </ul>
+
+          <h3>Quick Setup (Google Drive Example)</h3>
+          <ol>
+            <li>Create a project in <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a></li>
+            <li>Enable the <strong>Google Drive API</strong></li>
+            <li>Set up OAuth consent screen &rarr; add yourself as a test user</li>
+            <li>Create OAuth credentials &rarr; Web application &rarr; add the redirect URI shown in Argus</li>
+            <li>Paste the Client ID in Settings &rarr; Cloud Backup &rarr; Connect</li>
+            <li>Click <strong>Backup Now</strong> &mdash; data appears in <code>Google Drive/Argus Backups/</code></li>
+          </ol>
+
+          <h3>What's Backed Up?</h3>
+          <p>Everything: projects, bookmarks, monitors, feeds + entries, analysis history, knowledge graph, watchlist, automations, and settings. <strong>API keys are excluded</strong> by default for security.</p>
+
+          <h3>Backup Controls</h3>
+          <ul>
+            <li><strong>Backup Now</strong> &mdash; creates a ZIP and uploads to all connected providers</li>
+            <li><strong>Download Local Backup</strong> &mdash; saves the ZIP to your computer (no cloud needed)</li>
+            <li><strong>Restore from File</strong> &mdash; restore from a local ZIP backup</li>
+            <li><strong>Auto-backup</strong> &mdash; schedule automatic backups (every 6h, 12h, 24h, 48h, or weekly)</li>
+            <li><strong>Restore from Cloud</strong> &mdash; select a provider, list available backups, restore any one</li>
+          </ul>
+
+          <h3>Wipe Everything</h3>
+          <p>Settings &rarr; Storage Management &rarr; <strong>Wipe Everything</strong> permanently deletes all Argus data: IndexedDB stores, OPFS snapshots, and browser storage. Use this before uninstalling &mdash; Firefox does not automatically clear extension data on uninstall.</p>
+        </div>
+      </section>
+
       <!-- Provider-Specific Features -->
       <section class="card" id="help-providers">
         <h2 class="card-title">Provider-Specific Features</h2>
@@ -2176,6 +2242,9 @@ Flag SEC-relevant disclosures. Respond ONLY with valid JSON.</pre>
 
           <h3>Exporting Bookmarks</h3>
           <p>Use the <strong>"Export JSON"</strong> button in the Bookmarks tab to download all your smart bookmarks as a JSON file.</p>
+
+          <h3>Cloud Backup</h3>
+          <p>For a complete backup of <strong>all</strong> Argus data, use the <strong>Cloud Backup</strong> feature in Settings. Supports Google Drive, Dropbox, WebDAV, and S3-compatible storage, or download a local <code>.zip</code> file. See the <a href="#help-cloud-backup">Cloud Backup</a> section for details.</p>
         </div>
       </section>
 
@@ -2216,7 +2285,8 @@ Flag SEC-relevant disclosures. Respond ONLY with valid JSON.</pre>
             <li><strong>No accounts required</strong> — there is nothing to sign up for because there is no service behind this extension</li>
             <li><strong>Fully auditable</strong> — Argus is open source. Every line of code is available for you to read, verify, and modify</li>
           </ul>
-          <p>The only network requests Argus makes are to the AI provider APIs you configure (xAI, OpenAI, Anthropic, Google, or your custom endpoint), RSS feed URLs you subscribe to, archive redirect URLs if you enable that feature, RDAP (rdap.org) for whois lookups, Google DNS (dns.google) for DNS records, and the Wayback Machine API (archive.org) for availability checks. That's it.</p>
+          <p>The only network requests Argus makes are to: AI provider APIs you configure, RSS feed URLs you subscribe to, archive redirect URLs, RDAP (rdap.org) for whois lookups, Google DNS (dns.google) for DNS records, the Wayback Machine API (archive.org), and cloud backup providers you configure using your own credentials. That's it. Cloud backups go directly from your browser to your own storage &mdash; Argus has no servers.</p>
+          <p><strong>Wipe Everything:</strong> Use Settings &rarr; Storage Management &rarr; "Wipe Everything" to permanently delete all Argus data before uninstalling. Firefox does not automatically clear extension data on uninstall.</p>
         </div>
       </section>
 
