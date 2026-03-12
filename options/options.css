@@ -1016,6 +1016,21 @@ textarea {
   color: var(--success);
 }
 
+/* Cloud Backup */
+.cloud-panel { padding:8px 0; }
+.cloud-tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+/* Project Skeleton Panel */
+.proj-skeleton { padding:10px 0; }
+.skel-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:10px; }
+.skel-section { background:var(--bg-secondary); border-radius:6px; padding:10px; border:1px solid var(--border); }
+.skel-heading { font-size:12px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; }
+.skel-item { font-size:12px; color:var(--text-primary); padding:2px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.skel-item a { color:var(--accent); text-decoration:none; }
+.skel-item a:hover { text-decoration:underline; }
+.skel-badge { display:inline-block; font-size:10px; padding:1px 5px; border-radius:3px; background:var(--bg-surface); color:var(--text-muted); margin-right:4px; text-transform:uppercase; }
+.skel-footer { font-size:11px; color:var(--text-muted); margin-top:8px; padding-top:6px; border-top:1px solid var(--border); }
+
 /* Resources Tab — Toolbar */
 .res-toolbar {
   display: flex;

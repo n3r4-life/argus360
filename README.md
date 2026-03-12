@@ -56,6 +56,8 @@ Argus is named after the all-seeing giant of Greek mythology — a guardian with
 | **Source Credibility** | Credibility scoring (1-10) with bias and verification assessment |
 | **Person/Org Profile** | Structured intelligence profile from page content |
 
+And many, many more. Up to 30 pre-built, **ALL STILL FULLY CUSTOMIZABLE** prompts, with room more.
+
 ### Custom Presets & Provider Binding
 - Create your own analysis presets with custom system and user prompts
 - **Bind presets to specific providers** — e.g., always use Grok for fact-checking, Claude for deep reasoning

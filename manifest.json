@@ -33,7 +33,8 @@
     "https://api.x.ai/*",
     "https://api.openai.com/*",
     "https://api.anthropic.com/*",
-    "https://generativelanguage.googleapis.com/*"
+    "https://generativelanguage.googleapis.com/*",
+    "identity"
   ],
 
   "optional_permissions": [
@@ -48,6 +49,9 @@
       "lib/storage-db.js",
       "lib/opfs-storage.js",
       "lib/pdf.min.js",
+      "lib/fflate.min.js",
+      "lib/cloud-providers.js",
+      "lib/cloud-backup.js",
       "background-permissions.js",
       "background-presets.js",
       "background-providers.js",

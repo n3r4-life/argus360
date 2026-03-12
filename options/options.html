@@ -600,8 +600,10 @@
                   <button id="proj-timeline" class="btn btn-secondary btn-sm" title="Build timeline from dates">Timeline</button>
                   <button id="proj-report" class="btn btn-secondary btn-sm" title="Generate investigation report">Report</button>
                   <button id="proj-anomaly" class="btn btn-secondary btn-sm" title="AI anomaly &amp; outlier detection">Anomaly Scan</button>
+                  <button id="proj-skeleton" class="btn btn-secondary btn-sm" title="Structural overview of all project connections">Skeleton</button>
                   <button id="proj-dashboard" class="btn btn-primary btn-sm" title="Open project dashboard with at-a-glance widgets">Dashboard</button>
                 </div>
+                <div id="proj-skeleton-panel" class="proj-skeleton hidden"></div>
                 <!-- Automation toolbar -->
                 <div class="proj-items-toolbar hidden" id="proj-automation-toolbar" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;">
                   <span style="font-size:12px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Automations</span>
@@ -1248,6 +1250,186 @@
             <div class="form-group flex-1">
               <button id="clear-history" class="btn btn-secondary" style="color:var(--error);">Clear All History</button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Cloud Backup -->
+      <section class="card">
+        <h2 class="card-title">Cloud Backup</h2>
+        <div class="card-body">
+          <p class="info-text">Back up all Argus data to your own cloud storage. You provide your own credentials — no data flows through Argus infrastructure.</p>
+
+          <!-- Provider Tabs -->
+          <div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm cloud-tab active" data-cloud-tab="google">Google Drive</button>
+            <button class="btn btn-secondary btn-sm cloud-tab" data-cloud-tab="dropbox">Dropbox</button>
+            <button class="btn btn-secondary btn-sm cloud-tab" data-cloud-tab="webdav">WebDAV</button>
+            <button class="btn btn-secondary btn-sm cloud-tab" data-cloud-tab="s3">S3-Compatible</button>
+          </div>
+
+          <!-- Google Drive Panel -->
+          <div class="cloud-panel" data-cloud-panel="google">
+            <div class="form-group">
+              <label for="cloud-google-clientid">OAuth2 Client ID</label>
+              <input type="text" id="cloud-google-clientid" placeholder="xxxx.apps.googleusercontent.com">
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button id="cloud-google-connect" class="btn btn-accent btn-sm">Connect</button>
+              <button id="cloud-google-disconnect" class="btn btn-secondary btn-sm hidden">Disconnect</button>
+              <span id="cloud-google-status" style="font-size:12px;color:var(--text-muted);"></span>
+            </div>
+            <details style="margin-top:8px;"><summary style="font-size:12px;color:var(--accent);cursor:pointer;">Setup Guide</summary>
+              <ol style="font-size:12px;color:var(--text-secondary);padding-left:20px;margin:6px 0;">
+                <li>Go to <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a> and create a new project</li>
+                <li>From the within the console, Search for and Enable the <strong>Google Drive API</strong></li>
+                <li>Go to <strong>OAuth consent screen</strong> → External → fill required fields</li>
+                <li>Under <strong>Test users</strong>, add your own Google email address</li>
+                <li>Go to <strong>Credentials</strong> → Create OAuth client ID → Web application</li>
+                <li>Add the redirect URI shown below, copy the Client ID, paste above</li>
+              </ol>
+              <p style="font-size:11px;color:var(--text-muted);word-break:break-all;" id="cloud-google-redirect"></p>
+            </details>
+          </div>
+
+          <!-- Dropbox Panel -->
+          <div class="cloud-panel hidden" data-cloud-panel="dropbox">
+            <div class="form-group">
+              <label for="cloud-dropbox-appkey">App Key</label>
+              <input type="text" id="cloud-dropbox-appkey" placeholder="Your Dropbox App Key">
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button id="cloud-dropbox-connect" class="btn btn-accent btn-sm">Connect</button>
+              <button id="cloud-dropbox-disconnect" class="btn btn-secondary btn-sm hidden">Disconnect</button>
+              <span id="cloud-dropbox-status" style="font-size:12px;color:var(--text-muted);"></span>
+            </div>
+            <details style="margin-top:8px;"><summary style="font-size:12px;color:var(--accent);cursor:pointer;">Setup Guide</summary>
+              <ol style="font-size:12px;color:var(--text-secondary);padding-left:20px;margin:6px 0;">
+                <li>Go to <a href="https://www.dropbox.com/developers/apps/create" target="_blank">Dropbox App Console</a></li>
+                <li>Choose <strong>Scoped access</strong> → <strong>App folder</strong></li>
+                <li>Under Permissions, enable <strong>files.content.write</strong> and <strong>files.content.read</strong></li>
+                <li>Copy the <strong>App Key</strong> and paste above</li>
+              </ol>
+            </details>
+          </div>
+
+          <!-- WebDAV Panel -->
+          <div class="cloud-panel hidden" data-cloud-panel="webdav">
+            <div class="form-group">
+              <label for="cloud-webdav-url">Server URL</label>
+              <input type="text" id="cloud-webdav-url" placeholder="https://cloud.example.com/remote.php/dav/files/user/Argus/">
+            </div>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="cloud-webdav-user">Username</label>
+                <input type="text" id="cloud-webdav-user">
+              </div>
+              <div class="form-group flex-1">
+                <label for="cloud-webdav-pass">Password / App Token</label>
+                <input type="password" id="cloud-webdav-pass">
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button id="cloud-webdav-connect" class="btn btn-accent btn-sm">Connect</button>
+              <button id="cloud-webdav-test" class="btn btn-secondary btn-sm">Test Connection</button>
+              <button id="cloud-webdav-disconnect" class="btn btn-secondary btn-sm hidden">Disconnect</button>
+              <span id="cloud-webdav-status" style="font-size:12px;color:var(--text-muted);"></span>
+            </div>
+            <details style="margin-top:8px;"><summary style="font-size:12px;color:var(--accent);cursor:pointer;">Setup Guide</summary>
+              <ol style="font-size:12px;color:var(--text-secondary);padding-left:20px;margin:6px 0;">
+                <li>Enter your WebDAV server URL (e.g. Nextcloud: <code>https://cloud.example.com/remote.php/dav/files/username/Argus/</code>)</li>
+                <li>For Nextcloud: go to Settings → Security → create an <strong>App password</strong></li>
+                <li>Enter username + app password, then click Test Connection</li>
+              </ol>
+            </details>
+          </div>
+
+          <!-- S3 Panel -->
+          <div class="cloud-panel hidden" data-cloud-panel="s3">
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="cloud-s3-endpoint">Endpoint URL</label>
+                <input type="text" id="cloud-s3-endpoint" placeholder="https://s3.us-west-004.backblazeb2.com">
+              </div>
+              <div class="form-group flex-1">
+                <label for="cloud-s3-bucket">Bucket Name</label>
+                <input type="text" id="cloud-s3-bucket" placeholder="my-argus-backups">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="cloud-s3-key">Access Key</label>
+                <input type="text" id="cloud-s3-key">
+              </div>
+              <div class="form-group flex-1">
+                <label for="cloud-s3-secret">Secret Key</label>
+                <input type="password" id="cloud-s3-secret">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="cloud-s3-region">Region (optional)</label>
+              <input type="text" id="cloud-s3-region" placeholder="us-east-1" value="us-east-1">
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button id="cloud-s3-connect" class="btn btn-accent btn-sm">Connect</button>
+              <button id="cloud-s3-test" class="btn btn-secondary btn-sm">Test Connection</button>
+              <button id="cloud-s3-disconnect" class="btn btn-secondary btn-sm hidden">Disconnect</button>
+              <span id="cloud-s3-status" style="font-size:12px;color:var(--text-muted);"></span>
+            </div>
+            <details style="margin-top:8px;"><summary style="font-size:12px;color:var(--accent);cursor:pointer;">Setup Guide</summary>
+              <ol style="font-size:12px;color:var(--text-secondary);padding-left:20px;margin:6px 0;">
+                <li>Create a bucket on your S3-compatible provider</li>
+                <li>Create an access key with read/write permissions to the bucket</li>
+                <li>Enter endpoint, bucket, keys, and click Test Connection</li>
+                <li><strong>Backblaze B2:</strong> <code>s3.us-west-004.backblazeb2.com</code></li>
+                <li><strong>Wasabi:</strong> <code>s3.wasabisys.com</code></li>
+                <li><strong>Cloudflare R2:</strong> <code>{accountId}.r2.cloudflarestorage.com</code></li>
+              </ol>
+            </details>
+          </div>
+
+          <!-- Backup Schedule -->
+          <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+          <div class="form-row" style="align-items:center;">
+            <div class="form-group flex-1">
+              <label style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" id="cloud-backup-enabled">
+                Auto-backup on schedule
+              </label>
+            </div>
+            <div class="form-group">
+              <select id="cloud-backup-interval">
+                <option value="6">Every 6 hours</option>
+                <option value="12">Every 12 hours</option>
+                <option value="24" selected>Every 24 hours</option>
+                <option value="48">Every 48 hours</option>
+                <option value="168">Weekly</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button id="cloud-backup-now" class="btn btn-accent btn-sm">Backup Now</button>
+            <button id="cloud-backup-local" class="btn btn-secondary btn-sm">Download Local Backup</button>
+            <label class="btn btn-secondary btn-sm" style="cursor:pointer;">Restore from File <input type="file" id="cloud-restore-file" accept=".zip" style="display:none;"></label>
+          </div>
+          <div id="cloud-backup-status" style="font-size:12px;color:var(--text-muted);margin-top:6px;"></div>
+          <div id="cloud-last-backup" style="font-size:11px;color:var(--text-muted);margin-top:4px;"></div>
+
+          <!-- Restore from Cloud -->
+          <div id="cloud-restore-section" class="hidden" style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
+            <label style="font-size:12px;font-weight:600;color:var(--text-secondary);">Restore from Cloud</label>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
+              <select id="cloud-restore-provider" class="btn btn-secondary btn-sm">
+                <option value="">Select provider...</option>
+                <option value="google">Google Drive</option>
+                <option value="dropbox">Dropbox</option>
+                <option value="webdav">WebDAV</option>
+                <option value="s3">S3</option>
+              </select>
+              <button id="cloud-restore-list" class="btn btn-secondary btn-sm">List Backups</button>
+            </div>
+            <select id="cloud-restore-select" class="hidden" style="margin-top:6px;width:100%;font-size:12px;"></select>
+            <button id="cloud-restore-go" class="btn btn-accent btn-sm hidden" style="margin-top:6px;">Restore Selected Backup</button>
           </div>
         </div>
       </section>

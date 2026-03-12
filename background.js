@@ -1245,6 +1245,30 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "retypeKGEntities") return KnowledgeGraph.retypeEntities().then(r => ({ success: true, ...r }));
   if (message.action === "clearKG") return ArgusDB.KGNodes.clear().then(() => ArgusDB.KGEdges.clear()).then(() => ({ success: true }));
   if (message.action === "wipeEverything") return handleWipeEverything();
+  if (message.action === "buildProjectSkeleton") return handleBuildProjectSkeleton(message.projectId);
+  // Cloud Backup
+  if (message.action === "cloudCreateBackup") return CloudBackup.createBackup().then(r => ({ success: true, filename: r.filename, size: r.blob.size, manifest: r.manifest }));
+  if (message.action === "cloudBackupNow") return handleCloudBackupNow();
+  if (message.action === "cloudRestore") return handleCloudRestore(message.providerKey, message.filename);
+  if (message.action === "cloudListBackups") return CloudBackup.listBackups(message.providerKey).then(f => ({ success: true, files: f })).catch(e => ({ success: false, error: e.message }));
+  if (message.action === "cloudConnect") return handleCloudConnect(message);
+  if (message.action === "cloudDisconnect") return CloudProviders[message.providerKey]?.disconnect() || Promise.resolve({ success: false });
+  if (message.action === "cloudTestConnection") return CloudProviders[message.providerKey]?.testConnection().catch(e => ({ success: false, error: e.message }));
+  if (message.action === "cloudGetStatus") return handleCloudGetStatus();
+  if (message.action === "cloudLocalBackup") return handleCloudLocalBackup();
+  if (message.action === "cloudLocalRestore") return handleCloudLocalRestore(message.data);
+  if (message.action === "cloudGetRedirectURL") {
+    try { return Promise.resolve({ success: true, url: browser.identity.getRedirectURL() }); }
+    catch (e) { return Promise.resolve({ success: false, error: e.message }); }
+  }
+  if (message.action === "cloudSetSchedule") {
+    if (message.enabled) {
+      browser.alarms.create("argus-cloud-backup", { delayInMinutes: message.hours * 60, periodInMinutes: message.hours * 60 });
+    } else {
+      browser.alarms.clear("argus-cloud-backup");
+    }
+    return Promise.resolve({ success: true });
+  }
   // KG Dictionaries
   if (message.action === "getKGDictionaries") return KnowledgeGraph.getUserDictionaries();
   if (message.action === "saveKGDictionaries") return KnowledgeGraph.saveUserDictionaries(message.dictionaries);
@@ -1352,6 +1376,144 @@ async function handleWipeEverything() {
     return { success: true };
   } catch (e) {
     console.error("[Argus] Wipe failed:", e);
+    return { success: false, error: e.message };
+  }
+}
+
+async function handleBuildProjectSkeleton(projectId) {
+  try {
+    const proj = await ArgusDB.Projects.get(projectId);
+    if (!proj) return { success: false, error: "Project not found" };
+    const items = proj.items || [];
+    const itemUrls = new Set(items.filter(i => i.url).map(i => i.url));
+
+    // Gather cross-store data in parallel
+    const [allBookmarks, allMonitors, allFeeds, allNodes, storageData] = await Promise.all([
+      ArgusDB.Bookmarks.getAll(),
+      ArgusDB.Monitors.getAll(),
+      ArgusDB.Feeds.getAll(),
+      ArgusDB.KGNodes.getAll(),
+      browser.storage.local.get({ feedKeywordRoutes: [] }),
+    ]);
+
+    // Bookmarks matching project URLs
+    const matchedBookmarks = allBookmarks.filter(b => itemUrls.has(b.url));
+
+    // Monitors matching project URLs
+    const matchedMonitors = allMonitors.filter(m => itemUrls.has(m.url));
+
+    // Feeds routed to this project via keyword routes
+    const routes = (storageData.feedKeywordRoutes || []).filter(r => r.projectId === projectId);
+    const routedFeedIds = new Set(routes.map(r => r.feedId).filter(Boolean));
+    const routedKeywords = [...new Set(routes.flatMap(r => r.keywords || []))];
+    const matchedFeeds = routedFeedIds.size > 0
+      ? allFeeds.filter(f => routedFeedIds.has(f.id))
+      : (routes.length > 0 ? allFeeds : []); // routes with no feedId = all feeds
+
+    // KG entities from project item URLs
+    const matchedEntities = allNodes.filter(n => n.sourceUrl && itemUrls.has(n.sourceUrl));
+    // Sort by mention count descending
+    matchedEntities.sort((a, b) => (b.mentions || 1) - (a.mentions || 1));
+
+    return {
+      success: true,
+      skeleton: {
+        items: { total: items.length, list: items.slice(0, 10).map(i => ({ type: i.type, title: i.title, url: i.url })) },
+        feeds: { total: matchedFeeds.length, list: matchedFeeds.slice(0, 10).map(f => ({ title: f.title, url: f.url })) },
+        bookmarks: { total: matchedBookmarks.length, list: matchedBookmarks.slice(0, 10).map(b => ({ title: b.title, url: b.url })) },
+        monitors: { total: matchedMonitors.length, list: matchedMonitors.slice(0, 10).map(m => ({ label: m.label, url: m.url })) },
+        entities: { total: matchedEntities.length, list: matchedEntities.slice(0, 10).map(e => ({ label: e.label, type: e.type, mentions: e.mentions || 1 })) },
+        keywords: { total: routedKeywords.length, list: routedKeywords.slice(0, 10) },
+      }
+    };
+  } catch (e) {
+    console.error("[Argus] Skeleton failed:", e);
+    return { success: false, error: e.message };
+  }
+}
+
+// ── Cloud Backup Handlers ──
+
+async function handleCloudBackupNow() {
+  try {
+    const { blob, filename, manifest } = await CloudBackup.createBackup();
+    const results = await CloudBackup.uploadToAll(blob, filename);
+    // Log backup timestamp
+    const { cloudBackupLog = [] } = await browser.storage.local.get({ cloudBackupLog: [] });
+    cloudBackupLog.unshift({ date: new Date().toISOString(), filename, size: blob.size, results });
+    if (cloudBackupLog.length > 20) cloudBackupLog.length = 20;
+    await browser.storage.local.set({ cloudBackupLog });
+    return { success: true, filename, size: blob.size, results, manifest };
+  } catch (e) {
+    console.error("[Argus] Backup failed:", e);
+    return { success: false, error: e.message };
+  }
+}
+
+async function handleCloudRestore(providerKey, filename) {
+  try {
+    const blob = await CloudBackup.downloadBackup(providerKey, filename);
+    const result = await CloudBackup.restoreFromBackup(blob);
+    return result;
+  } catch (e) {
+    console.error("[Argus] Restore failed:", e);
+    return { success: false, error: e.message };
+  }
+}
+
+async function handleCloudConnect(message) {
+  try {
+    const key = message.providerKey;
+    console.log(`[Cloud] Connecting to ${key}...`);
+    let result;
+    if (key === "google") result = await CloudProviders.google.connect(message.clientId);
+    else if (key === "dropbox") result = await CloudProviders.dropbox.connect(message.appKey);
+    else if (key === "webdav") result = await CloudProviders.webdav.connect(message.url, message.username, message.password);
+    else if (key === "s3") result = await CloudProviders.s3.connect(message.endpoint, message.bucket, message.accessKey, message.secretKey, message.region);
+    else return { success: false, error: "Unknown provider" };
+    console.log(`[Cloud] ${key} connect result:`, result);
+    return result;
+  } catch (e) {
+    console.error(`[Cloud] Connect failed:`, e);
+    return { success: false, error: e.message };
+  }
+}
+
+async function handleCloudGetStatus() {
+  const [gConn, dConn, wConn, sConn] = await Promise.all([
+    CloudProviders.google.isConnected(),
+    CloudProviders.dropbox.isConnected(),
+    CloudProviders.webdav.isConnected(),
+    CloudProviders.s3.isConnected(),
+  ]);
+  const { cloudBackupLog = [] } = await browser.storage.local.get({ cloudBackupLog: [] });
+  return {
+    success: true,
+    providers: { google: gConn, dropbox: dConn, webdav: wConn, s3: sConn },
+    lastBackup: cloudBackupLog[0] || null,
+  };
+}
+
+async function handleCloudLocalBackup() {
+  try {
+    const { blob, filename, manifest } = await CloudBackup.createBackup();
+    // Convert to base64 for transfer through message passing
+    const buffer = await blob.arrayBuffer();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+    return { success: true, filename, base64, manifest };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+async function handleCloudLocalRestore(base64Data) {
+  try {
+    const binary = atob(base64Data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: "application/zip" });
+    return CloudBackup.restoreFromBackup(blob);
+  } catch (e) {
     return { success: false, error: e.message };
   }
 }
@@ -4066,6 +4228,18 @@ browser.alarms.onAlarm.addListener(async (alarm) => {
   } catch (e) { console.warn("[KG] Periodic inference error:", e); }
 });
 
+// Cloud backup alarm handler
+browser.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== "argus-cloud-backup") return;
+  try {
+    const { cloudBackupEnabled } = await browser.storage.local.get({ cloudBackupEnabled: false });
+    if (!cloudBackupEnabled) return;
+    const result = await handleCloudBackupNow();
+    if (result.success) console.log(`[Backup] Scheduled backup complete: ${result.filename} (${(result.size / 1024).toFixed(1)} KB)`);
+    else console.warn("[Backup] Scheduled backup failed:", result.error);
+  } catch (e) { console.warn("[Backup] Scheduled backup error:", e); }
+});
+
 // Scheduled digest alarm handler
 browser.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== "agent-digests") return;
@@ -4549,4 +4723,11 @@ function handleCancelBatch() {
 
   // Set up scheduled digest alarm (every 6 hours — actual digest generation checks per-project schedule)
   browser.alarms.create("agent-digests", { delayInMinutes: 60, periodInMinutes: 360 });
+
+  // Set up cloud backup alarm if enabled
+  const { cloudBackupEnabled, cloudBackupIntervalHours } = await browser.storage.local.get({ cloudBackupEnabled: false, cloudBackupIntervalHours: 24 });
+  if (cloudBackupEnabled) {
+    browser.alarms.create("argus-cloud-backup", { delayInMinutes: cloudBackupIntervalHours * 60, periodInMinutes: cloudBackupIntervalHours * 60 });
+    console.log(`[Backup] Scheduled backup alarm set: every ${cloudBackupIntervalHours}h`);
+  }
 })();

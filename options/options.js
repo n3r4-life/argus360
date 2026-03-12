@@ -541,6 +541,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   initHelpBackToTop();
   initWatchlist();
   initStorageManagement();
+  initCloudBackup();
 
   // Live data refresh — listen for background data changes
   let _refreshDebounce = {};
@@ -3312,6 +3313,7 @@ function initProjects() {
   document.getElementById("proj-report").addEventListener("click", projGenerateReport);
   document.getElementById("proj-anomaly").addEventListener("click", projAnomalyScan);
   document.getElementById("proj-dashboard").addEventListener("click", projOpenDashboard);
+  document.getElementById("proj-skeleton").addEventListener("click", projBuildSkeleton);
 
   projLoadProjects();
   checkRunningBatch();
@@ -4177,6 +4179,55 @@ function projOpenDashboard() {
   browser.tabs.create({ url: browser.runtime.getURL(`osint/dashboard.html?projectId=${encodeURIComponent(projState.activeProjectId)}`) });
 }
 
+async function projBuildSkeleton() {
+  const panel = document.getElementById("proj-skeleton-panel");
+  if (!panel.classList.contains("hidden")) { panel.classList.add("hidden"); return; }
+  if (!projState.activeProjectId) return;
+  panel.innerHTML = "<p style='color:var(--text-muted);font-size:12px;'>Loading skeleton...</p>";
+  panel.classList.remove("hidden");
+  const resp = await browser.runtime.sendMessage({ action: "buildProjectSkeleton", projectId: projState.activeProjectId });
+  if (!resp || !resp.success) { panel.innerHTML = "<p style='color:var(--error);'>Failed to build skeleton</p>"; return; }
+  const s = resp.skeleton;
+  const esc = t => (t||"").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const maxShow = 5;
+  function renderList(arr, labelFn) {
+    if (!arr.length) return "<span style='color:var(--text-muted);'>None</span>";
+    const shown = arr.slice(0, maxShow);
+    let html = shown.map(x => `<div class="skel-item">${labelFn(x)}</div>`).join("");
+    if (arr.length > maxShow) html += `<div class="skel-item" style="color:var(--text-muted);">+${arr.length - maxShow} more...</div>`;
+    return html;
+  }
+  panel.innerHTML = `
+    <div class="skel-grid">
+      <div class="skel-section">
+        <div class="skel-heading">Items (${s.items.total})</div>
+        ${renderList(s.items.list, i => `<span class="skel-badge">${esc(i.type)}</span> ${i.url ? `<a href="${esc(i.url)}" target="_blank">${esc(i.title || i.url)}</a>` : esc(i.title || "Note")}`)}
+      </div>
+      <div class="skel-section">
+        <div class="skel-heading">Feeds (${s.feeds.total})</div>
+        ${renderList(s.feeds.list, f => esc(f.title || f.url))}
+      </div>
+      <div class="skel-section">
+        <div class="skel-heading">Bookmarks (${s.bookmarks.total})</div>
+        ${renderList(s.bookmarks.list, b => `<a href="${esc(b.url)}" target="_blank">${esc(b.title || b.url)}</a>`)}
+      </div>
+      <div class="skel-section">
+        <div class="skel-heading">Monitors (${s.monitors.total})</div>
+        ${renderList(s.monitors.list, m => esc(m.label || m.url))}
+      </div>
+      <div class="skel-section">
+        <div class="skel-heading">Entities (${s.entities.total})</div>
+        ${renderList(s.entities.list, e => `<span class="skel-badge">${esc(e.type)}</span> ${esc(e.label)} <span style="color:var(--text-muted);">(${e.mentions})</span>`)}
+      </div>
+      <div class="skel-section">
+        <div class="skel-heading">Keywords (${s.keywords.total})</div>
+        ${renderList(s.keywords.list, k => `<span style="color:var(--accent);">"${esc(k)}"</span>`)}
+      </div>
+    </div>
+    <div class="skel-footer">Data: ${s.items.total} items &middot; ${s.entities.total} entities &middot; ${s.feeds.total} feeds &middot; ${s.monitors.total} monitors &middot; ${s.bookmarks.total} bookmarks</div>
+  `;
+}
+
 async function projGenerateReport() {
   if (!projState.activeProjectId) return;
   const statusEl = document.getElementById("proj-osint-status");
@@ -4368,6 +4419,250 @@ async function loadWatchlistMatches() {
 // ──────────────────────────────────────────────
 // Storage Management
 // ──────────────────────────────────────────────
+// ──────────────────────────────────────────────
+// Cloud Backup UI
+// ──────────────────────────────────────────────
+
+function initCloudBackup() {
+  // Provider tab switching
+  document.querySelectorAll(".cloud-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".cloud-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".cloud-panel").forEach(p => p.classList.add("hidden"));
+      tab.classList.add("active");
+      document.querySelector(`[data-cloud-panel="${tab.dataset.cloudTab}"]`).classList.remove("hidden");
+    });
+  });
+
+  // Show redirect URL for Google (must fetch from background — identity API not available in options page)
+  const redirectEl = document.getElementById("cloud-google-redirect");
+  if (redirectEl) {
+    browser.runtime.sendMessage({ action: "cloudGetRedirectURL" }).then(resp => {
+      if (resp?.success) redirectEl.textContent = "Redirect URI (add this to your GCP OAuth client): " + resp.url;
+      else redirectEl.textContent = "Could not get redirect URI: " + (resp?.error || "identity API unavailable");
+    }).catch(() => {});
+  }
+
+  // Connect handlers
+  document.getElementById("cloud-google-connect").addEventListener("click", async () => {
+    const clientId = document.getElementById("cloud-google-clientid").value.trim();
+    if (!clientId) return;
+    setCloudStatus("google", "Connecting...");
+    const resp = await browser.runtime.sendMessage({ action: "cloudConnect", providerKey: "google", clientId });
+    setCloudStatus("google", resp?.success ? `Connected as ${resp.email || ""}` : `Failed: ${resp?.error || "unknown"}`);
+    refreshCloudStatus();
+  });
+  document.getElementById("cloud-google-disconnect").addEventListener("click", async () => {
+    await browser.runtime.sendMessage({ action: "cloudDisconnect", providerKey: "google" });
+    setCloudStatus("google", "Disconnected");
+    refreshCloudStatus();
+  });
+
+  document.getElementById("cloud-dropbox-connect").addEventListener("click", async () => {
+    const appKey = document.getElementById("cloud-dropbox-appkey").value.trim();
+    if (!appKey) return;
+    setCloudStatus("dropbox", "Connecting...");
+    const resp = await browser.runtime.sendMessage({ action: "cloudConnect", providerKey: "dropbox", appKey });
+    setCloudStatus("dropbox", resp?.success ? `Connected as ${resp.userName || ""}` : `Failed: ${resp?.error || "unknown"}`);
+    refreshCloudStatus();
+  });
+  document.getElementById("cloud-dropbox-disconnect").addEventListener("click", async () => {
+    await browser.runtime.sendMessage({ action: "cloudDisconnect", providerKey: "dropbox" });
+    setCloudStatus("dropbox", "Disconnected");
+    refreshCloudStatus();
+  });
+
+  document.getElementById("cloud-webdav-connect").addEventListener("click", async () => {
+    const url = document.getElementById("cloud-webdav-url").value.trim();
+    const username = document.getElementById("cloud-webdav-user").value.trim();
+    const password = document.getElementById("cloud-webdav-pass").value;
+    if (!url) return;
+    setCloudStatus("webdav", "Connecting...");
+    const resp = await browser.runtime.sendMessage({ action: "cloudConnect", providerKey: "webdav", url, username, password });
+    setCloudStatus("webdav", resp?.success ? "Connected" : `Failed: ${resp?.error || "unknown"}`);
+    refreshCloudStatus();
+  });
+  document.getElementById("cloud-webdav-test").addEventListener("click", async () => {
+    setCloudStatus("webdav", "Testing...");
+    const resp = await browser.runtime.sendMessage({ action: "cloudTestConnection", providerKey: "webdav" });
+    setCloudStatus("webdav", resp?.success ? "Connection OK" : `Failed: ${resp?.error || "unknown"}`);
+  });
+  document.getElementById("cloud-webdav-disconnect").addEventListener("click", async () => {
+    await browser.runtime.sendMessage({ action: "cloudDisconnect", providerKey: "webdav" });
+    setCloudStatus("webdav", "Disconnected");
+    refreshCloudStatus();
+  });
+
+  document.getElementById("cloud-s3-connect").addEventListener("click", async () => {
+    const endpoint = document.getElementById("cloud-s3-endpoint").value.trim();
+    const bucket = document.getElementById("cloud-s3-bucket").value.trim();
+    const accessKey = document.getElementById("cloud-s3-key").value.trim();
+    const secretKey = document.getElementById("cloud-s3-secret").value;
+    const region = document.getElementById("cloud-s3-region").value.trim();
+    if (!endpoint || !bucket || !accessKey || !secretKey) return;
+    setCloudStatus("s3", "Connecting...");
+    const resp = await browser.runtime.sendMessage({ action: "cloudConnect", providerKey: "s3", endpoint, bucket, accessKey, secretKey, region });
+    setCloudStatus("s3", resp?.success ? "Connected" : `Failed: ${resp?.error || "unknown"}`);
+    refreshCloudStatus();
+  });
+  document.getElementById("cloud-s3-test").addEventListener("click", async () => {
+    setCloudStatus("s3", "Testing...");
+    const resp = await browser.runtime.sendMessage({ action: "cloudTestConnection", providerKey: "s3" });
+    setCloudStatus("s3", resp?.success ? "Connection OK" : `Failed: ${resp?.error || "unknown"}`);
+  });
+  document.getElementById("cloud-s3-disconnect").addEventListener("click", async () => {
+    await browser.runtime.sendMessage({ action: "cloudDisconnect", providerKey: "s3" });
+    setCloudStatus("s3", "Disconnected");
+    refreshCloudStatus();
+  });
+
+  // Backup Now
+  document.getElementById("cloud-backup-now").addEventListener("click", async () => {
+    const statusEl = document.getElementById("cloud-backup-status");
+    statusEl.textContent = "Creating backup...";
+    const resp = await browser.runtime.sendMessage({ action: "cloudBackupNow" });
+    if (resp?.success) {
+      const providers = Object.entries(resp.results || {}).filter(([,v]) => v.success).map(([k]) => k);
+      statusEl.textContent = providers.length
+        ? `Backed up to: ${providers.join(", ")} (${(resp.size / 1024).toFixed(1)} KB)`
+        : `Backup created (${(resp.size / 1024).toFixed(1)} KB) but no providers connected`;
+      statusEl.style.color = "var(--success)";
+    } else {
+      statusEl.textContent = "Backup failed: " + (resp?.error || "unknown");
+      statusEl.style.color = "var(--error)";
+    }
+    refreshCloudStatus();
+  });
+
+  // Download Local Backup
+  document.getElementById("cloud-backup-local").addEventListener("click", async () => {
+    const statusEl = document.getElementById("cloud-backup-status");
+    statusEl.textContent = "Creating local backup...";
+    const resp = await browser.runtime.sendMessage({ action: "cloudLocalBackup" });
+    if (resp?.success) {
+      const binary = atob(resp.base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: "application/zip" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = resp.filename; a.click();
+      URL.revokeObjectURL(url);
+      statusEl.textContent = `Downloaded ${resp.filename}`;
+      statusEl.style.color = "var(--success)";
+    } else {
+      statusEl.textContent = "Failed: " + (resp?.error || "unknown");
+      statusEl.style.color = "var(--error)";
+    }
+  });
+
+  // Restore from File
+  document.getElementById("cloud-restore-file").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!confirm("This will replace ALL local data with the backup. Continue?")) return;
+    const statusEl = document.getElementById("cloud-backup-status");
+    statusEl.textContent = "Restoring...";
+    const buffer = await file.arrayBuffer();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+    const resp = await browser.runtime.sendMessage({ action: "cloudLocalRestore", data: base64 });
+    if (resp?.success) {
+      statusEl.textContent = "Restore complete! Reloading...";
+      statusEl.style.color = "var(--success)";
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      statusEl.textContent = "Restore failed: " + (resp?.error || "unknown");
+      statusEl.style.color = "var(--error)";
+    }
+  });
+
+  // Cloud Restore
+  document.getElementById("cloud-restore-list").addEventListener("click", async () => {
+    const provider = document.getElementById("cloud-restore-provider").value;
+    if (!provider) return;
+    const resp = await browser.runtime.sendMessage({ action: "cloudListBackups", providerKey: provider });
+    const select = document.getElementById("cloud-restore-select");
+    select.innerHTML = "";
+    if (resp?.success && resp.files.length) {
+      resp.files.forEach(f => {
+        const opt = document.createElement("option");
+        opt.value = f.name;
+        opt.textContent = `${f.name} (${(f.size / 1024).toFixed(1)} KB) — ${f.date || ""}`;
+        select.appendChild(opt);
+      });
+      select.classList.remove("hidden");
+      document.getElementById("cloud-restore-go").classList.remove("hidden");
+    } else {
+      select.classList.add("hidden");
+      document.getElementById("cloud-backup-status").textContent = "No backups found on this provider";
+    }
+  });
+  document.getElementById("cloud-restore-go").addEventListener("click", async () => {
+    const provider = document.getElementById("cloud-restore-provider").value;
+    const filename = document.getElementById("cloud-restore-select").value;
+    if (!provider || !filename) return;
+    if (!confirm("This will replace ALL local data with the backup. Continue?")) return;
+    const statusEl = document.getElementById("cloud-backup-status");
+    statusEl.textContent = "Downloading and restoring...";
+    const resp = await browser.runtime.sendMessage({ action: "cloudRestore", providerKey: provider, filename });
+    if (resp?.success) {
+      statusEl.textContent = "Restore complete! Reloading...";
+      statusEl.style.color = "var(--success)";
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      statusEl.textContent = "Restore failed: " + (resp?.error || "unknown");
+      statusEl.style.color = "var(--error)";
+    }
+  });
+
+  // Schedule settings
+  const enabledCb = document.getElementById("cloud-backup-enabled");
+  const intervalSel = document.getElementById("cloud-backup-interval");
+  browser.storage.local.get({ cloudBackupEnabled: false, cloudBackupIntervalHours: 24 }).then(data => {
+    enabledCb.checked = data.cloudBackupEnabled;
+    intervalSel.value = String(data.cloudBackupIntervalHours);
+  });
+  const saveSchedule = async () => {
+    const enabled = enabledCb.checked;
+    const hours = parseInt(intervalSel.value, 10);
+    await browser.storage.local.set({ cloudBackupEnabled: enabled, cloudBackupIntervalHours: hours });
+    // Update alarm in background
+    if (enabled) {
+      await browser.runtime.sendMessage({ action: "cloudSetSchedule", enabled: true, hours });
+    }
+  };
+  enabledCb.addEventListener("change", saveSchedule);
+  intervalSel.addEventListener("change", saveSchedule);
+
+  refreshCloudStatus();
+}
+
+function setCloudStatus(provider, msg) {
+  const el = document.getElementById(`cloud-${provider}-status`);
+  if (el) el.textContent = msg;
+}
+
+async function refreshCloudStatus() {
+  const resp = await browser.runtime.sendMessage({ action: "cloudGetStatus" });
+  if (!resp?.success) return;
+  const providers = resp.providers || {};
+  for (const [key, connected] of Object.entries(providers)) {
+    const connectBtn = document.getElementById(`cloud-${key}-connect`);
+    const disconnectBtn = document.getElementById(`cloud-${key}-disconnect`);
+    if (connectBtn) connectBtn.classList.toggle("hidden", connected);
+    if (disconnectBtn) disconnectBtn.classList.toggle("hidden", !connected);
+    if (connected) setCloudStatus(key, "Connected");
+  }
+  // Show restore section if any provider connected
+  const anyConnected = Object.values(providers).some(Boolean);
+  document.getElementById("cloud-restore-section").classList.toggle("hidden", !anyConnected);
+  // Last backup
+  if (resp.lastBackup) {
+    const d = new Date(resp.lastBackup.date);
+    document.getElementById("cloud-last-backup").textContent = `Last backup: ${d.toLocaleString()} (${(resp.lastBackup.size / 1024).toFixed(1)} KB)`;
+  }
+}
+
 function initStorageManagement() {
   updateStorageUsage();
 
