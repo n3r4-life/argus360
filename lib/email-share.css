@@ -1,0 +1,85 @@
+.argus-email-overlay {
+  position: fixed; inset: 0; z-index: 10000;
+  background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center;
+}
+.argus-email-panel {
+  background: var(--bg-secondary, #16213e);
+  border: 1px solid var(--border, #2a2a4a);
+  border-radius: 8px;
+  width: 480px; max-width: 95vw; max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.argus-email-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border, #2a2a4a);
+}
+.argus-email-title { font-weight: 700; font-size: 15px; color: var(--text-primary, #e8e8e8); }
+.argus-email-close {
+  background: none; border: none; color: var(--text-muted, #6a6a80);
+  font-size: 20px; cursor: pointer; padding: 0 4px;
+}
+.argus-email-close:hover { color: var(--text-primary, #e8e8e8); }
+.argus-email-body { padding: 16px; }
+.argus-email-field { margin-bottom: 12px; }
+.argus-email-field label {
+  display: block; font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text-muted, #6a6a80); margin-bottom: 4px;
+}
+.argus-email-field label:has(input[type="checkbox"]) {
+  display: flex; align-items: center; gap: 6px;
+  text-transform: none; font-weight: 400; font-size: 12px; color: var(--text-secondary, #a0a0b0);
+}
+.argus-email-to-row { display: flex; gap: 6px; }
+.argus-email-to-input, .argus-email-subject, .argus-email-body-input {
+  width: 100%;
+  background: var(--bg-surface, #0f3460);
+  border: 1px solid var(--border, #2a2a4a);
+  border-radius: 4px;
+  color: var(--text-primary, #e8e8e8);
+  padding: 8px 10px; font-size: 13px; outline: none;
+  font-family: inherit;
+}
+.argus-email-to-input:focus, .argus-email-subject:focus, .argus-email-body-input:focus {
+  border-color: var(--accent, #e94560);
+}
+.argus-email-to-input { flex: 1; }
+.argus-email-add-btn {
+  background: var(--accent, #e94560); color: #fff; border: none;
+  border-radius: 4px; padding: 0 12px; font-size: 16px; font-weight: 700; cursor: pointer;
+}
+.argus-email-add-btn:hover { background: var(--accent-hover, #ff6b81); }
+.argus-email-recipients { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.argus-email-recipient-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: rgba(233,69,96,0.15); color: var(--accent, #e94560);
+  padding: 3px 8px; border-radius: 12px; font-size: 12px;
+}
+.argus-email-recipient-chip button {
+  background: none; border: none; color: inherit; cursor: pointer; font-size: 14px; padding: 0 2px;
+}
+.argus-email-contacts { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.argus-email-contacts-label { font-size: 10px; color: var(--text-muted, #6a6a80); font-weight: 600; }
+.argus-email-contact-chip {
+  background: var(--bg-surface, #0f3460);
+  border: 1px solid var(--border, #2a2a4a);
+  border-radius: 12px; padding: 2px 10px; font-size: 11px;
+  color: var(--text-secondary, #a0a0b0); cursor: pointer;
+  transition: all 0.15s;
+}
+.argus-email-contact-chip:hover { border-color: var(--accent, #e94560); color: var(--text-primary, #e8e8e8); }
+.argus-email-actions { display: flex; gap: 8px; margin-top: 16px; }
+.argus-email-send-btn {
+  flex: 1; padding: 10px; background: var(--accent, #e94560); color: #fff;
+  border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.argus-email-send-btn:hover { background: var(--accent-hover, #ff6b81); }
+.argus-email-cancel-btn {
+  padding: 10px 16px; background: var(--bg-surface, #0f3460);
+  color: var(--text-secondary, #a0a0b0);
+  border: 1px solid var(--border, #2a2a4a); border-radius: 6px;
+  font-size: 13px; cursor: pointer;
+}
+.argus-email-cancel-btn:hover { color: var(--text-primary, #e8e8e8); }

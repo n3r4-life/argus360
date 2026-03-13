@@ -994,23 +994,31 @@
   function applyCompareMode() {
     const opSlider = document.getElementById("compare-opacity");
     const opVal = document.getElementById("compare-opacity-val");
-    comparePanels.classList.remove("overlay-mode", "diff-mode");
+    const panels = comparePanels.querySelectorAll(".compare-panel");
 
-    if (compareMode === "overlay") {
-      comparePanels.classList.add("overlay-mode");
-      opSlider.style.display = "";
-      opVal.style.display = "";
-      const panels = comparePanels.querySelectorAll(".compare-panel");
-      if (panels[1]) panels[1].style.opacity = opSlider.value / 100;
-    } else if (compareMode === "diff") {
-      comparePanels.classList.add("diff-mode");
-      opSlider.style.display = "none";
-      opVal.style.display = "none";
-      comparePanels.querySelectorAll(".compare-panel").forEach(p => p.style.opacity = "");
+    // Reset all inline styles from previous mode
+    comparePanels.classList.remove("overlay-mode", "diff-mode");
+    panels.forEach(p => {
+      p.style.opacity = "";
+      p.style.display = "";
+    });
+
+    if (compareMode === "overlay" || compareMode === "diff") {
+      comparePanels.classList.add(compareMode === "overlay" ? "overlay-mode" : "diff-mode");
+      // Only first 2 panels matter for overlay/diff — hide extras
+      panels.forEach((p, i) => { if (i > 1) p.style.display = "none"; });
+      if (compareMode === "overlay") {
+        opSlider.style.display = "";
+        opVal.style.display = "";
+        if (panels[1]) panels[1].style.opacity = opSlider.value / 100;
+      } else {
+        opSlider.style.display = "none";
+        opVal.style.display = "none";
+      }
     } else {
+      // Side by side — show all panels
       opSlider.style.display = "none";
       opVal.style.display = "none";
-      comparePanels.querySelectorAll(".compare-panel").forEach(p => p.style.opacity = "");
     }
   }
 

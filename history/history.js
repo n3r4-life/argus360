@@ -41,6 +41,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       const activeTab = document.querySelector(".history-tab.active");
       if (activeTab && activeTab.dataset.tab === "feed") {
         loadFeed();
+      } else if (activeTab && activeTab.dataset.tab === "regex") {
+        loadRegexScans();
       } else if (activeTab && activeTab.dataset.tab === "monitors") {
         allMonitorChanges = null;
         monitorChangesLoaded = false;
@@ -523,6 +525,8 @@ function attachListeners() {
       const activeTab = document.querySelector(".history-tab.active");
       if (activeTab && activeTab.dataset.tab === "feed") {
         loadFeed(query);
+      } else if (activeTab && activeTab.dataset.tab === "regex") {
+        loadRegexScans(query);
       } else if (activeTab && activeTab.dataset.tab === "monitors") {
         loadMonitorChanges(query);
       } else if (query) {
@@ -663,6 +667,22 @@ function attachListeners() {
     window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
   });
 
+  // Email+ with contact picker
+  document.getElementById("detail-email-compose").addEventListener("click", () => {
+    if (!currentItem) return;
+    const attrib = getShareAttrib();
+    const pasteUrl = currentItem.pasteUrls?.length ? currentItem.pasteUrls[currentItem.pasteUrls.length - 1].url : "";
+    EmailShare.compose({
+      subject: `${currentItem.pageTitle || "Analysis"} - ${attrib}`,
+      body: EmailShare.formatBody({
+        summary: getShareSnippet(),
+        url: currentItem.pageUrl,
+        pasteUrl,
+        content: currentItem.content
+      })
+    });
+  });
+
   // ── Paste to service ──
   const detailPasteBtn = document.getElementById("detail-paste");
   const detailPastePicker = document.getElementById("detail-paste-picker");
@@ -723,6 +743,11 @@ function attachListeners() {
       detailPasteBtn.textContent = "Pasted!";
       detailPasteBtn.style.color = "var(--success)";
       window.open(result.url, "_blank");
+      // Persist paste URL on the history entry
+      const hid = currentItem.id || currentItem._historyId;
+      if (hid) {
+        browser.runtime.sendMessage({ action: "addHistoryPasteUrl", historyId: hid, service: providerKey, url: result.url });
+      }
     } else {
       detailPasteBtn.textContent = result?.error || "Failed";
       detailPasteBtn.style.color = "var(--error)";
@@ -864,6 +889,29 @@ function openDetail(item) {
     usage: item.usage,
   });
 
+  // Show paste links if any
+  const pasteLinksEl = document.getElementById("detail-paste-links");
+  if (item.pasteUrls && item.pasteUrls.length) {
+    pasteLinksEl.replaceChildren();
+    const label = document.createElement("span");
+    label.className = "paste-links-label";
+    label.textContent = "Pastes:";
+    pasteLinksEl.appendChild(label);
+    const serviceIcons = { gist: "GitHub Gist", pastebin: "Pastebin", privatebin: "PrivateBin" };
+    for (const p of item.pasteUrls) {
+      const a = document.createElement("a");
+      a.href = p.url;
+      a.target = "_blank";
+      a.className = "paste-link";
+      a.textContent = serviceIcons[p.service] || p.service;
+      a.title = `${new Date(p.date).toLocaleDateString()} — ${p.url}`;
+      pasteLinksEl.appendChild(a);
+    }
+    pasteLinksEl.classList.remove("hidden");
+  } else {
+    pasteLinksEl.classList.add("hidden");
+  }
+
   IntelligenceViewer.updateThinking(elements.detailThinking, elements.detailThinkingContent, item.thinking);
   IntelligenceViewer.renderMarkdown(item.content, elements.detailContent);
 
@@ -887,9 +935,11 @@ clearMonitorBtn.addEventListener("click", async () => {
 
 // ── Tab switching ──
 const feedList = document.getElementById("feed-list");
+const regexList = document.getElementById("regex-list");
 const monitorList = document.getElementById("monitor-changes-list");
 let monitorChangesLoaded = false;
 let historyLoaded = false;
+let regexLoaded = false;
 
 document.querySelectorAll(".history-tab").forEach(tab => {
   tab.addEventListener("click", () => {
@@ -898,6 +948,7 @@ document.querySelectorAll(".history-tab").forEach(tab => {
     const which = tab.dataset.tab;
     feedList.style.display = "none";
     elements.historyList.style.display = "none";
+    regexList.style.display = "none";
     monitorList.style.display = "none";
     elements.clearAll.style.display = "none";
     clearMonitorBtn.style.display = "none";
@@ -910,6 +961,10 @@ document.querySelectorAll(".history-tab").forEach(tab => {
       elements.searchInput.placeholder = "Search reports...";
       elements.clearAll.style.display = "";
       if (!historyLoaded) { historyLoaded = true; loadHistory(); }
+    } else if (which === "regex") {
+      regexList.style.display = "";
+      elements.searchInput.placeholder = "Search regex scans...";
+      if (!regexLoaded) { regexLoaded = true; loadRegexScans(); }
     } else {
       monitorList.style.display = "";
       elements.searchInput.placeholder = "Search monitor changes...";
@@ -918,6 +973,130 @@ document.querySelectorAll(".history-tab").forEach(tab => {
     }
   });
 });
+
+// ── Regex Scans tab ──
+async function loadRegexScans(query) {
+  const resp = await browser.runtime.sendMessage({ action: "getHistory", page: 0, perPage: 500 });
+  if (!resp || !resp.success) {
+    regexList.replaceChildren();
+    const errDiv = document.createElement("div");
+    errDiv.className = "empty-text";
+    errDiv.textContent = "Failed to load regex scans.";
+    regexList.appendChild(errDiv);
+    return;
+  }
+
+  // Filter to regex-prefixed presets
+  let items = (resp.history || []).filter(h =>
+    (h.preset || "").startsWith("regex-") || (h.presetLabel || "").startsWith("Regex:")
+  );
+
+  if (query) {
+    const q = query.toLowerCase();
+    items = items.filter(h =>
+      (h.pageTitle || "").toLowerCase().includes(q) ||
+      (h.pageUrl || "").toLowerCase().includes(q) ||
+      (h.content || "").toLowerCase().includes(q) ||
+      (h.presetLabel || "").toLowerCase().includes(q)
+    );
+  }
+
+  regexList.replaceChildren();
+
+  if (!items.length) {
+    const emptyDiv = document.createElement("div");
+    emptyDiv.className = "empty-text";
+    emptyDiv.textContent = query ? "No matching regex scans." : "No regex scan reports yet. Run an AI analysis from the Regex Scanner to see results here.";
+    regexList.appendChild(emptyDiv);
+    return;
+  }
+
+  // Group by mode
+  const modeGroups = { "regex-threat": [], "regex-entities": [], "regex-summary": [] };
+  const modeLabels = { "regex-threat": "Threat Checks", "regex-entities": "Entity Analyses", "regex-summary": "Summaries" };
+  const modeColors = { "regex-threat": "#ff5252", "regex-entities": "#64b5f6", "regex-summary": "#4caf50" };
+
+  for (const item of items) {
+    const key = item.preset || "regex-summary";
+    if (!modeGroups[key]) modeGroups[key] = [];
+    modeGroups[key].push(item);
+  }
+
+  for (const [mode, group] of Object.entries(modeGroups)) {
+    if (!group.length) continue;
+    const header = document.createElement("div");
+    header.className = "feed-group-header";
+    const dot = document.createElement("span");
+    dot.className = "feed-group-dot";
+    dot.style.background = modeColors[mode] || "#a0a0b0";
+    header.appendChild(dot);
+    header.appendChild(document.createTextNode(modeLabels[mode] || mode));
+    const countSpan = document.createElement("span");
+    countSpan.className = "feed-group-count";
+    countSpan.textContent = `(${group.length})`;
+    header.appendChild(countSpan);
+    regexList.appendChild(header);
+
+    for (const item of group) {
+      const div = document.createElement("div");
+      div.className = "history-item";
+      div.addEventListener("click", () => openDetail(item));
+
+      const info = document.createElement("div");
+      info.className = "history-item-info";
+
+      const titleDiv = document.createElement("div");
+      titleDiv.className = "history-item-title";
+      titleDiv.textContent = item.pageTitle || "Untitled";
+
+      const metaDiv = document.createElement("div");
+      metaDiv.className = "history-item-meta";
+      const date = new Date(item.timestamp);
+      const timeSpan = document.createElement("span");
+      timeSpan.textContent = date.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
+        " " + date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+      metaDiv.appendChild(timeSpan);
+
+      const provSpan = document.createElement("span");
+      provSpan.textContent = IntelligenceViewer.providerLabel(item.provider);
+      metaDiv.appendChild(provSpan);
+
+      const badge = document.createElement("span");
+      badge.className = "history-badge regex";
+      badge.textContent = item.presetLabel || "Regex Scan";
+      metaDiv.appendChild(badge);
+
+      const previewDiv = document.createElement("div");
+      previewDiv.className = "history-item-preview";
+      previewDiv.textContent = (item.content || "").substring(0, 280).replace(/[#*_`]/g, "");
+
+      info.appendChild(titleDiv);
+      info.appendChild(metaDiv);
+
+      // Project tags
+      const projects = projectMap.get(item.id);
+      if (projects && projects.length) {
+        const tagsDiv = document.createElement("div");
+        tagsDiv.className = "history-project-tags";
+        for (const proj of projects) {
+          const tag = document.createElement("span");
+          tag.className = "history-project-tag";
+          const pdot = document.createElement("span");
+          pdot.className = "history-project-dot";
+          pdot.style.background = proj.color;
+          tag.appendChild(pdot);
+          tag.appendChild(document.createTextNode(proj.name));
+          tagsDiv.appendChild(tag);
+        }
+        info.appendChild(tagsDiv);
+      }
+
+      info.appendChild(previewDiv);
+      div.appendChild(info);
+      regexList.appendChild(div);
+    }
+  }
+}
 
 let allMonitorChanges = null;
 

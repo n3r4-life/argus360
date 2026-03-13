@@ -23,6 +23,8 @@ body {
   background: var(--bg-primary);
   color: var(--text-primary);
   min-height: 100vh;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .header {
@@ -259,6 +261,26 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+.detail-paste-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 20px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(233, 69, 96, 0.04);
+}
+.paste-links-label { color: var(--text-muted); font-weight: 600; }
+.paste-link {
+  color: var(--accent-hover, #ff6b81);
+  text-decoration: none;
+  padding: 2px 8px;
+  background: rgba(233, 69, 96, 0.1);
+  border-radius: 4px;
+  font-size: 11px;
+}
+.paste-link:hover { background: rgba(233, 69, 96, 0.2); text-decoration: underline; }
+
 .detail-thinking {
   padding: 12px 20px;
   border-bottom: 1px solid var(--border);
@@ -454,6 +476,10 @@ body {
 .history-badge.entity {
   background: rgba(156, 39, 176, 0.18);
   color: #ce93d8;
+}
+.history-badge.regex {
+  background: rgba(233, 69, 96, 0.18);
+  color: #e94560;
 }
 
 /* Entity feed items */

@@ -269,28 +269,22 @@
       <span id="selection-text-preview"></span>
     </div>
 
-    <!-- Row 5: Project context toggle -->
-    <div id="context-panel" class="context-panel hidden">
-      <label class="context-toggle">
+    <!-- Combined: context + preset + provider -->
+    <div class="combined-controls-row">
+      <label id="context-panel" class="context-toggle hidden" title="Include project context in analysis">
         <input type="checkbox" id="context-enabled">
-        <span>Project context</span>
+        <span>add context</span>
       </label>
-      <select id="context-project" class="context-project-select" title="Select project for context"></select>
-    </div>
-
-    <!-- Row 4: Preset + provider (compact) -->
-    <div class="form-group compact-row">
-      <div class="provider-row">
-        <select id="analysis-type" class="flex-grow"></select>
-        <select id="analysis-provider" title="Choose AI provider for this analysis">
-          <option value="">Default</option>
-          <option value="xai">Grok</option>
-          <option value="openai">OpenAI</option>
-          <option value="anthropic">Claude</option>
-          <option value="gemini">Gemini</option>
-          <option value="custom">Custom</option>
-        </select>
-      </div>
+      <select id="context-project" class="context-project-select hidden" title="Select project for context"></select>
+      <select id="analysis-type" class="flex-grow"></select>
+      <select id="analysis-provider" title="Choose AI provider">
+        <option value="">Default</option>
+        <option value="xai">Grok</option>
+        <option value="openai">OpenAI</option>
+        <option value="anthropic">Claude</option>
+        <option value="gemini">Gemini</option>
+        <option value="custom">Custom</option>
+      </select>
     </div>
 
     <div id="custom-prompt-group" class="form-group hidden">
@@ -309,13 +303,6 @@
           <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
         </svg>
         <span>Meta</span>
-      </button>
-      <button id="osint-links" class="btn btn-osint" title="Map all links on this page">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-        </svg>
-        <span>Links</span>
       </button>
       <button id="osint-whois" class="btn btn-osint" title="Whois & DNS lookup for this domain">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -348,19 +335,75 @@
         </svg>
         <span>Pulse</span>
       </button>
-      <button id="osint-images" class="btn btn-osint" title="Grab all images from this page">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    </div>
+
+    <!-- Media & Extract row -->
+    <div class="form-group btn-row media-tools-row">
+      <button id="osint-links" class="btn btn-media" title="Map all links on this page">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+        </svg>
+        <span>Links</span>
+      </button>
+      <button id="osint-images" class="btn btn-media" title="Grab all images from this page">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
         </svg>
         <span>Images</span>
       </button>
-      <button id="osint-images-all" class="btn btn-osint" title="Grab images from ALL open tabs">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
-          <rect x="7" y="1" width="14" height="14" rx="2" opacity="0.4"/>
+      <button id="osint-images-all" class="btn btn-media" title="Grab images from ALL open tabs">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="16" height="16" rx="2"/><circle cx="8" cy="8" r="1.5"/><path d="M19 13l-4-4L5 19"/>
+          <rect x="6" y="1" width="16" height="16" rx="2" opacity="0.35"/>
         </svg>
         <span>All Tabs</span>
       </button>
+      <button id="osint-screenshot" class="btn btn-media" title="Capture visible page as image">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
+        </svg>
+        <span>Screenshot</span>
+      </button>
+      <button id="osint-regex" class="btn btn-media" title="Regex search: find emails, IPs, phone numbers, patterns in page source">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M8 8l6 6" stroke-width="1.5"/>
+        </svg>
+        <span>Regex</span>
+      </button>
+    </div>
+
+    <!-- Quick Search bar -->
+    <div class="quick-search-bar">
+      <div class="quick-search-row">
+        <select id="search-engine" class="search-engine-select" title="Search engine">
+          <option value="duckduckgo">DuckDuckGo</option>
+          <option value="startpage">Startpage</option>
+          <option value="brave">Brave</option>
+          <option value="searx">SearX</option>
+          <option value="mojeek">Mojeek</option>
+          <option value="google">Google</option>
+          <option value="dogpile">Dogpile</option>
+          <option value="yandex">Yandex</option>
+          <option value="bing">Bing</option>
+        </select>
+        <input type="text" id="search-query" class="search-query-input" placeholder="Search...">
+        <button id="search-go" class="btn-search-go" title="Search">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
+      </div>
+      <div class="search-prompts-row">
+        <button class="search-prompt-chip" data-prompt="" title="Plain search">plain</button>
+        <button class="search-prompt-chip" data-prompt="site:{domain} " title="Restrict to current domain">site:</button>
+        <button class="search-prompt-chip" data-prompt="inurl:" title="Search within URLs">inurl:</button>
+        <button class="search-prompt-chip" data-prompt="filetype:pdf " title="Find PDFs">PDF</button>
+        <button class="search-prompt-chip" data-prompt="filetype:csv OR filetype:xlsx " title="Find spreadsheets">data</button>
+        <button class="search-prompt-chip" data-prompt="&quot;{domain}&quot; " title="Exact domain mention">exact</button>
+        <button class="search-prompt-chip" data-prompt="cache:" title="Cached version">cache</button>
+        <button class="search-prompt-chip" data-prompt="related:{domain} " title="Find related sites">related</button>
+      </div>
     </div>
 
     <!-- Error display -->

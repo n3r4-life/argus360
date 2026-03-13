@@ -33,6 +33,7 @@ const elements = {
 let rawMarkdown = "";
 let pageTitle = "";
 let resultId = null;
+let historyId = null;
 let analysisProvider = "";
 let analysisModel = "";
 let shareline = "";
@@ -154,6 +155,19 @@ document.addEventListener("DOMContentLoaded", () => {
     window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
   });
 
+  // Email+ with contact picker
+  document.getElementById("email-compose").addEventListener("click", () => {
+    const attrib = getShareAttrib();
+    EmailShare.compose({
+      subject: `${pageTitle || "Analysis"} - ${attrib}`,
+      body: EmailShare.formatBody({
+        summary: getShareSnippet(),
+        url: getShareUrl(),
+        content: rawMarkdown
+      })
+    });
+  });
+
   // Save to Archive
   document.getElementById("save-archive").addEventListener("click", () => {
     const url = getShareUrl();
@@ -221,6 +235,10 @@ document.addEventListener("DOMContentLoaded", () => {
       pasteBtn.textContent = "Pasted!";
       pasteBtn.style.color = "var(--success)";
       window.open(result.url, "_blank");
+      // Persist paste URL on the history entry
+      if (historyId) {
+        browser.runtime.sendMessage({ action: "addHistoryPasteUrl", historyId, service: providerKey, url: result.url });
+      }
     } else {
       pasteBtn.textContent = result?.error || "Failed";
       pasteBtn.style.color = "var(--error)";
@@ -494,6 +512,7 @@ function showResult(data) {
 
   if (data.provider) analysisProvider = data.provider;
   if (data.model) analysisModel = data.model;
+  if (data.historyId) historyId = data.historyId;
 
   viewer.setMeta({ provider: data.provider, model: data.model, usage: data.usage });
 

@@ -394,6 +394,12 @@ async function createContextMenus() {
     contexts: ["page", "frame"]
   });
   browser.contextMenus.create({
+    id: "argus-regex-scan",
+    parentId: "argus-osint-parent",
+    title: "Regex Scan",
+    contexts: ["page", "frame"]
+  });
+  browser.contextMenus.create({
     id: "argus-osint-sep",
     parentId: "argus-osint-parent",
     type: "separator",
@@ -1090,7 +1096,8 @@ async function saveToHistory(entry) {
     }
   }
 
-  await ArgusDB.History.add(entry);
+  const saved = await ArgusDB.History.add(entry);
+  entry._historyId = saved.id;
   notifyDataChanged("history");
 
   // Extract entities for knowledge graph (non-blocking)
@@ -1103,6 +1110,7 @@ async function saveToHistory(entry) {
       );
     }
   } catch (e) { console.warn("[KG] entity extraction failed:", e); }
+  return saved;
 }
 
 // ──────────────────────────────────────────────
@@ -1188,7 +1196,7 @@ async function handleAnalyzeStream(port, message) {
     // Save to history
     const presetLabel = ANALYSIS_PRESETS[message.analysisType]?.label ||
       settings.customPresets[message.analysisType]?.label || message.analysisType;
-    await saveToHistory({
+    const histEntry = await saveToHistory({
       pageTitle: page.title,
       pageUrl: page.url,
       provider: settings.provider,
@@ -1210,7 +1218,8 @@ async function handleAnalyzeStream(port, message) {
       provider: settings.provider,
       thinking: result.thinking,
       content: result.content,
-      pageTitle: page.title
+      pageTitle: page.title,
+      historyId: histEntry?.id || null
     };
     if (detectedSource) {
       doneMsg.sourceType = { id: detectedSource.id, label: detectedSource.label, icon: detectedSource.icon };
@@ -1317,6 +1326,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "getHistory") return handleGetHistory(message);
   if (message.action === "getHistoryItem") return handleGetHistoryItem(message);
   if (message.action === "deleteHistoryItem") return handleDeleteHistoryItem(message);
+  if (message.action === "addHistoryPasteUrl") return handleAddHistoryPasteUrl(message);
   if (message.action === "clearHistory") return handleClearHistory();
   if (message.action === "searchHistory") return handleSearchHistory(message);
   if (message.action === "getHistoryForUrl") return handleGetHistoryForUrl(message);
@@ -1356,6 +1366,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
       return { success: true, feeds: available.length ? available : null, allSubscribed: available.length === 0 && feeds.length > 0 };
     })();
   }
+  if (message.action === "regexAnalyze") return handleRegexAnalyze(message);
   if (message.action === "getSelection") return handleGetSelection(message);
   if (message.action === "getOpenTabs") return handleGetOpenTabs();
   if (message.action === "getConversationState") return handleGetConversationState(message);
@@ -1570,6 +1581,36 @@ async function handleDeleteHistoryItem(message) {
   await ArgusDB.History.remove(message.id);
   notifyDataChanged("history");
   return { success: true };
+}
+
+async function handleAddHistoryPasteUrl(message) {
+  const { historyId, service, url } = message;
+  if (!historyId || !url) return { success: false, error: "Missing historyId or url" };
+  const item = await ArgusDB.History.get(historyId);
+  if (!item) return { success: false, error: "History item not found" };
+  if (!item.pasteUrls) item.pasteUrls = [];
+  const pasteEntry = { service: service || "unknown", url, date: Date.now() };
+  item.pasteUrls.push(pasteEntry);
+  await ArgusDB.History.update(historyId, { pasteUrls: item.pasteUrls });
+
+  // Also update any project items that reference this history entry
+  try {
+    const projects = await ArgusDB.Projects.getAll();
+    for (const proj of projects) {
+      let changed = false;
+      for (const pi of (proj.items || [])) {
+        if (pi.refId === historyId) {
+          if (!pi.pasteUrls) pi.pasteUrls = [];
+          pi.pasteUrls.push(pasteEntry);
+          changed = true;
+        }
+      }
+      if (changed) await ArgusDB.Projects.update(proj.id, { items: proj.items });
+    }
+  } catch (e) { console.warn("[Paste] Failed to update project items:", e); }
+
+  notifyDataChanged("history");
+  return { success: true, pasteUrls: item.pasteUrls };
 }
 
 async function handleClearHistory() {
@@ -1840,6 +1881,73 @@ async function handleAnalyze(message) {
 }
 
 // ──────────────────────────────────────────────
+// Regex scan AI analysis
+// ──────────────────────────────────────────────
+async function handleRegexAnalyze(message) {
+  try {
+    const settings = await getProviderSettings(message.provider);
+    const { found, pageUrl, analysisMode } = message;
+
+    // Build a concise summary of findings for the prompt
+    const findingSections = [];
+    for (const [cat, matches] of Object.entries(found)) {
+      // Limit each category to 30 items to stay within token limits
+      const limited = matches.slice(0, 30);
+      const extra = matches.length > 30 ? ` (+${matches.length - 30} more)` : "";
+      findingSections.push(`### ${cat} (${matches.length}${extra})\n${limited.join("\n")}`);
+    }
+    const findingsText = findingSections.join("\n\n");
+
+    const prompts = {
+      threat: {
+        system: "You are a cybersecurity analyst specializing in exposure assessment and data leak detection. Analyze regex scan findings from a web page and produce a structured security assessment. Be direct and actionable.",
+        user: `Analyze these patterns extracted from ${pageUrl || "a web page"} for security exposure:\n\n${findingsText}\n\nProvide:\n1. **Severity** — Overall risk rating (Critical/High/Medium/Low/Info)\n2. **Exposed Secrets** — Any API keys, tokens, credentials, or sensitive data found (with risk explanation)\n3. **PII Exposure** — Emails, phone numbers, SSNs, credit cards — who/what is exposed\n4. **Infrastructure Leaks** — IPs, internal domains, AWS keys, server details that shouldn't be public\n5. **Actionable Findings** — Specific items that need immediate attention, ordered by severity\n6. **Context** — Whether findings are likely intentional (e.g. contact info) vs accidental leaks\n\nBe concise. Flag only genuinely concerning items, not routine public information.`
+      },
+      entities: {
+        system: "You are an OSINT analyst. Extract and classify entities from regex scan findings into a structured intelligence report. Identify relationships, affiliations, and patterns.",
+        user: `Classify and analyze these patterns extracted from ${pageUrl || "a web page"}:\n\n${findingsText}\n\nProvide:\n1. **People** — Names, emails, social handles that map to individuals. Group aliases belonging to the same person.\n2. **Organizations** — Companies, domains, services identified. Note affiliations.\n3. **Infrastructure** — IPs, domains, servers, cloud services. Map relationships (which IPs belong to which orgs).\n4. **Digital Assets** — Crypto addresses, API endpoints, tokens. Note which service they belong to.\n5. **Key Relationships** — Connections between entities (e.g. "email X uses domain Y, hosted on IP Z")\n6. **Intelligence Gaps** — What's missing, what would be worth investigating further.\n\nBe analytical. Focus on connections and patterns, not just listing items.`
+      },
+      summary: {
+        system: "You are a research assistant producing concise intelligence summaries from automated data extraction results.",
+        user: `Summarize these regex scan findings from ${pageUrl || "a web page"}:\n\n${findingsText}\n\nProvide:\n1. **Page Profile** — What kind of page this likely is based on the patterns found\n2. **Key Findings** — The most noteworthy discoveries, prioritized by intelligence value\n3. **Data Landscape** — What types of data this page contains/references and their significance\n4. **Notable Patterns** — Anything unusual, interesting, or worth investigating further\n5. **OSINT Value** — Rate the page's intelligence value (High/Medium/Low) with reasoning\n\nKeep it tight — 200 words max for the summary, then list key items.`
+      }
+    };
+
+    const mode = analysisMode || "threat";
+    const prompt = prompts[mode] || prompts.threat;
+    const messages = buildMessages(prompt.system, prompt.user);
+    const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
+
+    const result = await callProvider(
+      settings.provider, settings.apiKey, settings.model, messages, opts
+    );
+
+    // Save to history so it appears in Reports → Regex Scans tab
+    const modeLabels = { threat: "Regex: Threat Check", entities: "Regex: Entities", summary: "Regex: Summary" };
+    try {
+      await saveToHistory({
+        pageTitle: pageUrl ? new URL(pageUrl).hostname : "Regex Scan",
+        pageUrl: pageUrl || "",
+        content: result.content,
+        thinking: result.thinking,
+        provider: settings.provider,
+        model: result.model,
+        preset: "regex-" + mode,
+        presetLabel: modeLabels[mode] || "Regex Analysis",
+        usage: result.usage,
+      });
+    } catch (e) { console.warn("[RegexAnalyze] Failed to save to history:", e); }
+
+    return {
+      success: true, content: result.content, thinking: result.thinking,
+      model: result.model, usage: result.usage, provider: settings.provider
+    };
+  } catch (err) {
+    return { success: false, error: err.message || "AI analysis failed." };
+  }
+}
+
+// ──────────────────────────────────────────────
 // Analyze in tab (popup launcher)
 // ──────────────────────────────────────────────
 async function handleAnalyzeInTab(message) {
@@ -1996,13 +2104,21 @@ async function streamAnalysisToStorage(resultId, page, message, settings, preset
 
     await browser.storage.local.set({ [resultId]: resultData });
 
-    await saveToHistory({
+    const histEntry = await saveToHistory({
       pageTitle: page.title, pageUrl: page.url, provider: settings.provider,
       model: result.model, preset: message.analysisType, presetLabel,
       content: result.content, thinking: result.thinking, usage: result.usage,
       isSelection: !!message.selectedText,
       promptText: systemPrompt + "\n" + userPrompt
     });
+    // Attach historyId to result so results page can reference it for paste URLs etc.
+    if (histEntry?.id) {
+      const rd = await browser.storage.local.get(resultId);
+      if (rd[resultId]) {
+        rd[resultId].historyId = histEntry.id;
+        await browser.storage.local.set(rd);
+      }
+    }
 
     // Run specialized pipeline in background (non-blocking enrichment)
     if (detectedSource && !message.selectedText) {
@@ -2567,6 +2683,28 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
         title: "Argus — Error",
         message: `Tech stack detection failed: ${err.message}`
       });
+    }
+    return;
+  }
+
+  // Handle regex scan from context menu
+  if (info.menuItemId === "argus-regex-scan") {
+    try {
+      const resp = await handleRegexScanPage({ tabId: tab.id });
+      if (resp && resp.success) {
+        const storeKey = `regex-${Date.now()}`;
+        const { html, text, ...scanResults } = resp;
+        const sourceKey = storeKey + "-source";
+        await browser.storage.local.set({
+          [storeKey]: { ...scanResults, pageUrl: tab.url, pageTitle: tab.title, sourceKey },
+          [sourceKey]: { html, text }
+        });
+        await browser.tabs.create({ url: browser.runtime.getURL(`osint/regex.html?id=${encodeURIComponent(storeKey)}`) });
+      } else {
+        safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus", message: resp?.error || "Regex scan failed" });
+      }
+    } catch (err) {
+      safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus — Error", message: `Regex scan failed: ${err.message}` });
     }
     return;
   }

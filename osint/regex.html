@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Argus - Regex Scanner</title>
+  <link rel="stylesheet" href="regex.css">
+  <link rel="stylesheet" href="../lib/email-share.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+</head>
+<body>
+  <script src="../shared/ribbon.js"></script>
+  <header class="header">
+    <div class="header-left">
+      <img src="../icons/icon-32.png" alt="" class="header-icon">
+      <h1 class="header-title">Regex Scanner</h1>
+    </div>
+    <a id="page-url" class="page-url" href="#" target="_blank" title="Open source page"></a>
+  </header>
+
+  <section id="stats-bar" class="stats-bar">
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-total">0</span>
+      <span class="stat-label">Matches</span>
+    </div>
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-categories">0</span>
+      <span class="stat-label">Categories</span>
+    </div>
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-html-size">0</span>
+      <span class="stat-label">HTML Size</span>
+    </div>
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-text-size">0</span>
+      <span class="stat-label">Text Size</span>
+    </div>
+  </section>
+
+  <nav class="toolbar">
+    <div class="toolbar-left">
+      <button id="expand-all" class="btn btn-secondary">Expand All</button>
+      <button id="collapse-all" class="btn btn-secondary">Collapse All</button>
+      <button id="export-all" class="btn btn-primary">Export All</button>
+    </div>
+    <div class="toolbar-right">
+      <input type="text" id="match-search" class="search-input" placeholder="Filter matches...">
+    </div>
+  </nav>
+
+  <section class="ai-bar">
+    <span class="ai-bar-label">AI Analysis</span>
+    <div class="ai-bar-buttons">
+      <button class="btn btn-ai" id="ai-threat" data-mode="threat" title="Security exposure assessment">Threat Check</button>
+      <button class="btn btn-ai" id="ai-entities" data-mode="entities" title="Entity extraction & relationship mapping">Entities</button>
+      <button class="btn btn-ai" id="ai-summary" data-mode="summary" title="Intelligence summary & page profile">Summary</button>
+    </div>
+    <select id="ai-provider" class="select-input ai-provider-select" title="AI provider">
+      <option value="">Default</option>
+      <option value="xai">Grok</option>
+      <option value="openai">OpenAI</option>
+      <option value="anthropic">Claude</option>
+      <option value="gemini">Gemini</option>
+      <option value="custom">Custom</option>
+    </select>
+    <span id="ai-status" class="ai-status"></span>
+  </section>
+
+  <section id="ai-results" class="ai-results hidden">
+    <div class="ai-results-header">
+      <span id="ai-results-title" class="ai-results-title">AI Analysis</span>
+      <div class="ai-results-actions">
+        <span id="ai-results-meta" class="ai-results-meta"></span>
+        <button id="ai-copy" class="btn btn-secondary btn-small">Copy</button>
+        <button id="ai-email" class="btn btn-secondary btn-small" style="color:var(--accent);">Email</button>
+        <button id="ai-close" class="btn btn-secondary btn-small">Close</button>
+      </div>
+    </div>
+    <div id="ai-results-body" class="ai-results-body markdown-body"></div>
+  </section>
+
+  <section class="page-search">
+    <div class="page-search-header">
+      <span class="page-search-label">Page Search</span>
+      <div class="page-search-mode">
+        <button class="mode-chip active" id="mode-regex" data-mode="regex">Regex</button>
+        <button class="mode-chip" id="mode-text" data-mode="text">Text</button>
+      </div>
+    </div>
+    <div class="page-search-input-row">
+      <input type="text" id="custom-regex" class="search-input custom-regex-input" placeholder="Enter regex pattern or plain text...">
+      <select id="custom-source" class="select-input">
+        <option value="html">HTML source</option>
+        <option value="text">Visible text</option>
+      </select>
+      <button id="custom-run" class="btn btn-primary">Search</button>
+      <span id="custom-status" class="custom-status"></span>
+    </div>
+    <div class="preset-chips">
+      <span class="preset-group-label">OSINT</span>
+      <button class="preset-chip" data-pattern="password\s*[:=]\s*\S+" data-src="html" title="Passwords in source">passwords</button>
+      <button class="preset-chip" data-pattern="(?:secret|private|token|auth)[_-]?\w*\s*[:=]\s*[&quot;']?\w+" data-src="html" title="Secrets & tokens">secrets</button>
+      <button class="preset-chip" data-pattern="<!--[\s\S]*?-->" data-src="html" title="HTML comments (often contain dev notes)">comments</button>
+      <button class="preset-chip" data-pattern="(?:TODO|FIXME|HACK|XXX|BUG)\b.*" data-src="html" title="Dev notes left in source">TODO/FIXME</button>
+      <button class="preset-chip" data-pattern="(?:internal|staging|dev|test|localhost)[.\-]\S+" data-src="html" title="Internal/staging URLs">internal URLs</button>
+      <span class="preset-group-label">Research</span>
+      <button class="preset-chip" data-pattern="\d{1,2}[/-]\d{1,2}[/-]\d{2,4}" data-src="text" title="Dates in various formats">dates</button>
+      <button class="preset-chip" data-pattern="\$[\d,]+(?:\.\d{2})?" data-src="text" title="Dollar amounts">money $</button>
+      <button class="preset-chip" data-pattern="\d+(?:\.\d+)?%" data-src="text" title="Percentage values">percentages</button>
+      <button class="preset-chip" data-pattern="&quot;[^&quot;]{10,}&quot;" data-src="text" title="Quoted text (10+ chars)" data-mode="regex">quoted text</button>
+      <button class="preset-chip" data-pattern="\((?:(?:19|20)\d{2}|[A-Z][a-z]+(?:\s(?:et\s)?al\.?)?(?:,?\s*(?:19|20)\d{2})?)\)" data-src="text" title="Academic citations like (Smith 2024) or (2023)">citations</button>
+      <button class="preset-chip" data-pattern="\b\d+(?:\.\d+)?(?:\s*[×x*\/\+\-\^=≈≤≥<>]\s*\d+(?:\.\d+)?)+\b" data-src="text" title="Math expressions and formulas">formulas</button>
+      <button class="preset-chip" data-pattern="(?:https?://\S*\?)\S*[=&]\S+" data-src="html" title="URLs with query parameters">URLs w/ params</button>
+      <button class="preset-chip" data-pattern="(?:Fig(?:ure)?|Table|Chart|Exhibit|Appendix)\s*\d+" data-src="text" title="Figure/Table references">figures/tables</button>
+      <button class="preset-chip" data-pattern="(?:[A-Z][a-z]+(?:\s[A-Z][a-z]+)+)" data-src="text" title="Proper nouns (capitalized multi-word names)">proper nouns</button>
+      <button class="preset-chip" data-pattern="\b[A-Z]{2,6}\b" data-src="text" title="Acronyms (2-6 uppercase letters)">acronyms</button>
+    </div>
+  </section>
+
+  <main id="results" class="results">
+    <div class="empty-state" id="empty-state">
+      <p>Loading scan results...</p>
+    </div>
+  </main>
+
+  <script src="../lib/email-share.js"></script>
+  <script src="regex.js"></script>
+</body>
+</html>

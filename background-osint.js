@@ -2140,6 +2140,90 @@ async function handleExtractImages(message) {
 }
 
 // ──────────────────────────────────────────────
+// Regex Page Scanner — extract patterns from source
+// ──────────────────────────────────────────────
+
+async function handleRegexScanPage(message) {
+  try {
+    const tabId = message.tabId;
+    const results = await browser.tabs.executeScript(tabId, {
+      code: `(function() {
+        const html = document.documentElement.outerHTML;
+        const text = document.body.innerText;
+        const patterns = {
+          emails:      { re: /[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}/g, src: html },
+          ipv4:        { re: /\\b(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\b/g, src: html },
+          phones:      { re: /(?:\\+?1[\\-\\s.]?)?\\(?\\d{3}\\)?[\\-\\s.]?\\d{3}[\\-\\s.]?\\d{4}/g, src: text },
+          urls:        { re: /https?:\\/\\/[^\\s"'<>\\)\\]}{]+/g, src: html },
+          domains:     { re: /\\b(?:[a-zA-Z0-9\\-]+\\.)+(?:com|org|net|gov|edu|io|co|info|biz|me|dev|app|xyz|uk|de|fr|jp|ru|cn|au|ca|nl|se|ch|es|it|br|in|kr|za)\\b/g, src: html },
+          hashes_md5:  { re: /\\b[a-fA-F0-9]{32}\\b/g, src: html },
+          hashes_sha1: { re: /\\b[a-fA-F0-9]{40}\\b/g, src: html },
+          hashes_sha256: { re: /\\b[a-fA-F0-9]{64}\\b/g, src: html },
+          btc_addr:    { re: /\\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\\b/g, src: text },
+          ssn:         { re: /\\b\\d{3}[\\-\\s]?\\d{2}[\\-\\s]?\\d{4}\\b/g, src: text },
+          credit_card: { re: /\\b(?:4\\d{3}|5[1-5]\\d{2}|6011|3[47]\\d{2})[\\-\\s]?\\d{4}[\\-\\s]?\\d{4}[\\-\\s]?\\d{4}\\b/g, src: text },
+          jwt:         { re: /eyJ[A-Za-z0-9_\\-]+\\.eyJ[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+/g, src: html },
+          api_keys:    { re: /(?:api[_\\-]?key|apikey|token|secret|access[_\\-]?key)[\\s]*[:=][\\s]*["']?([a-zA-Z0-9_\\-]{16,})["']?/gi, src: html },
+          aws_keys:    { re: /AKIA[0-9A-Z]{16}/g, src: html },
+          base64_blobs:{ re: /[A-Za-z0-9+\\/]{40,}={0,2}/g, src: html },
+          social_handles: { re: /@[a-zA-Z0-9_]{1,30}/g, src: text },
+        };
+        const found = {};
+        let totalMatches = 0;
+        for (const [name, { re, src }] of Object.entries(patterns)) {
+          const matches = [...new Set((src.match(re) || []))];
+          if (matches.length > 0) {
+            found[name] = matches.slice(0, 200); // cap per category
+            totalMatches += matches.length;
+          }
+        }
+        return { found, totalMatches, htmlLength: html.length, textLength: text.length, html, text };
+      })();`
+    });
+
+    const data = results?.[0];
+    if (!data) return { success: false, error: "No data returned from page scan" };
+
+    console.log(`[RegexScan] Found ${data.totalMatches} matches across ${Object.keys(data.found).length} categories`);
+    return { success: true, ...data };
+  } catch (e) {
+    console.error("[RegexScan] Failed:", e);
+    return { success: false, error: e.message };
+  }
+}
+
+// Custom regex re-scan — runs a user-supplied pattern on the original tab
+async function handleRegexScanCustom(message) {
+  try {
+    const { pattern, source, url } = message;
+    // Find the tab by URL
+    const tabs = await browser.tabs.query({ url: url || undefined });
+    const tab = tabs?.[0];
+    if (!tab) return { success: false, error: "Source tab not found. It may have been closed." };
+
+    const srcVar = source === "text" ? "document.body.innerText" : "document.documentElement.outerHTML";
+    const escaped = pattern.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+    const results = await browser.tabs.executeScript(tab.id, {
+      code: `(function() {
+        try {
+          const re = new RegExp('${escaped}', 'gi');
+          const src = ${srcVar};
+          const matches = [...new Set((src.match(re) || []))].slice(0, 500);
+          return { matches };
+        } catch(e) { return { error: e.message }; }
+      })();`
+    });
+    const data = results?.[0];
+    if (!data) return { success: false, error: "No response from tab" };
+    if (data.error) return { success: false, error: data.error };
+    return { success: true, matches: data.matches };
+  } catch (e) {
+    console.error("[RegexScanCustom] Failed:", e);
+    return { success: false, error: e.message };
+  }
+}
+
+// ──────────────────────────────────────────────
 // Multi-Tab Image Grabber
 // ──────────────────────────────────────────────
 
@@ -2326,6 +2410,8 @@ browser.runtime.onMessage.addListener((message, sender) => {
     case "extractLinks":        return handleExtractLinks(message);
     case "extractImages":       return handleExtractImages(message);
     case "extractImagesMultiTab": return handleExtractImagesMultiTab(message);
+    case "regexScanPage":       return handleRegexScanPage(message);
+    case "regexScanCustom":     return handleRegexScanCustom(message);
     case "aiImageSearch":       return handleAiImageSearch(message);
 
     // Whois / DNS

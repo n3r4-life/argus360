@@ -195,8 +195,15 @@ async function initContextPanel() {
       elements.contextProject.value = contextualMode.projectId;
     }
 
+    // Toggle project dropdown visibility based on checkbox
+    const updateProjectVisibility = () => {
+      elements.contextProject.classList.toggle("hidden", !elements.contextEnabled.checked);
+    };
+    updateProjectVisibility();
+
     // Persist on change
     const saveState = () => {
+      updateProjectVisibility();
       browser.storage.local.set({
         contextualMode: { enabled: elements.contextEnabled.checked, projectId: elements.contextProject.value }
       });
@@ -204,7 +211,7 @@ async function initContextPanel() {
     elements.contextEnabled.addEventListener("change", saveState);
     elements.contextProject.addEventListener("change", saveState);
 
-    // Show panel
+    // Show context toggle (projects exist)
     elements.contextPanel.classList.remove("hidden");
   } catch { /* no projects or error — panel stays hidden */ }
 }
@@ -946,6 +953,99 @@ function attachEventListeners() {
     } else {
       showToast(resp?.error || "Failed to grab images from tabs.", "error");
     }
+  });
+
+  // Screenshot — capture visible tab
+  document.getElementById("osint-screenshot").addEventListener("click", async () => {
+    showToast("Capturing screenshot...", "loading");
+    try {
+      const dataUrl = await browser.tabs.captureVisibleTab(null, { format: "png" });
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+      const domain = tabs[0]?.url ? new URL(tabs[0].url).hostname.replace(/^www\./, "") : "page";
+      a.download = `argus-screenshot-${domain}-${new Date().toISOString().slice(0,19).replace(/:/g, "-")}.png`;
+      a.click();
+      showToast("Screenshot saved!", "success");
+    } catch (e) {
+      showToast(e.message || "Screenshot failed", "error");
+    }
+  });
+
+  // Regex Search — extract patterns from page source
+  document.getElementById("osint-regex").addEventListener("click", async () => {
+    showToast("Scanning page source...", "loading");
+    try {
+      const resp = await browser.runtime.sendMessage({ action: "regexScanPage", tabId: currentTabId });
+      if (resp && resp.success) {
+        const storeKey = `regex-${Date.now()}`;
+        const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+        // Store source separately so custom searches work after tab closes
+        const { html, text, ...scanResults } = resp;
+        const sourceKey = storeKey + "-source";
+        await browser.storage.local.set({
+          [storeKey]: { ...scanResults, pageUrl: tabs[0]?.url, pageTitle: tabs[0]?.title, sourceKey },
+          [sourceKey]: { html, text }
+        });
+        browser.tabs.create({ url: browser.runtime.getURL(`osint/regex.html?id=${encodeURIComponent(storeKey)}`) });
+        window.close();
+      } else {
+        showToast(resp?.error || "Regex scan failed.", "error");
+      }
+    } catch (e) {
+      showToast(e.message || "Regex scan failed.", "error");
+    }
+  });
+
+  // ── Quick Search bar ──────────────────────────────
+  const SEARCH_ENGINES = {
+    duckduckgo: "https://duckduckgo.com/?q=",
+    startpage:  "https://www.startpage.com/do/dsearch?query=",
+    brave:      "https://search.brave.com/search?q=",
+    searx:      "https://searx.org/search?q=",
+    mojeek:     "https://www.mojeek.com/search?q=",
+    google:     "https://www.google.com/search?q=",
+    dogpile:    "https://www.dogpile.com/serp?q=",
+    yandex:     "https://yandex.com/search/?text=",
+    bing:       "https://www.bing.com/search?q=",
+  };
+
+  let searchPromptPrefix = "";
+
+  // Prompt chips
+  document.querySelectorAll(".search-prompt-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      document.querySelectorAll(".search-prompt-chip").forEach(c => c.classList.remove("active"));
+      chip.classList.add("active");
+      const tpl = chip.dataset.prompt;
+      // Replace {domain} with current page domain
+      searchPromptPrefix = tpl.replace(/\{domain\}/g, currentDomain || "");
+      // Focus query input
+      document.getElementById("search-query").focus();
+    });
+  });
+
+  // Get current domain for template substitution
+  let currentDomain = "";
+  browser.tabs.query({ active: true, currentWindow: true }).then(tabs => {
+    if (tabs[0]?.url) {
+      try { currentDomain = new URL(tabs[0].url).hostname; } catch (e) {}
+    }
+  });
+
+  function executeSearch() {
+    const q = document.getElementById("search-query").value.trim();
+    if (!q) return;
+    const engine = document.getElementById("search-engine").value;
+    const baseUrl = SEARCH_ENGINES[engine] || SEARCH_ENGINES.duckduckgo;
+    const fullQuery = searchPromptPrefix + q;
+    browser.tabs.create({ url: baseUrl + encodeURIComponent(fullQuery) });
+    window.close();
+  }
+
+  document.getElementById("search-go").addEventListener("click", executeSearch);
+  document.getElementById("search-query").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") executeSearch();
   });
 
   // Quick subscribe button (shown when feed detected)

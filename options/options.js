@@ -652,7 +652,7 @@ function initResourcesTab() {
     shield: "\uD83D\uDEE1\uFE0F", archive: "\uD83D\uDCE6", search: "\uD83D\uDD0D", globe: "\uD83C\uDF0D",
     chart: "\uD83D\uDCCA", government: "\uD83C\uDFDB\uFE0F", map: "\uD83D\uDDFA\uFE0F", world: "\uD83C\uDF10",
     trending: "\uD83D\uDCC8", book: "\uD83D\uDCDA", alert: "\uD83D\uDEA8", target: "\uD83C\uDFAF",
-    lock: "\uD83D\uDD12", clipboard: "\uD83D\uDCCB"
+    lock: "\uD83D\uDD12", clipboard: "\uD83D\uDCCB", terminal: "\uD83D\uDCBB"
   };
 
   // ── Load resources (cached update > bundled) ──
@@ -5093,6 +5093,18 @@ function projRenderItems(proj) {
       threadBadge.textContent = item.conversations.length === 1 ? "thread" : `${item.conversations.length} threads`;
       metaDiv.appendChild(threadBadge);
     }
+    if (item.pasteUrls && item.pasteUrls.length) {
+      for (const p of item.pasteUrls) {
+        const pasteLink = document.createElement("a");
+        pasteLink.href = p.url;
+        pasteLink.target = "_blank";
+        pasteLink.className = "proj-type-badge paste";
+        const svcNames = { gist: "Gist", pastebin: "Pastebin", privatebin: "PrivateBin" };
+        pasteLink.textContent = svcNames[p.service] || "Paste";
+        pasteLink.addEventListener("click", e => e.stopPropagation());
+        metaDiv.appendChild(pasteLink);
+      }
+    }
     const dateSpan = document.createElement("span");
     dateSpan.textContent = new Date(item.addedAt).toLocaleDateString();
     metaDiv.appendChild(dateSpan);
@@ -5150,6 +5162,25 @@ function projRenderItems(proj) {
       });
       actionsDiv2.appendChild(autoBtn);
     }
+    // Email share button
+    const emailBtn = document.createElement("button");
+    emailBtn.className = "proj-item-email-btn";
+    emailBtn.title = "Email this item";
+    emailBtn.textContent = "Email";
+    emailBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const pasteUrl = item.pasteUrls?.length ? item.pasteUrls[item.pasteUrls.length - 1].url : "";
+      EmailShare.compose({
+        subject: `${item.title || "Shared Item"} — ${proj.name}`,
+        body: EmailShare.formatBody({
+          summary: item.summary || (item.analysisContent || "").slice(0, 300),
+          url: item.url,
+          pasteUrl,
+          content: item.analysisContent
+        })
+      });
+    });
+    actionsDiv2.appendChild(emailBtn);
     // Block button for auto-routed/feed items — prevents re-routing
     if (item.url && (item.type === "feed" || (item.tags && item.tags.includes("auto-routed")))) {
       const blockBtn = document.createElement("button");
@@ -6129,6 +6160,36 @@ function initStorageManagement() {
   document.getElementById("purge-snapshots-btn").addEventListener("click", purgeMonitorSnapshots);
   document.getElementById("purge-cached-btn").addEventListener("click", purgeAllCachedData);
   document.getElementById("purge-opfs-btn").addEventListener("click", purgeOpfsFiles);
+
+  // Email Contacts management
+  const contactsList = document.getElementById("contacts-list");
+  async function renderContacts() {
+    const contacts = await EmailShare.getContacts();
+    contactsList.replaceChildren();
+    for (const c of contacts) {
+      const chip = document.createElement("span");
+      chip.style.cssText = "display:inline-flex;align-items:center;gap:4px;background:var(--bg-surface);border:1px solid var(--border);border-radius:12px;padding:3px 10px;font-size:11px;color:var(--text-secondary);";
+      chip.textContent = c.name ? `${c.name} <${c.email}>` : c.email;
+      const removeBtn = document.createElement("button");
+      removeBtn.textContent = "×";
+      removeBtn.style.cssText = "background:none;border:none;color:var(--error);cursor:pointer;font-size:14px;padding:0 2px;";
+      removeBtn.addEventListener("click", async () => { await EmailShare.removeContact(c.email); renderContacts(); });
+      chip.appendChild(removeBtn);
+      contactsList.appendChild(chip);
+    }
+    if (!contacts.length) contactsList.textContent = "No contacts saved yet.";
+  }
+  renderContacts();
+  document.getElementById("add-contact-btn").addEventListener("click", async () => {
+    const emailInput = document.getElementById("contact-email-input");
+    const nameInput = document.getElementById("contact-name-input");
+    const email = emailInput.value.trim();
+    if (!email || !email.includes("@")) return;
+    await EmailShare.addContact(email, nameInput.value.trim());
+    emailInput.value = "";
+    nameInput.value = "";
+    renderContacts();
+  });
 
   // Wipe Everything
   const wipeBtn = document.getElementById("wipe-everything-btn");

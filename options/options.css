@@ -1058,6 +1058,8 @@ textarea {
 .proj-type-badge.note { background: rgba(245, 166, 35, 0.15); color: #f5a623; }
 .proj-type-badge.url { background: rgba(80, 200, 120, 0.15); color: #50c878; }
 .proj-type-badge.feed { background: rgba(255, 152, 0, 0.15); color: #ff9800; }
+.proj-type-badge.paste { background: rgba(233, 69, 96, 0.12); color: #ff6b81; text-decoration: none; cursor: pointer; }
+.proj-type-badge.paste:hover { background: rgba(233, 69, 96, 0.25); text-decoration: underline; }
 
 .proj-item-actions {
   display: flex;
@@ -2261,4 +2263,17 @@ textarea {
 .proj-item-auto-btn:disabled {
   opacity: 0.5;
   cursor: default;
+}
+.proj-item-email-btn {
+  background: none;
+  border: 1px solid var(--text-muted);
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.proj-item-email-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }

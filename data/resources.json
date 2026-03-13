@@ -296,6 +296,48 @@
         { "name": "SecurityTrails", "url": "https://securitytrails.com/", "desc": "DNS and domain intelligence" },
         { "name": "Have I Been Pwned", "url": "https://haveibeenpwned.com/", "desc": "Check if emails appear in data breaches" }
       ]
+    },
+    {
+      "id": "devtools",
+      "title": "Online IDEs & Terminals",
+      "icon": "terminal",
+      "description": "Browser-based code editors, REPLs, and terminal emulators — run code anywhere without local setup.",
+      "links": [
+        { "name": "VSCode.dev", "url": "https://vscode.dev/", "desc": "Full VS Code in the browser — edit repos, extensions, no install" },
+        { "name": "Replit", "url": "https://replit.com/", "desc": "Full terminal + console for Python, Bash, Node.js, 50+ languages" },
+        { "name": "JDoodle", "url": "https://www.jdoodle.com/", "desc": "88+ languages — simple console editor + run button" },
+        { "name": "OnlineGDB", "url": "https://www.onlinegdb.com/", "desc": "Interactive console for Bash, Python, C++ with debugger" },
+        { "name": "TIO.run", "url": "https://tio.run/", "desc": "Try It Online — huge language list including PowerShell" },
+        { "name": "Tutorialspoint Terminal", "url": "https://www.tutorialspoint.com/linux_terminal_online.php", "desc": "Online terminals for Bash, PowerShell, Python, Linux" },
+        { "name": "PlayCode Python", "url": "https://playcode.io/python-compiler", "desc": "Python 3.11 in-browser with packages — no server lag" },
+        { "name": "Online Python", "url": "https://www.online-python.com/", "desc": "Clean, instant Python execution" },
+        { "name": "Programiz Python", "url": "https://www.programiz.com/python-programming/online-compiler/", "desc": "Python compiler with clean interface" },
+        { "name": "Python Morsels REPL", "url": "https://www.pythonmorsels.com/repl/", "desc": "Pure interactive Python REPL for quick testing" }
+      ]
+    },
+    {
+      "id": "powershell",
+      "title": "PowerShell & Bash Consoles",
+      "icon": "terminal",
+      "description": "Dedicated online consoles for shell scripting — PowerShell, Bash, and Linux terminal emulators.",
+      "links": [
+        { "name": "CompileBytes PowerShell", "url": "https://compilebytes.com/tools/powershell", "desc": "Dedicated online PowerShell console" },
+        { "name": "HCodx PowerShell", "url": "https://hcodx.com/compiler/powershell", "desc": "Online PowerShell compiler and runner" },
+        { "name": "Webminal", "url": "https://www.webminal.org/", "desc": "Free online Linux terminal with real account — classic CLI" },
+        { "name": "KillerCoda", "url": "https://killercoda.com/", "desc": "Interactive labs for Linux, Docker, K8s, security — full browser terminal" },
+        { "name": "Sandbox.bio", "url": "https://sandbox.bio/", "desc": "Interactive bash tutorials in the browser" }
+      ]
+    },
+    {
+      "id": "securitylabs",
+      "title": "Security Labs & Sandboxes",
+      "icon": "lock",
+      "description": "Browser-based pentesting environments and security training platforms with real terminal access.",
+      "links": [
+        { "name": "TryHackMe", "url": "https://tryhackme.com/", "desc": "Browser-based Kali terminals in guided rooms — best for beginners" },
+        { "name": "HackTheBox", "url": "https://www.hackthebox.com/", "desc": "Pwnbox — full in-browser terminal for pentesting labs" },
+        { "name": "KillerCoda Security", "url": "https://killercoda.com/", "desc": "Security scenarios — CKS, Linux hardening, container security" }
+      ]
     }
   ]
 }
