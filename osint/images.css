@@ -572,6 +572,20 @@ body {
 
 .hidden { display: none !important; }
 
+/* Tab badge on image cards (multi-tab mode) */
+.card-tab-badge {
+  font-size: 9px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 5px;
+  background: var(--bg-surface);
+  border-radius: 3px;
+  margin-top: 2px;
+  border: 1px solid var(--border);
+}
+
 /* Color filter tabs */
 .color-tab {
   width: 28px;

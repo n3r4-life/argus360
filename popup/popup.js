@@ -934,6 +934,20 @@ function attachEventListeners() {
     }
   });
 
+  // Image Grabber — All Tabs
+  document.getElementById("osint-images-all").addEventListener("click", async () => {
+    showToast("Grabbing images from all tabs...", "loading");
+    const resp = await browser.runtime.sendMessage({ action: "extractImagesMultiTab" });
+    if (resp && resp.success) {
+      const storeKey = `images-${Date.now()}`;
+      await browser.storage.local.set({ [storeKey]: resp.data });
+      browser.tabs.create({ url: browser.runtime.getURL(`osint/images.html?id=${encodeURIComponent(storeKey)}`) });
+      window.close();
+    } else {
+      showToast(resp?.error || "Failed to grab images from tabs.", "error");
+    }
+  });
+
   // Quick subscribe button (shown when feed detected)
   document.getElementById("osint-subscribe").addEventListener("click", async () => {
     const btn = document.getElementById("osint-subscribe");

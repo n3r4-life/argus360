@@ -8,7 +8,7 @@
   const stored = (await browser.storage.local.get(storeKey))[storeKey];
   if (!stored || !stored.images) { document.getElementById("empty-state").innerHTML = "<p>No image data found.</p>"; return; }
 
-  const { images, pageUrl, pageTitle, stats } = stored;
+  const { images, pageUrl, pageTitle, stats, multiTab, tabSources } = stored;
 
   // Header
   const urlEl = document.getElementById("page-url");
@@ -67,7 +67,36 @@
   let sortBy = "default";
   let showSelectedOnly = false;
   let currentColorFilter = "all"; // color search filter (not display overlay)
+  let currentTabFilter = "all";  // multi-tab filter
   const imageColors = new Map(); // src → Set of dominant color names
+
+  // ── Multi-Tab Filter Setup ──
+  if (multiTab && tabSources && tabSources.length > 1) {
+    const tabRow = document.getElementById("tab-filter-row");
+    tabRow.classList.remove("hidden");
+    const tabTabs = document.getElementById("tab-tabs");
+    // Update "All Tabs" count
+    tabTabs.querySelector('[data-tab="all"]').textContent = `All Tabs (${tabSources.length})`;
+    tabSources.forEach(ts => {
+      const btn = document.createElement("button");
+      btn.className = "tab";
+      btn.dataset.tab = ts.url;
+      // Shorten the title for display
+      let label = ts.title || ts.url;
+      if (label.length > 30) label = label.slice(0, 28) + "...";
+      btn.innerHTML = `${label} <span class="tab-count">${ts.imageCount}</span>`;
+      btn.title = ts.url;
+      tabTabs.appendChild(btn);
+    });
+    tabTabs.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        tabTabs.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        currentTabFilter = tab.dataset.tab;
+        render();
+      });
+    });
+  }
 
   // ── Color Extraction (canvas pixel sampling) ──
 
@@ -193,6 +222,7 @@
   function getFiltered() {
     let result = images.filter(img => {
       if (showSelectedOnly && !selected.has(img.src)) return false;
+      if (currentTabFilter !== "all" && img.tabUrl !== currentTabFilter) return false;
       if (currentFilter !== "all" && img.source !== currentFilter) return false;
       if (currentTypeFilter !== "all") {
         if (currentTypeFilter === "other") {
@@ -331,6 +361,17 @@
         info.appendChild(altEl);
       }
       info.appendChild(meta);
+
+      // Tab badge for multi-tab mode
+      if (multiTab && img.tabTitle) {
+        const tabBadge = document.createElement("div");
+        tabBadge.className = "card-tab-badge";
+        let tabLabel = img.tabTitle;
+        if (tabLabel.length > 25) tabLabel = tabLabel.slice(0, 23) + "...";
+        tabBadge.textContent = tabLabel;
+        tabBadge.title = img.tabUrl || "";
+        info.appendChild(tabBadge);
+      }
 
       card.appendChild(cb);
       card.appendChild(thumb);

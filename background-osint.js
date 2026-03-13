@@ -2140,6 +2140,77 @@ async function handleExtractImages(message) {
 }
 
 // ──────────────────────────────────────────────
+// Multi-Tab Image Grabber
+// ──────────────────────────────────────────────
+
+async function handleExtractImagesMultiTab(message) {
+  try {
+    const allTabs = await browser.tabs.query({ currentWindow: true });
+    // Filter out extension pages, about: pages, etc.
+    const validTabs = allTabs.filter(t =>
+      t.url && (t.url.startsWith("http://") || t.url.startsWith("https://"))
+    );
+
+    if (validTabs.length === 0) {
+      return { success: false, error: "No web pages open to grab images from." };
+    }
+
+    const allImages = [];
+    const tabSources = []; // { tabId, url, title, imageCount }
+    const globalSeen = new Set();
+
+    for (const tab of validTabs) {
+      try {
+        const resp = await handleExtractImages({ tabId: tab.id, minWidth: message?.minWidth || 50, minHeight: message?.minHeight || 50 });
+        if (resp.success && resp.images.length > 0) {
+          let added = 0;
+          for (const img of resp.images) {
+            // Cross-tab deduplication by URL
+            if (globalSeen.has(img.src)) continue;
+            globalSeen.add(img.src);
+            img.tabUrl = tab.url;
+            img.tabTitle = tab.title || tab.url;
+            img.tabId = tab.id;
+            allImages.push(img);
+            added++;
+          }
+          if (added > 0) {
+            tabSources.push({ tabId: tab.id, url: tab.url, title: tab.title || tab.url, imageCount: added });
+          }
+        }
+      } catch (e) {
+        console.warn(`[ImageGrabber] Skipped tab ${tab.id} (${tab.url}):`, e.message);
+      }
+    }
+
+    if (allImages.length === 0) {
+      return { success: false, error: "No images found across open tabs." };
+    }
+
+    console.log(`[ImageGrabber] Multi-tab: ${allImages.length} images from ${tabSources.length} tabs`);
+
+    return {
+      success: true,
+      data: {
+        images: allImages,
+        pageUrl: `${tabSources.length} tabs`,
+        pageTitle: `Images from ${tabSources.length} tabs (${allImages.length} total)`,
+        multiTab: true,
+        tabSources,
+        stats: {
+          total: allImages.length,
+          bySource: allImages.reduce((acc, img) => { acc[img.source] = (acc[img.source] || 0) + 1; return acc; }, {}),
+          byType: allImages.reduce((acc, img) => { acc[img.type] = (acc[img.type] || 0) + 1; return acc; }, {}),
+        }
+      }
+    };
+  } catch (e) {
+    console.error("[ImageGrabber] Multi-tab failed:", e);
+    return { success: false, error: e.message };
+  }
+}
+
+// ──────────────────────────────────────────────
 // AI Image Search — vision-based filtering
 // ──────────────────────────────────────────────
 
@@ -2254,6 +2325,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
     case "extractMetadata":     return handleExtractMetadata(message);
     case "extractLinks":        return handleExtractLinks(message);
     case "extractImages":       return handleExtractImages(message);
+    case "extractImagesMultiTab": return handleExtractImagesMultiTab(message);
     case "aiImageSearch":       return handleAiImageSearch(message);
 
     // Whois / DNS
