@@ -181,9 +181,34 @@ a:hover {
 
 .nav-tab-icon {
   padding: 6px 8px;
-  margin-left: auto;
 }
 .nav-tab-icon span { display: none; }
+
+.nav-spacer { margin-left: auto; }
+
+.nav-tab-action {
+  font-size: 11px;
+  padding: 5px 10px;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+}
+.nav-tab-action:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+.nav-tab-action svg { width: 14px; height: 14px; }
+
+.nav-tab-danger {
+  color: var(--error, #ff5252);
+  border-color: rgba(255, 82, 82, 0.3);
+}
+.nav-tab-danger:hover {
+  color: #fff;
+  background: var(--error, #ff5252);
+  border-color: var(--error, #ff5252);
+}
 
 /* Tab badges */
 .nav-badge {
@@ -565,6 +590,9 @@ textarea {
 .dp-status {
   font-size: 12px;
   color: var(--text-muted);
+  white-space: pre-line;
+  max-width: 100%;
+  word-break: break-word;
 }
 
 .dp-status.connected {
@@ -573,6 +601,7 @@ textarea {
 
 .dp-status.error {
   color: var(--error);
+  padding: 4px 0;
 }
 
 .dp-setup-guide {

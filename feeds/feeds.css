@@ -113,6 +113,8 @@ body {
 .layout {
   display: grid;
   grid-template-columns: 260px 1fr;
+  max-width: 1200px;
+  margin: 0 auto;
   min-height: calc(100vh - 56px);
 }
 

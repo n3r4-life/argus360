@@ -489,12 +489,12 @@ function setMode(mode) {
   elements.analysisProvider.style.display = mode === "compare" ? "none" : "";
 
   const texts = {
-    normal: "Analyze This Page",
+    normal: "Analyze It",
     selection: "Analyze Selection",
     compare: "Compare Providers",
-    multipage: "Analyze Selected Tabs"
+    multipage: "Analyze Tabs"
   };
-  elements.btnText.textContent = texts[mode] || "Analyze This Page";
+  elements.btnText.textContent = texts[mode] || "Analyze It";
 
   if (mode === "multipage") loadOpenTabs();
 }
@@ -578,6 +578,10 @@ function attachEventListeners() {
     focusOrCreateConsole();
   });
 
+  document.getElementById("open-bookmarks").addEventListener("click", () => {
+    focusOrCreateConsole("bookmarks");
+  });
+
   document.getElementById("open-resources").addEventListener("click", () => {
     focusOrCreateConsole("resources");
   });
@@ -658,6 +662,18 @@ function attachEventListeners() {
       showToast(newState ? "Archive redirect ON" : "Archive redirect OFF");
     });
   })();
+
+  document.getElementById("open-kg").addEventListener("click", async () => {
+    const kgUrl = browser.runtime.getURL("osint/graph.html?mode=global");
+    const existing = await browser.tabs.query({ url: browser.runtime.getURL("osint/graph.html") + "*" });
+    if (existing.length > 0) {
+      await browser.tabs.update(existing[0].id, { active: true });
+      await browser.windows.update(existing[0].windowId, { focused: true });
+    } else {
+      await browser.tabs.create({ url: kgUrl });
+    }
+    window.close();
+  });
 
   document.getElementById("open-history").addEventListener("click", async () => {
     const histUrl = browser.runtime.getURL("history/history.html");
@@ -902,6 +918,20 @@ function attachEventListeners() {
     const params = domain ? `?domain=${encodeURIComponent(domain)}` : "";
     browser.tabs.create({ url: browser.runtime.getURL(`osint/downdetector.html${params}`) });
     window.close();
+  });
+
+  // Image Grabber
+  document.getElementById("osint-images").addEventListener("click", async () => {
+    showToast("Grabbing images...", "loading");
+    const resp = await browser.runtime.sendMessage({ action: "extractImages", tabId: currentTabId });
+    if (resp && resp.success) {
+      const storeKey = `images-${Date.now()}`;
+      await browser.storage.local.set({ [storeKey]: { pageUrl: resp.pageUrl, pageTitle: resp.pageTitle, images: resp.images, stats: resp.stats } });
+      browser.tabs.create({ url: browser.runtime.getURL(`osint/images.html?id=${encodeURIComponent(storeKey)}`) });
+      window.close();
+    } else {
+      showToast(resp?.error || "Failed to grab images.", "error");
+    }
   });
 
   // Quick subscribe button (shown when feed detected)

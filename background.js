@@ -185,11 +185,25 @@ async function createContextMenus() {
     documentUrlPatterns: ["http://*/*", "https://*/*", "file://*/*", "ftp://*/*"]
   });
 
-  // ── Console & Help ──
+  // ── Console, Reader, Reports, Help ──
   browser.contextMenus.create({
     id: "argus-console",
     parentId: "argus-parent",
     title: "\u229E Argus Console",
+    contexts: ["page", "frame", "selection"]
+  });
+
+  browser.contextMenus.create({
+    id: "argus-open-reader",
+    parentId: "argus-parent",
+    title: "\uD83D\uDCF0 Open Reader",
+    contexts: ["page", "frame", "selection"]
+  });
+
+  browser.contextMenus.create({
+    id: "argus-reports",
+    parentId: "argus-parent",
+    title: "\uD83D\uDCCA Argus Reports",
     contexts: ["page", "frame", "selection"]
   });
 
@@ -208,27 +222,33 @@ async function createContextMenus() {
   });
 
   // ── Quick Actions ──
-  // ── ArgusMarks submenu ──
+  // ── Add to Bookmarks submenu ──
   browser.contextMenus.create({
     id: "argus-marks-parent",
     parentId: "argus-parent",
-    title: "\uD83D\uDD16 ArgusMarks",
+    title: "\uD83D\uDD16 Add to Bookmarks",
+    contexts: ["page", "frame"]
+  });
+  browser.contextMenus.create({
+    id: "argus-marks-manage",
+    parentId: "argus-marks-parent",
+    title: "\u2699\uFE0F Manage Bookmarks",
+    contexts: ["page", "frame"]
+  });
+  browser.contextMenus.create({
+    id: "argus-marks-sep-top",
+    parentId: "argus-marks-parent",
+    type: "separator",
     contexts: ["page", "frame"]
   });
   browser.contextMenus.create({
     id: "argus-bookmark",
     parentId: "argus-marks-parent",
-    title: "\uD83D\uDCCC Bookmark This Page",
+    title: "\uD83D\uDCC4 Unsorted",
     contexts: ["page", "frame"]
   });
   const bmFolders = await ArgusDB.BookmarkFolders.getAll();
   if (bmFolders.length > 0) {
-    browser.contextMenus.create({
-      id: "argus-marks-sep",
-      parentId: "argus-marks-parent",
-      type: "separator",
-      contexts: ["page", "frame"]
-    });
     // Build folder hierarchy — top-level folders first, then children
     const topFolders = bmFolders.filter(f => !f.parentId);
     const childMap = {};
@@ -243,14 +263,12 @@ async function createContextMenus() {
         const menuId = `argus-marks-folder-${folder.id}`;
         const children = childMap[folder.id] || [];
         if (children.length > 0) {
-          // Folder with children — becomes a submenu
           browser.contextMenus.create({
             id: menuId,
             parentId: parentMenuId,
             title: "\uD83D\uDCC1 " + folder.name,
             contexts: ["page", "frame"]
           });
-          // "Bookmark here" item inside the folder submenu
           browser.contextMenus.create({
             id: `argus-marks-save-${folder.id}`,
             parentId: menuId,
@@ -265,7 +283,6 @@ async function createContextMenus() {
           });
           createFolderMenuItems(children, menuId);
         } else {
-          // Leaf folder — clicking bookmarks directly to it
           browser.contextMenus.create({
             id: `argus-marks-save-${folder.id}`,
             parentId: parentMenuId,
@@ -277,12 +294,6 @@ async function createContextMenus() {
     }
     createFolderMenuItems(topFolders, "argus-marks-parent");
   }
-  browser.contextMenus.create({
-    id: "argus-marks-manage",
-    parentId: "argus-marks-parent",
-    title: "\u2699\uFE0F Manage Bookmarks",
-    contexts: ["page", "frame"]
-  });
 
   browser.contextMenus.create({
     id: "argus-monitor",
@@ -295,6 +306,13 @@ async function createContextMenus() {
     id: "argus-snapshot",
     parentId: "argus-parent",
     title: "\uD83D\uDCF8 Snapshot This Page",
+    contexts: ["page", "frame"]
+  });
+
+  browser.contextMenus.create({
+    id: "argus-images",
+    parentId: "argus-parent",
+    title: "\uD83D\uDDBC\uFE0F Grab Images",
     contexts: ["page", "frame"]
   });
 
@@ -324,19 +342,6 @@ async function createContextMenus() {
     contexts: ["page", "frame"]
   });
 
-  browser.contextMenus.create({
-    id: "argus-add-feed",
-    parentId: "argus-parent",
-    title: "\uD83D\uDCE1 Subscribe to Feed",
-    contexts: ["page", "frame"]
-  });
-
-  browser.contextMenus.create({
-    id: "argus-open-reader",
-    parentId: "argus-parent",
-    title: "\uD83D\uDCF0 Open Feed Reader",
-    contexts: ["page", "frame"]
-  });
 
   // Add to Project submenu
   const argusProjects = await ArgusDB.Projects.getAll();
@@ -484,6 +489,20 @@ async function createContextMenus() {
       });
     }
   }
+
+  // ── Wipe All Data ──
+  browser.contextMenus.create({
+    id: "argus-sep-wipe",
+    parentId: "argus-parent",
+    type: "separator",
+    contexts: ["page", "frame", "selection"]
+  });
+  browser.contextMenus.create({
+    id: "argus-wipe",
+    parentId: "argus-parent",
+    title: "\uD83D\uDDD1\uFE0F Wipe All Data",
+    contexts: ["page", "frame", "selection"]
+  });
 }
 
 createContextMenus();
@@ -1469,6 +1488,10 @@ browser.runtime.onMessage.addListener((message, sender) => {
   // Bookmark Cloud Sync
   if (message.action === "syncBookmarksToGitHub") return CloudBackup.syncBookmarksToGitHub().catch(e => ({ success: false, error: e.message }));
   if (message.action === "syncBookmarkSnapshot") return CloudBackup.syncBookmarkSnapshot(message.bookmarkId).catch(e => ({ success: false, error: e.message }));
+  if (message.action === "syncBookmarksToCloud") return CloudBackup.syncBookmarksToCloud().catch(e => ({ success: false, error: e.message }));
+  // Paste providers
+  if (message.action === "pasteCreate") return handlePasteCreate(message);
+  if (message.action === "pasteList") return CloudProviders[message.providerKey]?.list().catch(e => ({ success: false, error: e.message })) || Promise.resolve([]);
   // KG Dictionaries
   if (message.action === "getKGDictionaries") return KnowledgeGraph.getUserDictionaries();
   if (message.action === "saveKGDictionaries") return KnowledgeGraph.saveUserDictionaries(message.dictionaries);
@@ -1673,11 +1696,38 @@ async function handleCloudConnect(message) {
     else if (key === "webdav") result = await CloudProviders.webdav.connect(message.url, message.username, message.password);
     else if (key === "s3") result = await CloudProviders.s3.connect(message.endpoint, message.bucket, message.accessKey, message.secretKey, message.region);
     else if (key === "github") result = await CloudProviders.github.connect(message.pat, message.repo, message.branch);
+    else if (key === "gist") result = await CloudProviders.gist.connect(message.pat);
+    else if (key === "pastebin") result = await CloudProviders.pastebin.connect(message.apiKey, message.username, message.password);
+    else if (key === "privatebin") result = await CloudProviders.privatebin.connect(message.url);
     else return { success: false, error: "Unknown provider" };
     console.log(`[Cloud] ${key} connect result:`, result);
     return result;
   } catch (e) {
     console.error(`[Cloud] Connect failed:`, e);
+    return { success: false, error: e.message };
+  }
+}
+
+async function handlePasteCreate(message) {
+  try {
+    const key = message.providerKey; // gist, pastebin, privatebin
+    const title = message.title || "Argus Export";
+    const content = message.content || "";
+    const files = message.files || null; // for gist: { "file.json": "content" }
+    let result;
+    if (key === "gist") {
+      result = await CloudProviders.gist.createPaste(title, files || { "argus-export.md": content }, message.isPublic || false);
+    } else if (key === "pastebin") {
+      result = await CloudProviders.pastebin.createPaste(title, content, message.visibility ?? 1, message.format || "text", message.expiry || "N");
+    } else if (key === "privatebin") {
+      result = await CloudProviders.privatebin.createPaste(content, message.expiry || "1week", message.burn || false);
+    } else {
+      return { success: false, error: "Unknown paste provider" };
+    }
+    console.log(`[Paste] Created on ${key}:`, result.url);
+    return result;
+  } catch (e) {
+    console.error("[Paste] Create failed:", e);
     return { success: false, error: e.message };
   }
 }
@@ -2205,6 +2255,12 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
     return;
   }
 
+  // Wipe All Data — opens console Settings tab scrolled to wipe section
+  if (info.menuItemId === "argus-wipe") {
+    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#settings-wipe") });
+    return;
+  }
+
   // Open Help tab
   if (info.menuItemId === "argus-help") {
     browser.tabs.create({ url: browser.runtime.getURL("options/options.html#help") });
@@ -2226,6 +2282,12 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
   // Open Feed Reader
   if (info.menuItemId === "argus-open-reader") {
     browser.tabs.create({ url: browser.runtime.getURL("feeds/feeds.html") });
+    return;
+  }
+
+  // Open Reports
+  if (info.menuItemId === "argus-reports") {
+    browser.tabs.create({ url: browser.runtime.getURL("history/history.html") });
     return;
   }
 
@@ -2405,6 +2467,23 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
     return;
   }
 
+  // Handle image grabber context menu
+  if (info.menuItemId === "argus-images") {
+    try {
+      const resp = await handleExtractImages({ tabId: tab.id });
+      if (resp.success) {
+        const storeKey = `images-${Date.now()}`;
+        await browser.storage.local.set({ [storeKey]: { pageUrl: resp.pageUrl, pageTitle: resp.pageTitle, images: resp.images, stats: resp.stats } });
+        browser.tabs.create({ url: browser.runtime.getURL(`osint/images.html?id=${encodeURIComponent(storeKey)}`) });
+      } else {
+        safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus", message: `Image grab failed: ${resp.error}` });
+      }
+    } catch (err) {
+      safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus — Error", message: `Image grab failed: ${err.message}` });
+    }
+    return;
+  }
+
   // Handle redirect/archive context menu
   if (info.menuItemId === "argus-redirect") {
     try {
@@ -2522,58 +2601,6 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
     return;
   }
 
-  // Handle subscribe to feed context menu
-  if (info.menuItemId === "argus-add-feed") {
-    try {
-      // Try to detect a feed URL from the page's <link> tags
-      const feedResults = await browser.tabs.executeScript(tab.id, {
-        code: `
-          (function() {
-            const link = document.querySelector('link[type="application/rss+xml"], link[type="application/atom+xml"], link[type="application/feed+json"]');
-            return link ? link.href : null;
-          })();
-        `
-      });
-      const detectedFeed = feedResults && feedResults[0];
-
-      // Also try background-side discovery if no <link> found
-      let feedUrl = detectedFeed || await discoverFeedUrl(tab.url);
-
-      if (!feedUrl) {
-        safeNotify(null, {
-          type: "basic",
-          iconUrl: "icons/icon-96.png",
-          title: "Argus",
-          message: "No RSS or Atom feed found on this page."
-        });
-        return;
-      }
-
-      const result = await handleAddFeed({
-        url: feedUrl,
-        title: tab.title || feedUrl,
-        intervalMinutes: 60,
-        aiSummarize: false,
-        monitorBridge: false
-      });
-      safeNotify(null, {
-        type: "basic",
-        iconUrl: "icons/icon-96.png",
-        title: "Argus",
-        message: result.success
-          ? `Subscribed to feed: ${result.feed?.title || tab.title || feedUrl}`
-          : `Feed: ${result.error}`
-      });
-    } catch (err) {
-      safeNotify(null, {
-        type: "basic",
-        iconUrl: "icons/icon-96.png",
-        title: "Argus — Error",
-        message: `Failed to subscribe: ${err.message}`
-      });
-    }
-    return;
-  }
 
   // ── OSINT Tool handlers ──
   if (info.menuItemId === "argus-extract-metadata") {

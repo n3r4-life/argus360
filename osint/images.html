@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Argus - Image Grabber</title>
+  <link rel="stylesheet" href="images.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+</head>
+<body>
+  <script src="../shared/ribbon.js"></script>
+  <header class="header">
+    <div class="header-left">
+      <img src="../icons/icon-32.png" alt="" class="header-icon">
+      <h1 class="header-title">Image Grabber</h1>
+    </div>
+    <a id="page-url" class="page-url" href="#" target="_blank" title="Open source page"></a>
+  </header>
+
+  <section id="stats-bar" class="stats-bar">
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-total">0</span>
+      <span class="stat-label">Total</span>
+    </div>
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-img">0</span>
+      <span class="stat-label">IMG</span>
+    </div>
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-css">0</span>
+      <span class="stat-label">CSS BG</span>
+    </div>
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-meta">0</span>
+      <span class="stat-label">Meta/Icon</span>
+    </div>
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-selected">0</span>
+      <span class="stat-label">Selected</span>
+    </div>
+  </section>
+
+  <nav class="filter-bar">
+    <div class="filter-tabs">
+      <button class="tab active" data-filter="all">All</button>
+      <button class="tab" data-filter="img">IMG</button>
+      <button class="tab" data-filter="css-bg">CSS BG</button>
+      <button class="tab" data-filter="picture">Picture</button>
+      <button class="tab" data-filter="meta">Meta</button>
+      <button class="tab" data-filter="favicon">Icons</button>
+      <button class="tab" data-filter="video-poster">Posters</button>
+    </div>
+    <div class="filter-controls">
+      <input type="text" id="search-input" class="search-input" placeholder="Filter by alt text or URL...">
+      <select id="size-filter" class="size-filter">
+        <option value="0">All sizes</option>
+        <option value="100">100px+</option>
+        <option value="200">200px+</option>
+        <option value="400">400px+</option>
+        <option value="800">800px+</option>
+      </select>
+      <label class="view-toggle" title="Toggle grid/list view">
+        <input type="checkbox" id="view-list" hidden>
+        <span id="view-icon">Grid</span>
+      </label>
+    </div>
+  </nav>
+
+  <div class="actions-bar">
+    <div class="actions-left">
+      <button id="select-all" class="btn btn-secondary">Select All</button>
+      <button id="deselect-all" class="btn btn-secondary">Deselect</button>
+      <button id="download-selected" class="btn btn-primary" disabled>Download Selected</button>
+      <button id="save-to-cloud" class="btn btn-secondary" disabled>Save to Cloud</button>
+    </div>
+    <div class="actions-right">
+      <button id="export-urls" class="btn btn-secondary">Export URLs</button>
+    </div>
+  </div>
+
+  <main id="image-grid" class="image-grid">
+    <div class="empty-state" id="empty-state">
+      <p>Loading images...</p>
+    </div>
+  </main>
+
+  <!-- Image Preview Modal -->
+  <div id="preview-modal" class="preview-modal hidden">
+    <div class="preview-backdrop"></div>
+    <div class="preview-content">
+      <button class="preview-close">&times;</button>
+      <img id="preview-img" class="preview-img" alt="">
+      <div class="preview-info">
+        <div id="preview-filename" class="preview-filename"></div>
+        <div id="preview-dimensions" class="preview-dimensions"></div>
+        <div id="preview-alt" class="preview-alt"></div>
+        <div class="preview-actions">
+          <a id="preview-open" class="btn btn-primary" href="#" target="_blank">Open Original</a>
+          <a id="preview-download" class="btn btn-secondary" href="#" download>Download</a>
+          <button id="preview-reverse-google" class="btn btn-secondary">Google Reverse</button>
+          <button id="preview-reverse-tineye" class="btn btn-secondary">TinEye</button>
+          <button id="preview-reverse-yandex" class="btn btn-secondary">Yandex</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="images.js"></script>
+</body>
+</html>

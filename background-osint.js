@@ -1997,6 +1997,128 @@ async function handlePulseListSave(message) {
 
 
 // ──────────────────────────────────────────────
+// ──────────────────────────────────────────────
+// Image Grabber — extract all images from a page
+// ──────────────────────────────────────────────
+
+async function handleExtractImages(message) {
+  try {
+    const tabId = message.tabId;
+    const minWidth = message.minWidth || 50;
+    const minHeight = message.minHeight || 50;
+
+    const results = await browser.tabs.executeScript(tabId, {
+      code: `(function() {
+        const seen = new Set();
+        const images = [];
+
+        function addImage(src, alt, w, h, source) {
+          if (!src || seen.has(src)) return;
+          // Skip data URIs that are tiny (tracking pixels, spacers)
+          if (src.startsWith("data:") && src.length < 500) return;
+          // Skip common tracking/ad patterns
+          if (/1x1|pixel|spacer|blank\\.gif|beacon/i.test(src)) return;
+          seen.add(src);
+          try {
+            const url = new URL(src, location.href);
+            images.push({
+              src: url.href,
+              alt: (alt || "").trim().slice(0, 200),
+              width: w || 0,
+              height: h || 0,
+              source: source,
+              filename: url.pathname.split("/").pop() || "image",
+            });
+          } catch {}
+        }
+
+        // Standard img elements
+        document.querySelectorAll("img").forEach(img => {
+          const src = img.currentSrc || img.src;
+          addImage(src, img.alt, img.naturalWidth || img.width, img.naturalHeight || img.height, "img");
+        });
+
+        // Picture > source elements (responsive images)
+        document.querySelectorAll("picture source").forEach(source => {
+          const srcset = source.srcset;
+          if (srcset) {
+            srcset.split(",").forEach(s => {
+              const url = s.trim().split(/\\s+/)[0];
+              addImage(url, "", 0, 0, "picture");
+            });
+          }
+        });
+
+        // CSS background images
+        document.querySelectorAll("*").forEach(el => {
+          const bg = getComputedStyle(el).backgroundImage;
+          if (bg && bg !== "none") {
+            const match = bg.match(/url\\(["']?([^"')]+)["']?\\)/);
+            if (match) addImage(match[1], "", el.offsetWidth, el.offsetHeight, "css-bg");
+          }
+        });
+
+        // Video posters
+        document.querySelectorAll("video[poster]").forEach(v => {
+          addImage(v.poster, "Video poster", v.width, v.height, "video-poster");
+        });
+
+        // Open Graph / meta images
+        document.querySelectorAll('meta[property="og:image"], meta[name="twitter:image"], meta[property="og:image:url"]').forEach(m => {
+          addImage(m.content, "Meta image", 0, 0, "meta");
+        });
+
+        // Favicons / icons
+        document.querySelectorAll('link[rel~="icon"], link[rel="apple-touch-icon"]').forEach(l => {
+          addImage(l.href, "Favicon/Icon", 0, 0, "favicon");
+        });
+
+        // SVG images (inline)
+        document.querySelectorAll("svg image").forEach(img => {
+          addImage(img.getAttribute("href") || img.getAttribute("xlink:href"), "", 0, 0, "svg");
+        });
+
+        return {
+          images: images,
+          pageUrl: location.href,
+          pageTitle: document.title,
+        };
+      })();`
+    });
+
+    const data = results?.[0];
+    if (!data || !data.images) return { success: false, error: "No image data returned" };
+
+    // Attempt to get actual dimensions and file sizes via HEAD requests for images we couldn't measure in-page
+    const enriched = [];
+    for (const img of data.images) {
+      // Filter out images below minimum size if we know dimensions
+      if (img.width && img.height && (img.width < minWidth || img.height < minHeight)) continue;
+      // Try to determine file type from URL
+      const ext = (img.filename.match(/\.(jpe?g|png|gif|webp|svg|avif|bmp|ico|tiff?)$/i) || [])[1] || "";
+      img.type = ext.toLowerCase() || (img.src.startsWith("data:") ? (img.src.match(/data:image\/(\w+)/)?.[1] || "unknown") : "unknown");
+      enriched.push(img);
+    }
+
+    console.log(`[ImageGrabber] Found ${enriched.length} images on ${data.pageUrl}`);
+    return {
+      success: true,
+      images: enriched,
+      pageUrl: data.pageUrl,
+      pageTitle: data.pageTitle,
+      stats: {
+        total: enriched.length,
+        bySource: enriched.reduce((acc, img) => { acc[img.source] = (acc[img.source] || 0) + 1; return acc; }, {}),
+        byType: enriched.reduce((acc, img) => { acc[img.type] = (acc[img.type] || 0) + 1; return acc; }, {}),
+      }
+    };
+  } catch (e) {
+    console.error("[ImageGrabber] Failed:", e);
+    return { success: false, error: e.message };
+  }
+}
+
+// ──────────────────────────────────────────────
 // Message handler registration
 // ──────────────────────────────────────────────
 // Extends the existing browser.runtime.onMessage — MV2 supports
@@ -2007,6 +2129,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
     // Metadata & Links
     case "extractMetadata":     return handleExtractMetadata(message);
     case "extractLinks":        return handleExtractLinks(message);
+    case "extractImages":       return handleExtractImages(message);
 
     // Whois / DNS
     case "whoisLookup":         return handleWhoisLookup(message);

@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "updated": "2026-03-12",
+  "version": 2,
+  "updated": "2026-03-13",
   "categories": [
     {
       "id": "network",
@@ -14,7 +14,48 @@
         { "name": "IPv6 Test", "url": "https://test-ipv6.com/", "desc": "Check IPv6 connectivity and readiness" },
         { "name": "rDNS Lookup", "url": "http://www.nsupdate.info/", "desc": "Reverse DNS lookup for your current IP" },
         { "name": "BrowserLeaks", "url": "https://browserleaks.com/", "desc": "Comprehensive browser fingerprint analysis" },
-        { "name": "Whoer.net", "url": "https://whoer.net/", "desc": "Anonymity check — IP, DNS, browser fingerprint" }
+        { "name": "Whoer.net", "url": "https://whoer.net/", "desc": "Anonymity check — IP, DNS, browser fingerprint" },
+        { "name": "Tor Check", "url": "https://check.torproject.org/", "desc": "Verify if you're connected through the Tor network" },
+        { "name": "AmIUnique", "url": "https://amiunique.org/", "desc": "Browser fingerprint uniqueness test" }
+      ]
+    },
+    {
+      "id": "vpn",
+      "title": "VPN & Anonymity Tools",
+      "icon": "lock",
+      "description": "VPN services, Tor resources, and anonymity tools for secure research. Always verify your connection before sensitive work.",
+      "note": "No VPN is truly 'no-log' without independent audit. Check provider transparency reports and audit history.",
+      "links": [
+        { "name": "Mullvad VPN", "url": "https://mullvad.net/", "desc": "Privacy-first, no-log, accepts cash — independently audited" },
+        { "name": "ProtonVPN", "url": "https://protonvpn.com/", "desc": "Swiss-based, open-source apps, free tier available" },
+        { "name": "IVPN", "url": "https://www.ivpn.net/", "desc": "Transparent no-log policy, independent audits" },
+        { "name": "Tor Project", "url": "https://www.torproject.org/", "desc": "Free anonymity network — download Tor Browser here" },
+        { "name": "Tor Relay Status", "url": "https://metrics.torproject.org/rs.html", "desc": "Browse and search all Tor relays and bridges" },
+        { "name": "Onion.live", "url": "https://onion.live/", "desc": "Directory and uptime checker for .onion sites" },
+        { "name": "Tails OS", "url": "https://tails.net/", "desc": "Live OS that routes everything through Tor — leaves no trace" },
+        { "name": "Whonix", "url": "https://www.whonix.org/", "desc": "Desktop OS designed for advanced security and privacy via Tor" },
+        { "name": "VPN Comparison", "url": "https://www.privacyguides.org/en/vpn/", "desc": "Privacy Guides — unbiased VPN recommendations and criteria" },
+        { "name": "That One Privacy Site", "url": "https://www.safetydetectives.com/best-vpns/", "desc": "Detailed VPN comparison charts and reviews" }
+      ]
+    },
+    {
+      "id": "paste",
+      "title": "Paste Sites & Data Leaks",
+      "icon": "clipboard",
+      "description": "Paste services for sharing text and monitoring paste sites for OSINT — leaked data, threat intel, and breach indicators surface here first.",
+      "note": "For OSINT: paste sites are primary sources for leaked credentials, config dumps, and threat actor communications.",
+      "links": [
+        { "name": "Pastebin", "url": "https://pastebin.com/", "desc": "Most popular paste site — read/write, public API available" },
+        { "name": "GitHub Gist", "url": "https://gist.github.com/", "desc": "Code-focused pastes with version history and comments" },
+        { "name": "PrivateBin", "url": "https://privatebin.info/", "desc": "Zero-knowledge encrypted paste — server never sees content" },
+        { "name": "dpaste", "url": "https://dpaste.org/", "desc": "Simple paste with expiration, no account needed" },
+        { "name": "Rentry.co", "url": "https://rentry.co/", "desc": "Markdown paste with custom URLs and editing" },
+        { "name": "Ghostbin", "url": "https://ghostbin.me/", "desc": "Encrypted paste service with Tor support" },
+        { "name": "Intelligence X", "url": "https://intelx.io/", "desc": "Search engine for paste sites, leaks, darknet — OSINT gold" },
+        { "name": "PasteBeen", "url": "https://pastebeen.com/", "desc": "Paste site search and monitoring for OSINT" },
+        { "name": "Dehashed", "url": "https://www.dehashed.com/", "desc": "Search leaked databases and breached credentials" },
+        { "name": "Have I Been Pwned", "url": "https://haveibeenpwned.com/", "desc": "Check if emails/passwords appear in known breaches" },
+        { "name": "LeakPeek", "url": "https://leakpeek.com/", "desc": "Search exposed data from public breaches" }
       ]
     },
     {

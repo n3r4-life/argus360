@@ -651,7 +651,8 @@ function initResourcesTab() {
   const ICONS = {
     shield: "\uD83D\uDEE1\uFE0F", archive: "\uD83D\uDCE6", search: "\uD83D\uDD0D", globe: "\uD83C\uDF0D",
     chart: "\uD83D\uDCCA", government: "\uD83C\uDFDB\uFE0F", map: "\uD83D\uDDFA\uFE0F", world: "\uD83C\uDF10",
-    trending: "\uD83D\uDCC8", book: "\uD83D\uDCDA", alert: "\uD83D\uDEA8", target: "\uD83C\uDFAF"
+    trending: "\uD83D\uDCC8", book: "\uD83D\uDCDA", alert: "\uD83D\uDEA8", target: "\uD83C\uDFAF",
+    lock: "\uD83D\uDD12", clipboard: "\uD83D\uDCCB"
   };
 
   // ── Load resources (cached update > bundled) ──
@@ -978,6 +979,9 @@ async function loadAllSettings() {
     responseLanguage: "auto",
     apiKey: "",
     dataProviders: DEFAULT_DATA_PROVIDERS,
+    pasteProviders: DEFAULT_PASTE_PROVIDERS,
+    defaultCloudProvider: "all",
+    defaultPasteProvider: "",
     backupEnabled: false,
     backupInterval: 1440,
     backupAllProviders: true
@@ -985,6 +989,13 @@ async function loadAllSettings() {
 
   providers = settings.providers;
   dataProviders = settings.dataProviders || { ...DEFAULT_DATA_PROVIDERS };
+  pasteProviders = settings.pasteProviders || { ...DEFAULT_PASTE_PROVIDERS };
+
+  // Load default provider selections
+  const defCloudEl = document.getElementById("default-cloud-provider");
+  const defPasteEl = document.getElementById("default-paste-provider");
+  if (defCloudEl) defCloudEl.value = settings.defaultCloudProvider || "all";
+  if (defPasteEl) defPasteEl.value = settings.defaultPasteProvider || "";
 
   if (settings.apiKey && !providers.xai.apiKey) {
     providers.xai.apiKey = settings.apiKey;
@@ -1013,6 +1024,7 @@ async function loadAllSettings() {
 
   updateProviderTabIndicators();
   loadDataProviderFields();
+  loadPasteProviderFields();
 
   // Backup schedule
   document.getElementById("backup-enabled").checked = settings.backupEnabled || false;
@@ -1257,6 +1269,7 @@ async function testDataProviderConnection(key) {
       statusEl.textContent = result.email || result.user || result.repo || "Connected";
       updateDpConnectState(key, dataProviders[key]);
       updateDataProviderTabIndicators();
+      updateDefaultProviderStatus();
       scheduleSave();
     } else {
       statusEl.className = "dp-status error";
@@ -1289,14 +1302,21 @@ async function connectOAuthProvider(key) {
       if (result.user) dataProviders[key].userName = result.user;
       updateDpConnectState(key, dataProviders[key]);
       updateDataProviderTabIndicators();
+      updateDefaultProviderStatus();
       scheduleSave();
     } else {
+      const errMsg = result?.error || "Connection failed";
       statusEl.className = "dp-status error";
-      statusEl.textContent = result?.error || "Connection failed";
+      statusEl.textContent = errMsg;
+      statusEl.title = errMsg; // Show full error on hover if truncated
+      console.error(`[DataProvider] ${key} connect failed:`, errMsg);
     }
   } catch (err) {
+    const errMsg = err.message || "Connection failed";
     statusEl.className = "dp-status error";
-    statusEl.textContent = err.message || "Connection failed";
+    statusEl.textContent = errMsg;
+    statusEl.title = errMsg;
+    console.error(`[DataProvider] ${key} connect error:`, err);
   }
 }
 
@@ -1308,7 +1328,197 @@ function disconnectDataProvider(key) {
   dataProviders[key] = { ...DEFAULT_DATA_PROVIDERS[key], ...keep };
   updateDpConnectState(key, dataProviders[key]);
   updateDataProviderTabIndicators();
+  updateDefaultProviderStatus();
   scheduleSave();
+}
+
+// ── Default Provider Status ──
+
+const CLOUD_LABELS = { all: "All connected", google: "Google Drive", dropbox: "Dropbox", webdav: "WebDAV", s3: "S3" };
+const PASTE_LABELS = { "": "None", gist: "GitHub Gist", pastebin: "Pastebin", privatebin: "PrivateBin" };
+
+function updateDefaultProviderStatus() {
+  const cloudVal = document.getElementById("default-cloud-provider")?.value || "all";
+  const pasteVal = document.getElementById("default-paste-provider")?.value || "";
+
+  // Update status indicator on Providers tab
+  const statusEl = document.getElementById("default-provider-status");
+  if (statusEl) {
+    const parts = [];
+    // Check which cloud providers are actually connected
+    const connectedCloud = [];
+    const dpMap = { gdrive: "google", dropbox: "dropbox", webdav: "webdav", s3: "s3" };
+    for (const [uiKey, backendKey] of Object.entries(dpMap)) {
+      if (dataProviders[uiKey]?.connected) connectedCloud.push(CLOUD_LABELS[backendKey]);
+    }
+    if (connectedCloud.length) {
+      parts.push(`Cloud: ${CLOUD_LABELS[cloudVal]} (${connectedCloud.length} connected: ${connectedCloud.join(", ")})`);
+    } else {
+      parts.push("Cloud: No providers connected");
+    }
+    // Check paste providers
+    const connectedPaste = [];
+    for (const k of ["gist", "pastebin", "privatebin"]) {
+      if (pasteProviders[k]?.connected) connectedPaste.push(PASTE_LABELS[k]);
+    }
+    if (connectedPaste.length) {
+      parts.push(`Paste: ${PASTE_LABELS[pasteVal] || "None"} (${connectedPaste.length} connected: ${connectedPaste.join(", ")})`);
+    } else {
+      parts.push("Paste: No services connected");
+    }
+    statusEl.textContent = parts.join("  ·  ");
+  }
+
+  // Update read-only summary on Settings tab
+  const settingsBox = document.getElementById("settings-default-providers");
+  const settingsCloud = document.getElementById("settings-default-cloud");
+  const settingsPaste = document.getElementById("settings-default-paste");
+  if (settingsBox && settingsCloud && settingsPaste) {
+    settingsBox.style.display = "block";
+    settingsCloud.textContent = `Cloud storage: ${CLOUD_LABELS[cloudVal] || cloudVal}`;
+    settingsPaste.textContent = `Paste service: ${PASTE_LABELS[pasteVal] || "None"}`;
+  }
+
+  // Link to jump to Providers tab defaults section
+  const gotoDefaults = document.getElementById("settings-goto-defaults");
+  if (gotoDefaults && !gotoDefaults._bound) {
+    gotoDefaults._bound = true;
+    gotoDefaults.addEventListener("click", (e) => {
+      e.preventDefault();
+      document.querySelector('.nav-tab[data-tab="providers"]')?.click();
+      setTimeout(() => document.getElementById("default-cloud-provider")?.scrollIntoView({ behavior: "smooth", block: "center" }), 150);
+    });
+  }
+}
+
+// ──────────────────────────────────────────────
+// Paste Provider tabs
+// ──────────────────────────────────────────────
+const PASTE_PROVIDER_KEYS = ["gist", "pastebin", "privatebin"];
+
+const DEFAULT_PASTE_PROVIDERS = {
+  gist:       { pat: "", username: "", connected: false },
+  pastebin:   { apiKey: "", userKey: "", username: "", connected: false },
+  privatebin: { url: "", connected: false },
+};
+
+let pasteProviders = JSON.parse(JSON.stringify(DEFAULT_PASTE_PROVIDERS));
+let currentPasteProviderKey = "gist";
+
+function selectPasteProviderTab(key) {
+  currentPasteProviderKey = key;
+  const tabList = document.getElementById("paste-provider-tab-list");
+  tabList.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.pprovider === key);
+  });
+  for (const k of PASTE_PROVIDER_KEYS) {
+    const panel = document.getElementById(`pp-${k}-fields`);
+    if (panel) panel.classList.toggle("hidden", k !== key);
+  }
+}
+
+function loadPasteProviderFields() {
+  const g = pasteProviders.gist || {};
+  document.getElementById("pp-gist-pat").value = g.pat || "";
+  updatePpStatus("gist", g);
+
+  const p = pasteProviders.pastebin || {};
+  document.getElementById("pp-pastebin-api-key").value = p.apiKey || "";
+  document.getElementById("pp-pastebin-user").value = p.username || "";
+  document.getElementById("pp-pastebin-pass").value = "";
+  updatePpStatus("pastebin", p);
+
+  const pb = pasteProviders.privatebin || {};
+  document.getElementById("pp-privatebin-url").value = pb.url || "";
+  updatePpStatus("privatebin", pb);
+
+  updatePasteProviderTabIndicators();
+}
+
+function updatePpStatus(key, cfg) {
+  const statusEl = document.getElementById(`pp-${key}-status`);
+  if (cfg?.connected) {
+    statusEl.className = "dp-status connected";
+    if (key === "gist") statusEl.textContent = `Connected (${cfg.username || "GitHub"})`;
+    else if (key === "pastebin") statusEl.textContent = `Connected (${cfg.username || "Pastebin"})`;
+    else if (key === "privatebin") statusEl.textContent = `Connected (${cfg.url || "PrivateBin"})`;
+  } else {
+    statusEl.className = "dp-status";
+    statusEl.textContent = "";
+  }
+}
+
+function savePasteProviderField(key) {
+  if (!pasteProviders[key]) pasteProviders[key] = { ...DEFAULT_PASTE_PROVIDERS[key] };
+  const pp = pasteProviders[key];
+  switch (key) {
+    case "gist":
+      pp.pat = document.getElementById("pp-gist-pat").value.trim();
+      break;
+    case "pastebin":
+      pp.apiKey = document.getElementById("pp-pastebin-api-key").value.trim();
+      pp.username = document.getElementById("pp-pastebin-user").value.trim();
+      break;
+    case "privatebin":
+      pp.url = document.getElementById("pp-privatebin-url").value.trim();
+      break;
+  }
+  updatePasteProviderTabIndicators();
+  scheduleSave();
+}
+
+function updatePasteProviderTabIndicators() {
+  const tabList = document.getElementById("paste-provider-tab-list");
+  if (!tabList) return;
+  tabList.querySelectorAll(".tab-btn").forEach(btn => {
+    const key = btn.dataset.pprovider;
+    const cfg = pasteProviders[key];
+    let configured = false;
+    if (cfg?.connected) {
+      configured = true;
+    } else {
+      switch (key) {
+        case "gist": configured = !!cfg?.pat; break;
+        case "pastebin": configured = !!cfg?.apiKey; break;
+        case "privatebin": configured = !!cfg?.url; break;
+      }
+    }
+    btn.classList.toggle("configured", configured);
+  });
+}
+
+async function testPasteProviderConnection(key) {
+  const statusEl = document.getElementById(`pp-${key}-status`);
+  statusEl.className = "dp-status";
+  statusEl.textContent = "Testing...";
+  savePasteProviderField(key);
+  const cfg = pasteProviders[key];
+  try {
+    let msg;
+    if (key === "gist") {
+      msg = { action: "cloudConnect", providerKey: "gist", pat: cfg.pat };
+    } else if (key === "pastebin") {
+      const pass = document.getElementById("pp-pastebin-pass").value.trim();
+      msg = { action: "cloudConnect", providerKey: "pastebin", apiKey: cfg.apiKey, username: cfg.username, password: pass };
+    } else if (key === "privatebin") {
+      msg = { action: "cloudConnect", providerKey: "privatebin", url: cfg.url };
+    }
+    const result = await browser.runtime.sendMessage(msg);
+    if (result?.success) {
+      pasteProviders[key].connected = true;
+      if (result.user) pasteProviders[key].username = result.user;
+      updatePpStatus(key, pasteProviders[key]);
+      updatePasteProviderTabIndicators();
+      updateDefaultProviderStatus();
+      scheduleSave();
+    } else {
+      statusEl.className = "dp-status error";
+      statusEl.textContent = result?.error || "Connection failed";
+    }
+  } catch (err) {
+    statusEl.className = "dp-status error";
+    statusEl.textContent = err.message || "Connection failed";
+  }
 }
 
 // ──────────────────────────────────────────────
@@ -1430,6 +1640,9 @@ async function saveAllSettings() {
     showBadge: el.showBadge.checked,
     responseLanguage: el.responseLanguage.value,
     dataProviders,
+    pasteProviders,
+    defaultCloudProvider: document.getElementById("default-cloud-provider")?.value || "all",
+    defaultPasteProvider: document.getElementById("default-paste-provider")?.value || "",
     backupEnabled: document.getElementById("backup-enabled").checked,
     backupInterval: parseInt(document.getElementById("backup-interval").value, 10) || 1440,
     backupAllProviders: document.getElementById("backup-all-providers").checked
@@ -1973,6 +2186,230 @@ function buildStepConfig(step, container, idx) {
       container.appendChild(sumLabel);
       break;
     }
+    case "paste": {
+      // Provider selector
+      const provLabel = document.createElement("label");
+      provLabel.textContent = "Paste provider: ";
+      const provSel = document.createElement("select");
+      provSel.className = "auto-step-select";
+      for (const [val, label] of [["", "Use default"], ["gist", "GitHub Gist"], ["pastebin", "Pastebin"], ["privatebin", "PrivateBin"]]) {
+        const opt = document.createElement("option");
+        opt.value = val;
+        opt.textContent = label;
+        provSel.appendChild(opt);
+      }
+      provSel.value = step.provider || "";
+      provSel.addEventListener("change", () => { step.provider = provSel.value; rebuildPasteOptions(); });
+      provLabel.appendChild(provSel);
+      container.appendChild(provLabel);
+
+      // Input mode
+      const modeLabel = document.createElement("label");
+      modeLabel.textContent = "Content: ";
+      const modeSel = document.createElement("select");
+      modeSel.className = "auto-step-select";
+      for (const [val, label] of [["previous", "Previous step output"], ["page", "Original page text"]]) {
+        const opt = document.createElement("option");
+        opt.value = val;
+        opt.textContent = label;
+        modeSel.appendChild(opt);
+      }
+      modeSel.value = step.inputMode || "previous";
+      modeSel.addEventListener("change", () => { step.inputMode = modeSel.value; });
+      modeLabel.appendChild(modeSel);
+      container.appendChild(modeLabel);
+
+      // Title template
+      const titleLabel = document.createElement("label");
+      titleLabel.textContent = "Title template: ";
+      const titleInput = document.createElement("input");
+      titleInput.type = "text";
+      titleInput.className = "auto-step-input";
+      titleInput.value = step.titleTemplate || "";
+      titleInput.placeholder = "Argus — {title}";
+      titleInput.addEventListener("input", () => { step.titleTemplate = titleInput.value; });
+      titleLabel.appendChild(titleInput);
+      container.appendChild(titleLabel);
+
+      // Provider-specific options container
+      const provOpts = document.createElement("div");
+      provOpts.className = "auto-step-provider-opts";
+      container.appendChild(provOpts);
+
+      function rebuildPasteOptions() {
+        provOpts.innerHTML = "";
+        const p = provSel.value;
+        if (!p) {
+          const hint = document.createElement("div");
+          hint.className = "auto-step-hint";
+          hint.textContent = "Will use the default paste provider set on the Providers tab.";
+          provOpts.appendChild(hint);
+          return;
+        }
+        if (p === "gist") {
+          // Filename
+          const fnLabel = document.createElement("label");
+          fnLabel.textContent = "Filename: ";
+          const fnInput = document.createElement("input");
+          fnInput.type = "text";
+          fnInput.className = "auto-step-input";
+          fnInput.value = step.filename || "argus-export.md";
+          fnInput.addEventListener("input", () => { step.filename = fnInput.value; });
+          fnLabel.appendChild(fnInput);
+          provOpts.appendChild(fnLabel);
+          // Public toggle
+          const pubLabel = document.createElement("label");
+          pubLabel.className = "auto-step-checkbox-label";
+          const pubCb = document.createElement("input");
+          pubCb.type = "checkbox";
+          pubCb.checked = step.isPublic || false;
+          pubCb.addEventListener("change", () => { step.isPublic = pubCb.checked; });
+          pubLabel.appendChild(pubCb);
+          pubLabel.appendChild(document.createTextNode(" Public gist"));
+          provOpts.appendChild(pubLabel);
+          // Include entities
+          const entLabel = document.createElement("label");
+          entLabel.className = "auto-step-checkbox-label";
+          const entCb = document.createElement("input");
+          entCb.type = "checkbox";
+          entCb.checked = step.includeEntities || false;
+          entCb.addEventListener("change", () => { step.includeEntities = entCb.checked; });
+          entLabel.appendChild(entCb);
+          entLabel.appendChild(document.createTextNode(" Include entities as separate file"));
+          provOpts.appendChild(entLabel);
+        } else if (p === "pastebin") {
+          // Visibility
+          const visLabel = document.createElement("label");
+          visLabel.textContent = "Visibility: ";
+          const visSel = document.createElement("select");
+          visSel.className = "auto-step-select";
+          for (const [val, label] of [["1", "Unlisted"], ["0", "Public"], ["2", "Private"]]) {
+            const opt = document.createElement("option");
+            opt.value = val;
+            opt.textContent = label;
+            visSel.appendChild(opt);
+          }
+          visSel.value = String(step.visibility ?? 1);
+          visSel.addEventListener("change", () => { step.visibility = parseInt(visSel.value); });
+          visLabel.appendChild(visSel);
+          provOpts.appendChild(visLabel);
+          // Format
+          const fmtLabel = document.createElement("label");
+          fmtLabel.textContent = "Syntax: ";
+          const fmtInput = document.createElement("input");
+          fmtInput.type = "text";
+          fmtInput.className = "auto-step-input";
+          fmtInput.value = step.format || "text";
+          fmtInput.placeholder = "text, json, markdown, python...";
+          fmtInput.addEventListener("input", () => { step.format = fmtInput.value; });
+          fmtLabel.appendChild(fmtInput);
+          provOpts.appendChild(fmtLabel);
+          // Expiry
+          const expLabel = document.createElement("label");
+          expLabel.textContent = "Expiry: ";
+          const expSel = document.createElement("select");
+          expSel.className = "auto-step-select";
+          for (const [val, label] of [["N", "Never"], ["10M", "10 Minutes"], ["1H", "1 Hour"], ["1D", "1 Day"], ["1W", "1 Week"], ["1M", "1 Month"]]) {
+            const opt = document.createElement("option");
+            opt.value = val;
+            opt.textContent = label;
+            expSel.appendChild(opt);
+          }
+          expSel.value = step.expiry || "N";
+          expSel.addEventListener("change", () => { step.expiry = expSel.value; });
+          expLabel.appendChild(expSel);
+          provOpts.appendChild(expLabel);
+        } else if (p === "privatebin") {
+          // Expiry
+          const expLabel = document.createElement("label");
+          expLabel.textContent = "Expiry: ";
+          const expSel = document.createElement("select");
+          expSel.className = "auto-step-select";
+          for (const [val, label] of [["5min", "5 Minutes"], ["10min", "10 Minutes"], ["1hour", "1 Hour"], ["1day", "1 Day"], ["1week", "1 Week"], ["1month", "1 Month"], ["never", "Never"]]) {
+            const opt = document.createElement("option");
+            opt.value = val;
+            opt.textContent = label;
+            expSel.appendChild(opt);
+          }
+          expSel.value = step.expiry || "1week";
+          expSel.addEventListener("change", () => { step.expiry = expSel.value; });
+          expLabel.appendChild(expSel);
+          provOpts.appendChild(expLabel);
+          // Burn after reading
+          const burnLabel = document.createElement("label");
+          burnLabel.className = "auto-step-checkbox-label";
+          const burnCb = document.createElement("input");
+          burnCb.type = "checkbox";
+          burnCb.checked = step.burnAfterReading || false;
+          burnCb.addEventListener("change", () => { step.burnAfterReading = burnCb.checked; });
+          burnLabel.appendChild(burnCb);
+          burnLabel.appendChild(document.createTextNode(" Burn after reading"));
+          provOpts.appendChild(burnLabel);
+        }
+      }
+      rebuildPasteOptions();
+
+      const hint = document.createElement("div");
+      hint.className = "auto-step-hint";
+      hint.textContent = "Pushes step output to a paste service. Provider must be connected in Providers tab. The paste URL is passed as output to subsequent steps.";
+      container.appendChild(hint);
+      break;
+    }
+    case "saveToCloud": {
+      // Input mode
+      const modeLabel = document.createElement("label");
+      modeLabel.textContent = "Content: ";
+      const modeSel = document.createElement("select");
+      modeSel.className = "auto-step-select";
+      for (const [val, label] of [["previous", "Previous step output"], ["page", "Original page text"]]) {
+        const opt = document.createElement("option");
+        opt.value = val;
+        opt.textContent = label;
+        modeSel.appendChild(opt);
+      }
+      modeSel.value = step.inputMode || "previous";
+      modeSel.addEventListener("change", () => { step.inputMode = modeSel.value; });
+      modeLabel.appendChild(modeSel);
+      container.appendChild(modeLabel);
+
+      // File format
+      const fmtLabel = document.createElement("label");
+      fmtLabel.textContent = "Format: ";
+      const fmtSel = document.createElement("select");
+      fmtSel.className = "auto-step-select";
+      for (const [val, label] of [["md", "Markdown (.md)"], ["json", "JSON (.json)"]]) {
+        const opt = document.createElement("option");
+        opt.value = val;
+        opt.textContent = label;
+        fmtSel.appendChild(opt);
+      }
+      fmtSel.value = step.format || "md";
+      fmtSel.addEventListener("change", () => { step.format = fmtSel.value; });
+      fmtLabel.appendChild(fmtSel);
+      container.appendChild(fmtLabel);
+
+      // Target providers
+      const provLabel = document.createElement("label");
+      provLabel.textContent = "Upload to: ";
+      const provSel = document.createElement("select");
+      provSel.className = "auto-step-select";
+      for (const [val, label] of [["default", "Use default"], ["all", "All connected providers"], ["google", "Google Drive only"], ["dropbox", "Dropbox only"], ["webdav", "WebDAV only"], ["s3", "S3 only"]]) {
+        const opt = document.createElement("option");
+        opt.value = val;
+        opt.textContent = label;
+        provSel.appendChild(opt);
+      }
+      provSel.value = (step.providers && step.providers[0]) || "default";
+      provSel.addEventListener("change", () => { step.providers = [provSel.value]; });
+      provLabel.appendChild(provSel);
+      container.appendChild(provLabel);
+
+      const hint = document.createElement("div");
+      hint.className = "auto-step-hint";
+      hint.textContent = "Uploads step output as a file to connected cloud storage. Files are saved in the argus-automations/ folder.";
+      container.appendChild(hint);
+      break;
+    }
   }
 }
 
@@ -1984,6 +2421,8 @@ function stepTypeLabel(type) {
     addToProject: "Add to Project",
     addToMonitors: "Add to Monitors",
     runPipeline: "Run Pipeline",
+    paste: "Paste to Service",
+    saveToCloud: "Save to Cloud",
   };
   return labels[type] || type;
 }
@@ -1996,6 +2435,8 @@ function addEditorStep() {
   if (type === "runPipeline") step.pipelineId = "";
   if (type === "addToProject") { step.projectId = ""; step.tagsWith = ["automation"]; step.summaryFrom = "last"; }
   if (type === "addToMonitors") { step.intervalMinutes = 60; step.aiAnalysis = true; step.analysisPreset = ""; step.duration = 0; }
+  if (type === "paste") { step.provider = ""; step.inputMode = "previous"; step.titleTemplate = ""; step.filename = "argus-export.md"; }
+  if (type === "saveToCloud") { step.inputMode = "previous"; step.format = "md"; step.providers = ["default"]; }
   editorSteps.push(step);
   renderEditorSteps();
 }
@@ -2164,6 +2605,26 @@ function attachListeners() {
   document.getElementById("dp-webdav-test").addEventListener("click", () => testDataProviderConnection("webdav"));
   document.getElementById("dp-s3-test").addEventListener("click", () => testDataProviderConnection("s3"));
   document.getElementById("dp-github-test").addEventListener("click", () => testDataProviderConnection("github"));
+  // Paste provider tabs
+  document.getElementById("paste-provider-tab-list").querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => selectPasteProviderTab(btn.dataset.pprovider));
+  });
+  // Paste provider field inputs — auto-save on change
+  for (const id of ["pp-gist-pat", "pp-pastebin-api-key", "pp-pastebin-user", "pp-privatebin-url"]) {
+    const input = document.getElementById(id);
+    if (input) {
+      const key = id.split("-")[1]; // gist, pastebin, privatebin
+      input.addEventListener("input", () => savePasteProviderField(key));
+    }
+  }
+  // Paste provider test buttons
+  document.getElementById("pp-gist-test").addEventListener("click", () => testPasteProviderConnection("gist"));
+  document.getElementById("pp-pastebin-test").addEventListener("click", () => testPasteProviderConnection("pastebin"));
+  document.getElementById("pp-privatebin-test").addEventListener("click", () => testPasteProviderConnection("privatebin"));
+  // Default provider selectors
+  document.getElementById("default-cloud-provider").addEventListener("change", () => { scheduleSave(); updateDefaultProviderStatus(); });
+  document.getElementById("default-paste-provider").addEventListener("change", () => { scheduleSave(); updateDefaultProviderStatus(); });
+  updateDefaultProviderStatus();
   // Backup schedule
   document.getElementById("backup-enabled").addEventListener("change", scheduleSave);
   document.getElementById("backup-interval").addEventListener("change", scheduleSave);
@@ -3425,6 +3886,15 @@ function initMainTabs() {
   }
 
   // History icon button (not a tab — opens history page)
+  // KG button (not a tab — opens global knowledge graph)
+  const kgNavBtn = document.getElementById("open-kg-nav");
+  if (kgNavBtn) {
+    kgNavBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      browser.tabs.create({ url: browser.runtime.getURL("osint/graph.html?mode=global") });
+    });
+  }
+
   const histNavBtn = document.getElementById("open-history-nav");
   if (histNavBtn) {
     histNavBtn.addEventListener("click", (e) => {
@@ -3433,12 +3903,27 @@ function initMainTabs() {
     });
   }
 
-  // Reader icon button (not a tab — opens feeds/reader page)
+  // Reader button (not a tab — opens feeds/reader page)
   const readerNavBtn = document.getElementById("open-reader-nav");
   if (readerNavBtn) {
     readerNavBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       browser.tabs.create({ url: browser.runtime.getURL("feeds/feeds.html") });
+    });
+  }
+
+  // Wipe icon — quick link to Settings wipe section
+  const wipeNavBtn = document.getElementById("wipe-nav");
+  if (wipeNavBtn) {
+    wipeNavBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const tabs = document.querySelectorAll(".nav-tab[data-tab]");
+      const panels = document.querySelectorAll(".tab-panel[data-panel]");
+      switchMainTab("settings", tabs, panels);
+      setTimeout(() => {
+        const target = document.getElementById("settings-wipe");
+        if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 100);
     });
   }
 }
@@ -4077,9 +4562,21 @@ async function bmSyncToGitHub() {
   bmEl.syncGithubBtn.disabled = true;
   bmEl.syncGithubBtn.textContent = "Syncing...";
   try {
-    const resp = await browser.runtime.sendMessage({ action: "syncBookmarksToGitHub" });
+    const resp = await browser.runtime.sendMessage({ action: "syncBookmarksToCloud" });
     if (resp && resp.success) {
-      bmEl.syncGithubBtn.textContent = `Synced ${resp.bookmarks} bookmarks`;
+      const parts = [];
+      if (resp.github?.success) parts.push(`${resp.github.bookmarks} bookmarks to GitHub`);
+      else if (resp.github?.error) parts.push(`GitHub error`);
+      if (resp.snapshots?.synced > 0) parts.push(`${resp.snapshots.synced} snapshots`);
+      if (resp.snapshots?.failed > 0) parts.push(`${resp.snapshots.failed} snap failed`);
+      if (resp.pdfs?.synced > 0) parts.push(`${resp.pdfs.synced} PDFs`);
+      if (resp.pdfs?.failed > 0) parts.push(`${resp.pdfs.failed} PDF failed`);
+      if (resp.snapshots?.providers?.length) parts.push(`→ ${resp.snapshots.providers.join(", ")}`);
+      bmEl.syncGithubBtn.textContent = parts.length ? parts.join(" · ") : "No providers connected";
+      // Log errors to console for debugging
+      if (resp.github?.error) console.warn("[CloudSync UI] GitHub:", resp.github.error);
+      if (resp.snapshots?.errors?.length) console.warn("[CloudSync UI] Snapshot errors:", resp.snapshots.errors);
+      if (resp.pdfs?.errors?.length) console.warn("[CloudSync UI] PDF errors:", resp.pdfs.errors);
     } else {
       bmEl.syncGithubBtn.textContent = resp?.error || "Sync failed";
     }
@@ -4088,8 +4585,8 @@ async function bmSyncToGitHub() {
   }
   setTimeout(() => {
     bmEl.syncGithubBtn.disabled = false;
-    bmEl.syncGithubBtn.textContent = "Sync to GitHub";
-  }, 3000);
+    bmEl.syncGithubBtn.textContent = "Sync to Cloud";
+  }, 6000);
 }
 
 function bmToggleSelection() {
@@ -5458,6 +5955,8 @@ function initCloudBackup() {
 
   // Show connected providers summary
   refreshCloudStatus();
+  // Update default provider info on Settings tab
+  updateDefaultProviderStatus();
 
   // Backup Now
   document.getElementById("cloud-backup-now").addEventListener("click", async () => {
@@ -5576,6 +6075,24 @@ function initCloudBackup() {
   };
   enabledCb.addEventListener("change", saveSchedule);
   intervalSel.addEventListener("change", saveSchedule);
+
+  // Cloud sync toggles
+  const syncMetaCb = document.getElementById("cloud-sync-metadata");
+  const syncSnapCb = document.getElementById("cloud-sync-snapshots");
+  const syncPdfCb = document.getElementById("cloud-sync-pdfs");
+  browser.storage.local.get({ cloudSyncMetadata: true, cloudSyncSnapshots: true, cloudSyncPdfs: true }).then(data => {
+    syncMetaCb.checked = data.cloudSyncMetadata;
+    syncSnapCb.checked = data.cloudSyncSnapshots;
+    syncPdfCb.checked = data.cloudSyncPdfs;
+  });
+  const saveSyncOpts = () => browser.storage.local.set({
+    cloudSyncMetadata: syncMetaCb.checked,
+    cloudSyncSnapshots: syncSnapCb.checked,
+    cloudSyncPdfs: syncPdfCb.checked,
+  });
+  syncMetaCb.addEventListener("change", saveSyncOpts);
+  syncSnapCb.addEventListener("change", saveSyncOpts);
+  syncPdfCb.addEventListener("change", saveSyncOpts);
 
   refreshCloudStatus();
 }

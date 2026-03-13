@@ -203,6 +203,8 @@ const AutomationEngine = (() => {
       case "addToProject": return await stepAddToProject(step, ctx);
       case "addToMonitors": return await stepAddToMonitors(step, ctx);
       case "runPipeline": return await stepRunPipeline(step, ctx);
+      case "paste": return await stepPaste(step, ctx);
+      case "saveToCloud": return await stepSaveToCloud(step, ctx);
       default: throw new Error(`Unknown step type: ${step.type}`);
     }
   }
@@ -330,6 +332,107 @@ const AutomationEngine = (() => {
     };
   }
 
+  // ── Paste to External Service ──
+
+  async function stepPaste(step, ctx) {
+    // Use explicit provider, or fall back to user's default paste provider
+    let provider = step.provider;
+    if (!provider) {
+      const { defaultPasteProvider } = await browser.storage.local.get({ defaultPasteProvider: "" });
+      provider = defaultPasteProvider;
+    }
+    if (!provider) throw new Error("No paste provider selected and no default set. Configure one in Providers → Default Providers.");
+
+    const pp = CloudProviders[provider];
+    if (!pp) throw new Error(`Unknown paste provider: ${provider}`);
+    if (!await pp.isConnected()) throw new Error(`${provider} is not connected. Configure it in Providers → Paste Providers.`);
+
+    // Determine content to paste
+    const content = step.inputMode === "page"
+      ? (ctx.page.text || "").slice(0, 100000)
+      : (ctx.lastOutput || "");
+    if (!content) throw new Error("No content to paste");
+
+    const title = step.titleTemplate
+      ? step.titleTemplate.replace("{title}", ctx.page.title || "Untitled").replace("{url}", ctx.page.url || "").replace("{automation}", ctx.automationName || "")
+      : `Argus — ${ctx.page.title || ctx.page.url || "Export"}`;
+
+    let result;
+    if (provider === "gist") {
+      const filename = step.filename || "argus-export.md";
+      const files = {};
+      files[filename] = content;
+      // If entities exist and includeEntities is true, add a second file
+      if (step.includeEntities && ctx.entities.length) {
+        files["entities.json"] = JSON.stringify(ctx.entities, null, 2);
+      }
+      result = await pp.createPaste(title, files, step.isPublic || false);
+    } else if (provider === "pastebin") {
+      const visibility = step.visibility ?? 1; // 0=public, 1=unlisted, 2=private
+      const format = step.format || "text";
+      const expiry = step.expiry || "N"; // never
+      result = await pp.createPaste(title, content, visibility, format, expiry);
+    } else if (provider === "privatebin") {
+      const expiry = step.expiry || "1week";
+      const burn = step.burnAfterReading || false;
+      result = await pp.createPaste(content, expiry, burn);
+    }
+
+    if (!result || !result.url) throw new Error("Paste creation returned no URL");
+    console.log(`[Automation] Pasted to ${provider}: ${result.url}`);
+    return { stepType: "paste", content: result.url, pasteUrl: result.url };
+  }
+
+  // ── Save to Cloud Storage ──
+
+  async function stepSaveToCloud(step, ctx) {
+    const content = step.inputMode === "page"
+      ? (ctx.page.text || "").slice(0, 500000)
+      : (ctx.lastOutput || "");
+    if (!content) throw new Error("No content to save");
+
+    const safeTitle = (ctx.page.title || "export").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80);
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const ext = step.format === "json" ? "json" : "md";
+    const filename = `argus-automations/${safeTitle}-${timestamp}.${ext}`;
+    const blob = new Blob([content], { type: ext === "json" ? "application/json" : "text/markdown" });
+
+    // Determine which providers to upload to — step config, then user default, then all
+    let targetProviders = step.providers || [];
+    if (!targetProviders.length || targetProviders.includes("default")) {
+      const { defaultCloudProvider } = await browser.storage.local.get({ defaultCloudProvider: "all" });
+      targetProviders = [defaultCloudProvider || "all"];
+    }
+    const providerKeys = targetProviders.includes("all")
+      ? ["google", "dropbox", "webdav", "s3"]
+      : targetProviders;
+
+    const results = {};
+    let uploaded = 0;
+    for (const key of providerKeys) {
+      try {
+        const provider = CloudProviders[key];
+        if (provider && await provider.isConnected()) {
+          await provider.upload(blob, filename);
+          results[key] = { success: true };
+          uploaded++;
+          console.log(`[Automation] Saved to ${key}: ${filename}`);
+        }
+      } catch (e) {
+        results[key] = { success: false, error: e.message };
+        console.error(`[Automation] Save to ${key} failed:`, e.message);
+      }
+    }
+
+    if (uploaded === 0) throw new Error("No cloud providers connected. Configure them in Providers → Data Providers.");
+
+    return {
+      stepType: "saveToCloud",
+      content: `Saved to ${uploaded} provider(s): ${filename}`,
+      cloudResults: results,
+    };
+  }
+
   // ── Run on Project Items ──
 
   async function runOnItem(automationId, projectId, itemUrl, itemTitle) {
@@ -421,7 +524,7 @@ const AutomationEngine = (() => {
     getRunStatus,
     cancel,
     getLog,
-    STEP_TYPES: ["analyze", "prompt", "extractEntities", "addToProject", "addToMonitors", "runPipeline"],
+    STEP_TYPES: ["analyze", "prompt", "extractEntities", "addToProject", "addToMonitors", "runPipeline", "paste", "saveToCloud"],
   };
 
 })();

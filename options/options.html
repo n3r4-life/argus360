@@ -61,7 +61,7 @@
           <span>Providers</span>
         </button>
         <button class="nav-tab" data-tab="resources">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
           <span>Resources</span>
         </button>
         <button class="nav-tab" data-tab="settings">
@@ -72,11 +72,21 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           <span>Help</span>
         </button>
-        <button id="open-history-nav" class="nav-tab nav-tab-icon" title="Reports">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+        <span class="nav-spacer"></span>
+        <button id="open-kg-nav" class="nav-tab nav-tab-action" title="Knowledge Graph">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><line x1="9" y1="6" x2="15" y2="6"/><line x1="6" y1="9" x2="6" y2="15"/><line x1="18" y1="9" x2="18" y2="15"/><line x1="9" y1="18" x2="15" y2="18"/></svg>
+          <span>KG</span>
         </button>
-        <button id="open-reader-nav" class="nav-tab nav-tab-icon" title="Reader">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+        <button id="open-history-nav" class="nav-tab nav-tab-action" title="Reports">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+          <span>Reports</span>
+        </button>
+        <button id="open-reader-nav" class="nav-tab nav-tab-action" title="Reader">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+          <span>Reader</span>
+        </button>
+        <button id="wipe-nav" class="nav-tab nav-tab-icon nav-tab-danger" title="Wipe all Argus data">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
         </button>
       </div>
     </nav>
@@ -186,13 +196,23 @@
                 <summary>Setup Guide</summary>
                 <ol class="dp-guide-steps">
                   <li>Go to <a href="https://console.cloud.google.com/projectcreate" target="_blank">Google Cloud Console</a> and create a project</li>
-                  <li>Search for and enable the <strong>Google Drive API</strong> under APIs &amp; Services</li>
-                  <li>Go to <strong>OAuth consent screen</strong> → External → fill required fields</li>
-                  <li>Under <strong>Test users</strong>, add your own Google email address</li>
-                  <li>Go to <strong>Credentials</strong> → Create OAuth client ID → Web application</li>
-                  <li>Add the redirect URI shown below, copy the <strong>Client ID</strong>, paste it above</li>
+                  <li>Search for and enable the <strong>Google Drive API</strong> under APIs &amp; Services → Library</li>
+                  <li>Go to <strong>OAuth consent screen</strong> → choose <strong>External</strong> → fill App name, User support email, Developer email → Save</li>
+                  <li>Under <strong>Test users</strong>, click "Add users" and add your own Google email address (required while app is in "Testing" mode)</li>
+                  <li>Go to <strong>Credentials</strong> → Create Credentials → <strong>OAuth client ID</strong> → Application type: <strong>Web application</strong></li>
+                  <li><strong style="color:var(--accent);">CRITICAL:</strong> Under "Authorized redirect URIs", click "Add URI" and paste the <strong>exact</strong> redirect URI shown below — must match character-for-character</li>
+                  <li>Copy the <strong>Client ID</strong> (ends in <code>.apps.googleusercontent.com</code>), paste it above, then click Connect</li>
                 </ol>
-                <p style="font-size:11px;color:var(--text-muted);word-break:break-all;" id="dp-gdrive-redirect"></p>
+                <div style="margin-top:8px;padding:8px 10px;background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;">
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent);margin-bottom:4px;">Your Redirect URI (copy this exactly into GCP)</div>
+                  <p style="font-size:12px;color:var(--text-primary);word-break:break-all;font-family:monospace;user-select:all;cursor:text;" id="dp-gdrive-redirect">Loading...</p>
+                </div>
+                <div style="margin-top:8px;font-size:11px;color:var(--text-muted);line-height:1.5;">
+                  <strong>Common errors:</strong><br>
+                  <strong>redirect_uri_mismatch</strong> — the URI above isn't in your GCP OAuth client's Authorized redirect URIs<br>
+                  <strong>access_denied</strong> — your Google email isn't listed as a Test User in the consent screen<br>
+                  <strong>invalid_client</strong> — wrong Client ID (must end in .apps.googleusercontent.com)
+                </div>
               </details>
               <div class="dp-action-row">
                 <button id="dp-gdrive-connect" class="btn btn-sm btn-primary">Connect</button>
@@ -326,6 +346,130 @@
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- Paste Providers -->
+      <section class="card">
+        <h2 class="card-title">Paste Providers</h2>
+        <div class="card-body">
+          <p class="info-text">Push analysis reports, KG exports, and findings to paste services for sharing or archiving.</p>
+
+          <div class="provider-tabs">
+            <div id="paste-provider-tab-list" class="tab-list">
+              <button class="tab-btn active" data-pprovider="gist">GitHub Gist</button>
+              <button class="tab-btn" data-pprovider="pastebin">Pastebin</button>
+              <button class="tab-btn" data-pprovider="privatebin">PrivateBin</button>
+            </div>
+          </div>
+
+          <div id="paste-provider-config" class="prompt-editor">
+            <!-- GitHub Gist fields (default visible) -->
+            <div id="pp-gist-fields">
+              <div class="form-group">
+                <label for="pp-gist-pat">Personal Access Token</label>
+                <input type="password" id="pp-gist-pat" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+                <span class="hint">Same PAT as GitHub repo provider works here — needs <code>gist</code> scope</span>
+              </div>
+              <details class="dp-setup-guide">
+                <summary>Setup Guide</summary>
+                <ol class="dp-guide-steps">
+                  <li>Go to <a href="https://github.com/settings/tokens?type=beta" target="_blank">GitHub Settings → Developer Settings → Personal Access Tokens</a></li>
+                  <li>Generate a token with the <strong>gist</strong> scope (or use your existing repo PAT if it has gist scope)</li>
+                  <li>Pastes are created as <strong>secret gists</strong> (unlisted, not indexed, but accessible via URL)</li>
+                </ol>
+              </details>
+              <div class="dp-action-row">
+                <button id="pp-gist-test" class="btn btn-sm btn-primary">Test Connection</button>
+                <span id="pp-gist-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- Pastebin fields -->
+            <div id="pp-pastebin-fields" class="hidden">
+              <div class="form-group">
+                <label for="pp-pastebin-api-key">API Developer Key</label>
+                <input type="password" id="pp-pastebin-api-key" placeholder="Your Pastebin API key">
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="pp-pastebin-user">Username <span class="hint" style="display:inline;margin:0;">(optional)</span></label>
+                  <input type="text" id="pp-pastebin-user" placeholder="For private pastes">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="pp-pastebin-pass">Password <span class="hint" style="display:inline;margin:0;">(optional)</span></label>
+                  <input type="password" id="pp-pastebin-pass" placeholder="For private pastes">
+                </div>
+              </div>
+              <details class="dp-setup-guide">
+                <summary>Setup Guide</summary>
+                <ol class="dp-guide-steps">
+                  <li>Go to <a href="https://pastebin.com/doc_api" target="_blank">pastebin.com/doc_api</a> (free account required)</li>
+                  <li>Copy your <strong>Unique Developer API Key</strong> from the top of the page</li>
+                  <li>Username + password are optional — without them, pastes are created as guest (unlisted only)</li>
+                  <li>With login, you can create <strong>private pastes</strong> visible only to your account</li>
+                </ol>
+              </details>
+              <div class="dp-action-row">
+                <button id="pp-pastebin-test" class="btn btn-sm btn-primary">Test Connection</button>
+                <span id="pp-pastebin-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- PrivateBin fields -->
+            <div id="pp-privatebin-fields" class="hidden">
+              <div class="form-group">
+                <label for="pp-privatebin-url">Server URL</label>
+                <input type="text" id="pp-privatebin-url" placeholder="e.g. https://privatebin.example.com">
+                <span class="hint">Self-hosted PrivateBin instance — zero-knowledge encrypted, server never sees plaintext</span>
+              </div>
+              <details class="dp-setup-guide">
+                <summary>Setup Guide</summary>
+                <ol class="dp-guide-steps">
+                  <li>Deploy PrivateBin on your own server (<a href="https://github.com/PrivateBin/PrivateBin" target="_blank">github.com/PrivateBin/PrivateBin</a>)</li>
+                  <li>Or use a public instance: <code>privatebin.net</code>, <code>paste.debian.net</code></li>
+                  <li>Enter the server URL above — no account or API key needed</li>
+                  <li>All encryption happens client-side — the server never sees your data</li>
+                </ol>
+              </details>
+              <div class="dp-action-row">
+                <button id="pp-privatebin-test" class="btn btn-sm btn-primary">Test Connection</button>
+                <span id="pp-privatebin-status" class="dp-status"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Default Providers -->
+      <section class="card">
+        <h2 class="card-title">Default Providers</h2>
+        <div class="card-body">
+          <p class="info-text">When multiple services are connected, these defaults are used by automations and quick actions.</p>
+          <div class="form-row" style="gap:16px;">
+            <div class="form-group flex-1">
+              <label for="default-cloud-provider">Default Cloud Storage</label>
+              <select id="default-cloud-provider">
+                <option value="all">All connected</option>
+                <option value="google">Google Drive</option>
+                <option value="dropbox">Dropbox</option>
+                <option value="webdav">WebDAV</option>
+                <option value="s3">S3</option>
+              </select>
+              <span class="hint">Used by "Save to Cloud" automation steps and backup actions</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="default-paste-provider">Default Paste Service</label>
+              <select id="default-paste-provider">
+                <option value="">None</option>
+                <option value="gist">GitHub Gist</option>
+                <option value="pastebin">Pastebin</option>
+                <option value="privatebin">PrivateBin</option>
+              </select>
+              <span class="hint">Used by "Paste to Service" automation steps</span>
+            </div>
+          </div>
+          <div id="default-provider-status" style="font-size:11px;color:var(--text-muted);margin-top:6px;"></div>
         </div>
       </section>
 
@@ -588,6 +732,8 @@
                 <option value="runPipeline">Run Pipeline</option>
                 <option value="addToProject">Add to Project</option>
                 <option value="addToMonitors">Add to Monitors</option>
+                <option value="paste">Paste to Service</option>
+                <option value="saveToCloud">Save to Cloud</option>
               </select>
               <button id="auto-add-step-btn" class="btn btn-secondary btn-sm">+ Add Step</button>
             </div>
@@ -695,7 +841,7 @@
           <button id="bm-analyze-selected" class="btn btn-sm btn-secondary hidden">Analyze Selected</button>
           <button id="bm-select-toggle" class="btn btn-sm btn-secondary">Select</button>
           <button id="bm-export" class="btn btn-sm btn-secondary">Export JSON</button>
-          <button id="bm-sync-github" class="btn btn-sm btn-secondary" title="Sync bookmark metadata to GitHub">Sync to GitHub</button>
+          <button id="bm-sync-github" class="btn btn-sm btn-secondary" title="Sync metadata to GitHub + snapshots to connected drives">Sync to Cloud</button>
         </div>
       </div>
 
@@ -1529,6 +1675,14 @@
           <!-- Connected providers summary -->
           <div id="cloud-connected-summary" style="font-size:12px;color:var(--text-muted);margin-bottom:10px;"></div>
 
+          <!-- Default provider info (read-only, configured on Providers tab) -->
+          <div id="settings-default-providers" style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;padding:8px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;display:none;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent);margin-bottom:4px;">Default Providers</div>
+            <div id="settings-default-cloud" style="margin-bottom:2px;"></div>
+            <div id="settings-default-paste"></div>
+            <div style="margin-top:4px;"><a href="#" id="settings-goto-defaults" style="font-size:11px;color:var(--accent);">Change defaults on Providers tab</a></div>
+          </div>
+
           <!-- Backup Schedule -->
           <div class="form-row" style="align-items:center;">
             <div class="form-group flex-1">
@@ -1554,6 +1708,26 @@
           </div>
           <div id="cloud-backup-status" style="font-size:12px;color:var(--text-muted);margin-top:6px;"></div>
           <div id="cloud-last-backup" style="font-size:11px;color:var(--text-muted);margin-top:4px;"></div>
+
+          <!-- Cloud Sync Options -->
+          <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
+            <label style="font-size:12px;font-weight:600;color:var(--text-secondary);">Cloud Sync Options</label>
+            <p class="info-text" style="margin:4px 0 8px;">Choose what gets synced when using "Sync to Cloud" from the Bookmarks toolbar.</p>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;">
+                <input type="checkbox" id="cloud-sync-metadata" checked>
+                Bookmark metadata to GitHub (folders, tags, summaries — diffable JSON)
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;">
+                <input type="checkbox" id="cloud-sync-snapshots" checked>
+                Page snapshots to cloud drives (HTML + screenshots from OPFS)
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;">
+                <input type="checkbox" id="cloud-sync-pdfs" checked>
+                PDF files to cloud drives (fetches and uploads bookmarked PDFs)
+              </label>
+            </div>
+          </div>
 
           <!-- Restore from Cloud -->
           <div id="cloud-restore-section" class="hidden" style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
@@ -1629,7 +1803,7 @@
             </div>
           </div>
           <span id="storage-purge-status" class="save-indicator hidden" style="color:var(--success);">Done</span>
-          <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+          <hr id="settings-wipe" style="border:none;border-top:1px solid var(--border);margin:16px 0;">
           <label style="color:var(--error);font-weight:600;">Wipe Everything</label>
           <p class="info-text" style="margin:0 0 6px;">Permanently deletes all Argus data: projects, bookmarks, monitors, feeds, history, knowledge graph, snapshots, settings, and cached results. This cannot be undone. Use before uninstalling to leave no traces.</p>
           <button id="wipe-everything-btn" class="btn btn-secondary" style="color:var(--error);border-color:var(--error);">Wipe Everything</button>
