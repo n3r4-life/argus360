@@ -2862,9 +2862,9 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
     return;
   }
 
-  // Open Help tab
+  // Open Help (GitHub README)
   if (info.menuItemId === "argus-help") {
-    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#help") });
+    browser.tabs.create({ url: "https://github.com/n3r4-life/argus360#readme" });
     return;
   }
 

@@ -584,9 +584,15 @@ function attachEventListeners() {
     }
   });
 
+  const ARGUS_HELP_URL = "https://github.com/n3r4-life/argus360#readme";
+
   document.getElementById("help-get-key").addEventListener("click", (e) => {
     e.preventDefault();
-    focusOrCreateConsole("help-getting-started");
+    browser.tabs.create({ url: ARGUS_HELP_URL + "#quick-start" });
+  });
+
+  document.getElementById("quick-nav-help").addEventListener("click", () => {
+    browser.tabs.create({ url: ARGUS_HELP_URL });
   });
 
   // App icon button handlers — focus-or-create pattern

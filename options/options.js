@@ -583,7 +583,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateReasoningControls();
   loadVersion();
   initMainTabs();
-  initHelpBackToTop();
+  initHelpExtLinks();
   initWatchlist();
   initStorageManagement();
   initCloudBackup();
@@ -4100,7 +4100,13 @@ function initMainTabs() {
 
   // Restore last active tab from URL hash or sessionStorage
   const hash = window.location.hash.replace("#", "");
-  const savedTab = hash || sessionStorage.getItem("argus-activeTab") || "home";
+  let savedTab = hash || sessionStorage.getItem("argus-activeTab") || "home";
+
+  // Help tab removed — redirect to GitHub README
+  if (savedTab === "help" || savedTab.startsWith("help-")) {
+    browser.tabs.create({ url: ARGUS_HELP_URL });
+    savedTab = "home";
+  }
 
   switchMainTab(savedTab, tabs, panels);
 
@@ -4284,14 +4290,14 @@ function initMainTabs() {
   });
 }
 
-function initHelpBackToTop() {
-  document.querySelectorAll('[data-panel="help"] section[id^="help-"]').forEach(section => {
-    const link = document.createElement("a");
-    link.href = "#help-top";
-    link.className = "help-back-top";
-    link.textContent = "Back to top";
-    section.querySelector(".card-body").appendChild(link);
-  });
+const ARGUS_HELP_URL = "https://github.com/n3r4-life/argus360#readme";
+
+function initHelpExtLinks() {
+  const openHelp = () => browser.tabs.create({ url: ARGUS_HELP_URL });
+  const navHelp = document.getElementById("nav-help-ext");
+  if (navHelp) navHelp.addEventListener("click", openHelp);
+  const homeHelp = document.getElementById("home-help-ext");
+  if (homeHelp) homeHelp.addEventListener("click", openHelp);
 }
 
 function switchMainTab(tabName, tabs, panels) {
@@ -4312,7 +4318,14 @@ function switchMainTab(tabName, tabs, panels) {
 }
 
 function handleHashNav(hash, tabs, panels) {
-  // Check if hash is a direct tab name (e.g. "help", "settings", "presets")
+  // Redirect help hashes to GitHub README
+  if (hash === "help" || hash.startsWith("help-")) {
+    browser.tabs.create({ url: ARGUS_HELP_URL });
+    history.replaceState(null, "", "#home");
+    return;
+  }
+
+  // Check if hash is a direct tab name (e.g. "settings", "presets")
   const directTab = [...tabs].find(t => t.dataset.tab === hash);
   if (directTab) {
     switchMainTab(hash, tabs, panels);
@@ -4320,7 +4333,7 @@ function handleHashNav(hash, tabs, panels) {
     return;
   }
 
-  // Sub-anchor: e.g. "help-getting-started" → switch to "help" tab, scroll to element
+  // Sub-anchor: e.g. "settings-wipe" → switch to "settings" tab, scroll to element
   const tabName = hash.split("-")[0];
   const tabMatch = [...tabs].find(t => t.dataset.tab === tabName);
   if (tabMatch) {
