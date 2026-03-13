@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat - Argus</title>
+  <link rel="stylesheet" href="chat.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../lib/email-share.css">
+</head>
+<body>
+  <script src="../shared/ribbon.js"></script>
+  <div class="chat-layout">
+    <!-- Sidebar: session list -->
+    <aside class="chat-sidebar" id="chat-sidebar">
+      <div class="sidebar-header">
+        <img src="../icons/icon-32.png" alt="" class="sidebar-icon">
+        <span class="sidebar-title">Chat</span>
+        <button id="new-chat" class="btn-icon" title="New chat">+</button>
+      </div>
+      <div class="sidebar-search">
+        <input type="text" id="session-search" placeholder="Search chats..." />
+      </div>
+      <div class="session-list" id="session-list"></div>
+    </aside>
+
+    <!-- Main chat area -->
+    <main class="chat-main">
+      <header class="chat-header">
+        <button id="toggle-sidebar" class="btn-icon" title="Toggle sidebar">&#9776;</button>
+        <div class="chat-header-center">
+          <span id="chat-title" class="chat-title">New Chat</span>
+        </div>
+        <div class="chat-header-actions">
+          <select id="chat-provider" title="AI Provider">
+            <option value="">Default</option>
+            <option value="xai">Grok</option>
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Claude</option>
+            <option value="gemini">Gemini</option>
+            <option value="custom">Custom</option>
+          </select>
+          <button id="chat-export" class="btn-small" title="Export">Export</button>
+          <button id="chat-email" class="btn-small" title="Email+">Email+</button>
+        </div>
+      </header>
+
+      <div class="chat-messages" id="chat-messages">
+        <div class="chat-empty" id="chat-empty">
+          <div class="chat-empty-icon">&#128172;</div>
+          <h2>Start a conversation</h2>
+          <p>Just chat. No projects, no analysis presets, no hidden context. Pick a provider above and start talking.</p>
+        </div>
+      </div>
+
+      <div class="chat-input-area">
+        <div class="chat-input-row">
+          <textarea id="chat-input" placeholder="Type a message..." rows="1"></textarea>
+          <button id="chat-send" class="chat-send-btn" title="Send">&#10148;</button>
+        </div>
+        <div class="chat-input-meta">
+          <span id="chat-status"></span>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="../lib/purify.min.js"></script>
+  <script src="../lib/marked.min.js"></script>
+  <script src="../lib/export-utils.js"></script>
+  <script src="../lib/intelligence-viewer.js"></script>
+  <script src="../lib/email-share.js"></script>
+  <script src="chat.js"></script>
+</body>
+</html>

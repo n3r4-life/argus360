@@ -78,6 +78,14 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><line x1="9" y1="6" x2="15" y2="6"/><line x1="6" y1="9" x2="6" y2="15"/><line x1="18" y1="9" x2="18" y2="15"/><line x1="9" y1="18" x2="15" y2="18"/></svg>
           <span>KG</span>
         </button>
+        <button id="open-chat-nav" class="nav-tab nav-tab-action" title="Chat with AI">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Chat</span>
+        </button>
+        <button id="open-workbench-nav" class="nav-tab nav-tab-action" title="Project Workbench">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <span>Workbench</span>
+        </button>
         <button id="open-history-nav" class="nav-tab nav-tab-action" title="Reports">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
           <span>Reports</span>
@@ -962,6 +970,7 @@
                   <button id="proj-report" class="btn btn-secondary btn-sm" title="Generate investigation report">Report</button>
                   <button id="proj-anomaly" class="btn btn-secondary btn-sm" title="AI anomaly &amp; outlier detection">Anomaly Scan</button>
                   <button id="proj-skeleton" class="btn btn-secondary btn-sm" title="Structural overview of all project connections">Skeleton</button>
+                  <button id="proj-workbench" class="btn btn-secondary btn-sm" title="Open project in Workbench for deep-dive analysis" style="color:var(--accent);">Workbench</button>
                   <button id="proj-dashboard" class="btn btn-primary btn-sm" title="Open project dashboard with at-a-glance widgets">Dashboard</button>
                 </div>
                 <div id="proj-skeleton-panel" class="proj-skeleton hidden"></div>

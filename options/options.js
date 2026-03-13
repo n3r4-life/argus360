@@ -3895,6 +3895,22 @@ function initMainTabs() {
     });
   }
 
+  const chatNavBtn = document.getElementById("open-chat-nav");
+  if (chatNavBtn) {
+    chatNavBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      browser.tabs.create({ url: browser.runtime.getURL("chat/chat.html") });
+    });
+  }
+
+  const workbenchNavBtn = document.getElementById("open-workbench-nav");
+  if (workbenchNavBtn) {
+    workbenchNavBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      browser.tabs.create({ url: browser.runtime.getURL("workbench/workbench.html") });
+    });
+  }
+
   const histNavBtn = document.getElementById("open-history-nav");
   if (histNavBtn) {
     histNavBtn.addEventListener("click", (e) => {
@@ -4705,6 +4721,10 @@ function initProjects() {
   document.getElementById("proj-anomaly").addEventListener("click", projAnomalyScan);
   document.getElementById("proj-dashboard").addEventListener("click", projOpenDashboard);
   document.getElementById("proj-skeleton").addEventListener("click", projBuildSkeleton);
+  document.getElementById("proj-workbench").addEventListener("click", () => {
+    if (!projCurrentId) return;
+    browser.tabs.create({ url: browser.runtime.getURL(`workbench/workbench.html?project=${projCurrentId}`) });
+  });
 
   projLoadProjects();
   checkRunningBatch();

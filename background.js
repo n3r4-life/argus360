@@ -221,6 +221,35 @@ async function createContextMenus() {
     contexts: ["page", "frame", "selection"]
   });
 
+  // ── Chat ──
+  browser.contextMenus.create({
+    id: "argus-chat",
+    parentId: "argus-parent",
+    title: "\uD83D\uDCAC Chat with AI",
+    contexts: ["page", "frame"]
+  });
+  browser.contextMenus.create({
+    id: "argus-chat-selection",
+    parentId: "argus-parent",
+    title: "\uD83D\uDCAC Chat about Selection",
+    contexts: ["selection"]
+  });
+
+  // ── Workbench ──
+  browser.contextMenus.create({
+    id: "argus-workbench",
+    parentId: "argus-parent",
+    title: "\uD83D\uDD27 Workbench",
+    contexts: ["page", "frame", "selection"]
+  });
+
+  browser.contextMenus.create({
+    id: "argus-sep-chat",
+    parentId: "argus-parent",
+    type: "separator",
+    contexts: ["page", "frame", "selection"]
+  });
+
   // ── Quick Actions ──
   // ── Add to Bookmarks submenu ──
   browser.contextMenus.create({
@@ -1526,6 +1555,14 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "getAutomationStatus") return Promise.resolve(AutomationEngine.getRunStatus());
   if (message.action === "cancelAutomation") return Promise.resolve(AutomationEngine.cancel());
   if (message.action === "getAutomationLog") return AutomationEngine.getLog(message.automationId).then(l => ({ success: true, logs: l }));
+  // ── Chat ──
+  if (message.action === "chatGetSessions") return handleChatGetSessions();
+  if (message.action === "chatGetSession") return handleChatGetSession(message.sessionId);
+  if (message.action === "chatDeleteSession") return handleChatDeleteSession(message.sessionId);
+  if (message.action === "chatSendMessage") return handleChatSendMessage(message);
+  // ── Workbench ──
+  if (message.action === "workbenchGetData") return handleWorkbenchGetData(message.projectId);
+  if (message.action === "workbenchAnalyze") return handleWorkbenchAnalyze(message);
   // OSINT tools are handled by background-osint.js's own message listener
   return false;
 });
@@ -1643,6 +1680,229 @@ async function handleWipeEverything() {
   } catch (e) {
     console.error("[Argus] Wipe failed:", e);
     return { success: false, error: e.message };
+  }
+}
+
+// ──────────────────────────────────────────────
+// Chat handlers
+// ──────────────────────────────────────────────
+async function handleChatGetSessions() {
+  const sessions = await ArgusDB.ChatSessions.getAll();
+  // Return lightweight list (no full messages)
+  return { success: true, sessions: sessions.map(s => ({ id: s.id, title: s.title, preview: s.preview, provider: s.provider, updatedAt: s.updatedAt, messageCount: (s.messages || []).length })) };
+}
+
+async function handleChatGetSession(sessionId) {
+  const session = await ArgusDB.ChatSessions.get(sessionId);
+  if (!session) return { success: false, error: "Session not found" };
+  return { success: true, session };
+}
+
+async function handleChatDeleteSession(sessionId) {
+  await ArgusDB.ChatSessions.remove(sessionId);
+  return { success: true };
+}
+
+async function handleChatSendMessage(message) {
+  try {
+    const { sessionId, text, provider: providerOverride } = message;
+    const settings = await getProviderSettings(providerOverride || "");
+
+    // Load or create session
+    let session;
+    if (sessionId) {
+      session = await ArgusDB.ChatSessions.get(sessionId);
+    }
+    if (!session) {
+      session = {
+        id: `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        title: text.slice(0, 60) + (text.length > 60 ? "..." : ""),
+        messages: [],
+        provider: settings.provider,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+    }
+
+    // Add user message
+    session.messages.push({ role: "user", content: text, timestamp: Date.now() });
+    session.provider = settings.provider;
+
+    // Build messages array for API (no system prompt for pure chat)
+    const apiMessages = session.messages.map(m => ({ role: m.role, content: m.content }));
+
+    // Create stream ID for storage polling
+    const streamId = `chat-stream-${Date.now()}`;
+    await browser.storage.local.set({ [streamId]: { status: "loading" } });
+
+    // Save session immediately so UI can reference it
+    await ArgusDB.ChatSessions.save(session);
+
+    // Stream in background (non-blocking)
+    (async () => {
+      try {
+        const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
+        let streamedContent = "";
+        const result = await callProviderStream(
+          settings.provider, settings.apiKey, settings.model, apiMessages, opts,
+          async (chunk) => {
+            streamedContent += chunk;
+            await browser.storage.local.set({ [streamId]: { status: "streaming", content: streamedContent, model: settings.model, provider: settings.provider } });
+          },
+          null
+        );
+
+        // Save assistant message to session
+        session.messages.push({ role: "assistant", content: result.content, timestamp: Date.now() });
+        session.preview = result.content.slice(0, 120);
+        // Auto-title from first exchange
+        if (session.messages.filter(m => m.role === "user").length === 1 && session.title === session.messages[0].content.slice(0, 60) + (session.messages[0].content.length > 60 ? "..." : "")) {
+          // Keep the auto-title from user's first message — it's good enough
+        }
+        await ArgusDB.ChatSessions.save(session);
+
+        await browser.storage.local.set({
+          [streamId]: { status: "done", content: result.content, model: result.model, provider: settings.provider, usage: result.usage }
+        });
+      } catch (err) {
+        await browser.storage.local.set({ [streamId]: { status: "error", error: err.message } });
+      }
+    })();
+
+    return { success: true, sessionId: session.id, streamId };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ──────────────────────────────────────────────
+// Workbench handlers
+// ──────────────────────────────────────────────
+async function handleWorkbenchGetData(projectId) {
+  try {
+    const proj = await ArgusDB.Projects.get(projectId);
+    if (!proj) return { success: false, error: "Project not found" };
+
+    // Gather all related data
+    const items = proj.items || [];
+
+    // KG entities scoped to this project's URLs
+    const urls = new Set(items.filter(i => i.url).map(i => i.url));
+    let entities = [];
+    let edges = [];
+    try {
+      const graphData = await KnowledgeGraph.getGraphData({ projectId });
+      if (graphData) {
+        entities = graphData.nodes || [];
+        edges = graphData.edges || [];
+      }
+    } catch (e) { /* KG may not have data */ }
+
+    // Feeds routed to this project
+    const allFeeds = await ArgusDB.Feeds.getAll();
+    const routedFeeds = [];
+    for (const feed of allFeeds) {
+      if (feed.routeToProject === projectId) {
+        const entries = await ArgusDB.FeedEntries.getByFeed(feed.id);
+        routedFeeds.push({ id: feed.id, title: feed.title, url: feed.url, entryCount: entries.length, entries: entries.slice(0, 20) });
+      }
+    }
+
+    // Monitors watching project URLs
+    const allMonitors = await ArgusDB.Monitors.getAll();
+    const relatedMonitors = allMonitors.filter(m => urls.has(m.url));
+
+    // Bookmarks matching project URLs
+    const allBookmarks = await ArgusDB.Bookmarks.getAll();
+    const relatedBookmarks = allBookmarks.filter(b => urls.has(b.url));
+
+    // History entries linked to this project (via refId)
+    const refIds = new Set(items.filter(i => i.refId).map(i => i.refId));
+    let relatedHistory = [];
+    if (refIds.size > 0) {
+      const allHistory = await ArgusDB.History.getAll();
+      relatedHistory = allHistory.filter(h => refIds.has(h.id)).slice(0, 50);
+    }
+
+    return {
+      success: true,
+      project: { id: proj.id, name: proj.name, color: proj.color, description: proj.description },
+      items,
+      entities,
+      edges,
+      feeds: routedFeeds,
+      monitors: relatedMonitors,
+      bookmarks: relatedBookmarks,
+      history: relatedHistory
+    };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+async function handleWorkbenchAnalyze(message) {
+  try {
+    const { projectId, selectedItems, prompt, provider: providerOverride } = message;
+    const settings = await getProviderSettings(providerOverride || "");
+
+    // Build context from selected items
+    let contextBlock = "";
+    for (const item of (selectedItems || [])) {
+      const header = `[${(item.type || "item").toUpperCase()}] ${item.title || "Untitled"}`;
+      const content = item.analysisContent || item.summary || item.content || "";
+      const url = item.url ? ` (${item.url})` : "";
+      contextBlock += `\n--- ${header}${url} ---\n${content.slice(0, 3000)}\n`;
+    }
+
+    const systemPrompt = "You are a research analyst assistant. The user has selected multiple items from their investigation project and wants you to analyze them together. Provide thorough, actionable analysis.";
+    const userPrompt = `${prompt || "Analyze the following items and identify key patterns, connections, and insights."}\n\n${contextBlock}`;
+
+    const apiMessages = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ];
+
+    const streamId = `wb-stream-${Date.now()}`;
+    await browser.storage.local.set({ [streamId]: { status: "loading" } });
+
+    // Stream in background
+    (async () => {
+      try {
+        const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
+        let streamedContent = "";
+        const result = await callProviderStream(
+          settings.provider, settings.apiKey, settings.model, apiMessages, opts,
+          async (chunk) => {
+            streamedContent += chunk;
+            await browser.storage.local.set({ [streamId]: { status: "streaming", content: streamedContent, model: settings.model, provider: settings.provider } });
+          },
+          null
+        );
+        await browser.storage.local.set({
+          [streamId]: { status: "done", content: result.content, thinking: result.thinking, model: result.model, provider: settings.provider, usage: result.usage }
+        });
+
+        // Save to history
+        await saveToHistory({
+          pageTitle: `Workbench: ${selectedItems.length} items`,
+          pageUrl: "",
+          provider: settings.provider,
+          model: result.model,
+          preset: "workbench",
+          presetLabel: "Workbench Analysis",
+          content: result.content,
+          thinking: result.thinking,
+          usage: result.usage,
+          promptText: systemPrompt + "\n" + userPrompt
+        });
+      } catch (err) {
+        await browser.storage.local.set({ [streamId]: { status: "error", error: err.message } });
+      }
+    })();
+
+    return { success: true, streamId };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 }
 
@@ -2365,6 +2625,28 @@ async function handleReAnalyze(message) {
 // Context menu click handler
 // ──────────────────────────────────────────────
 browser.contextMenus.onClicked.addListener(async (info, tab) => {
+  // Chat with AI
+  if (info.menuItemId === "argus-chat") {
+    browser.tabs.create({ url: browser.runtime.getURL("chat/chat.html") });
+    return;
+  }
+  if (info.menuItemId === "argus-chat-selection") {
+    const text = (info.selectionText || "").trim();
+    if (text) {
+      const chatUrl = browser.runtime.getURL(`chat/chat.html?msg=${encodeURIComponent(text)}`);
+      browser.tabs.create({ url: chatUrl });
+    } else {
+      browser.tabs.create({ url: browser.runtime.getURL("chat/chat.html") });
+    }
+    return;
+  }
+
+  // Workbench
+  if (info.menuItemId === "argus-workbench") {
+    browser.tabs.create({ url: browser.runtime.getURL("workbench/workbench.html") });
+    return;
+  }
+
   // Open Argus Console
   if (info.menuItemId === "argus-console") {
     browser.tabs.create({ url: browser.runtime.getURL("options/options.html") });
