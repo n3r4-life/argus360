@@ -8,6 +8,11 @@ console.log(`[Argus] background.js loaded — version ${ARGUS_BG_VERSION}`);
 
 // Remind users to wipe data before uninstalling (Firefox doesn't auto-clear extension data)
 try { browser.runtime.setUninstallURL("about:blank"); } catch(e) { /* optional */ }
+
+// Vault: on startup, remove any leftover plaintext copies of sensitive data
+if (typeof ArgusVault !== "undefined") {
+  ArgusVault.onStartup().catch(e => console.warn("[Vault] startup cleanup:", e.message));
+}
 // OSINT tools: background-osint.js
 // ──────────────────────────────────────────────
 
@@ -1529,6 +1534,17 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "retypeKGEntities") return KnowledgeGraph.retypeEntities().then(r => ({ success: true, ...r }));
   if (message.action === "clearKG") return ArgusDB.KGNodes.clear().then(() => ArgusDB.KGEdges.clear()).then(() => browser.storage.local.remove("_kg_backfill_done")).then(() => ({ success: true }));
   if (message.action === "reindexKG") return browser.storage.local.remove(["_kg_backfill_done", "_kg_backfill_at"]).then(() => KnowledgeGraph.backfillFromHistory()).then(r => ({ success: true, ...r }));
+  // ── Vault (encryption / passcode lock) ──
+  if (message.action === "vaultGetStatus") return ArgusVault.getStatus();
+  if (message.action === "vaultSetup") return ArgusVault.setup(message.passcode, message.type);
+  if (message.action === "vaultUnlock") return ArgusVault.unlock(message.passcode);
+  if (message.action === "vaultLock") return Promise.resolve(ArgusVault.lock());
+  if (message.action === "vaultChange") return ArgusVault.changePasscode(message.passcode, message.type);
+  if (message.action === "vaultRemove") return ArgusVault.remove();
+  if (message.action === "vaultEncrypt") return ArgusVault.encrypt(message.plaintext);
+  if (message.action === "vaultDecrypt") return ArgusVault.decrypt(message.iv, message.ciphertext);
+  if (message.action === "vaultReadSensitive") return ArgusVault.readSensitive(message.key).then(v => ({ value: v }));
+  if (message.action === "vaultWriteSensitive") return ArgusVault.writeSensitive(message.key, message.value).then(() => ({ success: true }));
   if (message.action === "wipeEverything") return handleWipeEverything();
   if (message.action === "buildProjectSkeleton") return handleBuildProjectSkeleton(message.projectId);
   // Cloud Backup

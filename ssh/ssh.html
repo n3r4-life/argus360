@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terminal — Argus</title>
+  <link rel="stylesheet" href="ssh.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../lib/xterm.css">
+</head>
+<body>
+  <script src="../shared/ribbon.js"></script>
+
+  <header class="ssh-header">
+    <img src="../icons/icon-32.png" alt="" class="ssh-header-icon">
+    <span class="ssh-header-title">Terminal</span>
+    <span class="ssh-header-status" id="conn-status">Disconnected</span>
+    <div class="ssh-header-actions">
+      <button id="btn-disconnect" class="ssh-btn ssh-btn-danger" disabled>Disconnect</button>
+    </div>
+  </header>
+
+  <!-- Main: full-width terminal area -->
+  <main class="ssh-main">
+    <div id="terminal" class="ssh-terminal"></div>
+    <div id="terminal-placeholder" class="ssh-placeholder">
+      <div class="ssh-placeholder-content">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
+          <polyline points="4 17 10 11 4 5"></polyline>
+          <line x1="12" y1="19" x2="20" y2="19"></line>
+        </svg>
+        <h2>Argus Terminal</h2>
+        <p>Connect to a remote shell via WebSocket.</p>
+        <p class="ssh-placeholder-hint">Open the Connect panel to get started.</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Floating Connect panel (draggable, like workbench panels) -->
+  <div class="ssh-panel ssh-panel-connect" id="ssh-panel-connect">
+    <div class="ssh-panel-header" id="ssh-panel-drag">
+      <span class="ssh-panel-title">Connect</span>
+      <span class="ssh-panel-count" id="ssh-session-count"></span>
+      <button class="ssh-panel-close" id="ssh-panel-close">&times;</button>
+    </div>
+    <div class="ssh-panel-body">
+      <form id="connect-form" class="ssh-form" autocomplete="off">
+        <!-- Protocol selector -->
+        <label class="ssh-label">
+          Protocol
+          <select id="f-protocol" class="ssh-input ssh-select">
+            <option value="ttyd">ttyd / gotty (terminal over WS)</option>
+            <option value="raw-ws">Raw WebSocket (custom relay)</option>
+            <option value="ssh-proxy">SSH Proxy (webssh2-compatible)</option>
+          </select>
+        </label>
+
+        <!-- URL (always shown) -->
+        <label class="ssh-label">
+          <span id="url-label">WebSocket URL</span>
+          <input type="text" id="f-url" class="ssh-input" placeholder="ws://yourserver:7681" required>
+        </label>
+
+        <!-- SSH fields (hidden for ttyd) -->
+        <div id="ssh-fields">
+          <div class="ssh-row-2col">
+            <label class="ssh-label">
+              Host
+              <input type="text" id="f-host" class="ssh-input" placeholder="192.168.1.1">
+            </label>
+            <label class="ssh-label">
+              Port
+              <input type="number" id="f-port" class="ssh-input" value="22" min="1" max="65535">
+            </label>
+          </div>
+          <label class="ssh-label">
+            Username
+            <input type="text" id="f-user" class="ssh-input" placeholder="root">
+          </label>
+          <div class="ssh-auth-tabs">
+            <button type="button" class="ssh-auth-tab active" data-auth="password">Password</button>
+            <button type="button" class="ssh-auth-tab" data-auth="key">Private Key</button>
+          </div>
+          <div id="auth-password" class="ssh-auth-panel">
+            <label class="ssh-label">
+              Password
+              <input type="password" id="f-password" class="ssh-input" placeholder="••••••••">
+            </label>
+          </div>
+          <div id="auth-key" class="ssh-auth-panel hidden">
+            <label class="ssh-label">
+              Private Key
+              <textarea id="f-key" class="ssh-input ssh-textarea" placeholder="Paste private key here..." rows="3"></textarea>
+            </label>
+            <label class="ssh-label">
+              Passphrase <span class="ssh-hint">(if encrypted)</span>
+              <input type="password" id="f-passphrase" class="ssh-input" placeholder="Optional">
+            </label>
+            <label class="ssh-label ssh-file-label">
+              <input type="file" id="f-key-file" class="ssh-file-input" accept=".pem,.key,.pub,.ppk,*">
+              <span class="ssh-btn ssh-btn-secondary ssh-btn-sm">Upload Key File</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Setup guide (contextual) -->
+        <details class="ssh-relay-help" id="setup-guide">
+          <summary>Setup guide</summary>
+          <div id="guide-ttyd">
+            <p>Install <strong>ttyd</strong> on your server, then run:</p>
+            <code>ttyd -W -p 7681 bash</code>
+            <p>Then connect to <strong>ws://yourserver:7681/ws</strong></p>
+            <p>For SSH to another host:</p>
+            <code>ttyd -W -p 7681 ssh user@targethost</code>
+            <p><strong>Tip:</strong> Add <code>-t titleFixed=myserver</code> to set a window title. Use <code>-c user:pass</code> for basic auth.</p>
+          </div>
+          <div id="guide-raw" class="hidden">
+            <p>Run a WebSocket-to-TCP bridge on your server:</p>
+            <code>websockify 2222 localhost:22</code>
+            <p>Then connect to <strong>ws://yourserver:2222</strong></p>
+            <p>Enter SSH target details below — they're sent as JSON on connect.</p>
+          </div>
+          <div id="guide-proxy" class="hidden">
+            <p>Deploy <strong>webssh2</strong> on your server:</p>
+            <code>npm install -g webssh2<br>webssh2 --port 2222</code>
+            <p>Then connect to <strong>ws://yourserver:2222/ssh/host/TARGET</strong></p>
+            <p>Argus sends SSH credentials via the proxy's protocol.</p>
+          </div>
+        </details>
+
+        <button type="submit" id="btn-connect" class="ssh-btn ssh-btn-primary">Connect</button>
+      </form>
+
+      <div class="ssh-section-divider"></div>
+
+      <div class="ssh-sessions-section">
+        <h4 class="ssh-section-title">Saved Sessions</h4>
+        <div id="saved-sessions" class="ssh-sessions-list">
+          <p class="ssh-empty">No saved sessions yet.</p>
+        </div>
+        <button id="btn-save-session" class="ssh-btn ssh-btn-secondary ssh-btn-sm" disabled>Save Current</button>
+      </div>
+
+      <div class="ssh-security-note">
+        <p>Keys are handled in browser memory only — never saved to disk.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edge tab to toggle Connect panel -->
+  <button class="ssh-panel-tab" id="ssh-panel-tab" title="Toggle connection panel">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+    </svg>
+  </button>
+
+  <script src="../lib/xterm.js"></script>
+  <script src="../lib/xterm-addon-fit.js"></script>
+  <script src="../lib/xterm-addon-web-links.js"></script>
+  <script src="ssh.js"></script>
+</body>
+</html>

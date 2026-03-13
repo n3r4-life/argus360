@@ -57,6 +57,14 @@ async function focusOrCreateConsole(hash) {
 // Initialization
 // ──────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
+  // ── Vault lock check ──
+  try {
+    const vaultStatus = await browser.runtime.sendMessage({ action: "vaultGetStatus" });
+    if (vaultStatus && vaultStatus.enabled && !vaultStatus.unlocked) {
+      await showPopupLockScreen(vaultStatus);
+    }
+  } catch (_) { /* vault unavailable — proceed */ }
+
   const provResp = await browser.runtime.sendMessage({ action: "getProviders" });
   if (provResp && provResp.success) {
     provResp.providers.forEach(p => { providerData[p.key] = p; });
@@ -601,6 +609,7 @@ function attachEventListeners() {
   document.getElementById("open-workbench").addEventListener("click", () => focusOrCreatePage("workbench/workbench.html"));
   document.getElementById("open-draft").addEventListener("click", () => focusOrCreatePage("reporting/reporting.html"));
   document.getElementById("open-images").addEventListener("click", () => focusOrCreatePage("osint/images.html"));
+  document.getElementById("open-terminal").addEventListener("click", () => focusOrCreatePage("ssh/ssh.html"));
 
   // Reorder popup app icon buttons based on saved appTabOrder
   (async () => {
@@ -1151,4 +1160,123 @@ function resetButton() {
   elements.analyzeBtn.disabled = false;
   elements.btnText.classList.remove("hidden");
   elements.btnSpinner.classList.add("hidden");
+}
+
+// ── Popup vault lock screen ──
+function showPopupLockScreen(status) {
+  return new Promise((resolve) => {
+    // Hide all content
+    document.querySelectorAll("header, section, .prev-analysis, .archive-available, .toast").forEach(el => el.style.display = "none");
+
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "padding:32px 20px;text-align:center;";
+
+    const logo = document.createElement("img");
+    logo.src = "../icons/icon-48.png";
+    logo.style.cssText = "width:40px;height:40px;border-radius:8px;margin-bottom:12px;";
+    overlay.appendChild(logo);
+
+    const title = document.createElement("div");
+    title.textContent = "Locked";
+    title.style.cssText = "font-size:16px;font-weight:700;color:#e8e8e8;margin-bottom:4px;";
+    overlay.appendChild(title);
+
+    const sub = document.createElement("div");
+    sub.textContent = status.type === "password" ? "Enter password" : "Enter PIN";
+    sub.style.cssText = "font-size:12px;color:#6a6a80;margin-bottom:16px;";
+    overlay.appendChild(sub);
+
+    const errorEl = document.createElement("div");
+    errorEl.style.cssText = "color:#ff5252;font-size:11px;min-height:14px;margin-top:8px;";
+
+    let getValue;
+
+    if (status.type === "password") {
+      const pw = document.createElement("input");
+      pw.type = "password";
+      pw.placeholder = "Password";
+      pw.className = "argus-lock-password";
+      pw.style.cssText += "max-width:200px;font-size:13px;padding:8px 12px;";
+      overlay.appendChild(pw);
+      getValue = () => pw.value;
+      pw.addEventListener("keydown", e => { if (e.key === "Enter") doUnlock(); });
+      setTimeout(() => pw.focus(), 50);
+    } else {
+      const digits = status.type === "pin6" ? 6 : 4;
+      const row = document.createElement("div");
+      row.className = "argus-lock-pin-row";
+      const inputs = [];
+      for (let i = 0; i < digits; i++) {
+        const inp = document.createElement("input");
+        inp.type = "password";
+        inp.inputMode = "numeric";
+        inp.maxLength = 1;
+        inp.className = "argus-lock-pin-digit";
+        inp.style.cssText += "width:36px;height:42px;font-size:18px;";
+        inp.addEventListener("input", () => {
+          if (inp.value.length === 1) {
+            inp.classList.add("filled");
+            if (i < digits - 1) inputs[i + 1].focus();
+            else doUnlock();
+          }
+        });
+        inp.addEventListener("keydown", e => {
+          if (e.key === "Backspace" && !inp.value && i > 0) {
+            inputs[i - 1].focus();
+            inputs[i - 1].value = "";
+            inputs[i - 1].classList.remove("filled");
+          }
+        });
+        inp.addEventListener("paste", (e) => {
+          e.preventDefault();
+          const pasted = (e.clipboardData.getData("text") || "").replace(/\D/g, "").slice(0, digits);
+          for (let j = 0; j < pasted.length; j++) {
+            inputs[j].value = pasted[j];
+            inputs[j].classList.add("filled");
+          }
+          if (pasted.length === digits) doUnlock();
+        });
+        inputs.push(inp);
+        row.appendChild(inp);
+      }
+      overlay.appendChild(row);
+      getValue = () => inputs.map(i => i.value).join("");
+      setTimeout(() => inputs[0].focus(), 50);
+    }
+
+    const btn = document.createElement("button");
+    btn.className = "argus-lock-btn";
+    btn.textContent = "Unlock";
+    btn.style.cssText += "font-size:12px;padding:8px 24px;";
+    btn.addEventListener("click", doUnlock);
+    overlay.appendChild(btn);
+    overlay.appendChild(errorEl);
+
+    document.body.appendChild(overlay);
+
+    async function doUnlock() {
+      const passcode = getValue();
+      if (!passcode) return;
+      btn.disabled = true;
+      errorEl.textContent = "";
+      try {
+        const result = await browser.runtime.sendMessage({ action: "vaultUnlock", passcode });
+        if (result.success) {
+          overlay.remove();
+          document.querySelectorAll("header, section, .prev-analysis, .archive-available, .toast").forEach(el => el.style.display = "");
+          resolve();
+        } else {
+          errorEl.textContent = result.error || "Incorrect";
+          overlay.querySelectorAll(".argus-lock-pin-digit, .argus-lock-password").forEach(i => {
+            i.classList.add("error");
+            setTimeout(() => i.classList.remove("error"), 500);
+          });
+          if (status.type !== "password") {
+            overlay.querySelectorAll(".argus-lock-pin-digit").forEach(i => { i.value = ""; i.classList.remove("filled"); });
+          }
+        }
+      } catch (e) { errorEl.textContent = e.message; }
+      btn.disabled = false;
+    }
+  });
 }

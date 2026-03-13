@@ -2865,6 +2865,164 @@ function attachListeners() {
   el.importSettings.addEventListener("click", () => el.importFile.click());
   el.importFile.addEventListener("change", importSettingsFromFile);
 
+  // ── Vault / Security ──
+  const vaultTypeSelect   = document.getElementById("vault-type-select");
+  const vaultSetupInput   = document.getElementById("vault-setup-input");
+  const vaultSetupConfirm = document.getElementById("vault-setup-confirm");
+  const vaultSetupLabel   = document.getElementById("vault-setup-label");
+  const vaultEnableBtn    = document.getElementById("vault-enable-btn");
+  const vaultSetupStatus  = document.getElementById("vault-setup-status");
+  const vaultNotConfigured = document.getElementById("vault-not-configured");
+  const vaultConfigured   = document.getElementById("vault-configured");
+  const vaultStatusBadge  = document.getElementById("vault-status-badge");
+  const vaultTypeDisplay  = document.getElementById("vault-type-display");
+  const vaultLockBtn      = document.getElementById("vault-lock-btn");
+  const vaultChangeBtn    = document.getElementById("vault-change-btn");
+  const vaultRemoveBtn    = document.getElementById("vault-remove-btn");
+  const vaultActionStatus = document.getElementById("vault-action-status");
+
+  // Update form based on type selection
+  if (vaultTypeSelect) {
+    vaultTypeSelect.addEventListener("change", () => {
+      const type = vaultTypeSelect.value;
+      const isPassword = type === "password";
+      vaultSetupLabel.textContent = isPassword ? "Enter password" : "Enter PIN";
+      vaultSetupInput.placeholder = isPassword ? "Password" : "Enter PIN";
+      vaultSetupConfirm.placeholder = isPassword ? "Confirm password" : "Confirm PIN";
+      vaultSetupInput.maxLength = isPassword ? 128 : (type === "pin6" ? 6 : 4);
+      vaultSetupConfirm.maxLength = vaultSetupInput.maxLength;
+      vaultSetupInput.inputMode = isPassword ? "text" : "numeric";
+      vaultSetupConfirm.inputMode = vaultSetupInput.inputMode;
+      vaultSetupInput.value = "";
+      vaultSetupConfirm.value = "";
+    });
+  }
+
+  // Load vault status
+  async function loadVaultStatus() {
+    try {
+      const status = await browser.runtime.sendMessage({ action: "vaultGetStatus" });
+      if (status && status.enabled) {
+        vaultNotConfigured.classList.add("hidden");
+        vaultConfigured.classList.remove("hidden");
+        const typeNames = { pin4: "4-digit PIN", pin6: "6-digit PIN", password: "Password" };
+        vaultTypeDisplay.textContent = "Protected with " + (typeNames[status.type] || status.type);
+        vaultStatusBadge.textContent = status.unlocked ? "Unlocked" : "Locked";
+        vaultStatusBadge.className = "vault-status-badge " + (status.unlocked ? "vault-unlocked" : "vault-locked");
+      } else {
+        vaultNotConfigured.classList.remove("hidden");
+        vaultConfigured.classList.add("hidden");
+      }
+    } catch (_) {}
+  }
+
+  loadVaultStatus();
+
+  // Enable encryption
+  if (vaultEnableBtn) {
+    vaultEnableBtn.addEventListener("click", async () => {
+      if (vaultEnableBtn._isChange) return; // Handled by change handler
+      const type = vaultTypeSelect.value;
+      const pass = vaultSetupInput.value;
+      const confirm = vaultSetupConfirm.value;
+
+      if (!pass) { vaultSetupStatus.textContent = "Enter a passcode."; return; }
+      if (type !== "password" && !/^\d+$/.test(pass)) { vaultSetupStatus.textContent = "PIN must be digits only."; return; }
+      if (type === "pin4" && pass.length !== 4) { vaultSetupStatus.textContent = "PIN must be 4 digits."; return; }
+      if (type === "pin6" && pass.length !== 6) { vaultSetupStatus.textContent = "PIN must be 6 digits."; return; }
+      if (type === "password" && pass.length < 4) { vaultSetupStatus.textContent = "Password must be at least 4 characters."; return; }
+      if (pass !== confirm) { vaultSetupStatus.textContent = "Entries don't match."; return; }
+
+      vaultEnableBtn.disabled = true;
+      vaultSetupStatus.textContent = "Encrypting...";
+      try {
+        const result = await browser.runtime.sendMessage({ action: "vaultSetup", passcode: pass, type });
+        if (result.success) {
+          vaultSetupStatus.textContent = "Encryption enabled!";
+          vaultSetupInput.value = "";
+          vaultSetupConfirm.value = "";
+          loadVaultStatus();
+        } else {
+          vaultSetupStatus.textContent = "Failed: " + (result.error || "unknown error");
+        }
+      } catch (e) {
+        vaultSetupStatus.textContent = "Error: " + e.message;
+      }
+      vaultEnableBtn.disabled = false;
+    });
+  }
+
+  // Lock now
+  if (vaultLockBtn) {
+    vaultLockBtn.addEventListener("click", async () => {
+      await browser.runtime.sendMessage({ action: "vaultLock" });
+      vaultActionStatus.textContent = "Locked. Reload any Argus page to see the lock screen.";
+      loadVaultStatus();
+    });
+  }
+
+  // Change passcode
+  if (vaultChangeBtn) {
+    vaultChangeBtn.addEventListener("click", () => {
+      // Switch to setup view for changing
+      vaultConfigured.classList.add("hidden");
+      vaultNotConfigured.classList.remove("hidden");
+      vaultSetupStatus.textContent = "";
+      // Override the enable button to act as "change"
+      vaultEnableBtn.textContent = "Change Passcode";
+      vaultEnableBtn._isChange = true;
+    });
+
+    // Change handler reuses the setup form
+    vaultEnableBtn.addEventListener("click", async function changeHandler() {
+      if (!vaultEnableBtn._isChange) return; // Let the regular handler run
+      const type = vaultTypeSelect.value;
+      const pass = vaultSetupInput.value;
+      const confirm = vaultSetupConfirm.value;
+
+      if (!pass) { vaultSetupStatus.textContent = "Enter a passcode."; return; }
+      if (type !== "password" && !/^\d+$/.test(pass)) { vaultSetupStatus.textContent = "PIN must be digits only."; return; }
+      if (type === "pin4" && pass.length !== 4) { vaultSetupStatus.textContent = "PIN must be 4 digits."; return; }
+      if (type === "pin6" && pass.length !== 6) { vaultSetupStatus.textContent = "PIN must be 6 digits."; return; }
+      if (type === "password" && pass.length < 4) { vaultSetupStatus.textContent = "Password too short."; return; }
+      if (pass !== confirm) { vaultSetupStatus.textContent = "Entries don't match."; return; }
+
+      vaultEnableBtn.disabled = true;
+      vaultSetupStatus.textContent = "Changing...";
+      try {
+        const result = await browser.runtime.sendMessage({ action: "vaultChange", passcode: pass, type });
+        if (result.success) {
+          vaultSetupStatus.textContent = "Passcode changed!";
+          vaultSetupInput.value = "";
+          vaultSetupConfirm.value = "";
+          vaultEnableBtn.textContent = "Enable Encryption";
+          vaultEnableBtn._isChange = false;
+          loadVaultStatus();
+        }
+      } catch (e) {
+        vaultSetupStatus.textContent = "Error: " + e.message;
+      }
+      vaultEnableBtn.disabled = false;
+    });
+  }
+
+  // Remove encryption
+  if (vaultRemoveBtn) {
+    vaultRemoveBtn.addEventListener("click", async () => {
+      if (!confirm("Remove encryption? Your data will be stored in plaintext.")) return;
+      vaultActionStatus.textContent = "Decrypting...";
+      try {
+        const result = await browser.runtime.sendMessage({ action: "vaultRemove" });
+        if (result.success) {
+          vaultActionStatus.textContent = "Encryption removed.";
+          loadVaultStatus();
+        }
+      } catch (e) {
+        vaultActionStatus.textContent = "Error: " + e.message;
+      }
+    });
+  }
+
   // ── Set Argus as Homepage ──
   document.getElementById("set-argus-homepage")?.addEventListener("click", async () => {
     const pages = [
@@ -3988,7 +4146,8 @@ function initMainTabs() {
     "open-history-nav": "history/history.html",
     "open-draft-nav": "reporting/reporting.html",
     "open-reader-nav": "feeds/feeds.html",
-    "open-images-nav": "osint/images.html"
+    "open-images-nav": "osint/images.html",
+    "open-terminal-nav": "ssh/ssh.html"
   };
   for (const [id, path] of Object.entries(appNavMap)) {
     const btn = document.getElementById(id);
@@ -4012,26 +4171,28 @@ function initMainTabs() {
 
   // ── Console app-nav drag-to-reorder + saved order ──
   const consoleAppNav = document.getElementById("console-app-nav");
-  const CONSOLE_DEFAULT_ORDER = ["open-projects-nav", "open-reader-nav", "open-history-nav", "open-kg-nav", "open-workbench-nav", "open-draft-nav", "open-images-nav", "open-chat-nav"];
+  const CONSOLE_DEFAULT_ORDER = ["open-projects-nav", "open-reader-nav", "open-history-nav", "open-kg-nav", "open-workbench-nav", "open-draft-nav", "open-images-nav", "open-chat-nav", "open-terminal-nav"];
   // Mapping from ribbon tab IDs to console nav IDs
   const ribbonToConsole = {
     "app-projects": "open-projects-nav", "app-reader": "open-reader-nav",
     "app-reports": "open-history-nav", "app-kg": "open-kg-nav",
     "app-workbench": "open-workbench-nav", "app-draft": "open-draft-nav",
-    "app-images": "open-images-nav", "app-chat": "open-chat-nav"
+    "app-images": "open-images-nav", "app-chat": "open-chat-nav",
+    "app-terminal": "open-terminal-nav"
   };
   const consoleToRibbon = Object.fromEntries(Object.entries(ribbonToConsole).map(([k, v]) => [v, k]));
 
   (async function initConsoleAppNavOrder() {
     try {
       const stored = await browser.storage.local.get("appTabOrder");
-      if (Array.isArray(stored.appTabOrder) && stored.appTabOrder.length === CONSOLE_DEFAULT_ORDER.length) {
+      if (Array.isArray(stored.appTabOrder) && stored.appTabOrder.length > 0) {
         const consoleOrder = stored.appTabOrder.map(rid => ribbonToConsole[rid]).filter(Boolean);
-        if (consoleOrder.length === CONSOLE_DEFAULT_ORDER.length) {
-          for (const cid of consoleOrder) {
-            const btn = document.getElementById(cid);
-            if (btn) consoleAppNav.appendChild(btn);
-          }
+        // Append any new tabs not in saved order
+        const missing = CONSOLE_DEFAULT_ORDER.filter(id => !consoleOrder.includes(id));
+        const fullOrder = [...consoleOrder, ...missing];
+        for (const cid of fullOrder) {
+          const btn = document.getElementById(cid);
+          if (btn) consoleAppNav.appendChild(btn);
         }
       }
     } catch (e) { /* use default HTML order */ }

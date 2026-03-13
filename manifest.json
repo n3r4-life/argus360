@@ -52,6 +52,7 @@
       "lib/fflate.min.js",
       "lib/cloud-providers.js",
       "lib/cloud-backup.js",
+      "lib/argus-vault.js",
       "background-permissions.js",
       "lib/argus-structured.js",
       "background-presets.js",
@@ -69,7 +70,8 @@
 
   "web_accessible_resources": [
     "lib/pdf.worker.min.js",
-    "data/resources.json"
+    "data/resources.json",
+    "shared/lock-screen.css"
   ],
 
   "options_ui": {

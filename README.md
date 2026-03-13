@@ -1,41 +1,57 @@
-# Argus — Private Intelligence OS in Your Browser
+<p align="center">
+  <img src="icons/icon-128.png" alt="Argus" width="96">
+</p>
 
-- Easy to use!
-- Pin to your Toolbar!
-- or Right-Click, and select Argus...
+<h1 align="center">Argus</h1>
 
-**BYOK, Bring your own API key. No subscriptions. No accounts. 100% local, or BYOC, bring your own cloud**
+<p align="center">
+  AI-powered web intelligence for Firefox — analyze, monitor, investigate, report.
+</p>
 
-Argus requires your own API keys from supported AI providers — cheap, easy, and you stay in full control. Most providers offer free tiers or credits to get started, and a typical page analysis costs less than a penny.
+<p align="center">
+  Your API keys stay on your machine. No accounts, no servers, no telemetry. Ever.
+</p>
 
-| Provider | Get your key | Free tier |
-|----------|-------------|-----------|
-| xAI (Grok) | [console.x.ai](https://console.x.ai) | $25/month free API credits |
-| Google (Gemini) | [aistudio.google.com](https://aistudio.google.com/apikey) | Generous free tier |
-| OpenAI | [platform.openai.com](https://platform.openai.com/api-keys) | Pay-as-you-go (low cost) |
-| Anthropic (Claude) | [console.anthropic.com](https://console.anthropic.com) | $5 free credit on signup |
-| Custom (OpenAI-compatible) | Your endpoint | Bring your own |
-
-> **Why API keys instead of a subscription?** You only pay for what you use — typically fractions of a cent per analysis. Compare that to $20/month ChatGPT Plus or Claude Pro subscriptions. Analyzing 1,000 pages might cost less than a dollar. Run a local model through Ollama and it costs nothing at all. Your keys stay on your machine — Argus never sees, stores, or transmits them anywhere except directly to the provider you choose.
+<p align="center">
+  <img src="https://img.shields.io/badge/Firefox-142%2B-orange" alt="Firefox 142+">
+  <img src="https://img.shields.io/badge/version-360.2.0.0-blue" alt="Version">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+  <img src="https://img.shields.io/badge/dependencies-zero-brightgreen" alt="Zero Dependencies">
+</p>
 
 ---
 
 Argus is named after the all-seeing giant of Greek mythology — a guardian with a hundred eyes, ever-watchful, never forgetting. Whether you just want a quick way past CNN's paywall (via Archive.is auto-redirect), a simple page analyzer, or a full private second brain for serious research — Argus scales to whatever you need.
 
-![Firefox](https://img.shields.io/badge/Firefox-142%2B-orange)
-![Version](https://img.shields.io/badge/version-360.1.0.1-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+---
+
+## What Argus Does
+
+**Analyze** any webpage with AI. **Monitor** pages for changes. **Investigate** with OSINT tools, knowledge graphs, and entity extraction. **Draft** reports with a built-in editor. **Chat** with AI directly. **Back up** everything to your own cloud storage. All inside Firefox, all private, all yours.
+
+---
+
+## AI Providers
+
+| Provider | Models | Streaming | Extended Thinking |
+|----------|--------|-----------|-------------------|
+| **xAI (Grok)** | Grok 4, Grok 3, Grok Mini | ✓ | Swarm multi-agent mode |
+| **OpenAI** | GPT-4.1, o3, o4-mini | ✓ | Reasoning effort control |
+| **Anthropic (Claude)** | Claude 4, Sonnet, Haiku | ✓ | Native extended thinking |
+| **Google (Gemini)** | Gemini 2.5 Pro/Flash | ✓ | — |
+| **Custom** | Any OpenAI-compatible endpoint | ✓ | — |
+
+Custom endpoint support covers Ollama, LM Studio, Hugging Face, vLLM, and any self-hosted setup. Bring your own keys — Argus never sees, stores, or transmits them anywhere except directly to the provider you choose.
 
 ---
 
 ## Core Analysis
 
-- **5 providers + custom:** xAI (Grok), OpenAI (GPT-4.1), Anthropic (Claude), Google (Gemini), and any OpenAI-compatible endpoint (Ollama, LM Studio, Hugging Face, self-hosted)
-- **Fully editable presets:** summary, key points, sentiment, fact-check, entity extraction, critical analysis, contradiction scan, research brief, custom prompts, and more
+- **Fully editable presets** — summary, key points, sentiment, fact-check, entity extraction, critical analysis, contradiction scan, research brief, and 20+ more built-in, all fully customizable
 - **Compare multiple providers side-by-side** in one view
-- **Real-time streaming** with markdown rendering + built-in follow-up chat (switch models mid-conversation, keep context)
+- **Real-time streaming** with markdown rendering + built-in follow-up chat (switch models mid-conversation, keep full context)
 - **One-click re-analyze** with a different preset or provider
-- **PDF content extraction** — automatically extracts and analyzes text from PDF documents using Mozilla's pdf.js
+- **PDF content extraction** — automatically extracts and analyzes text from PDF documents (local and remote) via Mozilla's pdf.js
 - **Selection analysis** — highlight text and analyze just that selection
 - **Multi-page analysis** — analyze multiple open tabs together into a synthesized report
 
@@ -43,98 +59,231 @@ Argus is named after the all-seeing giant of Greek mythology — a guardian with
 
 | Preset | What it does |
 |--------|-------------|
-| **Summary** | Concise overview of the page content |
-| **Sentiment Analysis** | Tone, bias, and emotional undertones |
-| **Fact-Check** | Identifies claims and assesses verifiability |
-| **Key Points** | Structured bullet-point extraction |
-| **ELI5** | Explains content in simple, everyday language |
-| **Critical Analysis** | Examines arguments, strengths, weaknesses, fallacies |
-| **Action Items** | Extracts tasks and next steps as a checklist |
-| **Research Report** | Multi-source synthesis with citations and cross-references |
-| **Late Night Recap** | Sharp, witty comedic editorial recap |
-| **Entity Extraction (OSINT)** | Structured extraction of people, orgs, locations, dates, amounts, contacts as JSON |
-| **Source Credibility** | Credibility scoring (1-10) with bias and verification assessment |
-| **Person/Org Profile** | Structured intelligence profile from page content |
+| Summary | Concise overview of the page content |
+| Sentiment Analysis | Tone, bias, and emotional undertones |
+| Fact-Check | Identifies claims and assesses verifiability |
+| Key Points | Structured bullet-point extraction |
+| ELI5 | Explains content in simple, everyday language |
+| Critical Analysis | Arguments, strengths, weaknesses, fallacies |
+| Action Items | Tasks and next steps as a checklist |
+| Research Report | Multi-source synthesis with citations |
+| Late Night Recap | Sharp, witty comedic editorial recap |
+| Entity Extraction (OSINT) | People, orgs, locations, dates, amounts as JSON |
+| Source Credibility | Credibility scoring (1–10) with bias assessment |
+| Person/Org Profile | Structured intelligence profile from page content |
 
-And many, many more. Up to 30 pre-built, **ALL STILL FULLY CUSTOMIZABLE** prompts, with room more.
-
-### Custom Presets & Provider Binding
-- Create your own analysis presets with custom system and user prompts
-- **Bind presets to specific providers** — e.g., always use Grok for fact-checking, Claude for deep reasoning
-- Use template variables: `{title}`, `{url}`, `{domain}`, `{date}`, `{wordcount}`
+Plus contradiction scan, comparative analysis, legal brief, technical deep-dive, and more — over 30 presets total, all fully customizable, with room to add your own.
 
 ---
 
-## Projects — Your Living Knowledge Base
+## Chat
 
-Collect pages, bookmarks, RSS items, monitor snapshots, and notes into Projects. Argus automatically:
+Standalone AI chat interface — no page context required. Talk to any configured provider directly from Argus.
 
-- **Extracts & merges entities** (people, orgs, locations, dates) across everything
-- Maintains a **persistent cross-project knowledge graph** with relationship inference
-- Runs **source-aware workflows** on arrival:
-  - Wikipedia → infobox profiles + references + controversy flags
-  - News articles → claims with evidence levels, bias indicators, source quality scoring
-  - Classifieds/marketplace → listing extraction, scam risk analysis, price tracking
-  - Research/academic → claims analysis, knowledge coverage, methodology notes
-- **Surfaces trends, anomalies, contradictions, investigative leads**
-- **Auto-generates weekly digests**, timeline highlights, influence views, and draft report sections
-- Lets you build **custom research pipelines** (background runs: extract → profile → verify → append to report)
-
-### Project Dashboard & Auto-Digests
-- At-a-glance dashboard with stats, activity charts, entity breakdown, co-occurrence heatmap, and trend alerts
-- Auto-report sections on demand: Executive Summary, Knowledge Gaps, Contradictions, Timeline Highlights
-- Scheduled digests (daily/weekly) — AI-generated briefings summarizing new items, findings, and suggested next steps
+- Persistent sessions with full conversation history
+- Switch providers mid-conversation
+- Send any AI response to the Draft Pad with one click
+- Accessible from the context menu, keyboard shortcut, or ribbon nav
 
 ---
 
-## Full OSINT & Monitoring Suite
+## Workbench
 
-- **Metadata Extraction** — page meta tags, Open Graph, Twitter Cards, JSON-LD, dates, author, language
-- **Link Mapper** — categorize all links (external, internal, social for 14 platforms, emails, phones, files) → grouped by domain + CSV export
-- **Whois / DNS Lookup** — RDAP whois + Google DNS records with 24-hour caching
-- **Tech Stack Detector** — fingerprints websites by inspecting headers, scripts, meta tags, cookies, and JS globals
-- **Connection Graphs** — force-directed canvas visualization of entity relationships across project items
-- **Entity Heatmaps** — frequency visualization across sources
-- **Timelines** — chronological event extraction with date filters and markdown export
-- **Geolocation Mapping** — map entities with geographic references using Leaflet
-- **Anomaly Scanner** — AI-powered outlier detection across project data
-- **Keyword Watchlists** — track terms across monitors and feeds with instant browser notifications (supports regex)
-- **"Discuss with AI" chat** — available on every result and OSINT page, seeded with page context for follow-up questions
+Project-aware deep-analysis workspace with a chat interface and floating panels.
 
-### Smart Bookmarks
-- Bookmark any page with **AI-generated tags, categories, and summaries**
+- Select a project, browse its item tree, drag items onto the work surface
+- Chat with AI using the selected items as context — find connections, contradictions, and patterns across your research
+- Floating, draggable, resizable panels for the project tree and selected items
+- Save results back to the project, copy, export as markdown, or email
+- Provider override per session
+
+---
+
+## Draft Pad
+
+Lightweight markdown editor for assembling reports from your research.
+
+- **Asset Library** — floating panel with one-click insertion of analyses, entities, bookmarks, and notes from any project
+- **Templates** — OSINT Brief, Legal Summary, Tech Memo, Incident Report, or blank
+- **Drafts management** — save, rename, resume, and organize multiple drafts (project-attached or standalone)
+- **Live preview** toggle with markdown rendering
+- **Export** to .md, .html, or .txt
+- **Share** — paste to GitHub Gist / Pastebin / PrivateBin, email, post to X or LinkedIn
+- **Auto-save** and word count
+- Receives content from Chat, Workbench, Results, History, and Image Grabber via "Send to Draft"
+
+---
+
+## Smart Bookmarks
+
+- AI-generated tags, categories, summaries, and reading time estimates
+- Hierarchical folders with drag-and-drop organization
 - Full-text search, tag cloud, and category filtering
-- Select multiple bookmarks and synthesize into a research report with footnotes and citations
+- Select multiple bookmarks and synthesize into a research report with footnotes
 
-### Page Monitoring
+---
+
+## Projects
+
+Group related pages into structured investigations.
+
+- Add URLs, analyses, notes, and bookmarks to a project
+- Per-item analysis history with multi-analysis stacking and follow-up conversations
+- OSINT toolbar: entity extraction, connection graph, heatmap, geomap, timeline, report generation, anomaly scan, skeleton view
+- Automation integration — run multi-step workflows on all project items or a single item
+- Import/export as `.argusproj` bundles (includes related history entries)
+- Open in Workbench for deep-dive conversational analysis
+- Project-level Knowledge Graph and Dashboard
+
+---
+
+## Page Monitoring
+
 - Monitor any page for content changes with configurable check intervals
 - AI-powered change summaries with side-by-side diff comparison
+- Full HTML snapshots stored in OPFS (Origin Private File System) with optional screenshots
 - Auto-expiry settings (12h to indefinite)
+- Snapshot-and-analyze: capture a page and run analysis in one step
 
-### RSS Feed Reader
-- Subscribe to feeds or paste a page URL — Argus auto-discovers the feed
+---
+
+## RSS Feed Reader
+
+- Subscribe to feeds or paste any page URL — Argus auto-discovers the feed
 - AI-summarized entries using your configured provider
 - Bridge feeds to page monitors for unified tracking
+- Keyword routes: automatically tag, file, or act on entries matching your watchlist
+- Dedicated full-page feed reader view
 
-### Archive & Paywall Bypass
-- **Archive.is / Wayback Machine integration** — auto-redirect paywalled sites, on-demand archive checks from popup or right-click menu
+---
+
+## Archive & Paywall Bypass
+
+- **Archive.is / Wayback Machine integration** — auto-redirect paywalled sites, on-demand archive checks from popup or context menu
 - Customizable trouble list with 24 common news sites pre-loaded
 - Toggle redirect on/off from the popup
+- Save pages to archive directly, check archive availability
+
+---
+
+## OSINT Tools
+
+| Tool | What it does |
+|------|-------------|
+| Metadata Extraction | Headers, meta tags, Open Graph, structured data |
+| Link Mapping | Internal/external link analysis and visualization |
+| Whois / DNS | RDAP lookups (rdap.org) + DNS records (dns.google) |
+| Tech Stack Detection | Frameworks, CDNs, analytics, CMS identification |
+| Regex Scanner | Pattern scanning with AI-powered threat/entity/summary analysis |
+| Image Grabber | Extract, filter, preview, download, and cloud-save all images from a page |
+| Connection Graph | Interactive force-directed visualization (project-level and global) |
+| Entity Heatmap | Mention frequency visualization across project items |
+| Geolocation Map | Plot extracted locations on an interactive map (OpenStreetMap Nominatim) |
+| Timeline | Chronological event visualization from extracted dates |
+| Project Dashboard | At-a-glance widgets with auto-digests and AI-generated reports |
+
+---
+
+## Knowledge Graph
+
+Argus automatically builds a persistent knowledge graph from every analysis, bookmark, and monitored page.
+
+- Automatic entity extraction (people, organizations, locations, dates) across all content
+- Fuzzy matching (Levenshtein distance + token overlap) prevents duplicate entities
+- Co-occurrence edges connect entities that appear together
+- Inference rules discover implicit relationships (e.g., repeated person + org co-occurrence → affiliated-with)
+- Customizable entity dictionaries (~2,500+ built-in entries across noise phrases, known locations, known organizations, not-person words, and valid first names)
+- Pending merge queue for ambiguous matches requiring human review
+- Project-level and global graph views
+- Skeleton view for structural investigation overview
+
+---
+
+## Source-Aware Pipelines
+
+Argus detects the type of page you're analyzing and automatically runs a specialized extraction pipeline in the background.
+
+| Source Type | Detection | What It Extracts |
+|-------------|-----------|------------------|
+| Wikipedia | Wikipedia URLs | Structured profile, infobox data, related entities, categories |
+| News Article | Major news domains + byline heuristics | Claims with evidence levels, bias indicators, source quality score |
+| Classifieds | Marketplace URLs + price/listing heuristics | Listing data, seller info, scam risk analysis |
+| Research | Academic URLs (arxiv, scholar, etc.) | Claims, knowledge coverage, methodology notes |
+
+---
+
+## Automations
+
+Multi-step programmable workflows with URL-pattern triggers or manual execution.
+
+### Step Types
+- **Analyze** — run any preset on the page
+- **Custom Prompt** — chain your own system/user prompt (input from page or previous step)
+- **Extract Entities** — feed results into the Knowledge Graph
+- **Run Pipeline** — run a source-aware pipeline for structured extraction
+- **Add to Project** — route results into a project with custom tags
+- **Save to Cloud** — upload results to connected cloud providers
+- **Paste to Service** — publish to Gist, Pastebin, or PrivateBin
+
+### Triggers
+- **URL patterns** — auto-fire when visiting matching pages (wildcard support)
+- **Manual** — run from the automation list or from a project
+- **Linked project** — appears in that project's automation toolbar
+
+---
+
+## Cloud Backup & Storage
+
+### Backup Providers
+| Provider | Auth | Notes |
+|----------|------|-------|
+| Google Drive | OAuth2 (your own GCP Client ID) | `drive.file` scope only |
+| Dropbox | OAuth2 (your own App Key) | App folder access |
+| WebDAV | URL + credentials | Nextcloud, ownCloud, any WebDAV server |
+| S3-Compatible | Access Key + Secret | AWS S3, MinIO, Backblaze B2 |
+| GitHub Repo | Personal Access Token | Commits to `argus-backups/` in your repo |
+
+### What Gets Backed Up
+Projects, bookmarks, monitors, feeds + entries, analysis history, knowledge graph (nodes + edges), watchlist, automations, and settings. Compressed as `.zip` with manifest. Scheduled automatic backups or one-click manual backup.
+
+### Paste / Share Services
+| Service | Auth | Use |
+|---------|------|-----|
+| GitHub Gist | PAT with `gist` scope | Secret gists for sharing exports |
+| Pastebin | API Developer Key | Public/unlisted/private pastes |
+| PrivateBin | Instance URL | Client-side encrypted, zero-knowledge |
+
+---
+
+## Sharing & Export
+
+- **Email+** — compose with contact picker from results, history, or Draft Pad
+- **Social sharing** — X (Twitter), Reddit, LinkedIn one-click sharing
+- **Send to Draft** — push content from Chat, Workbench, Results, History, or Image Grabber into the Draft Pad
+- **Export formats** — Markdown, HTML, plain text, `.argusproj` bundles
+- **Cloud save** — upload files and pages directly to connected providers via context menu
 
 ---
 
 ## Extended AI Features
 
-- **Extended thinking** — Claude native thinking plus best-effort reasoning sections for OpenAI and Grok
-- **Multi-agent mode** — Grok 4.20 Swarm with configurable agent count and effort level
+- **Extended thinking** — Claude native thinking, plus best-effort reasoning sections for OpenAI and Grok
+- **Multi-agent mode** — Grok Swarm with configurable agent count and effort level
 - **Provider-specific reasoning controls** — configure effort levels separately per provider
 - **Response language** — auto-detects browser locale or set manually
+- **Advanced prompts** — fully customizable system/user prompts for every feature (dashboard reports, digests, change detection, feed summarization, workbench analysis, regex analysis, and more)
+
+---
+
+## Resources Hub
+
+Built-in curated link library with categories including OSINT tools, online IDEs & terminals, PowerShell & Bash consoles, security labs & sandboxes, investigative resources, and more. Shows your current public IP, supports update checking, and is fully customizable.
 
 ---
 
 ## Quick Start
 
-1. **Get an API key** — click any provider link above, create a free account, generate a key (~2 minutes)
+1. **Get an API key** — click any provider link in Settings, create a free account, generate a key (~2 minutes)
 2. **Install Argus** — [Firefox Add-ons](https://addons.mozilla.org) or load from source
 3. **Configure** — click the Argus icon → gear icon → paste your API key → Save
 4. **Analyze** — navigate to any page, click Argus, choose a preset, hit "Analyze This Page"
@@ -150,12 +299,38 @@ Collect pages, bookmarks, RSS items, monitor snapshots, and notes into Projects.
 ### Context Menu (Right-Click)
 
 Right-click anywhere on a page to access Argus directly:
-- **Argus Console** — open the full settings/project dashboard
-- **Redirector** submenu — save to archive, redirect through archive, add site to trouble list
-- **Site Versions** submenu — check Archive.is and Wayback Machine availability
-- **OSINT** submenu — metadata, links, whois, tech stack detection
-- **Bookmark with AI Tags** — instant smart bookmark
+
+- **Chat with AI** — open standalone chat, or chat about selected text
+- **Workbench** — open project-aware workspace
+- **Add to Bookmarks** — file into folders with AI tags
+- **Add to Project** — add to any existing project
+- **Redirector** — save to archive, redirect through archive, add site to trouble list
+- **Site Versions** — check Archive.is and Wayback Machine availability
+- **OSINT Tools** — metadata, links, whois, tech stack, regex scan, dashboard, global graph
+- **Save to Cloud** — upload linked files or current page to connected providers
+- **Run Automations** — execute any configured automation on the current page
 - Run any built-in or custom analysis preset directly from the menu
+
+---
+
+## Navigation
+
+Argus includes a shared **ribbon navigation bar** across all full-page views with quick access to:
+
+| App | What it is |
+|-----|-----------|
+| Console | Full settings, projects, bookmarks, monitors, feeds, OSINT, automations |
+| Knowledge Graph | Global interactive entity graph |
+| Chat | Standalone AI chat |
+| Workbench | Project-aware analysis workspace |
+| Reports | Analysis history viewer |
+| Draft Pad | Markdown report editor |
+| Reader | RSS feed reader |
+| Images | Image grabber tool |
+
+Each app opens as a single-instance tab — clicking the nav icon focuses an existing tab rather than opening duplicates. Badge counts show live data for bookmarks, projects, monitors, feeds, KG entities, and automations.
+
+You can also set all Argus pages as your Firefox homepage tabs.
 
 ---
 
@@ -186,10 +361,11 @@ npx web-ext run       # Development with auto-reload
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Max Response Tokens | 2048 | Maximum tokens in AI response (256-16,384) |
-| Max Input Characters | 100,000 | How much page text to send (1,000-500,000) |
+| Max Response Tokens | 2048 | Maximum tokens in AI response (256–16,384) |
+| Max Input Characters | 100,000 | How much page text to send (1,000–500,000) |
 | Temperature | 0.3 | Creativity level (0 = focused, 1 = creative) |
 | Response Language | Auto-detect | Language for AI responses |
+| Max History Size | 200 | Number of analysis entries to retain |
 
 ### Prompt Variables
 
@@ -207,107 +383,70 @@ npx web-ext run       # Development with auto-reload
 
 ```
 Argus/
-├── manifest.json              # Extension manifest (Manifest V2)
-├── background.js              # Core logic: API calls, streaming, message handling
-├── background-osint.js        # OSINT backend handlers
-├── background-presets.js      # Analysis presets and provider definitions
-├── background-providers.js    # AI provider API functions (streaming + non-streaming)
-├── background-permissions.js  # Optional permission management
-├── background-kg.js           # Knowledge Graph engine (entity extraction, fuzzy matching, inference)
-├── background-pipelines.js    # Source-aware pipelines (Wikipedia, News, Classifieds, Research)
-├── background-agents.js       # Agentic automation (digests, reports, trend detection, dashboard)
-├── popup/                     # Browser action popup
-├── results/                   # Analysis results display
-├── options/                   # Full settings / console page
-├── bookmarks/                 # Smart bookmarks
-├── history/                   # Analysis history viewer
-├── monitors/                  # Page monitor change history
-├── feeds/                     # RSS feed reader
-├── osint/                     # OSINT tool pages
-│   ├── graph.*                # Connection graph (project + global KG)
-│   ├── dashboard.*            # Project dashboard with widgets
-│   ├── timeline.*             # Event timeline
-│   ├── link-map.*             # Link mapping
-│   ├── heatmap.*              # Entity heatmap
-│   ├── geomap.*               # Geolocation map
-│   └── techstack.*            # Tech stack detection
-├── shared/                    # Shared UI components (nav ribbon)
+├── manifest.json                # Extension manifest (Manifest V2)
+├── background.js                # Core logic: router, context menus, analysis, features
+├── background-osint.js          # OSINT backend handlers
+├── background-presets.js        # Analysis presets and provider definitions
+├── background-providers.js      # AI provider API functions (streaming + non-streaming)
+├── background-permissions.js    # Optional permission management
+├── background-kg.js             # Knowledge Graph engine (extraction, fuzzy matching, inference)
+├── background-pipelines.js      # Source-aware pipelines (Wikipedia, News, Classifieds, Research)
+├── background-agents.js         # Agentic automation (digests, reports, trend detection)
+├── background-automations.js    # Multi-step automation engine with triggers
+├── popup/                       # Browser action popup
+├── results/                     # Analysis results display + sharing
+├── options/                     # Full settings / console (all tabs)
+├── chat/                        # Standalone AI chat interface
+├── workbench/                   # Project-aware conversational workspace
+├── reporting/                   # Draft Pad — markdown editor + asset library
+├── bookmarks/                   # Smart bookmarks manager
+├── history/                     # Analysis history viewer + feed
+├── monitors/                    # Page monitor change history
+├── feeds/                       # RSS feed reader
+├── shared/                      # Ribbon navigation bar + shared UI
+├── osint/                       # OSINT tool pages
+│   ├── graph.*                  # Connection graph (project + global KG)
+│   ├── dashboard.*              # Project dashboard with widgets
+│   ├── timeline.*               # Event timeline
+│   ├── link-map.*               # Link mapping
+│   ├── heatmap.*                # Entity heatmap
+│   ├── geomap.*                 # Geolocation map
+│   ├── techstack.*              # Tech stack detection
+│   └── images.*                 # Image grabber
+├── lib/                         # Shared libraries
+│   ├── storage-db.js            # IndexedDB abstraction (ArgusDB)
+│   ├── opfs-storage.js          # OPFS binary blob storage for snapshots
+│   ├── cloud-providers.js       # Google Drive, Dropbox, WebDAV, S3, GitHub, Gist, Pastebin, PrivateBin
+│   ├── cloud-backup.js          # Backup/restore with zip compression
+│   ├── argus-structured.js      # Structured output parsing
+│   ├── email-share.js           # Email+ compose with contact picker
+│   ├── export-utils.js          # Export helpers
+│   ├── intelligence-viewer.js   # Analysis result renderer
+│   ├── pdf.min.js               # Mozilla pdf.js for PDF extraction
+│   ├── fflate.min.js            # Compression library for backups
+│   ├── marked.min.js            # Markdown rendering
+│   └── purify.min.js            # DOMPurify for safe HTML
 ├── data/
-│   └── kg-dictionaries.js     # KG entity classification dictionaries (~2,500 entries)
-├── lib/
-│   ├── storage-db.js          # IndexedDB storage (ArgusDB)
-│   ├── opfs-storage.js        # OPFS binary storage (monitor snapshots)
-│   ├── cloud-providers.js     # Cloud storage backends (Google Drive, Dropbox, WebDAV, S3)
-│   ├── cloud-backup.js        # Backup engine (ZIP create/restore, scheduled uploads)
-│   ├── fflate.min.js          # ZIP compression library
-│   ├── intelligence-viewer.js # Unified rendering component
-│   ├── argus-chat.js          # Reusable "Discuss with AI" chat component
-│   ├── pdf.min.js             # Mozilla pdf.js (PDF text extraction)
-│   ├── pdf.worker.min.js      # pdf.js web worker
-│   ├── marked.min.js          # Markdown rendering
-│   ├── purify.min.js          # HTML sanitization (DOMPurify)
-│   └── export-utils.js        # Shared export functions
-└── icons/                     # Extension icons (16-128px)
+│   ├── resources.json           # Curated link library (OSINT, IDEs, security labs)
+│   └── kg-dictionaries.js       # Entity classification dictionaries
+└── icons/                       # Extension icons (16–128px)
 ```
-
----
-
-## Cloud Backup & Data Sovereignty
-
-Back up your entire Argus workspace to your own cloud storage — **you provide your own credentials**, and no data ever flows through Argus infrastructure.
-
-| Provider | Auth method | Examples |
-|----------|------------|---------|
-| **Google Drive** | OAuth2 (your own GCP Client ID) | Google Drive |
-| **Dropbox** | OAuth2 PKCE (your own App Key) | Dropbox |
-| **WebDAV** | URL + username + password | Nextcloud, ownCloud, Synology, any NAS |
-| **S3-compatible** | Endpoint + access key + secret | Backblaze B2, Wasabi, Cloudflare R2, MinIO, AWS S3 |
-
-- **Scheduled auto-backups** (every 6h, 12h, 24h, 48h, or weekly)
-- **One-click Backup Now** to all connected providers simultaneously
-- **Download local backup** as a `.zip` file — no cloud required
-- **Restore from any provider** or a local `.zip` file
-- **Wipe Everything** button for complete data cleanup before uninstalling
-
-### What's included in a backup?
-
-Projects, bookmarks, monitors, feeds + entries, analysis history, knowledge graph (nodes + edges), watchlist, automations, and settings (API keys excluded by default).
-
-### Example: Setting up Google Drive backup
-
-1. Create a project in [Google Cloud Console](https://console.cloud.google.com/)
-2. Enable the Google Drive API
-3. Set up OAuth consent screen → add yourself as a test user
-4. Create OAuth credentials → Web application → add the redirect URI shown in Argus
-5. Paste the Client ID in Argus Settings → Cloud Backup → Connect
-6. Click **Backup Now** — your data appears in a `Google Drive/Argus Backups/` folder
-
----
-
-## Entity Dictionaries
-
-The Knowledge Graph uses comprehensive built-in dictionaries (~2,500+ entries across 8 categories) to classify entities and filter noise. You can customize these through the **OSINT tab → Entity Dictionaries** editor:
-
-- **Noise phrases** — terms to always exclude (e.g., "Read More", "Subscribe Now")
-- **Known locations** — multi-word places (e.g., "New York City", "Silicon Valley")
-- **Known organizations** — companies and institutions (e.g., "Federal Reserve", "Reuters")
-- **Not-person words** — words that never start a real person name (e.g., "Download", "Premium")
-- **Valid first names** — real first names across cultures for person detection
-
-Add custom entries to any dictionary — they're stored locally and merged with the built-ins.
 
 ---
 
 ## Privacy
 
-- **API keys are stored locally** in your browser's extension storage — never transmitted anywhere except to the provider you choose
-- **No telemetry or analytics** — Argus does not phone home
-- **No data collection** — declared in `manifest.json` under `data_collection_permissions`
-- Page content is sent only to the AI provider you select for analysis
+- **API keys are stored locally** in your browser's extension storage — never transmitted anywhere except directly to the AI provider you select
+- **No telemetry or analytics** — Argus does not phone home, track usage, or report anything to anyone
+- **No data collection** — explicitly declared in the extension manifest under `data_collection_permissions`
+- **No accounts required** — there is nothing to sign up for because there is no service behind this extension
 - **Cloud backup connects only to providers you configure** using your own credentials — Argus has no servers and never sees your backup data
-- OSINT tools make requests to **rdap.org** (whois), **dns.google** (DNS), and **archive.org** (Wayback) — these contain only the domain or URL being looked up, no personal data
-- **Wipe Everything** in Settings permanently deletes all local data (IndexedDB, OPFS snapshots, browser storage)
-- Aggressive compression & pruning defaults keep storage manageable
+- **Fully auditable** — every line of code is vanilla JavaScript, no obfuscated bundles
+- **Wipe Everything** in Settings permanently deletes all local data (IndexedDB, OPFS snapshots, browser storage) — use before uninstalling, as Firefox does not auto-clear extension data
+
+The only network requests Argus makes are to: AI provider APIs you configure, RSS feed URLs you subscribe to, archive redirect URLs, RDAP (rdap.org) for whois lookups, Google DNS (dns.google) for DNS records, the Wayback Machine API (archive.org), OpenStreetMap Nominatim (geocoding), and cloud/paste providers you configure. That's it.
+
+See [PRIVACY.md](PRIVACY.md) for the full privacy policy.
 
 ---
 

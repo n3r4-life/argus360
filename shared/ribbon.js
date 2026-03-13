@@ -151,10 +151,11 @@
     "app-workbench":{ label: "Workbench",icon: [["rect", { x: "2", y: "3", width: "20", height: "14", rx: "2" }], ["line", { x1: "8", y1: "21", x2: "16", y2: "21" }], ["line", { x1: "12", y1: "17", x2: "12", y2: "21" }]], path: "workbench/workbench.html" },
     "app-draft":    { label: "Draft",    icon: [["path", { d: "M12 20h9" }], ["path", { d: "M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" }]], path: "reporting/reporting.html" },
     "app-images":   { label: "Images",   icon: [["rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" }], ["circle", { cx: "8.5", cy: "8.5", r: "1.5" }], ["polyline", { points: "21 15 16 10 5 21" }]], path: "osint/images.html" },
-    "app-chat":     { label: "Chat",     icon: [["path", { d: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" }]], path: "chat/chat.html" }
+    "app-chat":     { label: "Chat",     icon: [["path", { d: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" }]], path: "chat/chat.html" },
+    "app-terminal": { label: "Terminal", icon: [["polyline", { points: "4 17 10 11 4 5" }], ["line", { x1: "12", y1: "19", x2: "20", y2: "19" }]], path: "ssh/ssh.html" }
   };
 
-  const DEFAULT_TAB_ORDER = ["app-projects", "app-reader", "app-reports", "app-kg", "app-workbench", "app-draft", "app-images", "app-chat"];
+  const DEFAULT_TAB_ORDER = ["app-projects", "app-reader", "app-reports", "app-kg", "app-workbench", "app-draft", "app-images", "app-chat", "app-terminal"];
 
   // Active-state detection map (pathname fragment → tab id)
   const ACTIVE_MAP = {
@@ -165,7 +166,8 @@
     "/workbench/": "app-workbench",
     "/reporting/": "app-draft",
     "/osint/images": "app-images",
-    "/chat/": "app-chat"
+    "/chat/": "app-chat",
+    "/ssh/": "app-terminal"
   };
 
   function renderAppTabs(order) {
@@ -177,15 +179,16 @@
     }
   }
 
-  // Load saved order or use default
+  // Load saved order or use default, merging any new tabs
   async function initAppTabs() {
     let order = DEFAULT_TAB_ORDER;
     try {
       const stored = await browser.storage.local.get("appTabOrder");
-      if (Array.isArray(stored.appTabOrder) && stored.appTabOrder.length === DEFAULT_TAB_ORDER.length) {
-        // Validate all IDs are present
-        const valid = stored.appTabOrder.every(id => APP_TAB_DEFS[id]);
-        if (valid) order = stored.appTabOrder;
+      if (Array.isArray(stored.appTabOrder) && stored.appTabOrder.length > 0) {
+        // Keep only valid IDs, then append any new tabs not in saved order
+        const valid = stored.appTabOrder.filter(id => APP_TAB_DEFS[id]);
+        const missing = DEFAULT_TAB_ORDER.filter(id => !valid.includes(id));
+        if (valid.length > 0) order = [...valid, ...missing];
       }
     } catch (e) { /* use default */ }
     renderAppTabs(order);
@@ -350,4 +353,159 @@
   browser.runtime.onMessage.addListener((msg) => {
     if (msg.type === "argusDataChanged") updateRibbonBadges();
   });
+
+  // ── Vault Lock Screen ──
+  (async function checkVaultLock() {
+    try {
+      const status = await browser.runtime.sendMessage({ action: "vaultGetStatus" });
+      if (!status || !status.enabled || status.unlocked) return;
+
+      // Inject lock screen CSS
+      const css = document.createElement("link");
+      css.rel = "stylesheet";
+      css.href = browser.runtime.getURL("shared/lock-screen.css");
+      document.head.appendChild(css);
+
+      // Build lock overlay
+      const overlay = document.createElement("div");
+      overlay.className = "argus-lock-overlay";
+      overlay.id = "argus-lock-overlay";
+
+      const box = document.createElement("div");
+      box.className = "argus-lock-box";
+
+      const logo = document.createElement("img");
+      logo.className = "argus-lock-logo";
+      logo.src = browser.runtime.getURL("icons/icon-128.png");
+      logo.alt = "Argus";
+      box.appendChild(logo);
+
+      const title = document.createElement("h1");
+      title.className = "argus-lock-title";
+      title.textContent = "Argus is locked";
+      box.appendChild(title);
+
+      const subtitle = document.createElement("p");
+      subtitle.className = "argus-lock-subtitle";
+      subtitle.textContent = status.type === "password" ? "Enter your password to unlock" : "Enter your PIN to unlock";
+      box.appendChild(subtitle);
+
+      const errorEl = document.createElement("div");
+      errorEl.className = "argus-lock-error";
+
+      let getValue, focusFirst;
+
+      if (status.type === "password") {
+        // Password input
+        const pw = document.createElement("input");
+        pw.type = "password";
+        pw.className = "argus-lock-password";
+        pw.placeholder = "Password";
+        pw.autocomplete = "off";
+        box.appendChild(pw);
+
+        getValue = () => pw.value;
+        focusFirst = () => pw.focus();
+
+        pw.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") doUnlock();
+        });
+      } else {
+        // PIN digits
+        const digits = status.type === "pin6" ? 6 : 4;
+        const row = document.createElement("div");
+        row.className = "argus-lock-pin-row";
+        const inputs = [];
+        for (let i = 0; i < digits; i++) {
+          const inp = document.createElement("input");
+          inp.type = "password";
+          inp.inputMode = "numeric";
+          inp.maxLength = 1;
+          inp.className = "argus-lock-pin-digit";
+          inp.autocomplete = "off";
+          inp.addEventListener("input", () => {
+            if (inp.value.length === 1) {
+              inp.classList.add("filled");
+              if (i < digits - 1) inputs[i + 1].focus();
+              else doUnlock(); // Auto-submit on last digit
+            }
+          });
+          inp.addEventListener("keydown", (e) => {
+            if (e.key === "Backspace" && !inp.value && i > 0) {
+              inputs[i - 1].focus();
+              inputs[i - 1].value = "";
+              inputs[i - 1].classList.remove("filled");
+            }
+          });
+          // Allow paste of full PIN
+          inp.addEventListener("paste", (e) => {
+            e.preventDefault();
+            const pasted = (e.clipboardData.getData("text") || "").replace(/\D/g, "").slice(0, digits);
+            for (let j = 0; j < pasted.length && j < digits; j++) {
+              inputs[j].value = pasted[j];
+              inputs[j].classList.add("filled");
+            }
+            if (pasted.length === digits) doUnlock();
+            else if (pasted.length > 0) inputs[Math.min(pasted.length, digits - 1)].focus();
+          });
+          inputs.push(inp);
+          row.appendChild(inp);
+        }
+        box.appendChild(row);
+
+        getValue = () => inputs.map(i => i.value).join("");
+        focusFirst = () => inputs[0].focus();
+      }
+
+      const btn = document.createElement("button");
+      btn.className = "argus-lock-btn";
+      btn.textContent = "Unlock";
+      btn.addEventListener("click", doUnlock);
+      box.appendChild(btn);
+
+      box.appendChild(errorEl);
+
+      const hint = document.createElement("p");
+      hint.className = "argus-lock-hint";
+      hint.textContent = "Encryption protects your API keys, credentials, and session data.";
+      box.appendChild(hint);
+
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+
+      // Focus first input
+      setTimeout(focusFirst, 100);
+
+      async function doUnlock() {
+        const passcode = getValue();
+        if (!passcode) return;
+
+        btn.disabled = true;
+        errorEl.textContent = "";
+
+        try {
+          const result = await browser.runtime.sendMessage({ action: "vaultUnlock", passcode });
+          if (result.success) {
+            overlay.classList.add("hidden");
+            setTimeout(() => overlay.remove(), 300);
+          } else {
+            errorEl.textContent = result.error || "Incorrect passcode";
+            // Shake animation
+            const inputs = overlay.querySelectorAll(".argus-lock-pin-digit, .argus-lock-password");
+            inputs.forEach(i => { i.classList.add("error"); setTimeout(() => i.classList.remove("error"), 500); });
+            // Clear PIN inputs
+            if (status.type !== "password") {
+              inputs.forEach(i => { i.value = ""; i.classList.remove("filled"); });
+              focusFirst();
+            }
+          }
+        } catch (e) {
+          errorEl.textContent = "Unlock failed: " + e.message;
+        }
+        btn.disabled = false;
+      }
+    } catch (_) {
+      // Vault not available — proceed normally
+    }
+  })();
 })();

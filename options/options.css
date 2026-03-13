@@ -2400,6 +2400,33 @@ textarea {
 .btn-danger:hover {
   background: #ff7070;
 }
+.btn-danger-outline {
+  background: transparent;
+  border: 1px solid var(--error);
+  color: var(--error);
+}
+.btn-danger-outline:hover {
+  background: var(--error);
+  color: #fff;
+}
+
+/* Vault status badge */
+.vault-status-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 12px;
+  border-radius: 12px;
+  margin-right: 8px;
+}
+.vault-status-badge.vault-unlocked {
+  background: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+}
+.vault-status-badge.vault-locked {
+  background: rgba(233, 69, 96, 0.15);
+  color: #e94560;
+}
 
 .proj-item-auto-btn {
   background: none;
