@@ -72,6 +72,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await checkArchiveAvailability();
   await checkWaybackAvailability();
   await checkFeedAvailability();
+  await checkMonitorBookmarkStatus();
 });
 
 async function loadSettings() {
@@ -437,6 +438,33 @@ async function checkFeedAvailability() {
 
     feedEl.classList.remove("hidden");
   } catch (e) { console.error("[Feed-Popup] checkFeedAvailability error:", e); }
+}
+
+async function checkMonitorBookmarkStatus() {
+  try {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+    if (!tab || !tab.url || tab.url.startsWith("about:") || tab.url.startsWith("moz-extension:")) return;
+    const url = tab.url;
+
+    // Check monitors
+    const monResp = await browser.runtime.sendMessage({ action: "getMonitors" });
+    if (monResp?.success && monResp.monitors.some(m => m.url === url)) {
+      elements.monitorBtn.classList.add("btn-active-indicator");
+      elements.monitorBtn.title = "Already monitoring this page";
+      const svg = elements.monitorBtn.querySelector("svg");
+      if (svg) svg.setAttribute("fill", "currentColor");
+    }
+
+    // Check bookmarks
+    const bmResp = await browser.runtime.sendMessage({ action: "getBookmarks" });
+    if (bmResp?.success && bmResp.bookmarks.some(b => b.url === url)) {
+      elements.bookmarkBtn.classList.add("btn-active-indicator");
+      elements.bookmarkBtn.title = "Already bookmarked";
+      const svg = elements.bookmarkBtn.querySelector("svg");
+      if (svg) svg.setAttribute("fill", "currentColor");
+    }
+  } catch (e) { /* ignore */ }
 }
 
 // ──────────────────────────────────────────────

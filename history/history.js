@@ -21,6 +21,7 @@ let searchTimeout = null;
 let projectMap = new Map(); // historyId → [{ name, color }]
 let allProjects = []; // full project objects for feed tab
 let feedActiveProject = null; // null = "All", or projectId
+let feedActiveType = null; // null = "All", or kind string
 let feedLoaded = false;
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -101,11 +102,12 @@ async function loadFeed(query) {
   // Project items (analyses, links, notes, bookmarks)
   for (const proj of allProjects) {
     for (const item of (proj.items || [])) {
+      const isEntPreset = /^entit/i.test(item.analysisPreset || "");
       entries.push({
-        kind: item.analysisContent ? "analysis" : (item.type || "url"),
+        kind: item.analysisContent ? (isEntPreset ? "entity" : "analysis") : (item.type || "url"),
         title: item.title || item.url || "Untitled",
         url: item.url || "",
-        summary: item.analysisContent ? (item.analysisContent.substring(0, 280).replace(/[#*_`]/g, "")) : (item.summary || item.notes || ""),
+        summary: item.analysisContent ? (isEntPreset ? "" : item.analysisContent.substring(0, 280).replace(/[#*_`]/g, "")) : (item.summary || item.notes || ""),
         preset: item.analysisPreset || "",
         date: item.addedAt || proj.createdAt || 0,
         projectId: proj.id,
@@ -229,6 +231,39 @@ async function loadFeed(query) {
     visible = entries.filter(e => e.projectId === feedActiveProject);
   }
 
+  // Render type filter pills
+  const typeBar = document.getElementById("feed-type-bar");
+  typeBar.replaceChildren();
+  const typeMap = { analysis: "Analysis", entity: "KG Entity", url: "Link", feed: "Link", bookmark: "Bookmark", monitor: "Monitor", note: "Note" };
+  const typeCounts = {};
+  for (const e of visible) {
+    const tk = (e.kind === "feed" || e.kind === "url") ? "link" : e.kind;
+    typeCounts[tk] = (typeCounts[tk] || 0) + 1;
+  }
+  const typeAllPill = document.createElement("button");
+  typeAllPill.className = "feed-type-pill" + (feedActiveType === null ? " active" : "");
+  typeAllPill.textContent = `All (${visible.length})`;
+  typeAllPill.addEventListener("click", () => { feedActiveType = null; loadFeed(query); });
+  typeBar.appendChild(typeAllPill);
+  const typeOrder = ["analysis", "entity", "link", "bookmark", "monitor", "note"];
+  for (const tk of typeOrder) {
+    if (!typeCounts[tk]) continue;
+    const pill = document.createElement("button");
+    pill.className = "feed-type-pill" + (feedActiveType === tk ? " active" : "");
+    pill.textContent = `${typeMap[tk] || tk} (${typeCounts[tk]})`;
+    pill.addEventListener("click", () => { feedActiveType = tk; loadFeed(query); });
+    typeBar.appendChild(pill);
+  }
+
+  // Apply type filter
+  if (feedActiveType) {
+    if (feedActiveType === "link") {
+      visible = visible.filter(e => e.kind === "url" || e.kind === "feed");
+    } else {
+      visible = visible.filter(e => e.kind === feedActiveType);
+    }
+  }
+
   // Render entries
   feedItems.replaceChildren();
   if (!visible.length) {
@@ -284,19 +319,90 @@ function renderFeedGroup(container, name, color, items) {
   }
 }
 
+// Parse entity JSON from analysis content (same logic as projSummarizeForCard in options.js)
+function parseEntityJson(text) {
+  if (!text) return null;
+  const trimmed = text.trim();
+  let json = null;
+  try { json = JSON.parse(trimmed); } catch {}
+  if (!json) {
+    const fenced = trimmed.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/, "");
+    try { json = JSON.parse(fenced); } catch {}
+  }
+  if (!json) {
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try { json = JSON.parse(trimmed.slice(start, end + 1)); } catch {}
+    }
+  }
+  if (json && (json.people || json.organizations || json.locations || json.dates || json.claims)) {
+    return json;
+  }
+  return null;
+}
+
+// Check if an entry is an entity extraction result
+function isEntityEntry(entry) {
+  if (entry.kind === "entity") return true;
+  if (!entry._item) return false;
+  const preset = (entry.preset || "").toLowerCase();
+  if (preset === "entities" || preset === "entity extraction (osint)" || preset === "entity extraction") return true;
+  // Check if the content looks like entity JSON
+  if (entry._item.analysisContent && parseEntityJson(entry._item.analysisContent)) return true;
+  return false;
+}
+
+// Build entity badge elements from parsed JSON
+function buildEntityBadges(json, maxEntities) {
+  const badges = [];
+  const typeColors = {
+    person: "#e94560",
+    organization: "#64b5f6",
+    location: "#4caf50",
+    date: "#ffb74d",
+    claim: "#ce93d8",
+    contact: "#80cbc4",
+  };
+
+  function addBadges(items, type, nameKey) {
+    if (!items || !items.length) return;
+    for (const item of items) {
+      const name = item[nameKey || "name"] || item.event || item.date;
+      if (!name) continue;
+      badges.push({ name, type, color: typeColors[type] || "#a0a0b0" });
+    }
+  }
+
+  addBadges(json.people, "person");
+  addBadges(json.organizations, "organization");
+  addBadges(json.locations, "location");
+  addBadges(json.dates, "date");
+  addBadges(json.claims, "claim");
+  addBadges(json.contact, "contact");
+
+  return maxEntities ? badges.slice(0, maxEntities) : badges;
+}
+
 function buildFeedCard(entry) {
   const div = document.createElement("div");
-  const isLink = entry.kind === "url" || entry.kind === "bookmark" || entry.kind === "feed";
+  const isEntity = isEntityEntry(entry);
+  const isLink = !isEntity && (entry.kind === "url" || entry.kind === "bookmark" || entry.kind === "feed");
   const isNote = entry.kind === "note";
-  div.className = "history-item" + (isLink ? " feed-link" : "") + (isNote ? " feed-note" : "");
+  div.className = "history-item" + (isLink ? " feed-link" : "") + (isNote ? " feed-note" : "") + (isEntity ? " feed-entity" : "");
 
   div.addEventListener("click", () => {
+    if (isEntity && entry._proj) {
+      // Open KG graph filtered to this project
+      const graphUrl = browser.runtime.getURL("osint/graph.html") + "?project=" + encodeURIComponent(entry._proj.id);
+      window.open(graphUrl, "_blank");
+      return;
+    }
     if (entry._historyItem) {
       openDetail(entry._historyItem);
     } else if (entry._change) {
       openMonitorChangeDetail(entry._change);
     } else if (entry._item && entry._item.analysisContent) {
-      // Open analysis content inline
       currentItem = {
         id: entry._item.refId || entry._item.id,
         content: entry._item.analysisContent,
@@ -331,7 +437,10 @@ function buildFeedCard(entry) {
   // Type badge
   const badge = document.createElement("span");
   badge.className = "history-badge";
-  if (entry.kind === "analysis") {
+  if (isEntity) {
+    badge.className += " entity";
+    badge.textContent = "KG Entities";
+  } else if (entry.kind === "analysis") {
     badge.textContent = entry.preset || "Analysis";
   } else if (entry.kind === "monitor") {
     badge.className += " monitor";
@@ -363,10 +472,36 @@ function buildFeedCard(entry) {
   info.appendChild(titleDiv);
   info.appendChild(metaDiv);
 
-  // Summary / preview (abbreviated for links)
-  if (entry.summary) {
+  // Entity extraction: render entity badges instead of raw JSON
+  if (isEntity && entry._item && entry._item.analysisContent) {
+    const entityJson = parseEntityJson(entry._item.analysisContent);
+    if (entityJson) {
+      const entityDiv = document.createElement("div");
+      entityDiv.className = "feed-entity-tags";
+      const allBadges = buildEntityBadges(entityJson, 12);
+      const totalCount = buildEntityBadges(entityJson).length;
+      for (const b of allBadges) {
+        const tag = document.createElement("span");
+        tag.className = "feed-entity-tag";
+        const dot = document.createElement("span");
+        dot.className = "feed-entity-dot";
+        dot.style.background = b.color;
+        tag.appendChild(dot);
+        tag.appendChild(document.createTextNode(b.name));
+        entityDiv.appendChild(tag);
+      }
+      if (totalCount > 12) {
+        const more = document.createElement("span");
+        more.className = "feed-entity-more";
+        more.textContent = `+${totalCount - 12} more`;
+        entityDiv.appendChild(more);
+      }
+      info.appendChild(entityDiv);
+    }
+  } else if (entry.summary) {
+    // Summary / preview (abbreviated for links)
     const previewDiv = document.createElement("div");
-    previewDiv.className = isLink ? "history-item-preview" : "history-item-preview";
+    previewDiv.className = "history-item-preview";
     previewDiv.textContent = isLink ? entry.summary.substring(0, 100) : entry.summary.substring(0, 280);
     info.appendChild(previewDiv);
   } else if (entry.url && isLink) {
@@ -766,7 +901,20 @@ function renderMonitorChanges(changes) {
 
     const titleDiv = document.createElement("div");
     titleDiv.className = "history-item-title";
-    titleDiv.textContent = change.monitorTitle || "Unknown monitor";
+    if (change.monitorUrl) {
+      const titleLink = document.createElement("a");
+      titleLink.href = change.monitorUrl;
+      titleLink.textContent = change.monitorTitle || "Unknown monitor";
+      titleLink.className = "monitor-title-link";
+      titleLink.addEventListener("click", (e) => {
+        e.stopPropagation();
+        window.open(change.monitorUrl, "_blank");
+        e.preventDefault();
+      });
+      titleDiv.appendChild(titleLink);
+    } else {
+      titleDiv.textContent = change.monitorTitle || "Unknown monitor";
+    }
 
     const metaDiv = document.createElement("div");
     metaDiv.className = "history-item-meta";

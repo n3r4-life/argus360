@@ -205,8 +205,10 @@ const DEFAULT_MODELS = {
 // ──────────────────────────────────────────────
 let currentPresetKey = "summary";
 let currentProviderKey = "xai";
+let currentDataProviderKey = "gdrive";
 let customPresets = {};
 let providers = {};
+let dataProviders = {};
 let autoAnalyzeRules = [];
 let feedKeywordRoutes = [];
 let saveTimeout = null;
@@ -531,6 +533,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   buildPromptTabs();
   selectPromptTab("summary");
   selectProviderTab("xai");
+  selectDataProviderTab("gdrive");
   populateRulePresets();
   renderAutoRules();
   renderMonitors();
@@ -972,10 +975,15 @@ async function loadAllSettings() {
     maxHistorySize: 200,
     showBadge: true,
     responseLanguage: "auto",
-    apiKey: ""
+    apiKey: "",
+    dataProviders: DEFAULT_DATA_PROVIDERS,
+    backupEnabled: false,
+    backupInterval: 1440,
+    backupAllProviders: true
   });
 
   providers = settings.providers;
+  dataProviders = settings.dataProviders || { ...DEFAULT_DATA_PROVIDERS };
 
   if (settings.apiKey && !providers.xai.apiKey) {
     providers.xai.apiKey = settings.apiKey;
@@ -1003,6 +1011,12 @@ async function loadAllSettings() {
   el.bookmarkTagPrompt.value = settings.bookmarkTagPrompt || DEFAULT_BOOKMARK_TAG_PROMPT;
 
   updateProviderTabIndicators();
+  loadDataProviderFields();
+
+  // Backup schedule
+  document.getElementById("backup-enabled").checked = settings.backupEnabled || false;
+  document.getElementById("backup-interval").value = settings.backupInterval || 1440;
+  document.getElementById("backup-all-providers").checked = settings.backupAllProviders !== false;
 }
 
 // ──────────────────────────────────────────────
@@ -1063,6 +1077,237 @@ function updateProviderTabIndicators() {
       btn.classList.remove("configured");
     }
   });
+}
+
+// ──────────────────────────────────────────────
+// Data Provider tabs
+// ──────────────────────────────────────────────
+const DATA_PROVIDER_KEYS = ["gdrive", "dropbox", "webdav", "s3", "github"];
+
+const DEFAULT_DATA_PROVIDERS = {
+  gdrive:  { clientId: "", accessToken: "", refreshToken: "", expiresAt: 0, userEmail: "", connected: false },
+  dropbox: { appKey: "", accessToken: "", refreshToken: "", expiresAt: 0, userName: "", connected: false },
+  webdav:  { serverUrl: "", username: "", password: "", connected: false },
+  s3:      { endpoint: "", bucket: "", accessKey: "", secretKey: "", region: "", connected: false },
+  github:  { pat: "", repo: "", branch: "main", connected: false }
+};
+
+function selectDataProviderTab(key) {
+  currentDataProviderKey = key;
+  const tabList = document.getElementById("data-provider-tab-list");
+  tabList.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.dprovider === key);
+  });
+  for (const k of DATA_PROVIDER_KEYS) {
+    const panel = document.getElementById(`dp-${k}-fields`);
+    if (panel) panel.classList.toggle("hidden", k !== key);
+  }
+}
+
+function loadDataProviderFields() {
+  const g = dataProviders.gdrive || {};
+  document.getElementById("dp-gdrive-client-id").value = g.clientId || "";
+  updateDpConnectState("gdrive", g);
+
+  // Show redirect URI for Google Drive (identity API only available in background)
+  const dpRedirectEl = document.getElementById("dp-gdrive-redirect");
+  if (dpRedirectEl) {
+    browser.runtime.sendMessage({ action: "cloudGetRedirectURL" }).then(resp => {
+      if (resp?.success) dpRedirectEl.textContent = "Redirect URI (add to your GCP OAuth client): " + resp.url;
+      else dpRedirectEl.textContent = "Could not get redirect URI: " + (resp?.error || "identity API unavailable");
+    }).catch(() => {});
+  }
+
+  const d = dataProviders.dropbox || {};
+  document.getElementById("dp-dropbox-app-key").value = d.appKey || "";
+  updateDpConnectState("dropbox", d);
+
+  const w = dataProviders.webdav || {};
+  document.getElementById("dp-webdav-url").value = w.serverUrl || "";
+  document.getElementById("dp-webdav-user").value = w.username || "";
+  document.getElementById("dp-webdav-pass").value = w.password || "";
+  updateDpConnectState("webdav", w);
+
+  const s = dataProviders.s3 || {};
+  document.getElementById("dp-s3-endpoint").value = s.endpoint || "";
+  document.getElementById("dp-s3-bucket").value = s.bucket || "";
+  document.getElementById("dp-s3-access-key").value = s.accessKey || "";
+  document.getElementById("dp-s3-secret-key").value = s.secretKey || "";
+  document.getElementById("dp-s3-region").value = s.region || "";
+  updateDpConnectState("s3", s);
+
+  const gh = dataProviders.github || {};
+  document.getElementById("dp-github-pat").value = gh.pat || "";
+  document.getElementById("dp-github-repo").value = gh.repo || "";
+  document.getElementById("dp-github-branch").value = gh.branch || "main";
+  updateDpConnectState("github", gh);
+
+  updateDataProviderTabIndicators();
+}
+
+function updateDpConnectState(key, cfg) {
+  const statusEl = document.getElementById(`dp-${key}-status`);
+  if (key === "gdrive" || key === "dropbox") {
+    const connectBtn = document.getElementById(`dp-${key}-connect`);
+    const disconnectBtn = document.getElementById(`dp-${key}-disconnect`);
+    if (cfg?.connected) {
+      connectBtn.classList.add("hidden");
+      disconnectBtn.classList.remove("hidden");
+      statusEl.className = "dp-status connected";
+      statusEl.textContent = key === "gdrive" ? `Connected (${cfg.userEmail || "Google Drive"})` : `Connected (${cfg.userName || "Dropbox"})`;
+    } else {
+      connectBtn.classList.remove("hidden");
+      disconnectBtn.classList.add("hidden");
+      statusEl.className = "dp-status";
+      statusEl.textContent = "";
+    }
+  } else {
+    if (cfg?.connected) {
+      statusEl.className = "dp-status connected";
+      if (key === "webdav") statusEl.textContent = `Connected (${cfg.serverUrl || "WebDAV"})`;
+      else if (key === "s3") statusEl.textContent = `Connected (${cfg.bucket || "S3"})`;
+      else if (key === "github") statusEl.textContent = `Connected (${cfg.repo || "GitHub"})`;
+    } else {
+      statusEl.className = "dp-status";
+      statusEl.textContent = "";
+    }
+  }
+}
+
+function saveDataProviderField(key) {
+  if (!dataProviders[key]) dataProviders[key] = { ...DEFAULT_DATA_PROVIDERS[key] };
+  const dp = dataProviders[key];
+  switch (key) {
+    case "gdrive":
+      dp.clientId = document.getElementById("dp-gdrive-client-id").value.trim();
+      break;
+    case "dropbox":
+      dp.appKey = document.getElementById("dp-dropbox-app-key").value.trim();
+      break;
+    case "webdav":
+      dp.serverUrl = document.getElementById("dp-webdav-url").value.trim();
+      dp.username = document.getElementById("dp-webdav-user").value.trim();
+      dp.password = document.getElementById("dp-webdav-pass").value.trim();
+      break;
+    case "s3":
+      dp.endpoint = document.getElementById("dp-s3-endpoint").value.trim();
+      dp.bucket = document.getElementById("dp-s3-bucket").value.trim();
+      dp.accessKey = document.getElementById("dp-s3-access-key").value.trim();
+      dp.secretKey = document.getElementById("dp-s3-secret-key").value.trim();
+      dp.region = document.getElementById("dp-s3-region").value.trim();
+      break;
+    case "github":
+      dp.pat = document.getElementById("dp-github-pat").value.trim();
+      dp.repo = document.getElementById("dp-github-repo").value.trim();
+      dp.branch = document.getElementById("dp-github-branch").value.trim() || "main";
+      break;
+  }
+  updateDataProviderTabIndicators();
+  scheduleSave();
+}
+
+function updateDataProviderTabIndicators() {
+  const tabList = document.getElementById("data-provider-tab-list");
+  tabList.querySelectorAll(".tab-btn").forEach(btn => {
+    const key = btn.dataset.dprovider;
+    const cfg = dataProviders[key];
+    let configured = false;
+    if (cfg?.connected) {
+      configured = true;
+    } else {
+      switch (key) {
+        case "gdrive": configured = !!cfg?.clientId; break;
+        case "dropbox": configured = !!cfg?.appKey; break;
+        case "webdav": configured = !!(cfg?.serverUrl && cfg?.username); break;
+        case "s3": configured = !!(cfg?.endpoint && cfg?.bucket && cfg?.accessKey); break;
+        case "github": configured = !!(cfg?.pat && cfg?.repo); break;
+      }
+    }
+    btn.classList.toggle("configured", configured);
+  });
+}
+
+// Map data provider UI keys to CloudProviders backend keys
+const DP_KEY_MAP = { gdrive: "google", dropbox: "dropbox", webdav: "webdav", s3: "s3", github: "github" };
+
+async function testDataProviderConnection(key) {
+  const statusEl = document.getElementById(`dp-${key}-status`);
+  statusEl.className = "dp-status";
+  statusEl.textContent = "Testing...";
+  saveDataProviderField(key);
+  const backendKey = DP_KEY_MAP[key] || key;
+  try {
+    // For credential-based providers, connect first then test
+    const cfg = dataProviders[key];
+    let msg;
+    if (key === "webdav") {
+      msg = { action: "cloudConnect", providerKey: backendKey, url: cfg.serverUrl, username: cfg.username, password: cfg.password };
+    } else if (key === "s3") {
+      msg = { action: "cloudConnect", providerKey: backendKey, endpoint: cfg.endpoint, bucket: cfg.bucket, accessKey: cfg.accessKey, secretKey: cfg.secretKey, region: cfg.region };
+    } else if (key === "github") {
+      msg = { action: "cloudConnect", providerKey: backendKey, pat: cfg.pat, repo: cfg.repo, branch: cfg.branch };
+    } else {
+      msg = { action: "cloudTestConnection", providerKey: backendKey };
+    }
+    const result = await browser.runtime.sendMessage(msg);
+    if (result?.success) {
+      dataProviders[key].connected = true;
+      statusEl.className = "dp-status connected";
+      statusEl.textContent = result.email || result.user || result.repo || "Connected";
+      updateDpConnectState(key, dataProviders[key]);
+      updateDataProviderTabIndicators();
+      scheduleSave();
+    } else {
+      statusEl.className = "dp-status error";
+      statusEl.textContent = result?.error || "Connection failed";
+    }
+  } catch (err) {
+    statusEl.className = "dp-status error";
+    statusEl.textContent = err.message || "Connection failed";
+  }
+}
+
+async function connectOAuthProvider(key) {
+  const statusEl = document.getElementById(`dp-${key}-status`);
+  statusEl.className = "dp-status";
+  statusEl.textContent = "Connecting...";
+  saveDataProviderField(key);
+  const backendKey = DP_KEY_MAP[key] || key;
+  const cfg = dataProviders[key];
+  try {
+    const msg = {
+      action: "cloudConnect",
+      providerKey: backendKey,
+      clientId: cfg.clientId,
+      appKey: cfg.appKey,
+    };
+    const result = await browser.runtime.sendMessage(msg);
+    if (result?.success) {
+      dataProviders[key].connected = true;
+      if (result.email) dataProviders[key].userEmail = result.email;
+      if (result.user) dataProviders[key].userName = result.user;
+      updateDpConnectState(key, dataProviders[key]);
+      updateDataProviderTabIndicators();
+      scheduleSave();
+    } else {
+      statusEl.className = "dp-status error";
+      statusEl.textContent = result?.error || "Connection failed";
+    }
+  } catch (err) {
+    statusEl.className = "dp-status error";
+    statusEl.textContent = err.message || "Connection failed";
+  }
+}
+
+function disconnectDataProvider(key) {
+  if (!dataProviders[key]) return;
+  const backendKey = DP_KEY_MAP[key] || key;
+  browser.runtime.sendMessage({ action: "cloudDisconnect", providerKey: backendKey }).catch(() => {});
+  const keep = key === "gdrive" ? { clientId: dataProviders[key].clientId } : key === "dropbox" ? { appKey: dataProviders[key].appKey } : {};
+  dataProviders[key] = { ...DEFAULT_DATA_PROVIDERS[key], ...keep };
+  updateDpConnectState(key, dataProviders[key]);
+  updateDataProviderTabIndicators();
+  scheduleSave();
 }
 
 // ──────────────────────────────────────────────
@@ -1182,7 +1427,11 @@ async function saveAllSettings() {
     advancedPrompts,
     maxHistorySize: parseInt(el.maxHistory.value, 10) || 200,
     showBadge: el.showBadge.checked,
-    responseLanguage: el.responseLanguage.value
+    responseLanguage: el.responseLanguage.value,
+    dataProviders,
+    backupEnabled: document.getElementById("backup-enabled").checked,
+    backupInterval: parseInt(document.getElementById("backup-interval").value, 10) || 1440,
+    backupAllProviders: document.getElementById("backup-all-providers").checked
   });
   flashSaved();
 }
@@ -1603,6 +1852,69 @@ function buildStepConfig(step, container, idx) {
       container.appendChild(lbl);
       break;
     }
+    case "addToMonitors": {
+      // Interval
+      const intLabel = document.createElement("label");
+      intLabel.textContent = "Check interval (min): ";
+      const intInput = document.createElement("input");
+      intInput.type = "number";
+      intInput.className = "auto-step-input";
+      intInput.min = 5;
+      intInput.max = 1440;
+      intInput.value = step.intervalMinutes || 60;
+      intInput.addEventListener("input", () => { step.intervalMinutes = parseInt(intInput.value) || 60; });
+      intLabel.appendChild(intInput);
+      container.appendChild(intLabel);
+
+      // AI analysis toggle
+      const aiLabel = document.createElement("label");
+      aiLabel.className = "auto-step-checkbox-label";
+      const aiCb = document.createElement("input");
+      aiCb.type = "checkbox";
+      aiCb.checked = step.aiAnalysis !== false;
+      aiCb.addEventListener("change", () => { step.aiAnalysis = aiCb.checked; });
+      aiLabel.appendChild(aiCb);
+      aiLabel.appendChild(document.createTextNode(" AI-analyze changes"));
+      container.appendChild(aiLabel);
+
+      // Analysis preset (optional)
+      const presetLabel = document.createElement("label");
+      presetLabel.textContent = "Analysis preset: ";
+      const presetSel = document.createElement("select");
+      presetSel.className = "auto-step-select";
+      const noneOpt = document.createElement("option");
+      noneOpt.value = "";
+      noneOpt.textContent = "Default (Summary)";
+      presetSel.appendChild(noneOpt);
+      for (const [key, p] of Object.entries(DEFAULT_PRESETS)) {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = p.label;
+        presetSel.appendChild(opt);
+      }
+      presetSel.value = step.analysisPreset || "";
+      presetSel.addEventListener("change", () => { step.analysisPreset = presetSel.value; });
+      presetLabel.appendChild(presetSel);
+      container.appendChild(presetLabel);
+
+      // Duration (0 = indefinite)
+      const durLabel = document.createElement("label");
+      durLabel.textContent = "Duration (hours, 0=forever): ";
+      const durInput = document.createElement("input");
+      durInput.type = "number";
+      durInput.className = "auto-step-input";
+      durInput.min = 0;
+      durInput.value = step.duration || 0;
+      durInput.addEventListener("input", () => { step.duration = parseInt(durInput.value) || 0; });
+      durLabel.appendChild(durInput);
+      container.appendChild(durLabel);
+
+      const hint = document.createElement("div");
+      hint.className = "auto-step-hint";
+      hint.textContent = "Adds the page to monitors. Skips silently if already monitored.";
+      container.appendChild(hint);
+      break;
+    }
     case "addToProject": {
       const sel = document.createElement("select");
       sel.className = "auto-step-select";
@@ -1669,6 +1981,7 @@ function stepTypeLabel(type) {
     prompt: "Custom Prompt",
     extractEntities: "Extract Entities",
     addToProject: "Add to Project",
+    addToMonitors: "Add to Monitors",
     runPipeline: "Run Pipeline",
   };
   return labels[type] || type;
@@ -1681,6 +1994,7 @@ function addEditorStep() {
   if (type === "prompt") { step.system = ""; step.prompt = ""; step.inputMode = "page"; }
   if (type === "runPipeline") step.pipelineId = "";
   if (type === "addToProject") { step.projectId = ""; step.tagsWith = ["automation"]; step.summaryFrom = "last"; }
+  if (type === "addToMonitors") { step.intervalMinutes = 60; step.aiAnalysis = true; step.analysisPreset = ""; step.duration = 0; }
   editorSteps.push(step);
   renderEditorSteps();
 }
@@ -1826,6 +2140,46 @@ function attachListeners() {
   el.providerModel.addEventListener("change", saveProviderConfig);
   document.getElementById("custom-base-url").addEventListener("input", saveProviderConfig);
   document.getElementById("custom-model-name").addEventListener("input", saveProviderConfig);
+  // Data provider tabs
+  document.getElementById("data-provider-tab-list").querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => selectDataProviderTab(btn.dataset.dprovider));
+  });
+  // Data provider field inputs — auto-save on change
+  for (const id of ["dp-gdrive-client-id", "dp-dropbox-app-key", "dp-webdav-url", "dp-webdav-user", "dp-webdav-pass",
+    "dp-s3-endpoint", "dp-s3-bucket", "dp-s3-access-key", "dp-s3-secret-key", "dp-s3-region",
+    "dp-github-pat", "dp-github-repo", "dp-github-branch"]) {
+    const input = document.getElementById(id);
+    if (input) {
+      const key = id.split("-")[1]; // gdrive, dropbox, webdav, s3, github
+      input.addEventListener("input", () => saveDataProviderField(key));
+    }
+  }
+  // OAuth connect/disconnect buttons
+  document.getElementById("dp-gdrive-connect").addEventListener("click", () => connectOAuthProvider("gdrive"));
+  document.getElementById("dp-gdrive-disconnect").addEventListener("click", () => disconnectDataProvider("gdrive"));
+  document.getElementById("dp-dropbox-connect").addEventListener("click", () => connectOAuthProvider("dropbox"));
+  document.getElementById("dp-dropbox-disconnect").addEventListener("click", () => disconnectDataProvider("dropbox"));
+  // Test connection buttons
+  document.getElementById("dp-webdav-test").addEventListener("click", () => testDataProviderConnection("webdav"));
+  document.getElementById("dp-s3-test").addEventListener("click", () => testDataProviderConnection("s3"));
+  document.getElementById("dp-github-test").addEventListener("click", () => testDataProviderConnection("github"));
+  // Backup schedule
+  document.getElementById("backup-enabled").addEventListener("change", scheduleSave);
+  document.getElementById("backup-interval").addEventListener("change", scheduleSave);
+  document.getElementById("backup-all-providers").addEventListener("change", scheduleSave);
+  document.getElementById("backup-now").addEventListener("click", async () => {
+    const statusEl = document.getElementById("backup-status");
+    statusEl.textContent = "Starting backup...";
+    try {
+      const result = await browser.runtime.sendMessage({ action: "backupNow" });
+      statusEl.className = "dp-status" + (result?.success ? " connected" : " error");
+      statusEl.textContent = result?.success ? `Backup complete (${result.message || "done"})` : (result?.error || "Backup failed");
+    } catch (err) {
+      statusEl.className = "dp-status error";
+      statusEl.textContent = err.message || "Backup failed";
+    }
+  });
+
   el.maxTokens.addEventListener("input", scheduleSave);
   el.maxInputChars.addEventListener("input", scheduleSave);
   el.reasoningEffort.addEventListener("change", scheduleSave);
@@ -2098,6 +2452,24 @@ async function renderMonitors() {
     return;
   }
 
+  // Build URL → project map for monitor-project association
+  const monUrlToProjects = new Map();
+  try {
+    const projResp = await browser.runtime.sendMessage({ action: "getProjects" });
+    if (projResp?.success) {
+      for (const proj of projResp.projects) {
+        for (const item of (proj.items || [])) {
+          if (!item.url) continue;
+          if (!monUrlToProjects.has(item.url)) monUrlToProjects.set(item.url, []);
+          const existing = monUrlToProjects.get(item.url);
+          if (!existing.some(p => p.id === proj.id)) {
+            existing.push({ id: proj.id, name: proj.name, color: proj.color || "#a0a0b0" });
+          }
+        }
+      }
+    }
+  } catch { /* ignore */ }
+
   response.monitors.forEach(monitor => {
     const row = document.createElement("div");
     row.className = "rule-item";
@@ -2107,7 +2479,18 @@ async function renderMonitors() {
     info.className = "rule-info";
 
     const title = document.createElement("strong");
-    title.textContent = monitor.title || monitor.url;
+    const titleLink = document.createElement("a");
+    titleLink.href = monitor.url;
+    titleLink.textContent = monitor.title || monitor.url;
+    titleLink.className = "monitor-title-link";
+    titleLink.style.cssText = "color:var(--text-primary);text-decoration:none;";
+    titleLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      window.open(monitor.url, "_blank");
+    });
+    titleLink.addEventListener("mouseenter", () => { titleLink.style.color = "var(--accent-hover)"; titleLink.style.textDecoration = "underline"; });
+    titleLink.addEventListener("mouseleave", () => { titleLink.style.color = "var(--text-primary)"; titleLink.style.textDecoration = "none"; });
+    title.appendChild(titleLink);
     info.appendChild(title);
 
     const meta = document.createElement("span");
@@ -2243,8 +2626,41 @@ async function renderMonitors() {
       renderMonitors();
     });
 
+    // Snapshot & Analyze button
+    const snapBtn = document.createElement("button");
+    snapBtn.className = "btn btn-sm btn-secondary";
+    snapBtn.textContent = "Snapshot & Analyze";
+    snapBtn.title = "Take a snapshot now and run analysis on the current page content";
+    snapBtn.addEventListener("click", async () => {
+      snapBtn.textContent = "Snapshotting...";
+      snapBtn.disabled = true;
+      try {
+        // Fetch current page text for the snapshot
+        const snapResp = await browser.runtime.sendMessage({
+          action: "snapshotAndAnalyzeMonitor",
+          monitorId: monitor.id,
+          url: monitor.url,
+          title: monitor.title || monitor.url,
+        });
+        if (snapResp?.success) {
+          snapBtn.textContent = "Done!";
+          snapBtn.style.color = "var(--success)";
+          setTimeout(() => { renderMonitors(); }, 1500);
+        } else {
+          snapBtn.textContent = snapResp?.error || "Failed";
+          snapBtn.style.color = "var(--error)";
+          setTimeout(() => { snapBtn.textContent = "Snapshot & Analyze"; snapBtn.style.color = ""; snapBtn.disabled = false; }, 2500);
+        }
+      } catch (e) {
+        snapBtn.textContent = "Error";
+        snapBtn.style.color = "var(--error)";
+        setTimeout(() => { snapBtn.textContent = "Snapshot & Analyze"; snapBtn.style.color = ""; snapBtn.disabled = false; }, 2500);
+      }
+    });
+
     actions.appendChild(toggleBtn);
     actions.appendChild(autoOpenBtn);
+    actions.appendChild(snapBtn);
     actions.appendChild(intervalStepper);
     actions.appendChild(historyBtn);
     actions.appendChild(timelineBtn);
@@ -2252,6 +2668,28 @@ async function renderMonitors() {
 
     row.appendChild(info);
     row.appendChild(actions);
+
+    // Project association tags (full-width row below)
+    const monProjects = monUrlToProjects.get(monitor.url);
+    if (monProjects && monProjects.length) {
+      const tagsDiv = document.createElement("div");
+      tagsDiv.style.cssText = "display:flex;gap:6px;flex-wrap:wrap;width:100%;padding-top:6px;border-top:1px solid var(--border);margin-top:6px;";
+      for (const proj of monProjects) {
+        const tag = document.createElement("span");
+        tag.style.cssText = "display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:1px 8px;border-radius:10px;background:rgba(255,255,255,0.06);color:var(--text-secondary);white-space:nowrap;cursor:pointer;";
+        tag.title = `Open project: ${proj.name}`;
+        const dot = document.createElement("span");
+        dot.style.cssText = `width:7px;height:7px;border-radius:50%;flex-shrink:0;background:${proj.color};`;
+        tag.appendChild(dot);
+        tag.appendChild(document.createTextNode(proj.name));
+        tag.addEventListener("click", () => {
+          document.querySelector('[data-tab="projects"]').click();
+          setTimeout(() => projSelectProject(proj.id), 100);
+        });
+        tagsDiv.appendChild(tag);
+      }
+      row.appendChild(tagsDiv);
+    }
     el.monitorList.appendChild(row);
   });
 
@@ -2586,18 +3024,28 @@ async function renderFeedRoutes() {
     info.className = "rule-info";
 
     const keywords = document.createElement("strong");
-    keywords.textContent = route.keywords.join(", ");
+    const kwText = route.keywords.join(", ");
+    keywords.textContent = kwText === "*" ? "✱ All stories" : kwText;
+    if (kwText === "*") keywords.style.color = "var(--accent)";
     info.appendChild(keywords);
 
     const meta = document.createElement("span");
     meta.className = "rule-meta";
-    const projName = projects.find(p => p.id === route.projectId)?.name || "Unknown project";
+    const proj = projects.find(p => p.id === route.projectId);
+    const projName = proj?.name || "Unknown project";
+    const projColor = proj?.color || "#a0a0b0";
     const feedName = route.feedId
       ? (rssFeeds.find(f => f.id === route.feedId)?.title || "Specific feed")
       : "All feeds";
     const flags = [];
     if (route.notify) flags.push("notify");
-    meta.textContent = ` → ${projName} | ${feedName}${flags.length ? " | " + flags.join(", ") : ""}`;
+    // Build meta with colored project dot
+    const arrow = document.createTextNode(" → ");
+    meta.appendChild(arrow);
+    const dot = document.createElement("span");
+    dot.style.cssText = `display:inline-block;width:8px;height:8px;border-radius:50%;background:${projColor};margin-right:4px;vertical-align:middle;`;
+    meta.appendChild(dot);
+    meta.appendChild(document.createTextNode(`${projName} | ${feedName}${flags.length ? " | " + flags.join(", ") : ""}`));
     info.appendChild(meta);
 
     const actions = document.createElement("div");
@@ -3648,6 +4096,9 @@ function projRenderDetail() {
   // Populate automation toolbar for this project
   projPopulateAutomations(proj.id);
 
+  // Auto-show skeleton overview
+  projBuildSkeleton(true);
+
   projRenderItems(proj);
 }
 
@@ -3773,17 +4224,40 @@ function projSummarizeForCard(text) {
 }
 
 function projRenderItems(proj) {
+  projEl.itemsList.innerHTML = "";
+
+  // Collapsible header for items section
+  const analyzed = proj.items.filter(i => i.analysisContent || i.analysisPreset || (i.analyses && i.analyses.length));
+  const links = proj.items.filter(i => !i.analysisContent && !i.analysisPreset && !(i.analyses && i.analyses.length));
+  const headerDiv = document.createElement("div");
+  headerDiv.className = "proj-items-collapse-header";
+  headerDiv.innerHTML = `<span class="proj-items-collapse-arrow">&#9660;</span> <strong>Items (${proj.items.length})</strong><span style="margin-left:8px;font-size:11px;color:var(--text-muted);">${analyzed.length} analyzed &middot; ${links.length} links</span>`;
+  const itemsContainer = document.createElement("div");
+  itemsContainer.className = "proj-items-container";
+
+  // Default: collapsed if skeleton is showing and there are items
+  const skeletonPanel = document.getElementById("proj-skeleton-panel");
+  if (proj.items.length > 0 && skeletonPanel && !skeletonPanel.classList.contains("hidden")) {
+    itemsContainer.style.display = "none";
+    headerDiv.querySelector(".proj-items-collapse-arrow").innerHTML = "&#9654;";
+  }
+
+  headerDiv.addEventListener("click", () => {
+    const isHidden = itemsContainer.style.display === "none";
+    itemsContainer.style.display = isHidden ? "" : "none";
+    headerDiv.querySelector(".proj-items-collapse-arrow").innerHTML = isHidden ? "&#9660;" : "&#9654;";
+  });
+  projEl.itemsList.appendChild(headerDiv);
+  projEl.itemsList.appendChild(itemsContainer);
+
   if (proj.items.length === 0) {
-    projEl.itemsList.textContent = "";
     const noItems = document.createElement("p");
     noItems.className = "info-text";
     noItems.style.cssText = "text-align:center;padding:32px;";
     noItems.textContent = "No items in this project yet. Add analyses from results pages, bookmarks, notes, or URLs.";
-    projEl.itemsList.appendChild(noItems);
+    itemsContainer.appendChild(noItems);
     return;
   }
-
-  projEl.itemsList.innerHTML = "";
   for (const item of proj.items) {
     const card = document.createElement("div");
     const isAnalyzed = !!(item.analysisContent || item.analysisPreset || (item.analyses && item.analyses.length));
@@ -4023,7 +4497,7 @@ function projRenderItems(proj) {
       });
     }
 
-    projEl.itemsList.appendChild(card);
+    itemsContainer.appendChild(card);
   }
 
   // Render rejected URLs section if any exist
@@ -4071,7 +4545,7 @@ function projRenderItems(proj) {
       rejToggle.textContent = showing ? "Show" : "Hide";
     });
 
-    projEl.itemsList.appendChild(rejDiv);
+    itemsContainer.appendChild(rejDiv);
   }
 }
 
@@ -4453,9 +4927,9 @@ function projOpenDashboard() {
   browser.tabs.create({ url: browser.runtime.getURL(`osint/dashboard.html?projectId=${encodeURIComponent(projState.activeProjectId)}`) });
 }
 
-async function projBuildSkeleton() {
+async function projBuildSkeleton(forceOpen) {
   const panel = document.getElementById("proj-skeleton-panel");
-  if (!panel.classList.contains("hidden")) { panel.classList.add("hidden"); return; }
+  if (!forceOpen && !panel.classList.contains("hidden")) { panel.classList.add("hidden"); return; }
   if (!projState.activeProjectId) return;
   panel.innerHTML = "<p style='color:var(--text-muted);font-size:12px;'>Loading skeleton...</p>";
   panel.classList.remove("hidden");
@@ -4698,97 +5172,17 @@ async function loadWatchlistMatches() {
 // ──────────────────────────────────────────────
 
 function initCloudBackup() {
-  // Provider tab switching
-  document.querySelectorAll(".cloud-tab").forEach(tab => {
-    tab.addEventListener("click", () => {
-      document.querySelectorAll(".cloud-tab").forEach(t => t.classList.remove("active"));
-      document.querySelectorAll(".cloud-panel").forEach(p => p.classList.add("hidden"));
-      tab.classList.add("active");
-      document.querySelector(`[data-cloud-panel="${tab.dataset.cloudTab}"]`).classList.remove("hidden");
+  // "Go to Providers tab" link
+  const gotoProviders = document.getElementById("cloud-goto-providers");
+  if (gotoProviders) {
+    gotoProviders.addEventListener("click", (e) => {
+      e.preventDefault();
+      document.querySelector('.nav-tab[data-tab="providers"]')?.click();
     });
-  });
-
-  // Show redirect URL for Google (must fetch from background — identity API not available in options page)
-  const redirectEl = document.getElementById("cloud-google-redirect");
-  if (redirectEl) {
-    browser.runtime.sendMessage({ action: "cloudGetRedirectURL" }).then(resp => {
-      if (resp?.success) redirectEl.textContent = "Redirect URI (add this to your GCP OAuth client): " + resp.url;
-      else redirectEl.textContent = "Could not get redirect URI: " + (resp?.error || "identity API unavailable");
-    }).catch(() => {});
   }
 
-  // Connect handlers
-  document.getElementById("cloud-google-connect").addEventListener("click", async () => {
-    const clientId = document.getElementById("cloud-google-clientid").value.trim();
-    if (!clientId) return;
-    setCloudStatus("google", "Connecting...");
-    const resp = await browser.runtime.sendMessage({ action: "cloudConnect", providerKey: "google", clientId });
-    setCloudStatus("google", resp?.success ? `Connected as ${resp.email || ""}` : `Failed: ${resp?.error || "unknown"}`);
-    refreshCloudStatus();
-  });
-  document.getElementById("cloud-google-disconnect").addEventListener("click", async () => {
-    await browser.runtime.sendMessage({ action: "cloudDisconnect", providerKey: "google" });
-    setCloudStatus("google", "Disconnected");
-    refreshCloudStatus();
-  });
-
-  document.getElementById("cloud-dropbox-connect").addEventListener("click", async () => {
-    const appKey = document.getElementById("cloud-dropbox-appkey").value.trim();
-    if (!appKey) return;
-    setCloudStatus("dropbox", "Connecting...");
-    const resp = await browser.runtime.sendMessage({ action: "cloudConnect", providerKey: "dropbox", appKey });
-    setCloudStatus("dropbox", resp?.success ? `Connected as ${resp.userName || ""}` : `Failed: ${resp?.error || "unknown"}`);
-    refreshCloudStatus();
-  });
-  document.getElementById("cloud-dropbox-disconnect").addEventListener("click", async () => {
-    await browser.runtime.sendMessage({ action: "cloudDisconnect", providerKey: "dropbox" });
-    setCloudStatus("dropbox", "Disconnected");
-    refreshCloudStatus();
-  });
-
-  document.getElementById("cloud-webdav-connect").addEventListener("click", async () => {
-    const url = document.getElementById("cloud-webdav-url").value.trim();
-    const username = document.getElementById("cloud-webdav-user").value.trim();
-    const password = document.getElementById("cloud-webdav-pass").value;
-    if (!url) return;
-    setCloudStatus("webdav", "Connecting...");
-    const resp = await browser.runtime.sendMessage({ action: "cloudConnect", providerKey: "webdav", url, username, password });
-    setCloudStatus("webdav", resp?.success ? "Connected" : `Failed: ${resp?.error || "unknown"}`);
-    refreshCloudStatus();
-  });
-  document.getElementById("cloud-webdav-test").addEventListener("click", async () => {
-    setCloudStatus("webdav", "Testing...");
-    const resp = await browser.runtime.sendMessage({ action: "cloudTestConnection", providerKey: "webdav" });
-    setCloudStatus("webdav", resp?.success ? "Connection OK" : `Failed: ${resp?.error || "unknown"}`);
-  });
-  document.getElementById("cloud-webdav-disconnect").addEventListener("click", async () => {
-    await browser.runtime.sendMessage({ action: "cloudDisconnect", providerKey: "webdav" });
-    setCloudStatus("webdav", "Disconnected");
-    refreshCloudStatus();
-  });
-
-  document.getElementById("cloud-s3-connect").addEventListener("click", async () => {
-    const endpoint = document.getElementById("cloud-s3-endpoint").value.trim();
-    const bucket = document.getElementById("cloud-s3-bucket").value.trim();
-    const accessKey = document.getElementById("cloud-s3-key").value.trim();
-    const secretKey = document.getElementById("cloud-s3-secret").value;
-    const region = document.getElementById("cloud-s3-region").value.trim();
-    if (!endpoint || !bucket || !accessKey || !secretKey) return;
-    setCloudStatus("s3", "Connecting...");
-    const resp = await browser.runtime.sendMessage({ action: "cloudConnect", providerKey: "s3", endpoint, bucket, accessKey, secretKey, region });
-    setCloudStatus("s3", resp?.success ? "Connected" : `Failed: ${resp?.error || "unknown"}`);
-    refreshCloudStatus();
-  });
-  document.getElementById("cloud-s3-test").addEventListener("click", async () => {
-    setCloudStatus("s3", "Testing...");
-    const resp = await browser.runtime.sendMessage({ action: "cloudTestConnection", providerKey: "s3" });
-    setCloudStatus("s3", resp?.success ? "Connection OK" : `Failed: ${resp?.error || "unknown"}`);
-  });
-  document.getElementById("cloud-s3-disconnect").addEventListener("click", async () => {
-    await browser.runtime.sendMessage({ action: "cloudDisconnect", providerKey: "s3" });
-    setCloudStatus("s3", "Disconnected");
-    refreshCloudStatus();
-  });
+  // Show connected providers summary
+  refreshCloudStatus();
 
   // Backup Now
   document.getElementById("cloud-backup-now").addEventListener("click", async () => {
@@ -4911,29 +5305,28 @@ function initCloudBackup() {
   refreshCloudStatus();
 }
 
-function setCloudStatus(provider, msg) {
-  const el = document.getElementById(`cloud-${provider}-status`);
-  if (el) el.textContent = msg;
-}
-
 async function refreshCloudStatus() {
   const resp = await browser.runtime.sendMessage({ action: "cloudGetStatus" });
   if (!resp?.success) return;
   const providers = resp.providers || {};
-  for (const [key, connected] of Object.entries(providers)) {
-    const connectBtn = document.getElementById(`cloud-${key}-connect`);
-    const disconnectBtn = document.getElementById(`cloud-${key}-disconnect`);
-    if (connectBtn) connectBtn.classList.toggle("hidden", connected);
-    if (disconnectBtn) disconnectBtn.classList.toggle("hidden", !connected);
-    if (connected) setCloudStatus(key, "Connected");
+  const names = { google: "Google Drive", dropbox: "Dropbox", webdav: "WebDAV", s3: "S3", github: "GitHub" };
+  const connected = Object.entries(providers).filter(([, v]) => v).map(([k]) => names[k] || k);
+  const summaryEl = document.getElementById("cloud-connected-summary");
+  if (summaryEl) {
+    summaryEl.textContent = connected.length
+      ? "Connected: " + connected.join(", ")
+      : "No cloud providers connected. Set up providers on the Providers tab.";
+    summaryEl.style.color = connected.length ? "var(--success)" : "var(--text-muted)";
   }
   // Show restore section if any provider connected
-  const anyConnected = Object.values(providers).some(Boolean);
-  document.getElementById("cloud-restore-section").classList.toggle("hidden", !anyConnected);
+  const anyConnected = connected.length > 0;
+  const restoreSection = document.getElementById("cloud-restore-section");
+  if (restoreSection) restoreSection.classList.toggle("hidden", !anyConnected);
   // Last backup
   if (resp.lastBackup) {
     const d = new Date(resp.lastBackup.date);
-    document.getElementById("cloud-last-backup").textContent = `Last backup: ${d.toLocaleString()} (${(resp.lastBackup.size / 1024).toFixed(1)} KB)`;
+    const lastEl = document.getElementById("cloud-last-backup");
+    if (lastEl) lastEl.textContent = `Last backup: ${d.toLocaleString()} (${(resp.lastBackup.size / 1024).toFixed(1)} KB)`;
   }
 }
 

@@ -175,7 +175,22 @@
         color: p.color || '#e94560',
         urls: new Set((p.items || []).map(i => i.url).filter(Boolean))
       }));
-      visibleProjects = new Set(allProjects.map(p => p.id));
+      // Check for ?project= param to auto-filter to a specific project
+      const urlParams = new URLSearchParams(window.location.search);
+      const filterProjectId = urlParams.get('project');
+      if (filterProjectId && allProjects.some(p => p.id === filterProjectId)) {
+        visibleProjects = new Set([filterProjectId]);
+        showUnassigned = false;
+        projectFilterActive = true;
+        // Update header to show project name
+        const fp = allProjects.find(p => p.id === filterProjectId);
+        if (fp) {
+          const nameEl = document.getElementById('projectName');
+          if (nameEl) nameEl.textContent = fp.name + ' — Entities';
+        }
+      } else {
+        visibleProjects = new Set(allProjects.map(p => p.id));
+      }
       // If graph already loaded, rebuild mapping now
       if (nodes.length) {
         buildNodeProjectMap();
@@ -216,6 +231,10 @@
     const existing = body.querySelectorAll('.project-toggle:not(:first-child)');
     existing.forEach(el => el.remove());
 
+    // Sync the "All (unassigned)" toggle
+    const allToggle = document.getElementById('projToggleAll');
+    if (allToggle) allToggle.checked = showUnassigned;
+
     if (!allProjects.length) return;
 
     for (const proj of allProjects) {
@@ -226,9 +245,10 @@
         if (pids && pids.has(proj.id)) count++;
       }
 
+      const isChecked = visibleProjects.has(proj.id);
       const label = document.createElement('label');
       label.className = 'project-toggle';
-      label.innerHTML = `<input type="checkbox" data-project="${proj.id}" checked>` +
+      label.innerHTML = `<input type="checkbox" data-project="${proj.id}" ${isChecked ? 'checked' : ''}>` +
         `<span class="project-dot" style="background:${proj.color}"></span>` +
         `<span class="project-toggle-label">${proj.name}</span>` +
         `<span class="project-toggle-count">${count}</span>`;
@@ -696,16 +716,47 @@
         const mode = btn.dataset.mode;
         setMode(mode);
         if (mode === 'global') {
+          // Reset project filter to show everything
+          visibleProjects = new Set(allProjects.map(p => p.id));
+          showUnassigned = true;
+          projectFilterActive = false;
+          buildProjectPanel();
+          const nameEl = document.getElementById('projectName');
+          if (nameEl) nameEl.textContent = 'Global Knowledge Graph';
           loadGlobalKG();
         } else {
-          // Reload project data
+          // Switch to project-scoped view
           const params = new URLSearchParams(window.location.search);
           const storeKey = params.get('id');
-          if (storeKey && typeof browser !== 'undefined' && browser.storage) {
+          const filterProjectId = params.get('project');
+          if (filterProjectId && allProjects.some(p => p.id === filterProjectId)) {
+            // Re-apply project filter from URL param
+            visibleProjects = new Set([filterProjectId]);
+            showUnassigned = false;
+            projectFilterActive = true;
+            const fp = allProjects.find(p => p.id === filterProjectId);
+            // Load global KG data but with project filter active
+            browser.runtime.sendMessage({ action: 'getKGGraph' }).then(resp => {
+              if (resp && resp.nodes && resp.nodes.length) {
+                initGraph(transformKGData(resp));
+              } else {
+                initGraph(demoData());
+              }
+              // Override name after initGraph sets it
+              const nameEl = document.getElementById('projectName');
+              if (nameEl) nameEl.textContent = (fp ? fp.name : '') + ' — Entities';
+              buildProjectPanel();
+            }).catch(() => {});
+          } else if (storeKey && typeof browser !== 'undefined' && browser.storage) {
             browser.storage.local.get(storeKey).then(result => {
               if (result[storeKey]) initGraph(result[storeKey]);
               else initGraph(demoData());
             });
+          } else {
+            // No specific project — show global with all projects visible
+            const nameEl = document.getElementById('projectName');
+            if (nameEl) nameEl.textContent = 'Connection Graph';
+            loadGlobalKG();
           }
         }
       });

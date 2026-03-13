@@ -159,7 +159,203 @@
         </div>
       </section>
 
+      <!-- Data / Cloud Providers -->
+      <section class="card">
+        <h2 class="card-title">Data Providers</h2>
+        <div class="card-body">
+          <p class="info-text">Connect cloud storage and repositories for backup, file saving, and data sync. Your credentials stay local — never shared with Argus.</p>
 
+          <div class="provider-tabs">
+            <div id="data-provider-tab-list" class="tab-list">
+              <button class="tab-btn active" data-dprovider="gdrive">Google Drive</button>
+              <button class="tab-btn" data-dprovider="dropbox">Dropbox</button>
+              <button class="tab-btn" data-dprovider="webdav">WebDAV</button>
+              <button class="tab-btn" data-dprovider="s3">S3</button>
+              <button class="tab-btn" data-dprovider="github">GitHub</button>
+            </div>
+          </div>
+
+          <div id="data-provider-config" class="prompt-editor">
+            <!-- Google Drive fields (default visible) -->
+            <div id="dp-gdrive-fields">
+              <div class="form-group">
+                <label for="dp-gdrive-client-id">OAuth Client ID</label>
+                <input type="text" id="dp-gdrive-client-id" placeholder="e.g. 123456789.apps.googleusercontent.com">
+              </div>
+              <details class="dp-setup-guide">
+                <summary>Setup Guide</summary>
+                <ol class="dp-guide-steps">
+                  <li>Go to <a href="https://console.cloud.google.com/projectcreate" target="_blank">Google Cloud Console</a> and create a project</li>
+                  <li>Search for and enable the <strong>Google Drive API</strong> under APIs &amp; Services</li>
+                  <li>Go to <strong>OAuth consent screen</strong> → External → fill required fields</li>
+                  <li>Under <strong>Test users</strong>, add your own Google email address</li>
+                  <li>Go to <strong>Credentials</strong> → Create OAuth client ID → Web application</li>
+                  <li>Add the redirect URI shown below, copy the <strong>Client ID</strong>, paste it above</li>
+                </ol>
+                <p style="font-size:11px;color:var(--text-muted);word-break:break-all;" id="dp-gdrive-redirect"></p>
+              </details>
+              <div class="dp-action-row">
+                <button id="dp-gdrive-connect" class="btn btn-sm btn-primary">Connect</button>
+                <button id="dp-gdrive-disconnect" class="btn btn-sm btn-secondary hidden">Disconnect</button>
+                <span id="dp-gdrive-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- Dropbox fields -->
+            <div id="dp-dropbox-fields" class="hidden">
+              <div class="form-group">
+                <label for="dp-dropbox-app-key">App Key</label>
+                <input type="text" id="dp-dropbox-app-key" placeholder="e.g. abc123def456">
+              </div>
+              <details class="dp-setup-guide">
+                <summary>Setup Guide</summary>
+                <ol class="dp-guide-steps">
+                  <li>Go to <a href="https://www.dropbox.com/developers/apps/create" target="_blank">Dropbox App Console</a> and create an app</li>
+                  <li>Choose <strong>Scoped access</strong> → <strong>App folder</strong></li>
+                  <li>Under Permissions, enable <strong>files.content.write</strong> and <strong>files.content.read</strong></li>
+                  <li>Copy the <strong>App Key</strong> and paste it above</li>
+                </ol>
+              </details>
+              <div class="dp-action-row">
+                <button id="dp-dropbox-connect" class="btn btn-sm btn-primary">Connect</button>
+                <button id="dp-dropbox-disconnect" class="btn btn-sm btn-secondary hidden">Disconnect</button>
+                <span id="dp-dropbox-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- WebDAV fields -->
+            <div id="dp-webdav-fields" class="hidden">
+              <div class="form-group">
+                <label for="dp-webdav-url">Server URL</label>
+                <input type="text" id="dp-webdav-url" placeholder="e.g. https://cloud.example.com/remote.php/dav/files/user/Argus/">
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="dp-webdav-user">Username</label>
+                  <input type="text" id="dp-webdav-user" placeholder="Username">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="dp-webdav-pass">Password / App Token</label>
+                  <input type="password" id="dp-webdav-pass" placeholder="Password or app token">
+                </div>
+              </div>
+              <details class="dp-setup-guide">
+                <summary>Setup Guide</summary>
+                <ol class="dp-guide-steps">
+                  <li>Enter your WebDAV server URL (Nextcloud, ownCloud, Synology, TrueNAS, etc.)</li>
+                  <li>For Nextcloud: use an <strong>App Password</strong> from Settings → Security</li>
+                  <li>Click <strong>Test Connection</strong> to verify</li>
+                </ol>
+              </details>
+              <div class="dp-action-row">
+                <button id="dp-webdav-test" class="btn btn-sm btn-primary">Test Connection</button>
+                <span id="dp-webdav-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- S3 fields -->
+            <div id="dp-s3-fields" class="hidden">
+              <div class="form-group">
+                <label for="dp-s3-endpoint">Endpoint URL</label>
+                <input type="text" id="dp-s3-endpoint" placeholder="e.g. s3.us-west-004.backblazeb2.com">
+                <span class="hint">Backblaze B2, Wasabi, Cloudflare R2, MinIO, or AWS S3</span>
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="dp-s3-bucket">Bucket Name</label>
+                  <input type="text" id="dp-s3-bucket" placeholder="my-argus-backup">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="dp-s3-region">Region <span class="hint" style="display:inline;margin:0;">(optional)</span></label>
+                  <input type="text" id="dp-s3-region" placeholder="e.g. us-west-1">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="dp-s3-access-key">Access Key</label>
+                  <input type="text" id="dp-s3-access-key" placeholder="Access Key ID">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="dp-s3-secret-key">Secret Key</label>
+                  <input type="password" id="dp-s3-secret-key" placeholder="Secret Access Key">
+                </div>
+              </div>
+              <details class="dp-setup-guide">
+                <summary>Setup Guide</summary>
+                <ol class="dp-guide-steps">
+                  <li>Create a bucket in your S3-compatible provider</li>
+                  <li>Create an access key with read/write permissions for the bucket</li>
+                  <li>Enter the endpoint URL, bucket name, and credentials above</li>
+                  <li>Endpoint hints: Backblaze <code>s3.us-west-004.backblazeb2.com</code>, Wasabi <code>s3.wasabisys.com</code>, R2 <code>&lt;accountId&gt;.r2.cloudflarestorage.com</code></li>
+                </ol>
+              </details>
+              <div class="dp-action-row">
+                <button id="dp-s3-test" class="btn btn-sm btn-primary">Test Connection</button>
+                <span id="dp-s3-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- GitHub fields -->
+            <div id="dp-github-fields" class="hidden">
+              <div class="form-group">
+                <label for="dp-github-pat">Personal Access Token</label>
+                <input type="password" id="dp-github-pat" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="dp-github-repo">Repository</label>
+                  <input type="text" id="dp-github-repo" placeholder="owner/repo-name">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="dp-github-branch">Branch</label>
+                  <input type="text" id="dp-github-branch" placeholder="main" value="main">
+                </div>
+              </div>
+              <details class="dp-setup-guide">
+                <summary>Setup Guide</summary>
+                <ol class="dp-guide-steps">
+                  <li>Create a <strong>private repository</strong> on GitHub for your Argus data</li>
+                  <li>Go to <a href="https://github.com/settings/tokens?type=beta" target="_blank">Settings → Developer Settings → Personal Access Tokens</a></li>
+                  <li>Generate a token with <strong>repo</strong> scope (or fine-grained: Contents read/write)</li>
+                  <li>Paste the token and enter your repo as <code>owner/repo-name</code></li>
+                </ol>
+              </details>
+              <div class="dp-action-row">
+                <button id="dp-github-test" class="btn btn-sm btn-primary">Test Connection</button>
+                <span id="dp-github-status" class="dp-status"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Backup Schedule -->
+      <section class="card">
+        <h2 class="card-title">Backup Schedule</h2>
+        <div class="card-body">
+          <div class="form-row" style="align-items:center;gap:12px;">
+            <label class="toggle-label" style="margin:0;">
+              <input type="checkbox" id="backup-enabled">
+              <span>Enable automatic backups</span>
+            </label>
+            <select id="backup-interval" style="max-width:160px;">
+              <option value="360">Every 6 hours</option>
+              <option value="720">Every 12 hours</option>
+              <option value="1440" selected>Every 24 hours</option>
+              <option value="2880">Every 48 hours</option>
+              <option value="10080">Weekly</option>
+            </select>
+          </div>
+          <div class="form-row" style="margin-top:10px;align-items:center;gap:12px;">
+            <button id="backup-now" class="btn btn-sm btn-primary">Backup Now</button>
+            <label class="toggle-label" style="margin:0;">
+              <input type="checkbox" id="backup-all-providers" checked>
+              <span>Backup to all connected providers</span>
+            </label>
+          </div>
+          <div id="backup-status" class="dp-status" style="margin-top:8px;"></div>
+        </div>
+      </section>
 
     </div>
 
@@ -391,6 +587,7 @@
                 <option value="extractEntities">Extract Entities</option>
                 <option value="runPipeline">Run Pipeline</option>
                 <option value="addToProject">Add to Project</option>
+                <option value="addToMonitors">Add to Monitors</option>
               </select>
               <button id="auto-add-step-btn" class="btn btn-secondary btn-sm">+ Add Step</button>
             </div>
@@ -1309,140 +1506,14 @@
 
       <!-- Cloud Backup -->
       <section class="card">
-        <h2 class="card-title">Cloud Backup</h2>
+        <h2 class="card-title">Backup &amp; Restore</h2>
         <div class="card-body">
-          <p class="info-text">Back up all Argus data to your own cloud storage. You provide your own credentials — no data flows through Argus infrastructure.</p>
+          <p class="info-text">Back up all Argus data to connected cloud providers or download locally. Configure providers on the <a href="#" id="cloud-goto-providers" style="color:var(--accent);">Providers tab</a>.</p>
 
-          <!-- Provider Tabs -->
-          <div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap;">
-            <button class="btn btn-secondary btn-sm cloud-tab active" data-cloud-tab="google">Google Drive</button>
-            <button class="btn btn-secondary btn-sm cloud-tab" data-cloud-tab="dropbox">Dropbox</button>
-            <button class="btn btn-secondary btn-sm cloud-tab" data-cloud-tab="webdav">WebDAV</button>
-            <button class="btn btn-secondary btn-sm cloud-tab" data-cloud-tab="s3">S3-Compatible</button>
-          </div>
-
-          <!-- Google Drive Panel -->
-          <div class="cloud-panel" data-cloud-panel="google">
-            <div class="form-group">
-              <label for="cloud-google-clientid">OAuth2 Client ID</label>
-              <input type="text" id="cloud-google-clientid" placeholder="xxxx.apps.googleusercontent.com">
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;">
-              <button id="cloud-google-connect" class="btn btn-accent btn-sm">Connect</button>
-              <button id="cloud-google-disconnect" class="btn btn-secondary btn-sm hidden">Disconnect</button>
-              <span id="cloud-google-status" style="font-size:12px;color:var(--text-muted);"></span>
-            </div>
-            <details style="margin-top:8px;"><summary style="font-size:12px;color:var(--accent);cursor:pointer;">Setup Guide</summary>
-              <ol style="font-size:12px;color:var(--text-secondary);padding-left:20px;margin:6px 0;">
-                <li>Go to <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a> and create a new project</li>
-                <li>From the within the console, Search for and Enable the <strong>Google Drive API</strong></li>
-                <li>Go to <strong>OAuth consent screen</strong> → External → fill required fields</li>
-                <li>Under <strong>Test users</strong>, add your own Google email address</li>
-                <li>Go to <strong>Credentials</strong> → Create OAuth client ID → Web application</li>
-                <li>Add the redirect URI shown below, copy the Client ID, paste above</li>
-              </ol>
-              <p style="font-size:11px;color:var(--text-muted);word-break:break-all;" id="cloud-google-redirect"></p>
-            </details>
-          </div>
-
-          <!-- Dropbox Panel -->
-          <div class="cloud-panel hidden" data-cloud-panel="dropbox">
-            <div class="form-group">
-              <label for="cloud-dropbox-appkey">App Key</label>
-              <input type="text" id="cloud-dropbox-appkey" placeholder="Your Dropbox App Key">
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;">
-              <button id="cloud-dropbox-connect" class="btn btn-accent btn-sm">Connect</button>
-              <button id="cloud-dropbox-disconnect" class="btn btn-secondary btn-sm hidden">Disconnect</button>
-              <span id="cloud-dropbox-status" style="font-size:12px;color:var(--text-muted);"></span>
-            </div>
-            <details style="margin-top:8px;"><summary style="font-size:12px;color:var(--accent);cursor:pointer;">Setup Guide</summary>
-              <ol style="font-size:12px;color:var(--text-secondary);padding-left:20px;margin:6px 0;">
-                <li>Go to <a href="https://www.dropbox.com/developers/apps/create" target="_blank">Dropbox App Console</a></li>
-                <li>Choose <strong>Scoped access</strong> → <strong>App folder</strong></li>
-                <li>Under Permissions, enable <strong>files.content.write</strong> and <strong>files.content.read</strong></li>
-                <li>Copy the <strong>App Key</strong> and paste above</li>
-              </ol>
-            </details>
-          </div>
-
-          <!-- WebDAV Panel -->
-          <div class="cloud-panel hidden" data-cloud-panel="webdav">
-            <div class="form-group">
-              <label for="cloud-webdav-url">Server URL</label>
-              <input type="text" id="cloud-webdav-url" placeholder="https://cloud.example.com/remote.php/dav/files/user/Argus/">
-            </div>
-            <div class="form-row">
-              <div class="form-group flex-1">
-                <label for="cloud-webdav-user">Username</label>
-                <input type="text" id="cloud-webdav-user">
-              </div>
-              <div class="form-group flex-1">
-                <label for="cloud-webdav-pass">Password / App Token</label>
-                <input type="password" id="cloud-webdav-pass">
-              </div>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;">
-              <button id="cloud-webdav-connect" class="btn btn-accent btn-sm">Connect</button>
-              <button id="cloud-webdav-test" class="btn btn-secondary btn-sm">Test Connection</button>
-              <button id="cloud-webdav-disconnect" class="btn btn-secondary btn-sm hidden">Disconnect</button>
-              <span id="cloud-webdav-status" style="font-size:12px;color:var(--text-muted);"></span>
-            </div>
-            <details style="margin-top:8px;"><summary style="font-size:12px;color:var(--accent);cursor:pointer;">Setup Guide</summary>
-              <ol style="font-size:12px;color:var(--text-secondary);padding-left:20px;margin:6px 0;">
-                <li>Enter your WebDAV server URL (e.g. Nextcloud: <code>https://cloud.example.com/remote.php/dav/files/username/Argus/</code>)</li>
-                <li>For Nextcloud: go to Settings → Security → create an <strong>App password</strong></li>
-                <li>Enter username + app password, then click Test Connection</li>
-              </ol>
-            </details>
-          </div>
-
-          <!-- S3 Panel -->
-          <div class="cloud-panel hidden" data-cloud-panel="s3">
-            <div class="form-row">
-              <div class="form-group flex-1">
-                <label for="cloud-s3-endpoint">Endpoint URL</label>
-                <input type="text" id="cloud-s3-endpoint" placeholder="https://s3.us-west-004.backblazeb2.com">
-              </div>
-              <div class="form-group flex-1">
-                <label for="cloud-s3-bucket">Bucket Name</label>
-                <input type="text" id="cloud-s3-bucket" placeholder="my-argus-backups">
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group flex-1">
-                <label for="cloud-s3-key">Access Key</label>
-                <input type="text" id="cloud-s3-key">
-              </div>
-              <div class="form-group flex-1">
-                <label for="cloud-s3-secret">Secret Key</label>
-                <input type="password" id="cloud-s3-secret">
-              </div>
-            </div>
-            <div class="form-group">
-              <label for="cloud-s3-region">Region (optional)</label>
-              <input type="text" id="cloud-s3-region" placeholder="us-east-1" value="us-east-1">
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;">
-              <button id="cloud-s3-connect" class="btn btn-accent btn-sm">Connect</button>
-              <button id="cloud-s3-test" class="btn btn-secondary btn-sm">Test Connection</button>
-              <button id="cloud-s3-disconnect" class="btn btn-secondary btn-sm hidden">Disconnect</button>
-              <span id="cloud-s3-status" style="font-size:12px;color:var(--text-muted);"></span>
-            </div>
-            <details style="margin-top:8px;"><summary style="font-size:12px;color:var(--accent);cursor:pointer;">Setup Guide</summary>
-              <ol style="font-size:12px;color:var(--text-secondary);padding-left:20px;margin:6px 0;">
-                <li>Create a bucket on your S3-compatible provider</li>
-                <li>Create an access key with read/write permissions to the bucket</li>
-                <li>Enter endpoint, bucket, keys, and click Test Connection</li>
-                <li><strong>Backblaze B2:</strong> <code>s3.us-west-004.backblazeb2.com</code></li>
-                <li><strong>Wasabi:</strong> <code>s3.wasabisys.com</code></li>
-                <li><strong>Cloudflare R2:</strong> <code>{accountId}.r2.cloudflarestorage.com</code></li>
-              </ol>
-            </details>
-          </div>
+          <!-- Connected providers summary -->
+          <div id="cloud-connected-summary" style="font-size:12px;color:var(--text-muted);margin-bottom:10px;"></div>
 
           <!-- Backup Schedule -->
-          <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
           <div class="form-row" style="align-items:center;">
             <div class="form-group flex-1">
               <label style="display:flex;align-items:center;gap:8px;">
@@ -1478,6 +1549,7 @@
                 <option value="dropbox">Dropbox</option>
                 <option value="webdav">WebDAV</option>
                 <option value="s3">S3</option>
+                <option value="github">GitHub</option>
               </select>
               <button id="cloud-restore-list" class="btn btn-secondary btn-sm">List Backups</button>
             </div>
@@ -2235,17 +2307,11 @@ Flag SEC-relevant disclosures. Respond ONLY with valid JSON.</pre>
             <li><strong>Dropbox</strong> &mdash; OAuth2 PKCE with your own App Key</li>
             <li><strong>WebDAV</strong> &mdash; Nextcloud, ownCloud, Synology, any NAS (URL + username + password)</li>
             <li><strong>S3-compatible</strong> &mdash; Backblaze B2, Wasabi, Cloudflare R2, MinIO, AWS S3 (endpoint + access key + secret)</li>
+            <li><strong>GitHub</strong> &mdash; PAT with repo scope, individual JSON files committed for diffable history</li>
           </ul>
 
-          <h3>Quick Setup (Google Drive Example)</h3>
-          <ol>
-            <li>Create a project in <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a></li>
-            <li>Enable the <strong>Google Drive API</strong></li>
-            <li>Set up OAuth consent screen &rarr; add yourself as a test user</li>
-            <li>Create OAuth credentials &rarr; Web application &rarr; add the redirect URI shown in Argus</li>
-            <li>Paste the Client ID in Settings &rarr; Cloud Backup &rarr; Connect</li>
-            <li>Click <strong>Backup Now</strong> &mdash; data appears in <code>Google Drive/Argus Backups/</code></li>
-          </ol>
+          <h3>Setup</h3>
+          <p>Connect your cloud providers on the <strong>Providers</strong> tab under <strong>Data Providers</strong>. Each provider has a built-in setup guide. Once connected, use Settings &rarr; <strong>Backup &amp; Restore</strong> to trigger backups or set a schedule.</p>
 
           <h3>What's Backed Up?</h3>
           <p>Everything: projects, bookmarks, monitors, feeds + entries, analysis history, knowledge graph, watchlist, automations, and settings. <strong>API keys are excluded</strong> by default for security.</p>
@@ -2305,7 +2371,7 @@ Flag SEC-relevant disclosures. Respond ONLY with valid JSON.</pre>
           <p>Use the <strong>"Export JSON"</strong> button in the Bookmarks tab to download all your smart bookmarks as a JSON file.</p>
 
           <h3>Cloud Backup</h3>
-          <p>For a complete backup of <strong>all</strong> Argus data, use the <strong>Cloud Backup</strong> feature in Settings. Supports Google Drive, Dropbox, WebDAV, and S3-compatible storage, or download a local <code>.zip</code> file. See the <a href="#help-cloud-backup">Cloud Backup</a> section for details.</p>
+          <p>For a complete backup of <strong>all</strong> Argus data, connect cloud providers on the <strong>Providers</strong> tab, then use Settings &rarr; <strong>Backup &amp; Restore</strong>. Supports Google Drive, Dropbox, WebDAV, S3-compatible storage, and GitHub, or download a local <code>.zip</code> file. See the <a href="#help-cloud-backup">Cloud Backup</a> section for details.</p>
         </div>
       </section>
 

@@ -185,6 +185,7 @@ const AutomationEngine = (() => {
     return {
       success: logEntry.status === "done",
       status: logEntry.status,
+      automationName: automation.name,
       stepsCompleted: logEntry.steps.filter(s => s.status === "done").length,
       totalSteps: automation.steps.length,
       lastOutput: ctx.lastOutput,
@@ -200,6 +201,7 @@ const AutomationEngine = (() => {
       case "prompt": return await stepPrompt(step, ctx);
       case "extractEntities": return await stepExtractEntities(step, ctx);
       case "addToProject": return await stepAddToProject(step, ctx);
+      case "addToMonitors": return await stepAddToMonitors(step, ctx);
       case "runPipeline": return await stepRunPipeline(step, ctx);
       default: throw new Error(`Unknown step type: ${step.type}`);
     }
@@ -288,6 +290,26 @@ const AutomationEngine = (() => {
     });
 
     return { stepType: "addToProject", content: summary, projectItemId: resp?.itemId || null };
+  }
+
+  async function stepAddToMonitors(step, ctx) {
+    if (!ctx.page || !ctx.page.url) throw new Error("addToMonitors requires a page URL");
+
+    const resp = await handleAddMonitor({
+      url: ctx.page.url,
+      title: ctx.page.title || ctx.page.url,
+      intervalMinutes: step.intervalMinutes || 60,
+      aiAnalysis: step.aiAnalysis !== false,
+      analysisPreset: step.analysisPreset || "",
+      duration: step.duration || 0,
+    });
+
+    if (!resp.success && resp.error && resp.error.includes("already being monitored")) {
+      return { stepType: "addToMonitors", content: `Already monitored: ${ctx.page.url}`, skipped: true };
+    }
+    if (!resp.success) throw new Error(resp.error || "Failed to add monitor");
+
+    return { stepType: "addToMonitors", content: `Monitoring: ${ctx.page.url} (every ${step.intervalMinutes || 60}m)` };
   }
 
   async function stepRunPipeline(step, ctx) {
@@ -399,7 +421,7 @@ const AutomationEngine = (() => {
     getRunStatus,
     cancel,
     getLog,
-    STEP_TYPES: ["analyze", "prompt", "extractEntities", "addToProject", "runPipeline"],
+    STEP_TYPES: ["analyze", "prompt", "extractEntities", "addToProject", "addToMonitors", "runPipeline"],
   };
 
 })();

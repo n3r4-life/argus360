@@ -878,6 +878,13 @@ textarea {
 
 .bookmark-btn-saving svg { visibility: hidden; }
 
+/* Active state — page is already monitored/bookmarked */
+.btn-active-indicator {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+  background: rgba(233, 69, 96, 0.1) !important;
+}
+
 /* Setup help link */
 .setup-help-link {
   display: block;

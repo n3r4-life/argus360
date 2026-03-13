@@ -552,6 +552,65 @@ textarea {
   border-style: dashed;
 }
 
+/* ═══ Data Providers ═══ */
+.dp-action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.dp-status {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.dp-status.connected {
+  color: var(--success);
+}
+
+.dp-status.error {
+  color: var(--error);
+}
+
+.dp-setup-guide {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.dp-setup-guide summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.dp-setup-guide summary:hover {
+  color: var(--accent-hover);
+}
+
+.dp-guide-steps {
+  margin: 8px 0 0 20px;
+  line-height: 1.8;
+}
+
+.dp-guide-steps code {
+  background: var(--bg-surface);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.dp-guide-steps a {
+  color: var(--accent);
+}
+
+.dp-guide-steps a:hover {
+  color: var(--accent-hover);
+}
+
 .prompt-tabs {
   display: flex;
   align-items: flex-start;
@@ -846,6 +905,7 @@ textarea {
 
 .proj-items-toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 12px;
 }
@@ -1055,6 +1115,22 @@ textarea {
 .skel-item a:hover { text-decoration:underline; }
 .skel-badge { display:inline-block; font-size:10px; padding:1px 5px; border-radius:3px; background:var(--bg-surface); color:var(--text-muted); margin-right:4px; text-transform:uppercase; }
 .skel-footer { font-size:11px; color:var(--text-muted); margin-top:8px; padding-top:6px; border-top:1px solid var(--border); }
+
+/* Collapsible items header */
+.proj-items-collapse-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0 8px;
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+  user-select: none;
+}
+.proj-items-collapse-header:hover { color: var(--text-primary); }
+.proj-items-collapse-arrow { font-size: 10px; width: 14px; text-align: center; }
 
 /* Resources Tab — Toolbar */
 .res-toolbar {

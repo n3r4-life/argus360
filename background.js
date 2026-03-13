@@ -189,7 +189,7 @@ async function createContextMenus() {
   browser.contextMenus.create({
     id: "argus-console",
     parentId: "argus-parent",
-    title: "\uD83D\uDDA5\uFE0F Argus Console",
+    title: "\u229E Argus Console",
     contexts: ["page", "frame", "selection"]
   });
 
@@ -338,6 +338,26 @@ async function createContextMenus() {
     contexts: ["page", "frame"]
   });
 
+  // ── Run Automations submenu ──
+  const allAutomations = await AutomationEngine.getAll();
+  const manualAutomations = allAutomations.filter(a => a.enabled !== false && a.triggers?.manual !== false);
+  if (manualAutomations.length > 0) {
+    browser.contextMenus.create({
+      id: "argus-automations-parent",
+      parentId: "argus-parent",
+      title: "\u26A1 Run Automation",
+      contexts: ["page", "frame"]
+    });
+    for (const auto of manualAutomations) {
+      browser.contextMenus.create({
+        id: `argus-automation-${auto.id}`,
+        parentId: "argus-automations-parent",
+        title: auto.name,
+        contexts: ["page", "frame"]
+      });
+    }
+  }
+
   // ── Site Versions submenu ──
   browser.contextMenus.create({
     id: "argus-versions-parent",
@@ -401,7 +421,7 @@ createContextMenus();
 
 // Rebuild context menus when presets or projects change
 browser.storage.onChanged.addListener((changes) => {
-  if (changes.customPresets || changes.argusProjects) createContextMenus();
+  if (changes.customPresets || changes.argusProjects || changes.automations) createContextMenus();
   if (changes.showBadge) updateBadge();
 });
 
@@ -1286,6 +1306,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "getMonitorStorageUsage") return handleGetMonitorStorageUsage();
   if (message.action === "purgeOpfsFiles") return (typeof OpfsStorage !== "undefined" ? OpfsStorage.deleteAll() : Promise.resolve()).then(() => ({ success: true }));
   if (message.action === "snapshotPage") return handleSnapshotPage(message);
+  if (message.action === "snapshotAndAnalyzeMonitor") return handleSnapshotAndAnalyze(message);
   if (message.action === "getSnapshotScreenshot") return handleGetSnapshotScreenshot(message);
   if (message.action === "getSnapshotHtml") return handleGetSnapshotHtml(message);
   if (message.action === "getArchiveSettings") return browser.storage.local.get({ archiveRedirect: { enabled: false, domains: DEFAULT_ARCHIVE_DOMAINS, providerUrl: "https://archive.is/" } }).then(r => ({ success: true, ...r.archiveRedirect }));
@@ -1573,6 +1594,7 @@ async function handleCloudConnect(message) {
     else if (key === "dropbox") result = await CloudProviders.dropbox.connect(message.appKey);
     else if (key === "webdav") result = await CloudProviders.webdav.connect(message.url, message.username, message.password);
     else if (key === "s3") result = await CloudProviders.s3.connect(message.endpoint, message.bucket, message.accessKey, message.secretKey, message.region);
+    else if (key === "github") result = await CloudProviders.github.connect(message.pat, message.repo, message.branch);
     else return { success: false, error: "Unknown provider" };
     console.log(`[Cloud] ${key} connect result:`, result);
     return result;
@@ -1583,16 +1605,17 @@ async function handleCloudConnect(message) {
 }
 
 async function handleCloudGetStatus() {
-  const [gConn, dConn, wConn, sConn] = await Promise.all([
+  const [gConn, dConn, wConn, sConn, ghConn] = await Promise.all([
     CloudProviders.google.isConnected(),
     CloudProviders.dropbox.isConnected(),
     CloudProviders.webdav.isConnected(),
     CloudProviders.s3.isConnected(),
+    CloudProviders.github.isConnected(),
   ]);
   const { cloudBackupLog = [] } = await browser.storage.local.get({ cloudBackupLog: [] });
   return {
     success: true,
-    providers: { google: gConn, dropbox: dConn, webdav: wConn, s3: sConn },
+    providers: { google: gConn, dropbox: dConn, webdav: wConn, s3: sConn, github: ghConn },
     lastBackup: cloudBackupLog[0] || null,
   };
 }
@@ -2125,6 +2148,32 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
   // Open Feed Reader
   if (info.menuItemId === "argus-open-reader") {
     browser.tabs.create({ url: browser.runtime.getURL("feeds/feeds.html") });
+    return;
+  }
+
+  // Run automation from context menu
+  if (info.menuItemId.startsWith("argus-automation-")) {
+    const automationId = info.menuItemId.replace("argus-automation-", "");
+    try {
+      const result = await AutomationEngine.run(automationId, { tabId: tab.id });
+      if (result.success) {
+        safeNotify(null, {
+          type: "basic",
+          iconUrl: "icons/icon-96.png",
+          title: "Automation Complete",
+          message: `${result.automationName || "Automation"} finished on ${tab.title || tab.url}`
+        });
+      } else {
+        safeNotify(null, {
+          type: "basic",
+          iconUrl: "icons/icon-96.png",
+          title: "Automation Failed",
+          message: result.error || "Unknown error"
+        });
+      }
+    } catch (e) {
+      console.error("[Automation] Context menu run failed:", e);
+    }
     return;
   }
 
@@ -3249,6 +3298,70 @@ async function handleSnapshotPage(message) {
   }
 }
 
+// Snapshot a monitored page and run analysis on the snapshot text
+async function handleSnapshotAndAnalyze(message) {
+  const { monitorId, url, title } = message;
+  try {
+    // Fetch current page content
+    const text = await fetchPageText(url);
+    const hash = await hashText(text);
+
+    // Save snapshot
+    const snapshotId = `snap-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const snapshot = {
+      id: snapshotId,
+      monitorId: monitorId || "manual",
+      capturedAt: new Date().toISOString(),
+      hash,
+      text: text.slice(0, 5000),
+      changed: false,
+      isInitial: false,
+      url,
+      title: title || url,
+      hasScreenshot: false,
+      hasFullHtml: true,
+      manual: true,
+    };
+    await ArgusDB.Snapshots.add(snapshot);
+
+    // Store full HTML in OPFS
+    if (typeof OpfsStorage !== "undefined") {
+      await OpfsStorage.writeSnapshot(snapshotId, { html: text, screenshotBlob: null });
+    }
+
+    // Run analysis on the snapshot text
+    const settings = await getProviderSettings();
+    const page = { url, title: title || url, text: text.slice(0, 30000) };
+    const presetKey = "summary";
+    const { systemPrompt, userPrompt } = await buildAnalysisPrompts(page, presetKey, null, settings);
+    const messages = buildMessages(systemPrompt, userPrompt);
+    const result = await callProvider(
+      settings.provider, settings.apiKey, settings.model, messages,
+      { maxTokens: settings.maxTokens, temperature: settings.temperature }
+    );
+
+    // Save analysis to history
+    await saveToHistory({
+      pageTitle: title || url,
+      pageUrl: url,
+      provider: settings.provider,
+      model: result.model,
+      preset: presetKey,
+      presetLabel: "Summary",
+      content: result.content,
+      usage: result.usage,
+      autoAnalyzed: false,
+      snapshotId,
+    });
+
+    console.log(`[Snapshot] Captured and analyzed: ${url} (snapshot: ${snapshotId})`);
+    return { success: true, snapshotId, analysisPreview: result.content.slice(0, 200) };
+  } catch (err) {
+    console.error("[Snapshot+Analyze] Failed:", err);
+    return { success: false, error: err.message };
+  }
+}
+
 async function handleAddMonitor(message) {
   try {
     const pageMonitors = await ArgusDB.Monitors.getAll();
@@ -4231,7 +4344,9 @@ async function applyKeywordRoutes(entries, feedId, notify) {
         continue;
       }
 
-      const matchedKws = includeKws.filter(kw => testKw(kw, scanText));
+      // Wildcard "*" matches everything (associate entire feed with project)
+      const hasWildcard = includeKws.includes("*");
+      const matchedKws = hasWildcard ? ["*"] : includeKws.filter(kw => testKw(kw, scanText));
       if (!matchedKws.length && entries.indexOf(entry) < 3) {
         console.log(`[Routes] No match for "${entry.title?.slice(0, 60)}" against [${includeKws.join(", ")}]`);
       }
