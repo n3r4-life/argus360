@@ -585,10 +585,11 @@ function attachEventListeners() {
   });
 
   const ARGUS_HELP_URL = "https://github.com/n3r4-life/argus360#readme";
+  const ARGUS_HELP_BASE = "https://github.com/n3r4-life/argus360";
 
   document.getElementById("help-get-key").addEventListener("click", (e) => {
     e.preventDefault();
-    browser.tabs.create({ url: ARGUS_HELP_URL + "#quick-start" });
+    browser.tabs.create({ url: ARGUS_HELP_BASE + "#quick-start" });
   });
 
   document.getElementById("quick-nav-help").addEventListener("click", () => {
