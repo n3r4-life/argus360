@@ -716,6 +716,35 @@ textarea {
   padding: 16px;
 }
 
+/* ── Monitor 2-column grid ── */
+.monitor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.monitor-grid .rule-item {
+  flex-direction: column;
+  align-items: stretch;
+  padding: 8px 10px;
+  margin-bottom: 0;
+  font-size: 12px;
+}
+
+.monitor-grid .rule-info strong { font-size: 12px; }
+.monitor-grid .rule-info span { font-size: 11px; }
+.monitor-grid .rule-actions {
+  gap: 4px;
+  margin-top: 6px;
+  justify-content: flex-start;
+}
+.monitor-grid .rule-actions .btn { font-size: 10px; padding: 2px 6px; }
+
+@media (max-width: 700px) {
+  .monitor-grid { grid-template-columns: 1fr; }
+}
+
 /* ═══ Keyboard shortcuts ═══ */
 .shortcuts-list {
   display: flex;
@@ -1684,6 +1713,94 @@ textarea {
   letter-spacing: 0.5px;
   color: var(--text-secondary);
   margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.bm-sidebar-heading .btn-icon {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--accent);
+  font-size: 14px;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.bm-sidebar-heading .btn-icon:hover { background: var(--bg-hover); }
+
+/* Folder tree */
+.bm-folder-tree { margin-bottom: 8px; }
+.bm-folder-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius);
+  user-select: none;
+}
+.bm-folder-item:hover { background: var(--bg-hover); }
+.bm-folder-item.active { background: var(--bg-hover); color: var(--accent); font-weight: 600; }
+.bm-folder-item .bm-folder-icon { font-size: 13px; flex-shrink: 0; }
+.bm-folder-item .bm-folder-count { margin-left: auto; font-size: 10px; color: var(--text-muted); }
+.bm-folder-children { padding-left: 16px; }
+.bm-folder-item .bm-folder-actions {
+  margin-left: auto;
+  display: none;
+  gap: 2px;
+}
+.bm-folder-item:hover .bm-folder-actions { display: flex; }
+.bm-folder-actions button {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0 3px;
+}
+.bm-folder-actions button:hover { color: var(--accent); }
+
+/* Smart bookmark card enhancements */
+.bm-card-tldr {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.bm-card-keyfacts {
+  margin-top: 4px;
+  padding-left: 16px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.bm-card-techstack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.bm-tech-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.bm-card-content-type {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
 }
 
 .bm-filter-list {
@@ -1773,17 +1890,19 @@ textarea {
 }
 
 .bm-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
 }
 
 .bm-card {
-  padding: 14px 16px;
+  padding: 10px 12px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   transition: border-color 0.2s;
+  font-size: 12px;
+  overflow: hidden;
 }
 
 .bm-card:hover { border-color: var(--accent); }
@@ -1797,18 +1916,19 @@ textarea {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
+  gap: 4px;
 }
 
 .bm-card-header-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   min-width: 0;
 }
 
 .bm-card-title {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
   text-decoration: none;
@@ -1819,22 +1939,22 @@ textarea {
 
 .bm-card-title:hover { color: var(--accent-hover); }
 
-.bm-card-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.bm-card-actions { display: flex; gap: 4px; flex-shrink: 0; }
 
 .bm-card-url {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .bm-card-summary {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
-  line-height: 1.4;
-  margin-bottom: 8px;
+  line-height: 1.35;
+  margin-bottom: 6px;
 }
 
 .bm-card-tags {
@@ -1984,6 +2104,7 @@ textarea {
 @media (max-width: 600px) {
   .bm-layout { flex-direction: column; }
   .bm-sidebar { width: 100%; }
+  .bm-list { grid-template-columns: 1fr; }
 }
 
 /* ── Named Automations ── */

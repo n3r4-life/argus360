@@ -208,10 +208,79 @@ async function createContextMenus() {
   });
 
   // ── Quick Actions ──
+  // ── ArgusMarks submenu ──
+  browser.contextMenus.create({
+    id: "argus-marks-parent",
+    parentId: "argus-parent",
+    title: "\uD83D\uDD16 ArgusMarks",
+    contexts: ["page", "frame"]
+  });
   browser.contextMenus.create({
     id: "argus-bookmark",
-    parentId: "argus-parent",
-    title: "\uD83D\uDD16 Bookmark with AI Tags",
+    parentId: "argus-marks-parent",
+    title: "\uD83D\uDCCC Bookmark This Page",
+    contexts: ["page", "frame"]
+  });
+  const bmFolders = await ArgusDB.BookmarkFolders.getAll();
+  if (bmFolders.length > 0) {
+    browser.contextMenus.create({
+      id: "argus-marks-sep",
+      parentId: "argus-marks-parent",
+      type: "separator",
+      contexts: ["page", "frame"]
+    });
+    // Build folder hierarchy — top-level folders first, then children
+    const topFolders = bmFolders.filter(f => !f.parentId);
+    const childMap = {};
+    for (const f of bmFolders) {
+      if (f.parentId) {
+        if (!childMap[f.parentId]) childMap[f.parentId] = [];
+        childMap[f.parentId].push(f);
+      }
+    }
+    function createFolderMenuItems(folders, parentMenuId) {
+      for (const folder of folders) {
+        const menuId = `argus-marks-folder-${folder.id}`;
+        const children = childMap[folder.id] || [];
+        if (children.length > 0) {
+          // Folder with children — becomes a submenu
+          browser.contextMenus.create({
+            id: menuId,
+            parentId: parentMenuId,
+            title: "\uD83D\uDCC1 " + folder.name,
+            contexts: ["page", "frame"]
+          });
+          // "Bookmark here" item inside the folder submenu
+          browser.contextMenus.create({
+            id: `argus-marks-save-${folder.id}`,
+            parentId: menuId,
+            title: "\uD83D\uDCCC Bookmark Here",
+            contexts: ["page", "frame"]
+          });
+          browser.contextMenus.create({
+            id: `argus-marks-sep-${folder.id}`,
+            parentId: menuId,
+            type: "separator",
+            contexts: ["page", "frame"]
+          });
+          createFolderMenuItems(children, menuId);
+        } else {
+          // Leaf folder — clicking bookmarks directly to it
+          browser.contextMenus.create({
+            id: `argus-marks-save-${folder.id}`,
+            parentId: parentMenuId,
+            title: "\uD83D\uDCC1 " + folder.name,
+            contexts: ["page", "frame"]
+          });
+        }
+      }
+    }
+    createFolderMenuItems(topFolders, "argus-marks-parent");
+  }
+  browser.contextMenus.create({
+    id: "argus-marks-manage",
+    parentId: "argus-marks-parent",
+    title: "\u2699\uFE0F Manage Bookmarks",
     contexts: ["page", "frame"]
   });
 
@@ -1281,6 +1350,12 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "updateBookmark") return handleUpdateBookmark(message);
   if (message.action === "deleteBookmark") return handleDeleteBookmark(message);
   if (message.action === "exportBookmarks") return handleExportBookmarks();
+  // Bookmark folders
+  if (message.action === "getBookmarkFolders") return ArgusDB.BookmarkFolders.getAll().then(f => ({ success: true, folders: f }));
+  if (message.action === "saveBookmarkFolder") return ArgusDB.BookmarkFolders.save(message.folder).then(f => { createContextMenus(); return { success: true, folder: f }; });
+  if (message.action === "deleteBookmarkFolder") return ArgusDB.BookmarkFolders.remove(message.folderId).then(() => { createContextMenus(); return { success: true }; });
+  if (message.action === "moveBookmarkToFolder") return ArgusDB.Bookmarks.update(message.bookmarkId, { folderId: message.folderId || "" }).then(b => ({ success: true, bookmark: b }));
+  if (message.action === "assignFolderToProject") return handleAssignFolderToProject(message);
   if (message.action === "addMonitor") return handleAddMonitor(message);
   if (message.action === "getMonitors") return handleGetMonitors();
   if (message.action === "updateMonitor") return handleUpdateMonitor(message);
@@ -1391,6 +1466,9 @@ browser.runtime.onMessage.addListener((message, sender) => {
     }
     return Promise.resolve({ success: true });
   }
+  // Bookmark Cloud Sync
+  if (message.action === "syncBookmarksToGitHub") return CloudBackup.syncBookmarksToGitHub().catch(e => ({ success: false, error: e.message }));
+  if (message.action === "syncBookmarkSnapshot") return CloudBackup.syncBookmarkSnapshot(message.bookmarkId).catch(e => ({ success: false, error: e.message }));
   // KG Dictionaries
   if (message.action === "getKGDictionaries") return KnowledgeGraph.getUserDictionaries();
   if (message.action === "saveKGDictionaries") return KnowledgeGraph.saveUserDictionaries(message.dictionaries);
@@ -2206,6 +2284,41 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
     return;
   }
 
+  // Handle ArgusMarks — bookmark to folder
+  if (info.menuItemId.startsWith("argus-marks-save-")) {
+    const folderId = info.menuItemId.replace("argus-marks-save-", "");
+    try {
+      const page = await extractFrameContent(tab.id, info.frameId);
+      const settings = await getProviderSettings().catch(() => null);
+      const tagData = settings
+        ? Object.assign(await aiTagBookmark(page, settings), { aiTagged: true })
+        : { tags: [], category: "other", summary: page.description || "" };
+      tagData.folderId = folderId;
+      await saveBookmark(page, tagData);
+      const folder = await ArgusDB.BookmarkFolders.get(folderId);
+      safeNotify(null, {
+        type: "basic",
+        iconUrl: "icons/icon-96.png",
+        title: "Argus",
+        message: `Bookmarked to ${folder ? folder.name : "folder"}: ${page.title}`
+      });
+    } catch (err) {
+      safeNotify(null, {
+        type: "basic",
+        iconUrl: "icons/icon-96.png",
+        title: "Argus — Error",
+        message: `Failed to bookmark: ${err.message}`
+      });
+    }
+    return;
+  }
+
+  // Handle ArgusMarks — manage bookmarks
+  if (info.menuItemId === "argus-marks-manage") {
+    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#bookmarks") });
+    return;
+  }
+
   // Handle add to project context menu
   if (info.menuItemId.startsWith("argus-project-")) {
     const projectId = info.menuItemId.replace("argus-project-", "");
@@ -2831,22 +2944,29 @@ initWebNavigation(autoAnalyzeCallback).then(ok => { autoAnalyzeRegistered = ok; 
 // Smart Bookmarking
 // ──────────────────────────────────────────────
 const BOOKMARK_TAG_PROMPT = {
-  system: "You are a librarian and information organizer. Respond ONLY with valid JSON, no markdown fences.",
-  prompt: `Analyze this webpage and generate smart metadata for bookmarking.
+  system: "You are a librarian, intelligence analyst, and information organizer. Respond ONLY with valid JSON, no markdown fences.",
+  prompt: `Analyze this webpage and generate a comprehensive smart bookmark snapshot.
 
 Return JSON with this exact structure:
 {
   "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
   "category": "one-word-category",
   "summary": "One sentence summary of the page content.",
-  "readingTime": "X min"
+  "tldr": "2-3 sentence TLDR covering the key facts, who/what/when/where.",
+  "readingTime": "X min",
+  "contentType": "article|blog|documentation|forum|social|video|product|tool|dataset|government|academic|other",
+  "language": "en",
+  "keyFacts": ["fact 1", "fact 2", "fact 3"]
 }
 
 Rules:
 - tags: 3-7 lowercase tags that describe the content. Be specific (e.g., "react-hooks" not just "programming").
 - category: A single broad category like "tech", "news", "finance", "science", "health", "politics", "tutorial", "reference", "entertainment", "shopping", "social", "other".
 - summary: A concise one-sentence summary (max 150 chars).
-- readingTime: Estimated reading time.`
+- tldr: 2-3 sentences covering the essential facts. Who is involved, what happened, when, key numbers.
+- keyFacts: 2-5 brief factual bullet points extracted from the content.
+- contentType: What kind of page this is.
+- language: ISO 639-1 language code of the content.`
 };
 
 async function saveBookmark(pageData, options = {}) {
@@ -2857,7 +2977,7 @@ async function saveBookmark(pageData, options = {}) {
     id: existing ? existing.id : `bm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     url: pageData.url,
     title: pageData.title,
-    text: (pageData.text || "").slice(0, 50000), // Store page text for search, capped at 50k
+    text: (pageData.text || "").slice(0, 50000),
     savedAt: existing ? existing.savedAt : new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     tags: options.tags || [],
@@ -2865,7 +2985,18 @@ async function saveBookmark(pageData, options = {}) {
     summary: options.summary || "",
     readingTime: options.readingTime || "",
     notes: options.notes || (existing ? existing.notes : ""),
-    aiTagged: !!options.aiTagged
+    aiTagged: !!options.aiTagged,
+    // Smart bookmark fields
+    folderId: options.folderId || (existing ? existing.folderId : "") || "",
+    tldr: options.tldr || "",
+    contentType: options.contentType || "",
+    language: options.language || "",
+    keyFacts: options.keyFacts || [],
+    // Tech stack & meta (populated async after save)
+    techStack: existing ? existing.techStack : null,
+    meta: options.meta || (existing ? existing.meta : null),
+    snapshotId: existing ? existing.snapshotId : null,
+    favicon: pageData.favicon || (existing ? existing.favicon : "") || "",
   };
 
   await ArgusDB.Bookmarks.add(bookmark);
@@ -2899,9 +3030,19 @@ async function aiTagBookmark(pageData, settings) {
     if (content.startsWith("```")) {
       content = content.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
     }
-    return JSON.parse(content);
+    const parsed = JSON.parse(content);
+    return {
+      tags: parsed.tags || [],
+      category: parsed.category || "other",
+      summary: parsed.summary || "",
+      readingTime: parsed.readingTime || "",
+      tldr: parsed.tldr || "",
+      contentType: parsed.contentType || "",
+      language: parsed.language || "",
+      keyFacts: parsed.keyFacts || [],
+    };
   } catch {
-    return { tags: [], category: "other", summary: "", readingTime: "" };
+    return { tags: [], category: "other", summary: "", readingTime: "", tldr: "", contentType: "", language: "", keyFacts: [] };
   }
 }
 
@@ -2915,7 +3056,32 @@ async function handleBookmarkPage(message) {
       page = await extractPageContent(tabId);
     }
 
-    let tagData = { tags: [], category: "other", summary: "", readingTime: "" };
+    // Extract page meta from content script (favicon, description, og tags, canonical)
+    let pageMeta = null;
+    try {
+      const metaResults = await browser.tabs.executeScript(tabId, {
+        code: `(function() {
+          const getMeta = (n) => { const el = document.querySelector('meta[property="' + n + '"],meta[name="' + n + '"]'); return el ? el.content : ''; };
+          return {
+            description: getMeta('description') || getMeta('og:description'),
+            ogImage: getMeta('og:image'),
+            ogTitle: getMeta('og:title'),
+            ogType: getMeta('og:type'),
+            canonical: (document.querySelector('link[rel="canonical"]') || {}).href || '',
+            favicon: (document.querySelector('link[rel="icon"],link[rel="shortcut icon"]') || {}).href || '',
+            author: getMeta('author'),
+            publishedTime: getMeta('article:published_time') || getMeta('datePublished'),
+          };
+        })()`
+      });
+      pageMeta = metaResults?.[0] || null;
+    } catch { /* content script injection failed — ok for some pages */ }
+
+    if (pageMeta) {
+      page.favicon = pageMeta.favicon || page.favicon || "";
+    }
+
+    let tagData = { tags: [], category: "other", summary: "", readingTime: "", tldr: "", contentType: "", language: "", keyFacts: [] };
 
     // AI tagging if requested (default: true)
     if (message.aiTag !== false) {
@@ -2924,15 +3090,96 @@ async function handleBookmarkPage(message) {
         tagData = await aiTagBookmark(page, settings);
         tagData.aiTagged = true;
       } catch (e) {
-        // AI tagging failed, save without tags
-        tagData = { tags: [], category: "other", summary: page.description || "", readingTime: "" };
+        tagData = { tags: [], category: "other", summary: page.description || "", readingTime: "", tldr: "", contentType: "", language: "", keyFacts: [] };
       }
     }
 
+    // Save with folder assignment if provided
+    if (message.folderId) tagData.folderId = message.folderId;
+    tagData.meta = pageMeta;
+
     const bookmark = await saveBookmark(page, tagData);
+
+    // Fire tech stack detection in the background (non-blocking)
+    if (tabId) {
+      bookmarkDetectTechStack(tabId, bookmark.id).catch(e =>
+        console.warn("[Bookmark] tech stack detection failed:", e.message)
+      );
+    }
+
     return { success: true, bookmark };
   } catch (err) {
     return { success: false, error: err.message };
+  }
+}
+
+// Non-blocking: detect tech stack and update bookmark
+async function bookmarkDetectTechStack(tabId, bookmarkId) {
+  try {
+    const results = await browser.tabs.executeScript(tabId, {
+      code: `(function() {
+        const techs = [];
+        const gen = document.querySelector('meta[name="generator"]');
+        if (gen) techs.push({ source: 'meta', value: gen.getAttribute('content') || '' });
+        const scripts = Array.from(document.querySelectorAll('script[src]')).map(s => s.src);
+        techs.push({ source: 'scripts', value: scripts });
+        const links = Array.from(document.querySelectorAll('link[href]')).map(l => l.href);
+        techs.push({ source: 'links', value: links });
+        // JS globals — quick check for common frameworks
+        const globals = [];
+        try { if (window.React || document.querySelector('[data-reactroot]')) globals.push('React'); } catch {}
+        try { if (window.Vue || document.querySelector('[data-v-]')) globals.push('Vue'); } catch {}
+        try { if (window.angular || document.querySelector('[ng-app]')) globals.push('Angular'); } catch {}
+        try { if (window.jQuery || window.$?.fn?.jquery) globals.push('jQuery ' + (window.$?.fn?.jquery || '')); } catch {}
+        try { if (window.__NEXT_DATA__) globals.push('Next.js'); } catch {}
+        try { if (window.__NUXT__) globals.push('Nuxt.js'); } catch {}
+        try { if (window.Shopify) globals.push('Shopify'); } catch {}
+        try { if (document.querySelector('meta[name="generator"][content*="WordPress"]') || document.querySelector('link[href*="wp-content"]')) globals.push('WordPress'); } catch {}
+        try { if (document.querySelector('link[href*="drupal"]')) globals.push('Drupal'); } catch {}
+        techs.push({ source: 'globals', value: globals });
+        return techs;
+      })()`
+    });
+    if (!results?.[0]) return;
+
+    const techs = results[0];
+    const stack = {};
+    // Parse meta generator
+    const metaGen = techs.find(t => t.source === 'meta');
+    if (metaGen?.value) stack.generator = metaGen.value;
+    // Parse detected frameworks
+    const globalsEntry = techs.find(t => t.source === 'globals');
+    if (globalsEntry?.value?.length) stack.frameworks = globalsEntry.value;
+    // Parse script sources for CDN/analytics patterns
+    const scriptEntry = techs.find(t => t.source === 'scripts');
+    if (scriptEntry?.value?.length) {
+      const cdns = [];
+      const analytics = [];
+      for (const src of scriptEntry.value) {
+        if (/google-analytics|googletagmanager|gtag/i.test(src)) analytics.push("Google Analytics");
+        if (/cloudflare/i.test(src)) cdns.push("Cloudflare");
+        if (/facebook.*pixel|fbevents/i.test(src)) analytics.push("Facebook Pixel");
+        if (/hotjar/i.test(src)) analytics.push("Hotjar");
+        if (/stripe\.js/i.test(src)) stack.payments = "Stripe";
+      }
+      if (cdns.length) stack.cdn = [...new Set(cdns)];
+      if (analytics.length) stack.analytics = [...new Set(analytics)];
+    }
+
+    // Fetch server headers
+    try {
+      const resp = await fetch(techs.find(t => t.source === 'scripts')?.value?.[0] ? new URL(techs.find(t => t.source === 'scripts').value[0]).origin : "", { method: "HEAD", redirect: "follow" });
+      const server = resp.headers.get("server");
+      const powered = resp.headers.get("x-powered-by");
+      if (server) stack.server = server;
+      if (powered) stack.poweredBy = powered;
+    } catch { /* header fetch failed */ }
+
+    if (Object.keys(stack).length) {
+      await ArgusDB.Bookmarks.update(bookmarkId, { techStack: stack });
+    }
+  } catch (e) {
+    console.warn("[Bookmark] tech stack enrichment error:", e);
   }
 }
 
@@ -2991,6 +3238,7 @@ async function handleUpdateBookmark(message) {
   if (message.tags !== undefined) updates.tags = message.tags;
   if (message.notes !== undefined) updates.notes = message.notes;
   if (message.category !== undefined) updates.category = message.category;
+  if (message.folderId !== undefined) updates.folderId = message.folderId;
   updates.updatedAt = new Date().toISOString();
 
   const bookmark = await ArgusDB.Bookmarks.update(message.id, updates);
@@ -3011,6 +3259,63 @@ async function handleExportBookmarks() {
     return rest;
   });
   return { success: true, data: exportData };
+}
+
+// ──────────────────────────────────────────────
+// Bookmark Folder → Project Assignment
+// ──────────────────────────────────────────────
+async function handleAssignFolderToProject(message) {
+  const { folderId, projectId } = message;
+  if (!folderId) return { success: false, error: "No folder specified" };
+
+  // Update folder's projectId
+  const folder = await ArgusDB.BookmarkFolders.get(folderId);
+  if (!folder) return { success: false, error: "Folder not found" };
+  folder.projectId = projectId || "";
+  await ArgusDB.BookmarkFolders.save(folder);
+
+  if (!projectId) return { success: true }; // unassigned
+
+  // Add all bookmarks in this folder (and sub-folders) as project items
+  const project = await ArgusDB.Projects.get(projectId);
+  if (!project) return { success: false, error: "Project not found" };
+
+  const allFolders = await ArgusDB.BookmarkFolders.getAll();
+  // Collect folder and all descendants
+  const folderIds = new Set([folderId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const f of allFolders) {
+      if (folderIds.has(f.parentId) && !folderIds.has(f.id)) {
+        folderIds.add(f.id);
+        changed = true;
+      }
+    }
+  }
+
+  const allBookmarks = await ArgusDB.Bookmarks.getAll();
+  const folderBookmarks = allBookmarks.filter(b => folderIds.has(b.folderId));
+
+  if (!project.items) project.items = [];
+  const existingUrls = new Set(project.items.map(i => i.url));
+
+  for (const bm of folderBookmarks) {
+    if (existingUrls.has(bm.url)) continue;
+    project.items.push({
+      url: bm.url,
+      title: bm.title,
+      type: "bookmark",
+      addedAt: Date.now(),
+      summary: bm.tldr || bm.summary || "",
+      notes: bm.notes || "",
+      refId: bm.id,
+    });
+  }
+
+  project.updatedAt = new Date().toISOString();
+  await ArgusDB.Projects.save(project);
+  return { success: true, addedCount: folderBookmarks.filter(b => !existingUrls.has(b.url)).length };
 }
 
 // ──────────────────────────────────────────────
@@ -3390,6 +3695,7 @@ async function handleAddMonitor(message) {
       autoOpen: message.autoOpen || false,
       autoBookmark: message.autoBookmark !== false,
       analysisPreset: message.analysisPreset || "",
+      automationId: message.automationId || "",
       duration: message.duration || 0,
       expiresAt: message.duration ? new Date(Date.now() + message.duration * 3600000).toISOString() : null
     };
@@ -3759,6 +4065,24 @@ Summarize the key differences in 2-4 bullet points.`;
           browser.tabs.create({ url: browser.runtime.getURL("results/results.html"), active: false });
         } catch (err) {
           console.warn(`[Monitor] Auto-analysis failed for "${monitor.title}":`, err.message);
+        }
+      }
+
+      // Run automation if configured
+      if (monitor.automationId) {
+        try {
+          const autoResult = await AutomationEngine.run(monitor.automationId, {
+            url: monitor.url,
+            title: monitor.title,
+            text: newText.slice(0, 50000),
+            trigger: "monitor-change",
+            monitorId: monitor.id,
+          });
+          if (autoResult.success) {
+            console.log(`[Monitor] Automation "${autoResult.automationName}" ran for "${monitor.title}"`);
+          }
+        } catch (err) {
+          console.warn(`[Monitor] Automation failed for "${monitor.title}":`, err.message);
         }
       }
     } else {

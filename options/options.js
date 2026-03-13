@@ -488,6 +488,7 @@ const el = {
   monitorAutoBookmark: document.getElementById("monitor-auto-bookmark"),
   monitorDuration: document.getElementById("monitor-duration"),
   monitorPreset: document.getElementById("monitor-preset"),
+  monitorAutomation: document.getElementById("monitor-automation"),
   addMonitor: document.getElementById("add-monitor"),
   monitorStatus: document.getElementById("monitor-status"),
   monitorStorageBar: document.getElementById("monitor-storage-bar"),
@@ -2319,6 +2320,7 @@ function attachListeners() {
 
   // Monitors
   populateMonitorPresetDropdown();
+  populateMonitorAutomationDropdown();
   el.addMonitor.addEventListener("click", addMonitor);
 
   // RSS Feeds
@@ -2438,6 +2440,22 @@ async function populateMonitorPresetDropdown() {
   }
 }
 
+async function populateMonitorAutomationDropdown() {
+  while (el.monitorAutomation.options.length > 1) el.monitorAutomation.remove(1);
+  try {
+    const resp = await browser.runtime.sendMessage({ action: "getAutomations" });
+    if (resp?.success && resp.automations) {
+      for (const auto of resp.automations) {
+        if (auto.enabled === false) continue;
+        const opt = document.createElement("option");
+        opt.value = auto.id;
+        opt.textContent = auto.name;
+        el.monitorAutomation.appendChild(opt);
+      }
+    }
+  } catch { /* ignore */ }
+}
+
 async function renderMonitors() {
   const response = await browser.runtime.sendMessage({ action: "getMonitors" });
   if (!response || !response.success) return;
@@ -2502,6 +2520,7 @@ async function renderMonitors() {
     if (monitor.autoOpen) flags.push("auto-open");
     if (monitor.autoBookmark) flags.push("bookmarked");
     if (monitor.analysisPreset) flags.push(`preset: ${monitor.analysisPreset}`);
+    if (monitor.automationId) flags.push("automation");
     const flagStr = flags.length ? ` | ${flags.join(", ")}` : "";
     let durationStr = "";
     if (monitor.expired) {
@@ -3291,7 +3310,8 @@ async function addMonitor() {
     aiAnalysis: el.monitorAi.checked,
     autoOpen: el.monitorAutoOpen.checked,
     autoBookmark: el.monitorAutoBookmark.checked,
-    analysisPreset: el.monitorPreset.value || ""
+    analysisPreset: el.monitorPreset.value || "",
+    automationId: el.monitorAutomation.value || ""
   });
 
   el.addMonitor.disabled = false;
@@ -3477,10 +3497,12 @@ function handleHashNav(hash, tabs, panels) {
 // ──────────────────────────────────────────────
 const bmState = {
   initialized: false,
-  filter: { tag: null, category: null, query: "" },
+  filter: { tag: null, category: null, query: "", folderId: null },
   editingId: null,
   selectionMode: false,
-  selected: new Map()
+  selected: new Map(),
+  folders: [],
+  allBookmarks: [],
 };
 
 const bmEl = {};
@@ -3500,6 +3522,7 @@ function initBookmarks() {
   bmEl.analyzeSelected = document.getElementById("bm-analyze-selected");
   bmEl.editModal = document.getElementById("bm-edit-modal");
   bmEl.modalClose = document.getElementById("bm-modal-close");
+  bmEl.editFolder = document.getElementById("bm-edit-folder");
   bmEl.editTags = document.getElementById("bm-edit-tags");
   bmEl.editCategory = document.getElementById("bm-edit-category");
   bmEl.editNotes = document.getElementById("bm-edit-notes");
@@ -3516,6 +3539,8 @@ function initBookmarks() {
   });
 
   bmEl.exportBtn.addEventListener("click", bmExportBookmarks);
+  bmEl.syncGithubBtn = document.getElementById("bm-sync-github");
+  bmEl.syncGithubBtn.addEventListener("click", bmSyncToGitHub);
   bmEl.selectToggle.addEventListener("click", bmToggleSelection);
   bmEl.analyzeSelected.addEventListener("click", bmAnalyzeSelected);
   bmEl.modalClose.addEventListener("click", bmCloseModal);
@@ -3524,6 +3549,11 @@ function initBookmarks() {
   bmEl.editModal.addEventListener("click", (e) => {
     if (e.target === bmEl.editModal) bmCloseModal();
   });
+
+  bmEl.folderTree = document.getElementById("bm-folder-tree");
+  bmEl.newFolderBtn = document.getElementById("bm-new-folder");
+
+  bmEl.newFolderBtn.addEventListener("click", bmCreateFolder);
 
   const customizeTagLink = document.getElementById("bm-customize-tagging");
   if (customizeTagLink) {
@@ -3540,17 +3570,169 @@ function initBookmarks() {
 }
 
 async function bmLoadBookmarks() {
-  const response = await browser.runtime.sendMessage({
-    action: "getBookmarks",
-    tag: bmState.filter.tag,
-    category: bmState.filter.category,
-    query: bmState.filter.query
-  });
+  const [response, folderResp] = await Promise.all([
+    browser.runtime.sendMessage({
+      action: "getBookmarks",
+      tag: bmState.filter.tag,
+      category: bmState.filter.category,
+      query: bmState.filter.query
+    }),
+    browser.runtime.sendMessage({ action: "getBookmarkFolders" })
+  ]);
   if (!response || !response.success) return;
 
+  bmState.folders = folderResp?.success ? folderResp.folders : [];
+  bmState.allBookmarks = response.bookmarks;
+
+  // Filter by folder if selected
+  let visible = response.bookmarks;
+  if (bmState.filter.folderId !== null) {
+    // Collect folder + all descendant folder ids
+    const folderIds = bmCollectDescendantFolderIds(bmState.filter.folderId);
+    visible = visible.filter(b => folderIds.has(b.folderId || ""));
+  }
+
+  bmRenderFolderTree(response.bookmarks);
   bmRenderSidebar(response.tags, response.categories);
   bmRenderActiveFilters();
-  bmRenderBookmarks(response.bookmarks, response.total);
+  bmRenderBookmarks(visible, visible.length);
+}
+
+function bmCollectDescendantFolderIds(folderId) {
+  const ids = new Set([folderId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const f of bmState.folders) {
+      if (ids.has(f.parentId) && !ids.has(f.id)) { ids.add(f.id); changed = true; }
+    }
+  }
+  return ids;
+}
+
+function bmRenderFolderTree(allBookmarks) {
+  bmEl.folderTree.replaceChildren();
+
+  // Count bookmarks per folder
+  const folderCounts = {};
+  for (const bm of allBookmarks) {
+    const fid = bm.folderId || "";
+    folderCounts[fid] = (folderCounts[fid] || 0) + 1;
+  }
+
+  // "All Bookmarks" root item
+  const allItem = document.createElement("div");
+  allItem.className = "bm-folder-item" + (bmState.filter.folderId === null ? " active" : "");
+  allItem.innerHTML = `<span class="bm-folder-icon">📁</span> All Bookmarks <span class="bm-folder-count">${allBookmarks.length}</span>`;
+  allItem.addEventListener("click", () => { bmState.filter.folderId = null; bmLoadBookmarks(); });
+  bmEl.folderTree.appendChild(allItem);
+
+  // "Unsorted" item (bookmarks with no folder)
+  const unsortedCount = folderCounts[""] || 0;
+  if (unsortedCount > 0 && bmState.folders.length > 0) {
+    const unsorted = document.createElement("div");
+    unsorted.className = "bm-folder-item" + (bmState.filter.folderId === "" ? " active" : "");
+    unsorted.innerHTML = `<span class="bm-folder-icon">📄</span> Unsorted <span class="bm-folder-count">${unsortedCount}</span>`;
+    unsorted.addEventListener("click", () => { bmState.filter.folderId = ""; bmLoadBookmarks(); });
+    bmEl.folderTree.appendChild(unsorted);
+  }
+
+  // Build tree recursively
+  function renderFolder(folder, container, depth) {
+    const folderId = folder.id;
+    const count = bmCollectDescendantBookmarkCount(folderId, folderCounts);
+    const item = document.createElement("div");
+    item.className = "bm-folder-item" + (bmState.filter.folderId === folderId ? " active" : "");
+    item.style.paddingLeft = (8 + depth * 16) + "px";
+    item.setAttribute("data-folder-id", folderId);
+    // Drag target for moving bookmarks
+    item.addEventListener("dragover", (e) => { e.preventDefault(); item.style.background = "var(--bg-hover)"; });
+    item.addEventListener("dragleave", () => { item.style.background = ""; });
+    item.addEventListener("drop", (e) => {
+      e.preventDefault();
+      item.style.background = "";
+      const bmId = e.dataTransfer.getData("text/bookmark-id");
+      if (bmId) bmMoveBookmarkToFolder(bmId, folderId);
+    });
+
+    const icon = document.createElement("span");
+    icon.className = "bm-folder-icon";
+    icon.textContent = folder.projectId ? "📂" : "📁";
+    item.appendChild(icon);
+    item.appendChild(document.createTextNode(" " + folder.name));
+
+    const countSpan = document.createElement("span");
+    countSpan.className = "bm-folder-count";
+    countSpan.textContent = count;
+
+    const actions = document.createElement("span");
+    actions.className = "bm-folder-actions";
+    const renameBtn = document.createElement("button");
+    renameBtn.textContent = "✎";
+    renameBtn.title = "Rename";
+    renameBtn.addEventListener("click", (e) => { e.stopPropagation(); bmRenameFolder(folder); });
+    const deleteBtn = document.createElement("button");
+    deleteBtn.textContent = "✕";
+    deleteBtn.title = "Delete";
+    deleteBtn.addEventListener("click", (e) => { e.stopPropagation(); bmDeleteFolder(folder.id); });
+    actions.appendChild(renameBtn);
+    actions.appendChild(deleteBtn);
+
+    item.appendChild(actions);
+    item.appendChild(countSpan);
+    item.addEventListener("click", () => { bmState.filter.folderId = folderId; bmLoadBookmarks(); });
+    container.appendChild(item);
+
+    // Render children
+    const children = bmState.folders.filter(f => f.parentId === folderId).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    for (const child of children) renderFolder(child, container, depth + 1);
+  }
+
+  const rootFolders = bmState.folders.filter(f => !f.parentId || f.parentId === "").sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  for (const folder of rootFolders) renderFolder(folder, bmEl.folderTree, 0);
+}
+
+function bmCollectDescendantBookmarkCount(folderId, folderCounts) {
+  const ids = bmCollectDescendantFolderIds(folderId);
+  let total = 0;
+  for (const id of ids) total += (folderCounts[id] || 0);
+  return total;
+}
+
+async function bmCreateFolder() {
+  const name = prompt("Folder name:");
+  if (!name || !name.trim()) return;
+  const parentId = bmState.filter.folderId && bmState.filter.folderId !== "" ? bmState.filter.folderId : "";
+  const folder = {
+    id: `bmf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    name: name.trim(),
+    parentId,
+    projectId: "",
+    sortOrder: bmState.folders.length,
+    createdAt: new Date().toISOString(),
+  };
+  await browser.runtime.sendMessage({ action: "saveBookmarkFolder", folder });
+  bmLoadBookmarks();
+}
+
+async function bmRenameFolder(folder) {
+  const name = prompt("Rename folder:", folder.name);
+  if (!name || !name.trim() || name.trim() === folder.name) return;
+  folder.name = name.trim();
+  await browser.runtime.sendMessage({ action: "saveBookmarkFolder", folder });
+  bmLoadBookmarks();
+}
+
+async function bmDeleteFolder(folderId) {
+  if (!confirm("Delete this folder? Bookmarks will be moved to the parent folder.")) return;
+  await browser.runtime.sendMessage({ action: "deleteBookmarkFolder", folderId });
+  if (bmState.filter.folderId === folderId) bmState.filter.folderId = null;
+  bmLoadBookmarks();
+}
+
+async function bmMoveBookmarkToFolder(bookmarkId, folderId) {
+  await browser.runtime.sendMessage({ action: "moveBookmarkToFolder", bookmarkId, folderId });
+  bmLoadBookmarks();
 }
 
 function bmRenderSidebar(tags, categories) {
@@ -3611,6 +3793,13 @@ function bmRenderActiveFilters() {
     hasFilter = true;
     bmEl.activeFilters.appendChild(bmCreateFilterChip("Search: " + bmState.filter.query, () => {
       bmState.filter.query = ""; bmEl.search.value = ""; bmLoadBookmarks();
+    }));
+  }
+  if (bmState.filter.folderId) {
+    hasFilter = true;
+    const folder = bmState.folders.find(f => f.id === bmState.filter.folderId);
+    bmEl.activeFilters.appendChild(bmCreateFilterChip("Folder: " + (folder ? folder.name : "Unknown"), () => {
+      bmState.filter.folderId = null; bmLoadBookmarks();
     }));
   }
   bmEl.activeFilters.classList.toggle("hidden", !hasFilter);
@@ -3717,16 +3906,42 @@ function bmRenderBookmarks(bookmarks, total) {
     header.appendChild(actions);
     card.appendChild(header);
 
+    // Make card draggable for folder assignment
+    card.draggable = true;
+    card.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("text/bookmark-id", bm.id);
+      card.style.opacity = "0.5";
+    });
+    card.addEventListener("dragend", () => { card.style.opacity = ""; });
+
     const url = document.createElement("div");
     url.className = "bm-card-url";
     url.textContent = bm.url;
     card.appendChild(url);
 
-    if (bm.summary) {
+    // TLDR (smart analysis)
+    if (bm.tldr) {
+      const tldr = document.createElement("div");
+      tldr.className = "bm-card-tldr";
+      tldr.textContent = bm.tldr;
+      card.appendChild(tldr);
+    } else if (bm.summary) {
       const summary = document.createElement("div");
       summary.className = "bm-card-summary";
       summary.textContent = bm.summary;
       card.appendChild(summary);
+    }
+
+    // Key facts
+    if (bm.keyFacts && bm.keyFacts.length) {
+      const factsUl = document.createElement("ul");
+      factsUl.className = "bm-card-keyfacts";
+      for (const fact of bm.keyFacts.slice(0, 3)) {
+        const li = document.createElement("li");
+        li.textContent = fact;
+        factsUl.appendChild(li);
+      }
+      card.appendChild(factsUl);
     }
 
     if (bm.tags && bm.tags.length) {
@@ -3742,6 +3957,27 @@ function bmRenderBookmarks(bookmarks, total) {
       card.appendChild(tagsDiv);
     }
 
+    // Tech stack badges
+    if (bm.techStack) {
+      const techDiv = document.createElement("div");
+      techDiv.className = "bm-card-techstack";
+      const techs = [];
+      if (bm.techStack.generator) techs.push(bm.techStack.generator);
+      if (bm.techStack.frameworks) techs.push(...bm.techStack.frameworks);
+      if (bm.techStack.server) techs.push(bm.techStack.server);
+      if (bm.techStack.cdn) techs.push(...bm.techStack.cdn);
+      if (bm.techStack.analytics) techs.push(...bm.techStack.analytics);
+      if (bm.techStack.poweredBy) techs.push(bm.techStack.poweredBy);
+      if (bm.techStack.payments) techs.push(bm.techStack.payments);
+      for (const tech of [...new Set(techs)].slice(0, 5)) {
+        const badge = document.createElement("span");
+        badge.className = "bm-tech-badge";
+        badge.textContent = tech;
+        techDiv.appendChild(badge);
+      }
+      if (techs.length) card.appendChild(techDiv);
+    }
+
     if (bm.notes) {
       const notes = document.createElement("div");
       notes.className = "bm-card-notes";
@@ -3754,6 +3990,12 @@ function bmRenderBookmarks(bookmarks, total) {
     const date = document.createElement("span");
     date.textContent = new Date(bm.savedAt).toLocaleDateString();
     meta.appendChild(date);
+    if (bm.contentType && bm.contentType !== "other") {
+      const ct = document.createElement("span");
+      ct.className = "bm-card-content-type";
+      ct.textContent = bm.contentType;
+      meta.appendChild(ct);
+    }
     if (bm.category) {
       const cat = document.createElement("span");
       cat.textContent = bm.category;
@@ -3777,6 +4019,19 @@ function bmRenderBookmarks(bookmarks, total) {
 
 function bmOpenEditModal(bookmark) {
   bmState.editingId = bookmark.id;
+  // Populate folder select
+  bmEl.editFolder.replaceChildren();
+  const noneOpt = document.createElement("option");
+  noneOpt.value = "";
+  noneOpt.textContent = "— No folder —";
+  bmEl.editFolder.appendChild(noneOpt);
+  for (const f of bmState.folders) {
+    const opt = document.createElement("option");
+    opt.value = f.id;
+    opt.textContent = f.name;
+    bmEl.editFolder.appendChild(opt);
+  }
+  bmEl.editFolder.value = bookmark.folderId || "";
   bmEl.editTags.value = (bookmark.tags || []).join(", ");
   bmEl.editCategory.value = bookmark.category || "";
   bmEl.editNotes.value = bookmark.notes || "";
@@ -3793,7 +4048,8 @@ async function bmSaveEdit() {
   const tags = bmEl.editTags.value.split(",").map(t => t.trim().toLowerCase()).filter(Boolean);
   const category = bmEl.editCategory.value.trim().toLowerCase() || "other";
   const notes = bmEl.editNotes.value.trim();
-  await browser.runtime.sendMessage({ action: "updateBookmark", id: bmState.editingId, tags, category, notes });
+  const folderId = bmEl.editFolder.value || "";
+  await browser.runtime.sendMessage({ action: "updateBookmark", id: bmState.editingId, tags, category, notes, folderId });
   bmCloseModal();
   bmLoadBookmarks();
 }
@@ -3815,6 +4071,25 @@ async function bmExportBookmarks() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+async function bmSyncToGitHub() {
+  bmEl.syncGithubBtn.disabled = true;
+  bmEl.syncGithubBtn.textContent = "Syncing...";
+  try {
+    const resp = await browser.runtime.sendMessage({ action: "syncBookmarksToGitHub" });
+    if (resp && resp.success) {
+      bmEl.syncGithubBtn.textContent = `Synced ${resp.bookmarks} bookmarks`;
+    } else {
+      bmEl.syncGithubBtn.textContent = resp?.error || "Sync failed";
+    }
+  } catch (e) {
+    bmEl.syncGithubBtn.textContent = "Error: " + e.message;
+  }
+  setTimeout(() => {
+    bmEl.syncGithubBtn.disabled = false;
+    bmEl.syncGithubBtn.textContent = "Sync to GitHub";
+  }, 3000);
 }
 
 function bmToggleSelection() {

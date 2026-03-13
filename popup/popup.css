@@ -254,6 +254,28 @@ textarea {
   border-color: var(--accent);
 }
 
+.mode-select {
+  margin-left: auto;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-family: var(--font);
+  cursor: pointer;
+  max-width: 120px;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 22px;
+}
+.mode-select:hover { border-color: var(--accent); color: var(--text-primary); }
+.mode-select:focus { outline: none; border-color: var(--accent); }
+.mode-select option { background: var(--bg-card); color: var(--text-primary); }
+
 /* Compare panel */
 .compare-panel {
   padding: 8px 16px;

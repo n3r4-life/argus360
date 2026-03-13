@@ -26,7 +26,7 @@ const elements = {
   selectionInfo: document.getElementById("selection-info"),
   selectionTextPreview: document.getElementById("selection-text-preview"),
   monitorBtn: document.getElementById("monitor-btn"),
-  modeAuto: document.getElementById("mode-auto"),
+  defaultBookmarkFolder: document.getElementById("default-bookmark-folder"),
   bookmarkBtn: document.getElementById("bookmark-btn"),
   contextPanel: document.getElementById("context-panel"),
   contextEnabled: document.getElementById("context-enabled"),
@@ -67,7 +67,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await checkSelection();
   await initContextPanel();
   attachEventListeners();
-  await checkAutoAnalyzeStatus();
+  await loadBookmarkFolders();
   await checkPreviousAnalysis();
   await checkArchiveAvailability();
   await checkWaybackAvailability();
@@ -209,18 +209,22 @@ async function initContextPanel() {
   } catch { /* no projects or error — panel stays hidden */ }
 }
 
-async function checkAutoAnalyzeStatus() {
+async function loadBookmarkFolders() {
   try {
-    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-    const tab = tabs[0];
-    if (!tab || !tab.url || tab.url.startsWith("about:") || tab.url.startsWith("moz-extension:")) return;
-    const url = new URL(tab.url);
-    const pattern = `*://${url.hostname}/*`;
-    const { autoAnalyzeRules } = await browser.storage.local.get({ autoAnalyzeRules: [] });
-    if (autoAnalyzeRules.some(r => r.urlPattern === pattern && r.enabled)) {
-      elements.modeAuto.classList.add("active");
-      elements.modeAuto.title = `Auto-analyzing ${url.hostname}`;
+    const resp = await browser.runtime.sendMessage({ action: "getBookmarkFolders" });
+    if (!resp || !resp.success || !resp.folders || !resp.folders.length) return;
+    const select = elements.defaultBookmarkFolder;
+    // Keep the "Unsorted" default option
+    while (select.options.length > 1) select.remove(1);
+    for (const folder of resp.folders) {
+      const opt = document.createElement("option");
+      opt.value = folder.id;
+      opt.textContent = "\uD83D\uDCC1 " + folder.name;
+      select.appendChild(opt);
     }
+    // Restore saved default
+    const { defaultBookmarkFolderId } = await browser.storage.local.get({ defaultBookmarkFolderId: "" });
+    if (defaultBookmarkFolderId) select.value = defaultBookmarkFolderId;
   } catch { /* ignore */ }
 }
 
@@ -717,41 +721,12 @@ function attachEventListeners() {
     setMode(activeMode === "multipage" ? "normal" : "multipage");
   });
 
-  // Auto-analyze this site
-  elements.modeAuto.addEventListener("click", async () => {
-    try {
-      const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-      const tab = tabs[0];
-      if (!tab || !tab.url) {
-        showToast("No active page.", "error");
-        return;
-      }
-      const url = new URL(tab.url);
-      const pattern = `*://${url.hostname}/*`;
-      const preset = elements.analysisType.value || "summary";
-      const provider = elements.analysisProvider.value || "";
-
-      // Load existing rules to check for duplicates
-      const { autoAnalyzeRules } = await browser.storage.local.get({ autoAnalyzeRules: [] });
-      if (autoAnalyzeRules.some(r => r.urlPattern === pattern)) {
-        showToast(`Already auto-analyzing ${url.hostname}`, "error");
-        return;
-      }
-
-      autoAnalyzeRules.push({
-        id: `rule-${Date.now()}`,
-        urlPattern: pattern,
-        preset,
-        provider,
-        delay: 2000,
-        enabled: true
-      });
-      await browser.storage.local.set({ autoAnalyzeRules });
-      showToast(`Auto-analyzing ${url.hostname}!`, "success");
-      elements.modeAuto.classList.add("active");
-    } catch (err) {
-      showToast(err.message, "error");
-    }
+  // Default bookmark folder — save choice to storage
+  elements.defaultBookmarkFolder.addEventListener("change", async () => {
+    const folderId = elements.defaultBookmarkFolder.value;
+    await browser.storage.local.set({ defaultBookmarkFolderId: folderId });
+    const label = elements.defaultBookmarkFolder.options[elements.defaultBookmarkFolder.selectedIndex].textContent;
+    showToast(`Default folder: ${label}`, "success");
   });
 
   // Analyze
@@ -802,10 +777,12 @@ function attachEventListeners() {
     elements.bookmarkBtn.classList.add("bookmark-btn-saving");
     showToast("Saving bookmark...", "loading");
     try {
+      const folderId = elements.defaultBookmarkFolder.value || "";
       const response = await browser.runtime.sendMessage({
         action: "bookmarkPage",
         tabId: currentTabId,
-        aiTag: true
+        aiTag: true,
+        folderId
       });
       if (response && response.success) {
         elements.bookmarkBtn.classList.remove("bookmark-btn-saving");

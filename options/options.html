@@ -695,11 +695,18 @@
           <button id="bm-analyze-selected" class="btn btn-sm btn-secondary hidden">Analyze Selected</button>
           <button id="bm-select-toggle" class="btn btn-sm btn-secondary">Select</button>
           <button id="bm-export" class="btn btn-sm btn-secondary">Export JSON</button>
+          <button id="bm-sync-github" class="btn btn-sm btn-secondary" title="Sync bookmark metadata to GitHub">Sync to GitHub</button>
         </div>
       </div>
 
       <div class="bm-layout">
         <aside class="bm-sidebar">
+          <div class="bm-sidebar-section">
+            <h3 class="bm-sidebar-heading">Folders <button id="bm-new-folder" class="btn-icon" title="New folder">+</button></h3>
+            <div id="bm-folder-tree" class="bm-folder-tree">
+              <div class="bm-folder-item active" data-folder-id="">All Bookmarks</div>
+            </div>
+          </div>
           <div class="bm-sidebar-section">
             <h3 class="bm-sidebar-heading">Categories</h3>
             <div id="bm-category-list" class="bm-filter-list"></div>
@@ -731,6 +738,8 @@
             <button id="bm-modal-close" class="bm-modal-close">&times;</button>
           </div>
           <div class="bm-modal-body">
+            <label class="bm-field-label">Folder</label>
+            <select id="bm-edit-folder" class="bm-field-input"></select>
             <label class="bm-field-label">Tags (comma-separated)</label>
             <input type="text" id="bm-edit-tags" class="bm-field-input">
             <label class="bm-field-label">Category</label>
@@ -881,8 +890,6 @@
         <div class="card-body">
           <p class="info-text">Monitor pages for changes. Argus will periodically check for updates and notify you when content changes. Optionally uses AI to summarize what changed.</p>
 
-          <div id="monitor-list" class="rules-list"></div>
-
           <div class="rule-form">
             <div class="form-row">
               <div class="form-group flex-2">
@@ -922,6 +929,12 @@
                 </select>
               </div>
               <div class="form-group flex-1">
+                <label for="monitor-automation">Run Automation</label>
+                <select id="monitor-automation">
+                  <option value="">None</option>
+                </select>
+              </div>
+              <div class="form-group flex-1">
                 <label class="toggle-label">
                   <input type="checkbox" id="monitor-ai" checked>
                   <span>AI Change Analysis</span>
@@ -946,6 +959,9 @@
           </div>
 
           <span id="monitor-status" class="prompt-status"></span>
+
+          <div id="monitor-list" class="monitor-grid"></div>
+
           <div id="monitor-storage-bar" style="margin-top:12px;display:none;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
               <span class="rule-meta" style="font-size:12px;">Storage Usage</span>
