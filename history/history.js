@@ -662,6 +662,77 @@ function attachListeners() {
       : `${getShareSnippet()}\n\n- ${attrib}`;
     window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
   });
+
+  // ── Paste to service ──
+  const detailPasteBtn = document.getElementById("detail-paste");
+  const detailPastePicker = document.getElementById("detail-paste-picker");
+
+  detailPasteBtn.addEventListener("click", async () => {
+    if (!currentItem || !currentItem.content) return;
+    const settings = await browser.storage.local.get({ pasteProviders: {}, defaultPasteProvider: "" });
+    const pp = settings.pasteProviders || {};
+    const connected = [];
+    for (const key of ["gist", "pastebin", "privatebin"]) {
+      if (pp[key]?.connected) connected.push(key);
+    }
+    if (!connected.length) {
+      detailPasteBtn.textContent = "No paste service";
+      setTimeout(() => { detailPasteBtn.textContent = "Paste"; }, 2000);
+      return;
+    }
+    const defaultKey = settings.defaultPasteProvider;
+    if (connected.length === 1 || (defaultKey && connected.includes(defaultKey))) {
+      const key = (defaultKey && connected.includes(defaultKey)) ? defaultKey : connected[0];
+      await doDetailPaste(key);
+      return;
+    }
+    detailPastePicker.innerHTML = "";
+    const labels = { gist: "GitHub Gist", pastebin: "Pastebin", privatebin: "PrivateBin" };
+    for (const key of connected) {
+      const opt = document.createElement("div");
+      opt.style.cssText = "padding:8px 12px;cursor:pointer;font-size:13px;";
+      opt.textContent = labels[key] || key;
+      opt.addEventListener("mouseenter", () => opt.style.background = "var(--bg-hover,#2a2a4a)");
+      opt.addEventListener("mouseleave", () => opt.style.background = "");
+      opt.addEventListener("click", async () => {
+        detailPastePicker.classList.add("hidden");
+        await doDetailPaste(key);
+      });
+      detailPastePicker.appendChild(opt);
+    }
+    detailPastePicker.classList.toggle("hidden");
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!detailPasteBtn.contains(e.target) && !detailPastePicker.contains(e.target)) {
+      detailPastePicker.classList.add("hidden");
+    }
+  });
+
+  async function doDetailPaste(providerKey) {
+    detailPasteBtn.disabled = true;
+    detailPasteBtn.textContent = "Pasting...";
+    const title = `${currentItem.pageTitle || "Argus Report"} - ${new Date().toISOString().slice(0, 10)}`;
+    const result = await browser.runtime.sendMessage({
+      action: "pasteCreate",
+      providerKey,
+      title,
+      content: currentItem.content,
+    });
+    if (result?.success && result.url) {
+      detailPasteBtn.textContent = "Pasted!";
+      detailPasteBtn.style.color = "var(--success)";
+      window.open(result.url, "_blank");
+    } else {
+      detailPasteBtn.textContent = result?.error || "Failed";
+      detailPasteBtn.style.color = "var(--error)";
+    }
+    setTimeout(() => {
+      detailPasteBtn.textContent = "Paste";
+      detailPasteBtn.style.color = "";
+      detailPasteBtn.disabled = false;
+    }, 2000);
+  }
 }
 
 async function loadHistory() {

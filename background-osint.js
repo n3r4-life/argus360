@@ -2012,22 +2012,36 @@ async function handleExtractImages(message) {
         const seen = new Set();
         const images = [];
 
+        function normalizeUrl(raw) {
+          try {
+            const u = new URL(raw, location.href);
+            u.hash = "";
+            // Strip common CDN resize/quality params that create duplicates
+            for (const p of ["w","h","width","height","size","resize","quality","q","fit","auto","format","fm","dpr"]) {
+              u.searchParams.delete(p);
+            }
+            return u.href;
+          } catch { return null; }
+        }
+
         function addImage(src, alt, w, h, source) {
-          if (!src || seen.has(src)) return;
+          if (!src) return;
           // Skip data URIs that are tiny (tracking pixels, spacers)
           if (src.startsWith("data:") && src.length < 500) return;
           // Skip common tracking/ad patterns
           if (/1x1|pixel|spacer|blank\\.gif|beacon/i.test(src)) return;
-          seen.add(src);
+          const resolved = normalizeUrl(src);
+          if (!resolved || seen.has(resolved)) return;
+          seen.add(resolved);
           try {
-            const url = new URL(src, location.href);
+            const url = new URL(resolved);
             images.push({
               src: url.href,
               alt: (alt || "").trim().slice(0, 200),
               width: w || 0,
               height: h || 0,
               source: source,
-              filename: url.pathname.split("/").pop() || "image",
+              filename: decodeURIComponent(url.pathname.split("/").pop() || "image"),
             });
           } catch {}
         }
@@ -2089,16 +2103,23 @@ async function handleExtractImages(message) {
     const data = results?.[0];
     if (!data || !data.images) return { success: false, error: "No image data returned" };
 
-    // Attempt to get actual dimensions and file sizes via HEAD requests for images we couldn't measure in-page
-    const enriched = [];
+    // Deduplicate by base path (strip query strings) — keep the version with largest dimensions
+    const byBase = new Map();
     for (const img of data.images) {
       // Filter out images below minimum size if we know dimensions
       if (img.width && img.height && (img.width < minWidth || img.height < minHeight)) continue;
       // Try to determine file type from URL
       const ext = (img.filename.match(/\.(jpe?g|png|gif|webp|svg|avif|bmp|ico|tiff?)$/i) || [])[1] || "";
       img.type = ext.toLowerCase() || (img.src.startsWith("data:") ? (img.src.match(/data:image\/(\w+)/)?.[1] || "unknown") : "unknown");
-      enriched.push(img);
+      // Dedup key: strip all query params to catch CDN variants
+      let baseKey;
+      try { const u = new URL(img.src); baseKey = u.origin + u.pathname; } catch { baseKey = img.src; }
+      const existing = byBase.get(baseKey);
+      if (!existing || (img.width * img.height) > (existing.width * existing.height)) {
+        byBase.set(baseKey, img);
+      }
     }
+    const enriched = [...byBase.values()];
 
     console.log(`[ImageGrabber] Found ${enriched.length} images on ${data.pageUrl}`);
     return {
@@ -2119,6 +2140,109 @@ async function handleExtractImages(message) {
 }
 
 // ──────────────────────────────────────────────
+// AI Image Search — vision-based filtering
+// ──────────────────────────────────────────────
+
+async function handleAiImageSearch(message) {
+  const { query, images, provider: providerOverride } = message;
+  if (!query || !images || images.length === 0) {
+    return { success: false, error: "No query or images provided." };
+  }
+
+  try {
+    const settings = await getProviderSettings(providerOverride || null);
+    const BATCH_SIZE = 4; // images per API call (balance cost vs speed)
+    const MAX_IMAGES = 40; // cap to avoid excessive API usage
+    const toScan = images.slice(0, MAX_IMAGES);
+    const matches = [];
+
+    // Fetch and convert images to base64 in parallel batches
+    async function fetchAsBase64(url) {
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) return null;
+        const blob = await resp.blob();
+        // Skip very large images (>5MB) to stay within token limits
+        if (blob.size > 5 * 1024 * 1024) return null;
+        const mimeType = blob.type || "image/jpeg";
+        // Only process actual images
+        if (!mimeType.startsWith("image/")) return null;
+        const buffer = await blob.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = "";
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        return { base64: btoa(binary), mimeType };
+      } catch { return null; }
+    }
+
+    const systemPrompt = `You are an image analysis assistant. You will be shown images and a search query. For each image, determine if it matches the query. Respond ONLY with a JSON array of booleans — one per image, in order. Example: [true, false, true, false]. No explanation, no markdown, just the JSON array.`;
+
+    // Process in batches
+    for (let i = 0; i < toScan.length; i += BATCH_SIZE) {
+      const batch = toScan.slice(i, i + BATCH_SIZE);
+      const imageDataList = [];
+      const batchIndices = [];
+
+      // Fetch all images in this batch in parallel
+      const fetched = await Promise.all(batch.map(img => fetchAsBase64(img.src)));
+      for (let j = 0; j < fetched.length; j++) {
+        if (fetched[j]) {
+          imageDataList.push(fetched[j]);
+          batchIndices.push(i + j);
+        }
+      }
+
+      if (imageDataList.length === 0) continue;
+
+      const userPrompt = `Search query: "${query}"\n\nI'm showing you ${imageDataList.length} image(s). For each one, does it match or relate to the query "${query}"? Return a JSON array of ${imageDataList.length} booleans.`;
+
+      try {
+        const result = await callProviderVision(
+          settings.provider, settings.apiKey, settings.model,
+          systemPrompt, userPrompt, imageDataList,
+          { maxTokens: 256, temperature: 0.1 }
+        );
+
+        // Parse the boolean array from the response
+        const text = result.content.trim();
+        const jsonMatch = text.match(/\[[\s\S]*?\]/);
+        if (jsonMatch) {
+          const bools = JSON.parse(jsonMatch[0]);
+          for (let k = 0; k < bools.length; k++) {
+            if (bools[k] === true && batchIndices[k] !== undefined) {
+              matches.push(batchIndices[k]);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn(`[AiImageSearch] Batch ${i} failed:`, e.message);
+        // Continue with remaining batches
+      }
+
+      // Report progress via storage for the UI to poll
+      await browser.storage.local.set({
+        [`ai-search-progress-${message.searchId}`]: {
+          scanned: Math.min(i + BATCH_SIZE, toScan.length),
+          total: toScan.length,
+          matches: matches.length
+        }
+      });
+    }
+
+    // Clean up progress key
+    if (message.searchId) {
+      await browser.storage.local.remove(`ai-search-progress-${message.searchId}`);
+    }
+
+    console.log(`[AiImageSearch] "${query}" — ${matches.length} matches out of ${toScan.length} images`);
+    return { success: true, matchIndices: matches, total: toScan.length };
+  } catch (e) {
+    console.error("[AiImageSearch] Failed:", e);
+    return { success: false, error: e.message };
+  }
+}
+
+// ──────────────────────────────────────────────
 // Message handler registration
 // ──────────────────────────────────────────────
 // Extends the existing browser.runtime.onMessage — MV2 supports
@@ -2130,6 +2254,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
     case "extractMetadata":     return handleExtractMetadata(message);
     case "extractLinks":        return handleExtractLinks(message);
     case "extractImages":       return handleExtractImages(message);
+    case "aiImageSearch":       return handleAiImageSearch(message);
 
     // Whois / DNS
     case "whoisLookup":         return handleWhoisLookup(message);

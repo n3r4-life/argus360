@@ -543,6 +543,154 @@ async function callGeminiStream(apiKey, model, messages, opts, onChunk, onThinki
 }
 
 // ──────────────────────────────────────────────
+// Vision API calls (image + text prompts)
+// ──────────────────────────────────────────────
+
+/**
+ * Build a vision message with images for the appropriate provider format.
+ * @param {string} provider - "xai", "openai", "anthropic", "gemini", "custom"
+ * @param {string} systemPrompt - System instruction
+ * @param {string} userPrompt - User text prompt
+ * @param {Array<{base64: string, mimeType: string}>} imageDataList - Images as base64
+ * @returns {Object} { messages, geminiContents, geminiSystem } formatted for the provider
+ */
+function buildVisionMessages(provider, systemPrompt, userPrompt, imageDataList) {
+  if (provider === "anthropic") {
+    // Anthropic: content array with image blocks
+    const userContent = [];
+    for (const img of imageDataList) {
+      userContent.push({
+        type: "image",
+        source: { type: "base64", media_type: img.mimeType, data: img.base64 }
+      });
+    }
+    userContent.push({ type: "text", text: userPrompt });
+    return {
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent }
+      ]
+    };
+  }
+
+  if (provider === "gemini") {
+    // Gemini: parts array with inline_data
+    const parts = [];
+    for (const img of imageDataList) {
+      parts.push({ inline_data: { mime_type: img.mimeType, data: img.base64 } });
+    }
+    parts.push({ text: userPrompt });
+    return {
+      geminiContents: [{ role: "user", parts }],
+      geminiSystem: systemPrompt
+    };
+  }
+
+  // OpenAI / xAI / Custom: content array with image_url blocks
+  const userContent = [];
+  for (const img of imageDataList) {
+    userContent.push({
+      type: "image_url",
+      image_url: { url: `data:${img.mimeType};base64,${img.base64}`, detail: "low" }
+    });
+  }
+  userContent.push({ type: "text", text: userPrompt });
+  return {
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userContent }
+    ]
+  };
+}
+
+/**
+ * Call any provider with vision (image) content.
+ * @param {string} provider
+ * @param {string} apiKey
+ * @param {string} model
+ * @param {string} systemPrompt
+ * @param {string} userPrompt
+ * @param {Array<{base64: string, mimeType: string}>} imageDataList
+ * @param {Object} opts - { maxTokens, temperature }
+ * @returns {Promise<{content: string, model: string}>}
+ */
+async function callProviderVision(provider, apiKey, model, systemPrompt, userPrompt, imageDataList, opts = {}) {
+  const temperature = opts.temperature ?? 0.3;
+  const maxTokens = opts.maxTokens || 1024;
+
+  if (provider === "gemini") {
+    const { geminiContents, geminiSystem } = buildVisionMessages(provider, systemPrompt, userPrompt, imageDataList);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const body = {
+      contents: geminiContents,
+      generationConfig: { temperature, maxOutputTokens: maxTokens }
+    };
+    if (geminiSystem) body.system_instruction = { parts: [{ text: geminiSystem }] };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    if (!response.ok) handleApiError(response, await response.text(), "Gemini");
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("") || "";
+    return { content: text, model };
+  }
+
+  if (provider === "anthropic") {
+    const { messages } = buildVisionMessages(provider, systemPrompt, userPrompt, imageDataList);
+    const systemMsg = messages.find(m => m.role === "system");
+    const nonSystem = messages.filter(m => m.role !== "system");
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model, max_tokens: maxTokens,
+        system: systemMsg?.content,
+        messages: nonSystem
+      })
+    });
+    if (!response.ok) handleApiError(response, await response.text(), "Anthropic");
+    const data = await response.json();
+    const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
+    return { content: text, model: data.model || model };
+  }
+
+  // xAI, OpenAI, Custom — all use OpenAI-compatible format
+  const { messages } = buildVisionMessages(provider, systemPrompt, userPrompt, imageDataList);
+  let url, headers;
+  if (provider === "custom") {
+    const cfg = await getCustomProviderConfig();
+    url = `${cfg.baseUrl}/v1/chat/completions`;
+    headers = { "Content-Type": "application/json", "Authorization": `Bearer ${cfg.apiKey}` };
+    model = cfg.model;
+  } else if (provider === "openai") {
+    url = "https://api.openai.com/v1/chat/completions";
+    headers = { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` };
+  } else {
+    // xAI
+    url = "https://api.x.ai/v1/chat/completions";
+    headers = { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` };
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature })
+  });
+  if (!response.ok) handleApiError(response, await response.text(), provider === "custom" ? "Custom" : provider === "openai" ? "OpenAI" : "xAI");
+  const data = await response.json();
+  return { content: data.choices?.[0]?.message?.content || "", model: data.model || model };
+}
+
+// ──────────────────────────────────────────────
 // Provider router
 // ──────────────────────────────────────────────
 async function callProvider(provider, apiKey, model, messages, opts = {}) {
