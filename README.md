@@ -109,14 +109,14 @@ Custom endpoint support covers Ollama, LM Studio, Hugging Face, vLLM, and any se
 
 ### Getting an API Key
 
-You only need **one key** to get started. Most providers offer generous free tiers — many users spend less than $1/month.
+You only need **one key** to get started. Most providers offer generous free tiers — many users spend less than $1/month. 
 
 | Provider | Get Your Key | Free Tier |
 |----------|-------------|-----------|
-| xAI (Grok) | [console.x.ai](https://console.x.ai) | $25/month free API credits |
+| xAI (Grok) | [console.x.ai](https://console.x.ai) | **$25/month FREE** API credits |
 | Google (Gemini) | [aistudio.google.com](https://aistudio.google.com/apikey) | Generous free tier |
 | OpenAI | [platform.openai.com](https://platform.openai.com/api-keys) | Pay-as-you-go (low cost) |
-| Anthropic (Claude) | [console.anthropic.com](https://console.anthropic.com) | $5 free credit on signup |
+| Anthropic (Claude) | [console.anthropic.com](https://console.anthropic.com) | **$5 free** credit on signup |
 | Custom | Your endpoint | Bring your own |
 
 **How to get a key (takes ~2 minutes):**

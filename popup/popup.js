@@ -39,18 +39,27 @@ let activeMode = "normal"; // normal, selection, compare, multipage
 let currentTabId = null;
 let selectedText = "";
 
-// Focus existing console tab or create a new one (prevents duplicate tabs)
-async function focusOrCreateConsole(hash) {
-  const consoleUrl = browser.runtime.getURL("options/options.html");
-  const tabs = await browser.tabs.query({ url: consoleUrl + "*" });
-  if (tabs.length > 0) {
-    const tab = tabs[0];
-    await browser.tabs.update(tab.id, { active: true, url: consoleUrl + (hash ? "#" + hash : "") });
-    await browser.windows.update(tab.windowId, { focused: true });
+// Find any existing Argus extension tab and navigate it, or create one
+async function findArgusTab() {
+  const extOrigin = browser.runtime.getURL("");
+  const all = await browser.tabs.query({ url: extOrigin + "*" });
+  return all.length > 0 ? all[0] : null;
+}
+
+async function navigateArgusTab(fullUrl) {
+  const existing = await findArgusTab();
+  if (existing) {
+    await browser.tabs.update(existing.id, { active: true, url: fullUrl });
+    await browser.windows.update(existing.windowId, { focused: true });
   } else {
-    await browser.tabs.create({ url: consoleUrl + (hash ? "#" + hash : "") });
+    await browser.tabs.create({ url: fullUrl });
   }
   window.close();
+}
+
+async function focusOrCreateConsole(hash) {
+  const consoleUrl = browser.runtime.getURL("options/options.html");
+  await navigateArgusTab(consoleUrl + (hash ? "#" + hash : ""));
 }
 
 // ──────────────────────────────────────────────
@@ -596,18 +605,10 @@ function attachEventListeners() {
     browser.tabs.create({ url: ARGUS_HELP_URL });
   });
 
-  // App icon button handlers — focus-or-create pattern
+  // App icon button handlers — navigate the single Argus tab
   async function focusOrCreatePage(urlPath) {
     const fullUrl = browser.runtime.getURL(urlPath);
-    const baseUrl = fullUrl.split("?")[0];
-    const existing = await browser.tabs.query({ url: baseUrl + "*" });
-    if (existing.length > 0) {
-      await browser.tabs.update(existing[0].id, { active: true });
-      await browser.windows.update(existing[0].windowId, { focused: true });
-    } else {
-      await browser.tabs.create({ url: fullUrl });
-    }
-    window.close();
+    await navigateArgusTab(fullUrl);
   }
 
   document.getElementById("open-projects").addEventListener("click", () => focusOrCreateConsole("projects"));

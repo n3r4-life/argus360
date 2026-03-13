@@ -2410,6 +2410,18 @@ textarea {
   color: #fff;
 }
 
+/* Refresh button — light blue accent */
+.btn-refresh {
+  background: transparent;
+  border: 1px solid #4fc3f7;
+  color: #4fc3f7;
+  font-weight: 600;
+}
+.btn-refresh:hover {
+  background: #4fc3f7;
+  color: #0f0f1a;
+}
+
 /* Vault status badge */
 .vault-status-badge {
   display: inline-block;

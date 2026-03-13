@@ -2814,34 +2814,47 @@ async function handleReAnalyze(message) {
 }
 
 // ──────────────────────────────────────────────
+// Single-tab navigation — find any Argus tab and reuse it, or create one
+// ──────────────────────────────────────────────
+async function openArgusPage(url) {
+  const extOrigin = browser.runtime.getURL("");
+  const existing = await browser.tabs.query({ url: extOrigin + "*" });
+  if (existing.length > 0) {
+    await browser.tabs.update(existing[0].id, { active: true, url });
+    await browser.windows.update(existing[0].windowId, { focused: true });
+  } else {
+    await browser.tabs.create({ url });
+  }
+}
+
+// ──────────────────────────────────────────────
 // Context menu click handler
 // ──────────────────────────────────────────────
 browser.contextMenus.onClicked.addListener(async (info, tab) => {
   // Chat with AI
   if (info.menuItemId === "argus-chat") {
-    browser.tabs.create({ url: browser.runtime.getURL("chat/chat.html") });
+    openArgusPage(browser.runtime.getURL("chat/chat.html"));
     return;
   }
   if (info.menuItemId === "argus-chat-selection") {
     const text = (info.selectionText || "").trim();
     if (text) {
-      const chatUrl = browser.runtime.getURL(`chat/chat.html?msg=${encodeURIComponent(text)}`);
-      browser.tabs.create({ url: chatUrl });
+      openArgusPage(browser.runtime.getURL(`chat/chat.html?msg=${encodeURIComponent(text)}`));
     } else {
-      browser.tabs.create({ url: browser.runtime.getURL("chat/chat.html") });
+      openArgusPage(browser.runtime.getURL("chat/chat.html"));
     }
     return;
   }
 
   // Workbench
   if (info.menuItemId === "argus-workbench") {
-    browser.tabs.create({ url: browser.runtime.getURL("workbench/workbench.html") });
+    openArgusPage(browser.runtime.getURL("workbench/workbench.html"));
     return;
   }
 
   // Open Argus Console
   if (info.menuItemId === "argus-console") {
-    browser.tabs.create({ url: browser.runtime.getURL("options/options.html") });
+    openArgusPage(browser.runtime.getURL("options/options.html"));
     return;
   }
 
@@ -2858,7 +2871,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
 
   // Wipe All Data — opens console Settings tab scrolled to wipe section
   if (info.menuItemId === "argus-wipe") {
-    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#settings-wipe") });
+    openArgusPage(browser.runtime.getURL("options/options.html#settings-wipe"));
     return;
   }
 
@@ -2870,25 +2883,25 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
 
   // Open OSINT Dashboard
   if (info.menuItemId === "argus-osint-dashboard") {
-    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#osint") });
+    openArgusPage(browser.runtime.getURL("options/options.html#osint"));
     return;
   }
 
   // Open Global Knowledge Graph
   if (info.menuItemId === "argus-osint-global-graph") {
-    browser.tabs.create({ url: browser.runtime.getURL("osint/graph.html?mode=global") });
+    openArgusPage(browser.runtime.getURL("osint/graph.html?mode=global"));
     return;
   }
 
   // Open Feed Reader
   if (info.menuItemId === "argus-open-reader") {
-    browser.tabs.create({ url: browser.runtime.getURL("feeds/feeds.html") });
+    openArgusPage(browser.runtime.getURL("feeds/feeds.html"));
     return;
   }
 
   // Open Reports
   if (info.menuItemId === "argus-reports") {
-    browser.tabs.create({ url: browser.runtime.getURL("history/history.html") });
+    openArgusPage(browser.runtime.getURL("history/history.html"));
     return;
   }
 

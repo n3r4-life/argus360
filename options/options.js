@@ -1,15 +1,8 @@
 // ──────────────────────────────────────────────
-// Focus existing tab or create new (single instance per page)
+// Single-tab navigation — navigate current tab to another Argus page
 // ──────────────────────────────────────────────
-async function focusOrCreatePage(urlPath) {
-  const fullUrl = browser.runtime.getURL(urlPath);
-  const existing = await browser.tabs.query({ url: fullUrl + "*" });
-  if (existing.length > 0) {
-    await browser.tabs.update(existing[0].id, { active: true });
-    await browser.windows.update(existing[0].windowId, { focused: true });
-  } else {
-    await browser.tabs.create({ url: fullUrl });
-  }
+function focusOrCreatePage(urlPath) {
+  window.location.href = browser.runtime.getURL(urlPath);
 }
 
 // ──────────────────────────────────────────────
@@ -587,6 +580,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   initWatchlist();
   initStorageManagement();
   initCloudBackup();
+
+  // Refresh buttons on data tabs
+  document.getElementById("bm-refresh")?.addEventListener("click", () => {
+    if (bmState.initialized) bmLoadBookmarks();
+  });
+  document.getElementById("mon-refresh")?.addEventListener("click", () => renderMonitors());
+  document.getElementById("feed-refresh")?.addEventListener("click", () => {
+    renderFeeds();
+    renderFeedRoutes();
+  });
+  document.getElementById("kg-refresh")?.addEventListener("click", () => {
+    updateKGStats();
+    loadPendingMerges();
+  });
 
   // Live data refresh — listen for background data changes
   let _refreshDebounce = {};

@@ -262,21 +262,21 @@
   initAppTabs();
   ribbon.insertAdjacentElement("afterend", appBar);
 
-  // ── Focus-or-create helpers (single instance per page) ──
-  async function focusOrCreate(urlPath, hash) {
-    const fullUrl = browser.runtime.getURL(urlPath);
-    const existing = await browser.tabs.query({ url: fullUrl + "*" });
-    if (existing.length > 0) {
-      const tab = existing[0];
-      await browser.tabs.update(tab.id, { active: true, url: hash ? fullUrl + "#" + hash : undefined });
-      await browser.windows.update(tab.windowId, { focused: true });
-    } else {
-      await browser.tabs.create({ url: fullUrl + (hash ? "#" + hash : "") });
-    }
+  // ── Single-tab navigation — all Argus pages share the current tab ──
+  function navigateTo(urlPath, hash) {
+    const fullUrl = browser.runtime.getURL(urlPath) + (hash ? "#" + hash : "");
+    window.location.href = fullUrl;
   }
 
   function nav(hash) {
-    focusOrCreate("options/options.html", hash);
+    const onConsole = window.location.pathname.endsWith("/options/options.html");
+    if (onConsole) {
+      // Same page — just switch the hash (triggers hashchange in options.js)
+      window.location.hash = hash;
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    } else {
+      navigateTo("options/options.html", hash);
+    }
   }
 
   // Brand / logo → console home landing
@@ -294,7 +294,9 @@
   document.getElementById("ribbon-providers").addEventListener("click", () => nav("providers"));
   document.getElementById("ribbon-resources").addEventListener("click", () => nav("resources"));
   document.getElementById("ribbon-settings").addEventListener("click", () => nav("settings"));
-  document.getElementById("ribbon-help").addEventListener("click", () => nav("help"));
+  document.getElementById("ribbon-help").addEventListener("click", () => {
+    browser.tabs.create({ url: "https://github.com/n3r4-life/argus360#readme" });
+  });
 
   // Wipe button
   document.getElementById("ribbon-wipe").addEventListener("click", async () => {
@@ -311,8 +313,8 @@
     if (!btn) return;
     const def = APP_TAB_DEFS[btn.dataset.tabId];
     if (!def) return;
-    if (def.hash) focusOrCreate(def.path, def.hash);
-    else focusOrCreate(def.path);
+    if (def.hash) nav(def.hash);
+    else navigateTo(def.path);
   });
 
   // ── Ribbon badge counts ──
