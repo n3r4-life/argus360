@@ -197,12 +197,13 @@
     chatMessages.replaceChildren();
     for (const msg of messages) {
       if (msg.role === "user" || msg.role === "assistant") {
-        appendMessageBubble(msg.role, msg.content, msg.timestamp);
+        appendMessageBubble(msg.role, msg.content, msg.timestamp,
+          msg.role === "assistant" ? { provider: msg.provider, model: msg.model } : null);
       }
     }
   }
 
-  function appendMessageBubble(role, content, timestamp) {
+  function appendMessageBubble(role, content, timestamp, meta) {
     const emptyEl = chatMessages.querySelector(".chat-empty");
     if (emptyEl) emptyEl.remove();
 
@@ -236,6 +237,56 @@
 
     div.appendChild(header);
     div.appendChild(body);
+
+    // Provider/model footnote for AI messages
+    if (role === "assistant" && meta && (meta.provider || meta.model)) {
+      const footnote = document.createElement("div");
+      footnote.className = "chat-msg-footnote";
+      const parts = [];
+      if (meta.provider) parts.push(meta.provider);
+      if (meta.model) parts.push(meta.model);
+      footnote.textContent = parts.join(" · ");
+      div.appendChild(footnote);
+    }
+
+    // Action bar for assistant messages
+    if (role === "assistant" && content) {
+      const actions = document.createElement("div");
+      actions.className = "chat-msg-actions";
+
+      const copyBtn = document.createElement("button");
+      copyBtn.className = "chat-msg-action";
+      copyBtn.textContent = "Copy";
+      copyBtn.title = "Copy to clipboard";
+      copyBtn.addEventListener("click", () => {
+        navigator.clipboard.writeText(content);
+        copyBtn.textContent = "Copied";
+        setTimeout(() => { copyBtn.textContent = "Copy"; }, 1500);
+      });
+      actions.appendChild(copyBtn);
+
+      const draftBtn = document.createElement("button");
+      draftBtn.className = "chat-msg-action chat-msg-action-accent";
+      draftBtn.textContent = "Send to Draft";
+      draftBtn.title = "Insert into Draft Pad";
+      draftBtn.addEventListener("click", async () => {
+        await browser.storage.local.set({ draftPendingInsert: { content, timestamp: Date.now() } });
+        draftBtn.textContent = "Sent!";
+        setTimeout(() => { draftBtn.textContent = "Send to Draft"; }, 1500);
+        const draftUrl = browser.runtime.getURL("reporting/reporting.html");
+        const existing = await browser.tabs.query({ url: draftUrl + "*" });
+        if (existing.length > 0) {
+          await browser.tabs.update(existing[0].id, { active: true });
+          await browser.windows.update(existing[0].windowId, { focused: true });
+        } else {
+          await browser.tabs.create({ url: draftUrl });
+        }
+      });
+      actions.appendChild(draftBtn);
+
+      div.appendChild(actions);
+    }
+
     chatMessages.appendChild(div);
     return div;
   }
@@ -339,8 +390,21 @@
           clearInterval(streamPollTimer);
           msgDiv.classList.remove("streaming");
           chatStatus.textContent = state.usage
-            ? `${state.model || ""} · ${state.usage.totalTokens || "?"} tokens`
+            ? `${state.usage.totalTokens || "?"} tokens`
             : "";
+          // Add provider/model footnote
+          if (state.provider || state.model) {
+            const existing = msgDiv.querySelector(".chat-msg-footnote");
+            if (!existing) {
+              const footnote = document.createElement("div");
+              footnote.className = "chat-msg-footnote";
+              const parts = [];
+              if (state.provider) parts.push(state.provider);
+              if (state.model) parts.push(state.model);
+              footnote.textContent = parts.join(" · ");
+              msgDiv.appendChild(footnote);
+            }
+          }
           browser.storage.local.remove(streamId);
           resolve();
         }
@@ -406,7 +470,10 @@
       if (msg.role === "user") {
         md += `**You:** ${msg.content}\n\n`;
       } else if (msg.role === "assistant") {
-        md += `**AI:** ${msg.content}\n\n`;
+        const attr = [msg.provider, msg.model].filter(Boolean).join(" · ");
+        md += `**AI:** ${msg.content}\n`;
+        if (attr) md += `*— ${attr}*\n`;
+        md += `\n`;
       }
     }
     md += `\n---\n*Exported from Argus Chat*\n`;
@@ -434,7 +501,12 @@
     let body = "";
     for (const msg of (session.messages || [])) {
       if (msg.role === "user") body += `You: ${msg.content}\n\n`;
-      else if (msg.role === "assistant") body += `AI: ${msg.content}\n\n`;
+      else if (msg.role === "assistant") {
+        const attr = [msg.provider, msg.model].filter(Boolean).join(" · ");
+        body += `AI: ${msg.content}\n`;
+        if (attr) body += `— ${attr}\n`;
+        body += `\n`;
+      }
     }
 
     EmailShare.compose({

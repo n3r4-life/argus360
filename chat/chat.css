@@ -79,7 +79,7 @@ body {
 .chat-main {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 46px);
+  height: calc(100vh - 46px - 136px);
 }
 
 .chat-messages {
@@ -183,6 +183,40 @@ body {
 .chat-msg.assistant .chat-msg-body th,
 .chat-msg.assistant .chat-msg-body td { border: 1px solid var(--border); padding: 4px 8px; }
 .chat-msg.assistant .chat-msg-body th { background: var(--bg-surface); font-weight: 600; }
+
+/* Provider/model footnote */
+.chat-msg-footnote {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+  opacity: 0.7;
+  font-style: italic;
+}
+
+/* Message action bar */
+.chat-msg-actions {
+  display: flex;
+  gap: 6px;
+  padding: 4px 0 0;
+  margin-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.chat-msg-action {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  padding: 2px 10px;
+  font-size: 10px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.chat-msg-action:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+.chat-msg-action-accent { color: var(--accent); border-color: var(--accent); }
+.chat-msg-action-accent:hover { background: var(--accent); color: #fff; }
 
 /* Streaming cursor */
 .chat-msg.streaming .chat-msg-body::after {

@@ -73,6 +73,24 @@
   background: #ff5252;
 }
 
+/* Badge pill on ribbon icons */
+.argus-ribbon .ribbon-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  color: #fff;
+  background: #e94560;
+  border-radius: 7px;
+  pointer-events: none;
+}
+
 .argus-ribbon .ribbon-icon-sep {
   width: 1px;
   height: 18px;

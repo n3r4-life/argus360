@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Draft Pad - Argus</title>
+  <link rel="stylesheet" href="reporting.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../lib/email-share.css">
+</head>
+<body>
+  <script src="../shared/ribbon.js"></script>
+
+  <!-- ── Header bar ── -->
+  <header class="rp-header">
+    <svg class="rp-header-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+    <span class="rp-header-title">Draft Pad</span>
+    <select id="rp-project" title="Attach to project" class="rp-select">
+      <option value="">No project</option>
+    </select>
+    <span class="rp-header-spacer"></span>
+    <select id="rp-template" title="Report template" class="rp-select">
+      <option value="">Blank</option>
+      <option value="osint-brief">OSINT Brief</option>
+      <option value="legal-summary">Legal Summary</option>
+      <option value="tech-memo">Tech Memo</option>
+      <option value="incident-report">Incident Report</option>
+    </select>
+    <button id="rp-save" class="rp-btn-sm" title="Save draft">Save</button>
+    <button id="rp-export" class="rp-btn-sm" title="Export">Export</button>
+    <span class="rp-header-sep"></span>
+    <button id="rp-paste" class="rp-btn-sm rp-btn-share" title="Paste to pastebin">Paste</button>
+    <button id="rp-email" class="rp-btn-sm rp-btn-share" title="Email+">Email+</button>
+    <button id="rp-x" class="rp-btn-sm rp-btn-share" title="Post to X">X</button>
+    <button id="rp-linkedin" class="rp-btn-sm rp-btn-share" title="Share on LinkedIn">LinkedIn</button>
+    <button id="rp-blogger" class="rp-btn-sm rp-btn-share" title="Post to Blogger">Blogger</button>
+    <span class="rp-header-sep"></span>
+    <button id="rp-quick-post" class="rp-btn-sm rp-btn-ai" title="AI-summarize draft for social posting">Quick Post</button>
+    <button id="rp-run-script" class="rp-btn-sm rp-btn-ai" title="Run automation on draft">Run Script</button>
+  </header>
+
+  <!-- ── Quick Post compose panel (floating) ── -->
+  <div class="rp-compose-panel hidden" id="composePanel">
+    <div class="rp-snippets-header">
+      <span class="rp-snippets-title">Quick Post</span>
+      <button class="rp-snippets-close" id="composeClose">&times;</button>
+    </div>
+    <div class="rp-compose-controls">
+      <select id="compose-platform" class="rp-asset-project-select" title="Platform preset">
+        <option value="x">X / Twitter (280)</option>
+        <option value="reddit-title">Reddit Title (300)</option>
+        <option value="linkedin">LinkedIn (700)</option>
+        <option value="mastodon">Mastodon (500)</option>
+        <option value="bluesky">Bluesky (300)</option>
+        <option value="custom">Custom...</option>
+      </select>
+      <div class="rp-compose-limit-row">
+        <label>Char limit:</label>
+        <input type="number" id="compose-limit" value="280" min="50" max="5000" class="rp-compose-limit-input">
+        <button id="compose-generate" class="rp-btn-sm rp-btn-ai" title="Generate summary">Summarize</button>
+      </div>
+    </div>
+    <textarea id="compose-output" class="rp-compose-textarea" placeholder="Click Summarize to generate a post from your draft..."></textarea>
+    <div class="rp-compose-footer">
+      <span id="compose-chars" class="rp-compose-chars">0 / 280</span>
+      <span class="rp-status-spacer"></span>
+      <button id="compose-copy" class="rp-btn-sm" title="Copy to clipboard">Copy</button>
+      <button id="compose-post-x" class="rp-btn-sm rp-btn-share" title="Post to X">X</button>
+      <button id="compose-post-linkedin" class="rp-btn-sm rp-btn-share" title="Post to LinkedIn">LinkedIn</button>
+      <button id="compose-post-reddit" class="rp-btn-sm rp-btn-share" title="Post to Reddit">Reddit</button>
+    </div>
+  </div>
+
+  <!-- ── Asset Library panel (floating) ── -->
+  <div class="rp-snippets-panel" id="snippetsPanel">
+    <div class="rp-snippets-header">
+      <span class="rp-snippets-title">Asset Library</span>
+      <button class="rp-snippets-close" id="snippetsClose">&times;</button>
+    </div>
+    <div class="rp-snippets-search-row">
+      <select id="asset-project" class="rp-asset-project-select" title="Filter assets by project">
+        <option value="">All Projects</option>
+      </select>
+      <input type="text" id="snippetSearch" class="rp-snippets-search" placeholder="Search assets...">
+    </div>
+    <div class="rp-snippets-tabs">
+      <button class="rp-snip-tab active" data-sniptab="analyses">Analyses</button>
+      <button class="rp-snip-tab" data-sniptab="entities">Entities</button>
+      <button class="rp-snip-tab" data-sniptab="bookmarks">Bookmarks</button>
+      <button class="rp-snip-tab" data-sniptab="notes">Notes</button>
+    </div>
+    <div class="rp-snippets-list" id="snippetsList"></div>
+  </div>
+  <button class="rp-snippets-tab" id="snippetsTab" title="Asset Library">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+    <span id="snippetCount"></span>
+  </button>
+
+  <!-- ── Drafts panel (floating right) ── -->
+  <div class="rp-drafts-panel hidden" id="draftsPanel">
+    <div class="rp-snippets-header">
+      <span class="rp-snippets-title">Saved Drafts</span>
+      <button class="rp-snippets-close" id="draftsClose">&times;</button>
+    </div>
+    <div class="rp-snippets-search-row">
+      <input type="text" id="draftSearch" class="rp-snippets-search" placeholder="Search drafts...">
+    </div>
+    <div class="rp-snippets-list" id="draftsList"></div>
+  </div>
+  <button class="rp-drafts-tab" id="draftsTab" title="Saved Drafts">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    <span id="draftCount"></span>
+  </button>
+
+  <!-- ── Main editor area ── -->
+  <main class="rp-main">
+    <div class="rp-toolbar">
+      <div class="rp-toolbar-left">
+        <button class="rp-tool" data-insert="**" title="Bold"><strong>B</strong></button>
+        <button class="rp-tool" data-insert="*" title="Italic"><em>I</em></button>
+        <button class="rp-tool" data-insert="~~" title="Strikethrough"><s>S</s></button>
+        <span class="rp-tool-sep"></span>
+        <button class="rp-tool" data-prefix="# " title="Heading 1">H1</button>
+        <button class="rp-tool" data-prefix="## " title="Heading 2">H2</button>
+        <button class="rp-tool" data-prefix="### " title="Heading 3">H3</button>
+        <span class="rp-tool-sep"></span>
+        <button class="rp-tool" data-prefix="- " title="Bullet list">&#8226;</button>
+        <button class="rp-tool" data-prefix="1. " title="Numbered list">1.</button>
+        <button class="rp-tool" data-prefix="> " title="Blockquote">&raquo;</button>
+        <button class="rp-tool" data-insert="`" title="Inline code">&lt;/&gt;</button>
+        <span class="rp-tool-sep"></span>
+        <button class="rp-tool" id="rp-insert-hr" title="Horizontal rule">&#8213;</button>
+        <button class="rp-tool" id="rp-insert-link" title="Insert link">&#128279;</button>
+        <button class="rp-tool" id="rp-insert-citation" title="Insert citation">[1]</button>
+      </div>
+      <div class="rp-toolbar-right">
+        <span class="rp-word-count" id="rpWordCount">0 words</span>
+        <button class="rp-tool rp-tool-toggle" id="rp-toggle-preview" title="Toggle preview">Preview</button>
+        <button class="rp-tool" id="rp-copy-all" title="Copy all">Copy</button>
+      </div>
+    </div>
+    <div class="rp-editor-wrap">
+      <textarea id="rpEditor" class="rp-editor" placeholder="Start writing your report...&#10;&#10;Use the Asset Library to insert analyses, entities, and bookmarks.&#10;&#10;Markdown is fully supported."></textarea>
+      <div id="rpPreview" class="rp-preview hidden"></div>
+    </div>
+  </main>
+
+  <!-- ── Status bar ── -->
+  <footer class="rp-status">
+    <span id="rpStatus"></span>
+    <span class="rp-status-spacer"></span>
+    <span id="rpDraftInfo"></span>
+  </footer>
+
+  <script src="../lib/purify.min.js"></script>
+  <script src="../lib/marked.min.js"></script>
+  <script src="../lib/export-utils.js"></script>
+  <script src="../lib/email-share.js"></script>
+  <script src="reporting.js"></script>
+</body>
+</html>

@@ -161,10 +161,19 @@
     ["line", { x1: "16", y1: "13", x2: "8", y2: "13" }],
     ["line", { x1: "16", y1: "17", x2: "8", y2: "17" }]
   ]));
+  appBar.appendChild(makeAppTab("app-draft", "Draft", [
+    ["path", { d: "M12 20h9" }],
+    ["path", { d: "M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" }]
+  ]));
   appBar.appendChild(makeAppTab("app-reader", "Reader", [
     ["path", { d: "M4 11a9 9 0 0 1 9 9" }],
     ["path", { d: "M4 4a16 16 0 0 1 16 16" }],
     ["circle", { cx: "5", cy: "19", r: "1" }]
+  ]));
+  appBar.appendChild(makeAppTab("app-images", "Images", [
+    ["rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" }],
+    ["circle", { cx: "8.5", cy: "8.5", r: "1.5" }],
+    ["polyline", { points: "21 15 16 10 5 21" }]
   ]));
   ribbon.insertAdjacentElement("afterend", appBar);
 
@@ -174,7 +183,9 @@
   else if (loc.includes("/chat/")) document.getElementById("app-chat")?.classList.add("active");
   else if (loc.includes("/workbench/")) document.getElementById("app-workbench")?.classList.add("active");
   else if (loc.includes("/history/")) document.getElementById("app-reports")?.classList.add("active");
+  else if (loc.includes("/reporting/")) document.getElementById("app-draft")?.classList.add("active");
   else if (loc.includes("/feeds/")) document.getElementById("app-reader")?.classList.add("active");
+  else if (loc.includes("/osint/images")) document.getElementById("app-images")?.classList.add("active");
 
   // ── Focus-or-create helpers (single instance per page) ──
   async function focusOrCreate(urlPath, hash) {
@@ -224,5 +235,46 @@
   document.getElementById("app-chat").addEventListener("click", () => focusOrCreate("chat/chat.html"));
   document.getElementById("app-workbench").addEventListener("click", () => focusOrCreate("workbench/workbench.html"));
   document.getElementById("app-reports").addEventListener("click", () => focusOrCreate("history/history.html"));
+  document.getElementById("app-draft").addEventListener("click", () => focusOrCreate("reporting/reporting.html"));
   document.getElementById("app-reader").addEventListener("click", () => focusOrCreate("feeds/feeds.html"));
+  document.getElementById("app-images").addEventListener("click", () => focusOrCreate("osint/images.html"));
+
+  // ── Ribbon badge counts ──
+  // Maps ribbon icon IDs → the same data sources as console tab badges
+  const badgeMap = {
+    "ribbon-bookmarks": () => browser.runtime.sendMessage({ action: "getBookmarks" }).then(r => r?.total || 0),
+    "ribbon-projects":  () => browser.runtime.sendMessage({ action: "getProjects" }).then(r => Array.isArray(r?.projects) ? r.projects.length : 0),
+    "ribbon-monitors":  () => browser.runtime.sendMessage({ action: "getMonitors" }).then(r => Array.isArray(r?.monitors) ? r.monitors.length : 0),
+    "ribbon-feeds":     () => browser.runtime.sendMessage({ action: "getFeeds" }).then(r => Array.isArray(r?.feeds) ? r.feeds.length : 0),
+    "ribbon-osint":     () => browser.runtime.sendMessage({ action: "getKGStats" }).then(r => typeof r?.nodeCount === "number" ? r.nodeCount : 0).catch(() => 0),
+    "ribbon-automate":  () => browser.runtime.sendMessage({ action: "getAutomations" }).then(r => Array.isArray(r?.automations) ? r.automations.length : 0).catch(() => 0)
+  };
+
+  async function updateRibbonBadges() {
+    for (const [iconId, fetchCount] of Object.entries(badgeMap)) {
+      try {
+        const count = await fetchCount();
+        const btn = document.getElementById(iconId);
+        if (!btn) continue;
+        let badge = btn.querySelector(".ribbon-badge");
+        if (count > 0) {
+          if (!badge) {
+            badge = document.createElement("span");
+            badge.className = "ribbon-badge";
+            btn.appendChild(badge);
+          }
+          badge.textContent = count > 999 ? "999+" : count;
+        } else if (badge) {
+          badge.remove();
+        }
+      } catch (e) { /* skip */ }
+    }
+  }
+
+  updateRibbonBadges();
+
+  // Refresh on data changes
+  browser.runtime.onMessage.addListener((msg) => {
+    if (msg.type === "argusDataChanged") updateRibbonBadges();
+  });
 })();

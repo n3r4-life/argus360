@@ -188,9 +188,9 @@ async function initContextPanel() {
       elements.contextProject.appendChild(opt);
     }
 
-    // Restore saved state
+    // Restore saved project selection but always start unchecked
     const { contextualMode } = await browser.storage.local.get({ contextualMode: { enabled: false, projectId: null } });
-    elements.contextEnabled.checked = contextualMode.enabled;
+    elements.contextEnabled.checked = false;
     if (contextualMode.projectId && elements.contextProject.querySelector(`option[value="${contextualMode.projectId}"]`)) {
       elements.contextProject.value = contextualMode.projectId;
     }
@@ -581,12 +581,8 @@ function attachEventListeners() {
     focusOrCreateConsole("help-getting-started");
   });
 
-  document.getElementById("open-bookmarks").addEventListener("click", () => {
-    focusOrCreateConsole("bookmarks");
-  });
-
-  document.getElementById("open-projects").addEventListener("click", () => {
-    focusOrCreateConsole("projects");
+  document.getElementById("open-resources").addEventListener("click", () => {
+    focusOrCreateConsole("resources");
   });
 
   document.getElementById("open-feeds").addEventListener("click", async () => {

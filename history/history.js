@@ -683,6 +683,23 @@ function attachListeners() {
     });
   });
 
+  // ── Send to Draft ──
+  document.getElementById("detail-send-draft").addEventListener("click", async () => {
+    if (!currentItem || !currentItem.content) return;
+    await browser.storage.local.set({ draftPendingInsert: { content: currentItem.content, source: "history", timestamp: Date.now() } });
+    const btn = document.getElementById("detail-send-draft");
+    btn.textContent = "Sent!";
+    setTimeout(() => { btn.textContent = "Draft"; }, 1500);
+    const draftUrl = browser.runtime.getURL("reporting/reporting.html");
+    const existing = await browser.tabs.query({ url: draftUrl + "*" });
+    if (existing.length > 0) {
+      await browser.tabs.update(existing[0].id, { active: true });
+      await browser.windows.update(existing[0].windowId, { focused: true });
+    } else {
+      await browser.tabs.create({ url: draftUrl });
+    }
+  });
+
   // ── Paste to service ──
   const detailPasteBtn = document.getElementById("detail-paste");
   const detailPastePicker = document.getElementById("detail-paste-picker");

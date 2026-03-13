@@ -3,7 +3,123 @@
 
   const params = new URLSearchParams(location.search);
   const storeKey = params.get("id");
-  if (!storeKey) { document.getElementById("empty-state").innerHTML = "<p>No image data key provided.</p>"; return; }
+  if (!storeKey) {
+    // Standalone mode — show tab picker landing
+    document.querySelector(".header-title").textContent = "Image Grabber";
+    document.getElementById("page-url").textContent = "";
+    const emptyEl = document.getElementById("empty-state");
+    emptyEl.innerHTML = `
+      <div style="max-width:520px;margin:0 auto;text-align:center;">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" style="margin-bottom:12px;">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+        </svg>
+        <h2 style="font-size:18px;margin-bottom:8px;">Image Grabber</h2>
+        <p style="color:var(--text-secondary);margin-bottom:12px;">Select tabs to extract images from.</p>
+        <div id="grab-tab-picker" style="text-align:left;max-height:260px;overflow-y:auto;margin-bottom:12px;border:1px solid var(--border);border-radius:var(--radius);padding:8px;">
+          <p style="color:var(--text-muted);text-align:center;padding:12px;">Loading tabs...</p>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:center;align-items:center;">
+          <label style="font-size:12px;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;gap:4px;">
+            <input type="checkbox" id="grab-select-all" checked> Select All
+          </label>
+          <button id="grab-selected-tabs" class="btn btn-primary" style="padding:10px 24px;font-size:14px;">Grab Images</button>
+        </div>
+      </div>`;
+
+    // Load open tabs into the picker
+    (async () => {
+      const allTabs = await browser.tabs.query({ currentWindow: true });
+      const webTabs = allTabs.filter(t => t.url && (t.url.startsWith("http://") || t.url.startsWith("https://")));
+      const picker = document.getElementById("grab-tab-picker");
+
+      if (webTabs.length === 0) {
+        picker.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:12px;">No web tabs open.</p>';
+        document.getElementById("grab-selected-tabs").disabled = true;
+        return;
+      }
+
+      picker.innerHTML = "";
+      for (const tab of webTabs) {
+        const label = document.createElement("label");
+        label.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;cursor:pointer;font-size:12px;";
+        label.addEventListener("mouseenter", () => { label.style.background = "var(--bg-surface)"; });
+        label.addEventListener("mouseleave", () => { label.style.background = ""; });
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = true;
+        cb.value = tab.id;
+        cb.className = "grab-tab-cb";
+        cb.style.accentColor = "var(--accent)";
+        if (tab.favIconUrl) {
+          const ico = document.createElement("img");
+          ico.src = tab.favIconUrl;
+          ico.style.cssText = "width:16px;height:16px;border-radius:2px;flex-shrink:0;";
+          ico.onerror = () => { ico.style.display = "none"; };
+          label.appendChild(cb);
+          label.appendChild(ico);
+        } else {
+          label.appendChild(cb);
+        }
+        const title = document.createElement("span");
+        title.style.cssText = "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;";
+        title.textContent = tab.title || tab.url;
+        title.title = tab.url;
+        label.appendChild(title);
+        picker.appendChild(label);
+      }
+
+      // Select All toggle
+      const selectAllCb = document.getElementById("grab-select-all");
+      selectAllCb.addEventListener("change", () => {
+        picker.querySelectorAll(".grab-tab-cb").forEach(cb => { cb.checked = selectAllCb.checked; });
+      });
+      // Update Select All when individual checkboxes change
+      picker.addEventListener("change", (e) => {
+        if (e.target.classList.contains("grab-tab-cb")) {
+          const all = picker.querySelectorAll(".grab-tab-cb");
+          const checked = picker.querySelectorAll(".grab-tab-cb:checked");
+          selectAllCb.checked = checked.length === all.length;
+          selectAllCb.indeterminate = checked.length > 0 && checked.length < all.length;
+        }
+      });
+    })();
+
+    // Grab button
+    document.getElementById("grab-selected-tabs").addEventListener("click", async () => {
+      const btn = document.getElementById("grab-selected-tabs");
+      const checked = document.querySelectorAll(".grab-tab-cb:checked");
+      const tabIds = Array.from(checked).map(cb => parseInt(cb.value));
+      if (tabIds.length === 0) { btn.textContent = "Select at least one tab"; setTimeout(() => { btn.textContent = "Grab Images"; }, 1500); return; }
+      btn.disabled = true;
+      btn.textContent = `Grabbing ${tabIds.length} tab${tabIds.length > 1 ? "s" : ""}...`;
+      try {
+        const resp = tabIds.length === 1
+          ? await browser.runtime.sendMessage({ action: "extractImages", tabId: tabIds[0] })
+          : await browser.runtime.sendMessage({ action: "extractImagesMultiTab", tabIds });
+        if (resp && resp.success) {
+          const key = `images-${Date.now()}`;
+          const data = tabIds.length === 1
+            ? { pageUrl: resp.pageUrl, pageTitle: resp.pageTitle, images: resp.images, stats: resp.stats }
+            : resp.data;
+          await browser.storage.local.set({ [key]: data });
+          location.search = `?id=${encodeURIComponent(key)}`;
+        } else {
+          btn.textContent = resp?.error || "Failed";
+          btn.disabled = false;
+          setTimeout(() => { btn.textContent = "Grab Images"; }, 2000);
+        }
+      } catch (e) { btn.textContent = e.message || "Failed"; btn.disabled = false; }
+    });
+
+    // Hide filter/action bars and clear button in standalone mode
+    document.querySelector(".stats-bar")?.classList.add("hidden");
+    document.querySelector(".filter-bar")?.classList.add("hidden");
+    document.querySelector(".ai-search-bar")?.classList.add("hidden");
+    document.querySelector(".display-bar")?.classList.add("hidden");
+    document.querySelector(".actions-bar")?.classList.add("hidden");
+    document.getElementById("clear-gallery")?.classList.add("hidden");
+    return;
+  }
 
   const stored = (await browser.storage.local.get(storeKey))[storeKey];
   if (!stored || !stored.images) { document.getElementById("empty-state").innerHTML = "<p>No image data found.</p>"; return; }
@@ -15,6 +131,12 @@
   urlEl.href = pageUrl || "#";
   urlEl.textContent = pageTitle || pageUrl || "";
   document.title = `Images - ${pageTitle || pageUrl || "Argus"}`;
+
+  // Clear gallery → remove stored data and go back to landing
+  document.getElementById("clear-gallery").addEventListener("click", async () => {
+    await browser.storage.local.remove(storeKey);
+    location.search = "";
+  });
 
   // Stats
   document.getElementById("stat-total").textContent = images.length;
@@ -411,6 +533,7 @@
     document.getElementById("stat-selected").textContent = selected.size;
     document.getElementById("download-selected").disabled = selected.size === 0;
     document.getElementById("save-to-cloud").disabled = selected.size === 0;
+    document.getElementById("insert-to-draft").disabled = selected.size === 0;
     const cmpBtn = document.getElementById("compare-selected");
     if (cmpBtn) cmpBtn.disabled = selected.size < 2;
   }
@@ -842,6 +965,61 @@
     a.download = `argus-images-${new Date().toISOString().slice(0,10)}.txt`;
     a.click();
     URL.revokeObjectURL(url);
+  });
+
+  // ── Insert to Draft ──
+
+  async function buildImageMarkdown(imgList) {
+    // Try to get cloud-backed URLs for images if available
+    const lines = [];
+    for (const img of imgList) {
+      const alt = img.alt || img.filename || "image";
+      const dims = (img.width && img.height) ? ` (${img.width}x${img.height})` : "";
+      // Use the original src — if cloud backup exists, user can reference that separately
+      lines.push(`![${alt}](${img.src})`);
+      if (dims) lines.push(`*${decodeURIComponent(img.filename || "image")}${dims}*`);
+    }
+    return lines.join("\n\n");
+  }
+
+  async function sendToDraft(content, source) {
+    await browser.storage.local.set({
+      draftPendingInsert: { content, source: source || "Image Grabber", timestamp: Date.now() }
+    });
+    // Focus or open Draft Pad
+    const draftUrl = browser.runtime.getURL("reporting/reporting.html");
+    const existing = await browser.tabs.query({ url: draftUrl + "*" });
+    if (existing.length > 0) {
+      await browser.tabs.update(existing[0].id, { active: true });
+      await browser.windows.update(existing[0].windowId, { focused: true });
+    } else {
+      await browser.tabs.create({ url: draftUrl });
+    }
+  }
+
+  document.getElementById("insert-to-draft").addEventListener("click", async () => {
+    const btn = document.getElementById("insert-to-draft");
+    btn.disabled = true;
+    btn.textContent = "Inserting...";
+    const selectedImages = images.filter(img => selected.has(img.src));
+    const md = await buildImageMarkdown(selectedImages);
+    await sendToDraft(md);
+    btn.textContent = "Sent!";
+    setTimeout(() => { btn.textContent = "Insert to Draft"; btn.disabled = selected.size === 0; }, 2000);
+  });
+
+  // Preview modal — insert single image to draft
+  document.getElementById("preview-insert-draft").addEventListener("click", async () => {
+    const btn = document.getElementById("preview-insert-draft");
+    if (previewCurrentIndex < 0 || !previewCurrentImages[previewCurrentIndex]) return;
+    btn.textContent = "Sending...";
+    btn.disabled = true;
+    const img = previewCurrentImages[previewCurrentIndex];
+    const md = await buildImageMarkdown([img]);
+    await sendToDraft(md);
+    btn.textContent = "Sent!";
+    btn.disabled = false;
+    setTimeout(() => { btn.textContent = "To Draft"; }, 1500);
   });
 
   // ── AI Vision Search ──

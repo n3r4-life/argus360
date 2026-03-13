@@ -599,6 +599,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (store === "projects" && typeof projLoadProjects === "function") projLoadProjects();
       if (store === "feeds" && typeof renderFeeds === "function") renderFeeds();
       if (store === "monitors" && typeof renderMonitors === "function") renderMonitors();
+      if (store === "drafts" && projState.activeProjectId && typeof projRenderDrafts === "function") projRenderDrafts(projState.activeProjectId);
       if (store === "history") { /* history page handles its own refresh */ }
       updateTabBadges();
     }, 500);
@@ -2864,6 +2865,29 @@ function attachListeners() {
   el.importSettings.addEventListener("click", () => el.importFile.click());
   el.importFile.addEventListener("change", importSettingsFromFile);
 
+  // ── Set Argus as Homepage ──
+  document.getElementById("set-argus-homepage")?.addEventListener("click", async () => {
+    const pages = [
+      "options/options.html",
+      "osint/graph.html",
+      "chat/chat.html",
+      "workbench/workbench.html",
+      "history/history.html",
+      "reporting/reporting.html",
+      "feeds/feeds.html"
+    ];
+    const urls = pages.map(p => browser.runtime.getURL(p));
+    const homepageStr = urls.join("|");
+    await navigator.clipboard.writeText(homepageStr);
+    const statusEl = document.getElementById("homepage-status");
+    if (statusEl) {
+      statusEl.textContent = "URLs copied! Paste into the Custom URLs field in Firefox settings.";
+      statusEl.style.color = "var(--success)";
+    }
+    // Open Firefox homepage preferences
+    browser.tabs.create({ url: "about:preferences#home" });
+  });
+
 }
 
 // ──────────────────────────────────────────────
@@ -3961,7 +3985,9 @@ function initMainTabs() {
     "open-chat-nav": "chat/chat.html",
     "open-workbench-nav": "workbench/workbench.html",
     "open-history-nav": "history/history.html",
-    "open-reader-nav": "feeds/feeds.html"
+    "open-draft-nav": "reporting/reporting.html",
+    "open-reader-nav": "feeds/feeds.html",
+    "open-images-nav": "osint/images.html"
   };
   for (const [id, path] of Object.entries(appNavMap)) {
     const btn = document.getElementById(id);
@@ -4966,6 +4992,7 @@ function projRenderDetail() {
   projBuildSkeleton(true);
 
   projRenderItems(proj);
+  projRenderDrafts(proj.id);
 }
 
 async function projPopulateAutomations(projectId) {
@@ -5446,6 +5473,112 @@ function projRenderItems(proj) {
   }
 }
 
+async function projRenderDrafts(projectId) {
+  const container = document.getElementById("proj-drafts-list");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const resp = await browser.runtime.sendMessage({ action: "draftGetAll" });
+  if (!resp?.success) return;
+  const drafts = (resp.drafts || []).filter(d => d.projectId === projectId);
+  if (!drafts.length) return;
+
+  // Sort by most recently updated
+  drafts.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+  const headerDiv = document.createElement("div");
+  headerDiv.className = "proj-items-collapse-header";
+  headerDiv.innerHTML = `<span class="proj-items-collapse-arrow">&#9660;</span> <strong>Drafts (${drafts.length})</strong>`;
+  const draftsContainer = document.createElement("div");
+  draftsContainer.className = "proj-items-container";
+
+  headerDiv.addEventListener("click", () => {
+    const isHidden = draftsContainer.style.display === "none";
+    draftsContainer.style.display = isHidden ? "" : "none";
+    headerDiv.querySelector(".proj-items-collapse-arrow").innerHTML = isHidden ? "&#9660;" : "&#9654;";
+  });
+
+  container.appendChild(headerDiv);
+  container.appendChild(draftsContainer);
+
+  for (const draft of drafts) {
+    const card = document.createElement("div");
+    card.className = "proj-item-card";
+    const bodyDiv = document.createElement("div");
+    bodyDiv.className = "proj-item-body";
+    bodyDiv.style.cursor = "pointer";
+
+    const titleDiv = document.createElement("div");
+    titleDiv.className = "proj-item-title";
+    titleDiv.textContent = draft.title || "Untitled Draft";
+    bodyDiv.appendChild(titleDiv);
+
+    if (draft.content) {
+      const preview = document.createElement("div");
+      preview.className = "proj-item-summary";
+      preview.textContent = draft.content.replace(/[#*_~`>\-]/g, "").slice(0, 200);
+      bodyDiv.appendChild(preview);
+    }
+
+    const metaDiv = document.createElement("div");
+    metaDiv.className = "proj-item-meta";
+    const badge = document.createElement("span");
+    badge.className = "proj-type-badge";
+    badge.textContent = "draft";
+    badge.style.background = "var(--accent-dim)";
+    badge.style.color = "var(--accent)";
+    metaDiv.appendChild(badge);
+    const wordCount = draft.content ? draft.content.trim().split(/\s+/).length : 0;
+    const wcSpan = document.createElement("span");
+    wcSpan.style.cssText = "font-size:11px;color:var(--text-muted);";
+    wcSpan.textContent = wordCount + " words";
+    metaDiv.appendChild(wcSpan);
+    if (draft.updatedAt) {
+      const dateSpan = document.createElement("span");
+      dateSpan.textContent = new Date(draft.updatedAt).toLocaleDateString();
+      metaDiv.appendChild(dateSpan);
+    }
+    bodyDiv.appendChild(metaDiv);
+    card.appendChild(bodyDiv);
+
+    // Click to open in Draft Pad
+    bodyDiv.addEventListener("click", async () => {
+      await browser.storage.local.set({ draftOpenId: draft.id });
+      const draftUrl = browser.runtime.getURL("reporting/reporting.html");
+      const existing = await browser.tabs.query({ url: draftUrl + "*" });
+      if (existing.length > 0) {
+        await browser.tabs.update(existing[0].id, { active: true });
+        await browser.windows.update(existing[0].windowId, { focused: true });
+      } else {
+        await browser.tabs.create({ url: draftUrl });
+      }
+    });
+
+    // Actions
+    const actionsDiv = document.createElement("div");
+    actionsDiv.className = "proj-item-actions";
+    const openBtn = document.createElement("button");
+    openBtn.className = "proj-item-view-btn";
+    openBtn.title = "Open in Draft Pad";
+    openBtn.textContent = "Open";
+    openBtn.addEventListener("click", () => bodyDiv.click());
+    actionsDiv.appendChild(openBtn);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "proj-item-remove-btn";
+    removeBtn.title = "Detach draft from project";
+    removeBtn.textContent = "Detach";
+    removeBtn.addEventListener("click", async () => {
+      await browser.runtime.sendMessage({ action: "draftSave", draft: { ...draft, projectId: "" } });
+      projRenderDrafts(projectId);
+    });
+    actionsDiv.appendChild(removeBtn);
+
+    card.appendChild(actionsDiv);
+    draftsContainer.appendChild(card);
+  }
+}
+
 function projOpenModal(existing) {
   projState.editingProjectId = existing ? existing.id : null;
   projEl.modalTitle.textContent = existing ? "Edit Project" : "New Project";
@@ -5868,8 +6001,12 @@ async function projBuildSkeleton(forceOpen) {
         <div class="skel-heading">Keywords (${s.keywords.total})</div>
         ${renderList(s.keywords.list, k => `<span style="color:var(--accent);">"${esc(k)}"</span>`)}
       </div>
+      ${s.drafts && s.drafts.total > 0 ? `<div class="skel-section">
+        <div class="skel-heading">Drafts (${s.drafts.total})</div>
+        ${renderList(s.drafts.list, d => `${esc(d.title)} <span style="color:var(--text-muted);">(${d.words} words)</span>`)}
+      </div>` : ""}
     </div>
-    <div class="skel-footer">Data: ${s.items.total} items &middot; ${s.entities.total} entities &middot; ${s.feeds.total} feeds &middot; ${s.monitors.total} monitors &middot; ${s.bookmarks.total} bookmarks</div>
+    <div class="skel-footer">Data: ${s.items.total} items &middot; ${s.entities.total} entities &middot; ${s.feeds.total} feeds &middot; ${s.monitors.total} monitors &middot; ${s.bookmarks.total} bookmarks${s.drafts && s.drafts.total > 0 ? ` &middot; ${s.drafts.total} drafts` : ""}</div>
   `;
 }
 

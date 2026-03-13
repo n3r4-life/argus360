@@ -42,7 +42,7 @@ body {
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   position: sticky;
-  top: 0;
+  top: 136px;
   z-index: 100;
 }
 
@@ -120,7 +120,7 @@ body {
   grid-template-columns: 260px 1fr;
   max-width: 1200px;
   margin: 0 auto;
-  min-height: calc(100vh - 56px);
+  min-height: calc(100vh - 46px - 136px);
 }
 
 /* ── Sidebar ── */
@@ -130,9 +130,9 @@ body {
   border-right: 1px solid var(--border);
   padding: 16px 0;
   overflow-y: auto;
-  max-height: calc(100vh - 56px);
+  max-height: calc(100vh - 46px - 136px);
   position: sticky;
-  top: 56px;
+  top: 46px;
 }
 
 .feed-list-header {
@@ -213,7 +213,7 @@ body {
 .main-content {
   padding: 24px;
   overflow-y: auto;
-  max-height: calc(100vh - 56px);
+  max-height: calc(100vh - 46px - 136px);
 }
 
 .entries-header {

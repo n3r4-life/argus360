@@ -14,7 +14,10 @@
       <img src="../icons/icon-32.png" alt="" class="header-icon">
       <h1 class="header-title">Image Grabber</h1>
     </div>
-    <a id="page-url" class="page-url" href="#" target="_blank" title="Open source page"></a>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <a id="page-url" class="page-url" href="#" target="_blank" title="Open source page"></a>
+      <button id="clear-gallery" class="btn btn-secondary" style="font-size:11px;padding:4px 10px;" title="Clear gallery and start fresh">Clear</button>
+    </div>
   </header>
 
   <section id="stats-bar" class="stats-bar">
@@ -163,6 +166,7 @@
       <button id="show-selected-only" class="btn btn-secondary" title="Show only selected images">Show Selected</button>
       <button id="download-selected" class="btn btn-primary" disabled>Download Selected</button>
       <button id="save-to-cloud" class="btn btn-secondary" disabled>Save to Cloud</button>
+      <button id="insert-to-draft" class="btn btn-secondary" disabled title="Insert image links into Draft Pad">Insert to Draft</button>
     </div>
     <div class="actions-right">
       <button id="compare-selected" class="btn btn-secondary" disabled title="Compare selected images side-by-side">Compare</button>
@@ -218,6 +222,7 @@
         <div class="preview-actions">
           <a id="preview-open" class="btn btn-primary" href="#" target="_blank">Open Original</a>
           <a id="preview-download" class="btn btn-secondary" href="#" download>Download</a>
+          <button id="preview-insert-draft" class="btn btn-secondary" title="Insert image link into Draft Pad">To Draft</button>
           <button id="preview-reverse-google" class="btn btn-secondary">Google Reverse</button>
           <button id="preview-reverse-tineye" class="btn btn-secondary">TinEye</button>
           <button id="preview-reverse-yandex" class="btn btn-secondary">Yandex</button>

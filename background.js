@@ -525,6 +525,35 @@ async function createContextMenus() {
     }
   }
 
+  // ── Save to Drive (only shown if at least one data provider is connected) ──
+  try {
+    const cloudKeys = ["google", "dropbox", "webdav", "s3", "github"];
+    const connected = [];
+    for (const key of cloudKeys) {
+      if (CloudProviders[key] && await CloudProviders[key].isConnected()) connected.push(key);
+    }
+    if (connected.length > 0) {
+      browser.contextMenus.create({
+        id: "argus-sep-cloud",
+        parentId: "argus-parent",
+        type: "separator",
+        contexts: ["link", "page", "image"]
+      });
+      browser.contextMenus.create({
+        id: "argus-save-to-cloud",
+        parentId: "argus-parent",
+        title: "\u2601\uFE0F Save to Drive",
+        contexts: ["link", "image"]
+      });
+      browser.contextMenus.create({
+        id: "argus-save-page-to-cloud",
+        parentId: "argus-parent",
+        title: "\u2601\uFE0F Save Page to Drive",
+        contexts: ["page"]
+      });
+    }
+  } catch (e) { console.warn("[Argus] Cloud context menu check failed:", e); }
+
   // ── Wipe All Data ──
   browser.contextMenus.create({
     id: "argus-sep-wipe",
@@ -544,7 +573,7 @@ createContextMenus();
 
 // Rebuild context menus when presets or projects change
 browser.storage.onChanged.addListener((changes) => {
-  if (changes.customPresets || changes.argusProjects || changes.automations) createContextMenus();
+  if (changes.customPresets || changes.argusProjects || changes.automations || changes.argusCloudProviders) createContextMenus();
   if (changes.showBadge) updateBadge();
 });
 
@@ -1560,6 +1589,12 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "chatGetSession") return handleChatGetSession(message.sessionId);
   if (message.action === "chatDeleteSession") return handleChatDeleteSession(message.sessionId);
   if (message.action === "chatSendMessage") return handleChatSendMessage(message);
+  // ── Drafts ──
+  if (message.action === "draftGetAll") return handleDraftGetAll();
+  if (message.action === "draftGet") return handleDraftGet(message.draftId);
+  if (message.action === "draftSave") return handleDraftSave(message.draft);
+  if (message.action === "draftDelete") return handleDraftDelete(message.draftId);
+  if (message.action === "draftSummarize") return handleDraftSummarize(message);
   // ── Workbench ──
   if (message.action === "workbenchGetData") return handleWorkbenchGetData(message.projectId);
   if (message.action === "workbenchAnalyze") return handleWorkbenchAnalyze(message);
@@ -1670,6 +1705,7 @@ async function handleWipeEverything() {
       ArgusDB.Watchlist.clear(),
       ArgusDB.KGNodes.clear(),
       ArgusDB.KGEdges.clear(),
+      ArgusDB.Drafts.clear(),
     ]);
     // Clear OPFS snapshots
     await OpfsStorage.deleteAll();
@@ -1728,8 +1764,12 @@ async function handleChatSendMessage(message) {
     session.messages.push({ role: "user", content: text, timestamp: Date.now() });
     session.provider = settings.provider;
 
-    // Build messages array for API (no system prompt for pure chat)
-    const apiMessages = session.messages.map(m => ({ role: m.role, content: m.content }));
+    // Build messages array for API
+    const systemPrompt = {
+      role: "system",
+      content: "You are a helpful assistant in Argus Chat. Continue the conversation naturally. Do not comment on the conversation history, context, or the fact that you're resuming a prior thread — just answer the user's question directly."
+    };
+    const apiMessages = [systemPrompt, ...session.messages.map(m => ({ role: m.role, content: m.content }))];
 
     // Create stream ID for storage polling
     const streamId = `chat-stream-${Date.now()}`;
@@ -1752,8 +1792,8 @@ async function handleChatSendMessage(message) {
           null
         );
 
-        // Save assistant message to session
-        session.messages.push({ role: "assistant", content: result.content, timestamp: Date.now() });
+        // Save assistant message to session (with provider/model for attribution)
+        session.messages.push({ role: "assistant", content: result.content, timestamp: Date.now(), provider: settings.provider, model: result.model || settings.model });
         session.preview = result.content.slice(0, 120);
         // Auto-title from first exchange
         if (session.messages.filter(m => m.role === "user").length === 1 && session.title === session.messages[0].content.slice(0, 60) + (session.messages[0].content.length > 60 ? "..." : "")) {
@@ -1772,6 +1812,62 @@ async function handleChatSendMessage(message) {
     return { success: true, sessionId: session.id, streamId };
   } catch (err) {
     return { success: false, error: err.message };
+  }
+}
+
+// ──────────────────────────────────────────────
+// Draft handlers
+// ──────────────────────────────────────────────
+async function handleDraftGetAll() {
+  const drafts = await ArgusDB.Drafts.getAll();
+  return { success: true, drafts: drafts.map(d => ({ id: d.id, title: d.title, content: d.content, projectId: d.projectId, updatedAt: d.updatedAt })) };
+}
+
+async function handleDraftGet(draftId) {
+  const draft = await ArgusDB.Drafts.get(draftId);
+  if (!draft) return { success: false, error: "Draft not found" };
+  return { success: true, draft };
+}
+
+async function handleDraftSave(draft) {
+  if (!draft || !draft.id) return { success: false, error: "Invalid draft" };
+  const existing = await ArgusDB.Drafts.get(draft.id);
+  if (existing) {
+    draft.createdAt = existing.createdAt;
+  } else {
+    draft.createdAt = draft.createdAt || Date.now();
+  }
+  await ArgusDB.Drafts.save(draft);
+  notifyDataChanged("drafts");
+  return { success: true, draftId: draft.id };
+}
+
+async function handleDraftDelete(draftId) {
+  await ArgusDB.Drafts.remove(draftId);
+  notifyDataChanged("drafts");
+  return { success: true };
+}
+
+async function handleDraftSummarize(message) {
+  try {
+    const { content, charLimit, platform, provider: providerOverride } = message;
+    if (!content?.trim()) return { success: false, error: "No content to summarize." };
+
+    const settings = await getProviderSettings(providerOverride || "");
+    const limit = charLimit || 280;
+    const platformHint = platform || "social media";
+
+    const systemPrompt = `You are a concise social media copywriter. Summarize the given content into a ${platformHint} post. Hard limit: ${limit} characters. Output ONLY the post text — no quotes, no preamble, no commentary. Make it punchy and engaging.`;
+    const userPrompt = content.slice(0, 6000);
+    const messages = [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }];
+
+    const result = await callProvider(settings.provider, settings.apiKey, settings.model, messages, { maxTokens: 300 });
+    // Enforce character limit on the result
+    let summary = (result.content || "").trim();
+    if (summary.length > limit) summary = summary.slice(0, limit - 1) + "…";
+    return { success: true, summary, provider: settings.provider, model: result.model };
+  } catch (err) {
+    return { success: false, error: err.message || "Summarize failed." };
   }
 }
 
@@ -1927,11 +2023,12 @@ async function handleBuildProjectSkeleton(projectId) {
     const itemUrls = new Set(items.filter(i => i.url).map(i => i.url));
 
     // Gather cross-store data in parallel
-    const [allBookmarks, allMonitors, allFeeds, allNodes, storageData] = await Promise.all([
+    const [allBookmarks, allMonitors, allFeeds, allNodes, allDrafts, storageData] = await Promise.all([
       ArgusDB.Bookmarks.getAll(),
       ArgusDB.Monitors.getAll(),
       ArgusDB.Feeds.getAll(),
       ArgusDB.KGNodes.getAll(),
+      ArgusDB.Drafts.getAll(),
       browser.storage.local.get({ feedKeywordRoutes: [] }),
     ]);
 
@@ -1954,6 +2051,10 @@ async function handleBuildProjectSkeleton(projectId) {
     // Sort by mention count descending
     matchedEntities.sort((a, b) => (b.mentions || 1) - (a.mentions || 1));
 
+    // Drafts attached to this project
+    const matchedDrafts = allDrafts.filter(d => d.projectId === projectId);
+    matchedDrafts.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
     return {
       success: true,
       skeleton: {
@@ -1963,11 +2064,64 @@ async function handleBuildProjectSkeleton(projectId) {
         monitors: { total: matchedMonitors.length, list: matchedMonitors.slice(0, 10).map(m => ({ label: m.label, url: m.url })) },
         entities: { total: matchedEntities.length, list: matchedEntities.slice(0, 10).map(e => ({ label: e.label, type: e.type, mentions: e.mentions || 1 })) },
         keywords: { total: routedKeywords.length, list: routedKeywords.slice(0, 10) },
+        drafts: { total: matchedDrafts.length, list: matchedDrafts.slice(0, 10).map(d => ({ id: d.id, title: d.title || "Untitled", words: d.content ? d.content.trim().split(/\s+/).length : 0 })) },
       }
     };
   } catch (e) {
     console.error("[Argus] Skeleton failed:", e);
     return { success: false, error: e.message };
+  }
+}
+
+// ── Save to Drive (context menu) ──
+
+async function handleSaveToCloud(url, tab) {
+  try {
+    // Determine filename from URL
+    const urlObj = new URL(url);
+    let filename = urlObj.pathname.split("/").filter(Boolean).pop() || "page";
+    if (!filename.includes(".")) filename += ".html";
+
+    // Fetch the resource
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Fetch failed: ${resp.status}`);
+    const blob = await resp.blob();
+
+    // Upload to all connected providers
+    const cloudKeys = ["google", "dropbox", "webdav", "s3", "github"];
+    const results = [];
+    for (const key of cloudKeys) {
+      if (!CloudProviders[key] || !await CloudProviders[key].isConnected()) continue;
+      try {
+        await CloudProviders[key].upload(blob, `Argus Saved Files/${filename}`);
+        results.push({ provider: key, success: true });
+      } catch (e) {
+        results.push({ provider: key, success: false, error: e.message });
+      }
+    }
+
+    const ok = results.filter(r => r.success).map(r => r.provider);
+    const msg = ok.length > 0
+      ? `Saved ${filename} to ${ok.join(", ")}`
+      : "Failed to save to any provider";
+
+    // Show notification
+    browser.notifications.create(`argus-cloud-save-${Date.now()}`, {
+      type: "basic",
+      iconUrl: browser.runtime.getURL("icons/icon-48.png"),
+      title: "Argus — Save to Drive",
+      message: msg
+    });
+
+    console.log("[Argus] Save to cloud:", msg, results);
+  } catch (e) {
+    console.error("[Argus] Save to cloud failed:", e);
+    browser.notifications.create(`argus-cloud-save-err-${Date.now()}`, {
+      type: "basic",
+      iconUrl: browser.runtime.getURL("icons/icon-48.png"),
+      title: "Argus — Save to Drive",
+      message: `Failed: ${e.message}`
+    });
   }
 }
 
@@ -2672,6 +2826,17 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
   // Open Argus Console
   if (info.menuItemId === "argus-console") {
     browser.tabs.create({ url: browser.runtime.getURL("options/options.html") });
+    return;
+  }
+
+  // Save to Drive — fetch file and upload to all connected cloud providers
+  if (info.menuItemId === "argus-save-to-cloud") {
+    const url = info.linkUrl || info.srcUrl;
+    if (url) handleSaveToCloud(url, tab);
+    return;
+  }
+  if (info.menuItemId === "argus-save-page-to-cloud") {
+    if (tab && tab.url) handleSaveToCloud(tab.url, tab);
     return;
   }
 

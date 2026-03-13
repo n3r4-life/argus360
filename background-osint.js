@@ -2231,9 +2231,14 @@ async function handleExtractImagesMultiTab(message) {
   try {
     const allTabs = await browser.tabs.query({ currentWindow: true });
     // Filter out extension pages, about: pages, etc.
-    const validTabs = allTabs.filter(t =>
+    let validTabs = allTabs.filter(t =>
       t.url && (t.url.startsWith("http://") || t.url.startsWith("https://"))
     );
+    // If specific tab IDs provided, filter to only those
+    if (message.tabIds && Array.isArray(message.tabIds) && message.tabIds.length > 0) {
+      const idSet = new Set(message.tabIds);
+      validTabs = validTabs.filter(t => idSet.has(t.id));
+    }
 
     if (validTabs.length === 0) {
       return { success: false, error: "No web pages open to grab images from." };

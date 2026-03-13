@@ -66,8 +66,8 @@ body {
 
 .graph-motto {
   position: fixed;
-  top: 48px;
-  left: 50%;
+  top: 72px;
+  left: calc(50% + 298px);
   transform: translateX(-50%);
   font-size: 12px;
   font-style: italic;

@@ -84,9 +84,17 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
         <span>Reports</span>
       </button>
+      <button id="open-draft-nav" class="app-tab" title="Draft Pad">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        <span>Draft</span>
+      </button>
       <button id="open-reader-nav" class="app-tab" title="Reader">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
         <span>Reader</span>
+      </button>
+      <button id="open-images-nav" class="app-tab" title="Image Grabber">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <span>Images</span>
       </button>
     </nav>
 
@@ -1039,6 +1047,7 @@
                 <div id="proj-automation-status" class="prompt-status" style="padding:4px 0;font-size:12px;"></div>
                 <div id="proj-osint-status" class="prompt-status" style="padding:4px 0;font-size:12px;"></div>
                 <div class="proj-items-list" id="proj-items-list"></div>
+                <div class="proj-drafts-list" id="proj-drafts-list"></div>
               </div>
             </div>
           </div>
@@ -1706,6 +1715,21 @@
             </div>
           </div>
           <span id="import-export-status" class="prompt-status"></span>
+        </div>
+      </section>
+
+      <!-- Startup / Homepage -->
+      <section class="card">
+        <h2 class="card-title">Startup</h2>
+        <div class="card-body">
+          <p class="info-text">Set Argus as your browser homepage. Opens all Argus pages as tabs when Firefox starts — Console, KG, Chat, Workbench, Reports, Draft Pad, and Reader.</p>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <button id="set-argus-homepage" class="btn btn-secondary">Set Argus as Homepage</button>
+              <span class="hint">Copies Argus page URLs and opens Firefox homepage settings. Paste into the Custom URLs field.</span>
+            </div>
+          </div>
+          <span id="homepage-status" class="prompt-status"></span>
         </div>
       </section>
 

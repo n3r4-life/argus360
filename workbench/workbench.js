@@ -642,6 +642,46 @@
 
     div.appendChild(header);
     div.appendChild(body);
+
+    // Action bar for assistant messages
+    if (role === "assistant" && content) {
+      const actions = document.createElement("div");
+      actions.className = "wb-msg-actions";
+
+      const copyBtn = document.createElement("button");
+      copyBtn.className = "wb-msg-action";
+      copyBtn.textContent = "Copy";
+      copyBtn.title = "Copy to clipboard";
+      copyBtn.addEventListener("click", () => {
+        navigator.clipboard.writeText(content);
+        copyBtn.textContent = "Copied";
+        setTimeout(() => { copyBtn.textContent = "Copy"; }, 1500);
+      });
+      actions.appendChild(copyBtn);
+
+      const draftBtn = document.createElement("button");
+      draftBtn.className = "wb-msg-action wb-msg-action-accent";
+      draftBtn.textContent = "Send to Draft";
+      draftBtn.title = "Insert into Draft Pad";
+      draftBtn.addEventListener("click", async () => {
+        await browser.storage.local.set({ draftPendingInsert: { content, timestamp: Date.now() } });
+        draftBtn.textContent = "Sent!";
+        setTimeout(() => { draftBtn.textContent = "Send to Draft"; }, 1500);
+        // Focus or open Draft Pad
+        const draftUrl = browser.runtime.getURL("reporting/reporting.html");
+        const existing = await browser.tabs.query({ url: draftUrl + "*" });
+        if (existing.length > 0) {
+          await browser.tabs.update(existing[0].id, { active: true });
+          await browser.windows.update(existing[0].windowId, { focused: true });
+        } else {
+          await browser.tabs.create({ url: draftUrl });
+        }
+      });
+      actions.appendChild(draftBtn);
+
+      div.appendChild(actions);
+    }
+
     messagesEl.appendChild(div);
     return div;
   }

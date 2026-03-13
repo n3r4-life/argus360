@@ -168,6 +168,23 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  // Send to Draft Pad
+  document.getElementById("send-to-draft").addEventListener("click", async () => {
+    if (!rawMarkdown) return;
+    await browser.storage.local.set({ draftPendingInsert: { content: rawMarkdown, source: "analysis", timestamp: Date.now() } });
+    const btn = document.getElementById("send-to-draft");
+    btn.textContent = "Sent!";
+    setTimeout(() => { btn.textContent = "Draft"; }, 1500);
+    const draftUrl = browser.runtime.getURL("reporting/reporting.html");
+    const existing = await browser.tabs.query({ url: draftUrl + "*" });
+    if (existing.length > 0) {
+      await browser.tabs.update(existing[0].id, { active: true });
+      await browser.windows.update(existing[0].windowId, { focused: true });
+    } else {
+      await browser.tabs.create({ url: draftUrl });
+    }
+  });
+
   // Save to Archive
   document.getElementById("save-archive").addEventListener("click", () => {
     const url = getShareUrl();
