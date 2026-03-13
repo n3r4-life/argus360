@@ -335,4 +335,141 @@ body {
   overflow: hidden;
 }
 
+/* Project association indicators */
+.history-project-tags {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.history-project-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.06);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.history-project-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Project Feed filter bar */
+.feed-project-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.feed-project-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.feed-project-pill:hover {
+  background: var(--bg-card);
+}
+
+.feed-project-pill.active {
+  background: var(--bg-card);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.feed-project-pill .pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Feed item type indicators */
+.feed-item-type {
+  display: inline-block;
+  width: 3px;
+  min-height: 100%;
+  border-radius: 2px;
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
+.history-item.feed-link {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+.history-item.feed-link:hover {
+  opacity: 0.85;
+}
+
+.history-item.feed-note {
+  border-left: 3px solid #f5a623;
+}
+
+.history-badge.link {
+  background: rgba(80, 200, 120, 0.15);
+  color: #50c878;
+}
+
+.history-badge.note {
+  background: rgba(245, 166, 35, 0.15);
+  color: #f5a623;
+}
+
+.history-badge.bookmark {
+  background: rgba(100, 180, 255, 0.15);
+  color: #64b4ff;
+}
+
+/* Project group header */
+.feed-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 6px;
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+.feed-group-header:first-child {
+  margin-top: 0;
+}
+
+.feed-group-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.feed-group-count {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 .hidden { display: none !important; }

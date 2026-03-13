@@ -2263,13 +2263,34 @@ async function updateMonitorStorageUsage() {
   try {
     const resp = await browser.runtime.sendMessage({ action: "getMonitorStorageUsage" });
     if (!resp || !resp.success) return;
-    const mb = resp.totalBytes / (1024 * 1024);
-    const maxMb = 10; // reasonable threshold for warning
-    const pct = Math.min(100, (mb / maxMb) * 100);
+    // Show IndexedDB monitor data only (excludes OPFS binary blobs which have no quota)
+    const idbBytes = resp.totalBytes - (resp.opfsBytes || 0);
+    const idbMb = idbBytes / (1024 * 1024);
+    const opfsMb = (resp.opfsBytes || 0) / (1024 * 1024);
+    const maxMb = 10;
+    const pct = Math.min(100, (idbMb / maxMb) * 100);
     el.monitorStorageBar.style.display = "";
-    el.monitorStorageLabel.textContent = `${mb.toFixed(2)} MB`;
+    el.monitorStorageLabel.textContent = opfsMb > 0.01
+      ? `${idbMb.toFixed(2)} MB data + ${opfsMb.toFixed(1)} MB snapshots`
+      : `${idbMb.toFixed(2)} MB`;
     el.monitorStorageFill.style.width = `${pct}%`;
     el.monitorStorageFill.style.background = pct > 80 ? "var(--error)" : pct > 50 ? "var(--accent)" : "var(--success)";
+
+    const manageLink = document.getElementById("monitor-storage-manage");
+    if (manageLink && !manageLink._wired) {
+      manageLink._wired = true;
+      manageLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        const nav = document.getElementById("main-nav");
+        const tabs = nav.querySelectorAll(".nav-tab");
+        const panels = document.querySelectorAll(".tab-panel");
+        switchMainTab("settings", tabs, panels);
+        setTimeout(() => {
+          const el = document.getElementById("storage-management");
+          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 100);
+      });
+    }
   } catch { /* non-critical */ }
 }
 
@@ -2941,6 +2962,15 @@ function initMainTabs() {
     histNavBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       browser.tabs.create({ url: browser.runtime.getURL("history/history.html") });
+    });
+  }
+
+  // Reader icon button (not a tab — opens feeds/reader page)
+  const readerNavBtn = document.getElementById("open-reader-nav");
+  if (readerNavBtn) {
+    readerNavBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      browser.tabs.create({ url: browser.runtime.getURL("feeds/feeds.html") });
     });
   }
 }
@@ -3756,7 +3786,8 @@ function projRenderItems(proj) {
   projEl.itemsList.innerHTML = "";
   for (const item of proj.items) {
     const card = document.createElement("div");
-    card.className = "proj-item-card";
+    const isAnalyzed = !!(item.analysisContent || item.analysisPreset || (item.analyses && item.analyses.length));
+    card.className = "proj-item-card" + (isAnalyzed ? "" : " unanalyzed");
     const bodyDiv = document.createElement("div");
     bodyDiv.className = "proj-item-body";
     const titleDiv2 = document.createElement("div");
@@ -3873,6 +3904,15 @@ function projRenderItems(proj) {
       });
       actionsDiv2.appendChild(autoBtn);
     }
+    // Block button for auto-routed/feed items — prevents re-routing
+    if (item.url && (item.type === "feed" || (item.tags && item.tags.includes("auto-routed")))) {
+      const blockBtn = document.createElement("button");
+      blockBtn.className = "proj-item-block-btn";
+      blockBtn.title = "Remove & block from being re-routed to this project";
+      blockBtn.textContent = "Block";
+      blockBtn.style.color = "var(--error)";
+      actionsDiv2.appendChild(blockBtn);
+    }
     actionsDiv2.appendChild(noteBtn);
     actionsDiv2.appendChild(removeBtn);
     card.appendChild(actionsDiv2);
@@ -3974,7 +4014,64 @@ function projRenderItems(proj) {
       projSelectProject(proj.id);
     });
 
+    const blockBtn = card.querySelector(".proj-item-block-btn");
+    if (blockBtn) {
+      blockBtn.addEventListener("click", async () => {
+        await browser.runtime.sendMessage({ action: "removeProjectItem", projectId: proj.id, itemId: item.id, reject: true });
+        await projLoadProjects();
+        projSelectProject(proj.id);
+      });
+    }
+
     projEl.itemsList.appendChild(card);
+  }
+
+  // Render rejected URLs section if any exist
+  if (proj.rejectedUrls && proj.rejectedUrls.length) {
+    const rejDiv = document.createElement("div");
+    rejDiv.style.cssText = "margin-top:16px;padding:10px 14px;background:var(--bg-primary);border:1px dashed var(--border);border-radius:var(--radius);";
+    const rejHeader = document.createElement("div");
+    rejHeader.style.cssText = "display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;cursor:pointer;";
+    const rejTitle = document.createElement("span");
+    rejTitle.style.cssText = "font-size:12px;font-weight:600;color:var(--text-muted);";
+    rejTitle.textContent = `Blocked from routing (${proj.rejectedUrls.length})`;
+    const rejToggle = document.createElement("span");
+    rejToggle.style.cssText = "font-size:11px;color:var(--text-muted);";
+    rejToggle.textContent = "Show";
+    rejHeader.appendChild(rejTitle);
+    rejHeader.appendChild(rejToggle);
+    rejDiv.appendChild(rejHeader);
+
+    const rejList = document.createElement("div");
+    rejList.style.display = "none";
+    for (const url of proj.rejectedUrls) {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:center;gap:8px;padding:3px 0;font-size:11px;";
+      const urlSpan = document.createElement("span");
+      urlSpan.style.cssText = "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted);";
+      urlSpan.textContent = url;
+      urlSpan.title = url;
+      const unblockBtn = document.createElement("button");
+      unblockBtn.style.cssText = "background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-secondary);cursor:pointer;font-size:10px;padding:2px 6px;flex-shrink:0;";
+      unblockBtn.textContent = "Unblock";
+      unblockBtn.addEventListener("click", async () => {
+        await browser.runtime.sendMessage({ action: "unRejectProjectUrl", projectId: proj.id, url });
+        await projLoadProjects();
+        projSelectProject(proj.id);
+      });
+      row.appendChild(urlSpan);
+      row.appendChild(unblockBtn);
+      rejList.appendChild(row);
+    }
+    rejDiv.appendChild(rejList);
+
+    rejHeader.addEventListener("click", () => {
+      const showing = rejList.style.display !== "none";
+      rejList.style.display = showing ? "none" : "";
+      rejToggle.textContent = showing ? "Show" : "Hide";
+    });
+
+    projEl.itemsList.appendChild(rejDiv);
   }
 }
 
@@ -4846,6 +4943,7 @@ function initStorageManagement() {
   document.getElementById("purge-history-btn").addEventListener("click", purgeOldHistory);
   document.getElementById("purge-snapshots-btn").addEventListener("click", purgeMonitorSnapshots);
   document.getElementById("purge-cached-btn").addEventListener("click", purgeAllCachedData);
+  document.getElementById("purge-opfs-btn").addEventListener("click", purgeOpfsFiles);
 
   // Wipe Everything
   const wipeBtn = document.getElementById("wipe-everything-btn");
@@ -5043,6 +5141,110 @@ function initStorageManagement() {
     loadDictData();
   }
 
+  // ── Entity Overrides UI ──
+  {
+    const overridesList = document.getElementById("kg-overrides-list");
+    const overrideName = document.getElementById("kg-override-name");
+    const overrideType = document.getElementById("kg-override-type");
+    const overrideAddBtn = document.getElementById("kg-override-add");
+    const overrideApplyBtn = document.getElementById("kg-override-apply");
+    const overrideStatus = document.getElementById("kg-override-status");
+
+    if (overridesList) {
+      let _overrides = {}; // { "kari lake": "person", ... }
+
+      function showOverrideStatus(msg) {
+        overrideStatus.textContent = msg;
+        overrideStatus.classList.remove("hidden");
+        setTimeout(() => overrideStatus.classList.add("hidden"), 2500);
+      }
+
+      const typeLabels = { person: "Person", organization: "Organization", location: "Location", event: "Event", other: "Other" };
+      const typeColors = { person: "#e94560", organization: "#64b5f6", location: "#4caf50", event: "#ffb74d", other: "#a0a0b0" };
+
+      function renderOverrides() {
+        overridesList.replaceChildren();
+        const entries = Object.entries(_overrides);
+        if (!entries.length) {
+          const empty = document.createElement("div");
+          empty.className = "info-text";
+          empty.style.cssText = "padding:12px;text-align:center;";
+          empty.textContent = "No overrides defined.";
+          overridesList.appendChild(empty);
+          return;
+        }
+        for (const [name, type] of entries.sort((a, b) => a[0].localeCompare(b[0]))) {
+          const row = document.createElement("div");
+          row.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--border);";
+          const dot = document.createElement("span");
+          dot.style.cssText = `width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${typeColors[type] || "#a0a0b0"}`;
+          const label = document.createElement("span");
+          label.style.cssText = "flex:1;font-size:13px;";
+          label.textContent = name;
+          const typeBadge = document.createElement("span");
+          typeBadge.style.cssText = `font-size:11px;padding:1px 8px;border-radius:10px;background:rgba(255,255,255,0.06);color:var(--text-secondary);`;
+          typeBadge.textContent = typeLabels[type] || type;
+          const removeBtn = document.createElement("button");
+          removeBtn.className = "btn btn-secondary btn-sm";
+          removeBtn.style.cssText = "padding:2px 8px;font-size:11px;color:var(--error);";
+          removeBtn.textContent = "Remove";
+          removeBtn.addEventListener("click", async () => {
+            delete _overrides[name];
+            await saveOverrides();
+            renderOverrides();
+            showOverrideStatus("Removed");
+          });
+          row.append(dot, label, typeBadge, removeBtn);
+          overridesList.appendChild(row);
+        }
+      }
+
+      async function loadOverrides() {
+        const dict = await browser.runtime.sendMessage({ action: "getKGDictionaries" });
+        _overrides = dict.overrides || {};
+        renderOverrides();
+      }
+
+      async function saveOverrides() {
+        const dict = await browser.runtime.sendMessage({ action: "getKGDictionaries" });
+        dict.overrides = _overrides;
+        await browser.runtime.sendMessage({ action: "saveKGDictionaries", dictionaries: dict });
+      }
+
+      overrideAddBtn.addEventListener("click", async () => {
+        const name = overrideName.value.trim().toLowerCase();
+        const type = overrideType.value;
+        if (!name) return;
+        if (_overrides[name] === type) { showOverrideStatus("Already exists"); return; }
+        _overrides[name] = type;
+        await saveOverrides();
+        overrideName.value = "";
+        renderOverrides();
+        showOverrideStatus("Saved");
+      });
+      overrideName.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") overrideAddBtn.click();
+      });
+
+      overrideApplyBtn.addEventListener("click", async () => {
+        overrideApplyBtn.disabled = true;
+        overrideApplyBtn.textContent = "Applying...";
+        try {
+          const resp = await browser.runtime.sendMessage({ action: "retypeKGEntities" });
+          const parts = [];
+          if (resp?.fixed) parts.push(`Re-typed ${resp.fixed}`);
+          if (resp?.pruned) parts.push(`pruned ${resp.pruned}`);
+          showOverrideStatus(parts.length ? parts.join(", ") : "All correct");
+          updateKGStats();
+        } catch { showOverrideStatus("Error"); }
+        overrideApplyBtn.disabled = false;
+        overrideApplyBtn.textContent = "Apply to Existing Entities";
+      });
+
+      loadOverrides();
+    }
+  }
+
   // OSINT Quick Tools (on OSINT tab)
   const osintLaunch = (tool) => async () => {
     const tabs = await browser.tabs.query({ active: true, currentWindow: true });
@@ -5063,17 +5265,88 @@ function initStorageManagement() {
   if (osintTechBtn) osintTechBtn.addEventListener("click", osintLaunch("detectTechStack"));
 }
 
+function fmtBytes(b) {
+  if (b < 1024) return b + " B";
+  if (b < 1048576) return (b / 1024).toFixed(1) + " KB";
+  return (b / 1048576).toFixed(1) + " MB";
+}
+
 async function updateStorageUsage() {
   const display = document.getElementById("storage-usage-display");
+  const breakdown = document.getElementById("storage-breakdown");
   try {
-    // Combine browser.storage.local (settings/ephemeral) + IndexedDB (heavy data)
+    // browser.storage.local — settings + ephemeral result keys
     const all = await browser.storage.local.get(null);
     const localBytes = new Blob([JSON.stringify(all)]).size;
+
+    // Categorize storage.local keys
+    let ephemeralBytes = 0, ephemeralCount = 0;
+    for (const [key, val] of Object.entries(all)) {
+      if (key.startsWith("tl-result-") || key.startsWith("proj-view-") ||
+          key.endsWith("-pipeline") || key.startsWith("techstack-") ||
+          key.startsWith("metadata-") || key.startsWith("linkmap-") ||
+          key.startsWith("whois-") || key.startsWith("result-")) {
+        const s = new Blob([JSON.stringify(val)]).size;
+        ephemeralBytes += s;
+        ephemeralCount++;
+      }
+    }
+
+    // IndexedDB — all the heavy stores
     const idbSizes = await ArgusDB.estimateSize();
-    const totalBytes = localBytes + (idbSizes._total || 0);
-    if (totalBytes < 1024) display.textContent = totalBytes + " B";
-    else if (totalBytes < 1048576) display.textContent = (totalBytes / 1024).toFixed(1) + " KB";
-    else display.textContent = (totalBytes / 1048576).toFixed(1) + " MB";
+
+    // OPFS — binary snapshot files (full HTML + screenshots)
+    let opfsBytes = 0;
+    try {
+      const monResp = await browser.runtime.sendMessage({ action: "getMonitorStorageUsage" });
+      if (monResp && monResp.success) opfsBytes = monResp.opfsBytes || 0;
+    } catch { /* */ }
+
+    const totalBytes = localBytes + (idbSizes._total || 0) + opfsBytes;
+
+    display.textContent = fmtBytes(totalBytes);
+    if (totalBytes > 8 * 1048576) {
+      display.style.color = "var(--error)";
+    } else if (totalBytes > 5 * 1048576) {
+      display.style.color = "var(--warning, #ffb74d)";
+    } else {
+      display.style.color = "var(--text-secondary)";
+    }
+
+    // Build breakdown
+    const storeLabels = {
+      history: "Analysis History",
+      snapshots: "Monitor Snapshots",
+      changes: "Monitor Changes",
+      feedEntries: "Feed Entries",
+      kgNodes: "KG Nodes",
+      kgEdges: "KG Edges",
+      projects: "Projects",
+      bookmarks: "Bookmarks",
+      monitors: "Monitors",
+      feeds: "Feeds",
+      watchlist: "Watchlist",
+    };
+    const rows = [];
+    for (const [store, label] of Object.entries(storeLabels)) {
+      const s = idbSizes[store];
+      if (s && s.bytes > 0) {
+        rows.push(`${label}: ${fmtBytes(s.bytes)} (${s.count} items)`);
+      }
+    }
+    if (opfsBytes > 0) {
+      rows.push(`Snapshot Files (HTML/PNG): ${fmtBytes(opfsBytes)}`);
+    }
+    if (ephemeralCount > 0) {
+      rows.push(`Cached Results: ${fmtBytes(ephemeralBytes)} (${ephemeralCount} keys)`);
+    }
+    const settingsBytes = localBytes - ephemeralBytes;
+    if (settingsBytes > 0) {
+      rows.push(`Settings & Config: ${fmtBytes(settingsBytes)}`);
+    }
+    // Sort by size descending
+    breakdown.innerHTML = rows.join("<br>");
+    breakdown.style.display = rows.length ? "block" : "none";
   } catch {
     display.textContent = "Unable to calculate";
   }
@@ -5107,10 +5380,23 @@ async function purgeMonitorSnapshots() {
 async function purgeAllCachedData() {
   // Ephemeral result keys stay in browser.storage.local
   const all = await browser.storage.local.get(null);
-  const prefixes = ["tl-result-", "techstack-", "metadata-", "linkmap-", "whois-", "result-"];
-  const keysToRemove = Object.keys(all).filter(k => prefixes.some(p => k.startsWith(p)));
+  const prefixes = ["tl-result-", "proj-view-", "techstack-", "metadata-", "linkmap-", "whois-", "result-"];
+  const keysToRemove = Object.keys(all).filter(k =>
+    prefixes.some(p => k.startsWith(p)) || k.endsWith("-pipeline")
+  );
   if (keysToRemove.length) await browser.storage.local.remove(keysToRemove);
   showPurgeStatus(`Removed ${keysToRemove.length} cached entries`);
+  updateStorageUsage();
+}
+
+async function purgeOpfsFiles() {
+  if (!confirm("Delete all snapshot HTML and screenshot files? This frees the most space but removes the ability to view old page captures.")) return;
+  try {
+    await browser.runtime.sendMessage({ action: "purgeOpfsFiles" });
+    showPurgeStatus("All snapshot files deleted");
+  } catch {
+    showPurgeStatus("Failed to delete snapshot files");
+  }
   updateStorageUsage();
 }
 

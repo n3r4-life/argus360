@@ -18,11 +18,367 @@ const elements = {
 
 let currentItem = null;
 let searchTimeout = null;
+let projectMap = new Map(); // historyId → [{ name, color }]
+let allProjects = []; // full project objects for feed tab
+let feedActiveProject = null; // null = "All", or projectId
+let feedLoaded = false;
 
-document.addEventListener("DOMContentLoaded", () => {
-  loadHistory();
+document.addEventListener("DOMContentLoaded", async () => {
+  await loadProjectMap();
+  loadFeed();
   attachListeners();
+
+  // Live data refresh — auto-update when background data changes
+  let _refreshDebounce = null;
+  browser.runtime.onMessage.addListener((message) => {
+    if (message.type !== "argusDataChanged") return;
+    if (message.store !== "history" && message.store !== "projects" && message.store !== "monitors") return;
+    if (_refreshDebounce) clearTimeout(_refreshDebounce);
+    _refreshDebounce = setTimeout(async () => {
+      _refreshDebounce = null;
+      if (message.store === "projects" || message.store === "history") await loadProjectMap();
+      const activeTab = document.querySelector(".history-tab.active");
+      if (activeTab && activeTab.dataset.tab === "feed") {
+        loadFeed();
+      } else if (activeTab && activeTab.dataset.tab === "monitors") {
+        allMonitorChanges = null;
+        monitorChangesLoaded = false;
+        loadMonitorChanges();
+      } else {
+        loadHistory();
+      }
+    }, 500);
+  });
 });
+
+async function loadProjectMap() {
+  try {
+    const resp = await browser.runtime.sendMessage({ action: "getProjects" });
+    if (!resp || !resp.success) return;
+    allProjects = resp.projects || [];
+    projectMap.clear();
+    for (const proj of allProjects) {
+      if (!proj.items) continue;
+      for (const item of proj.items) {
+        if (!item.refId) continue;
+        if (!projectMap.has(item.refId)) projectMap.set(item.refId, []);
+        projectMap.get(item.refId).push({ name: proj.name, color: proj.color || "#a0a0b0" });
+      }
+    }
+  } catch { /* ignore */ }
+}
+
+// ── Project Feed ──
+async function loadFeed(query) {
+  feedLoaded = true;
+  const feedItems = document.getElementById("feed-items");
+  const bar = document.getElementById("feed-project-bar");
+
+  // Fetch projects + monitor changes in parallel
+  const [projResp, histResp, monResp] = await Promise.all([
+    browser.runtime.sendMessage({ action: "getProjects" }),
+    browser.runtime.sendMessage({ action: "getHistory", page: 0, perPage: 500 }),
+    browser.runtime.sendMessage({ action: "getAllMonitorChanges" }),
+  ]);
+
+  allProjects = (projResp?.success && projResp.projects) ? projResp.projects : [];
+  const historyItems = (histResp?.success && histResp.history) ? histResp.history : [];
+  const monitorChanges = (monResp?.success && monResp.changes) ? monResp.changes : [];
+
+  // Build URL → project lookup for matching monitor changes to projects
+  const urlToProjects = new Map();
+  for (const proj of allProjects) {
+    for (const item of (proj.items || [])) {
+      if (!item.url) continue;
+      if (!urlToProjects.has(item.url)) urlToProjects.set(item.url, []);
+      urlToProjects.get(item.url).push(proj);
+    }
+  }
+
+  // Build unified feed entries
+  let entries = [];
+
+  // Project items (analyses, links, notes, bookmarks)
+  for (const proj of allProjects) {
+    for (const item of (proj.items || [])) {
+      entries.push({
+        kind: item.analysisContent ? "analysis" : (item.type || "url"),
+        title: item.title || item.url || "Untitled",
+        url: item.url || "",
+        summary: item.analysisContent ? (item.analysisContent.substring(0, 280).replace(/[#*_`]/g, "")) : (item.summary || item.notes || ""),
+        preset: item.analysisPreset || "",
+        date: item.addedAt || proj.createdAt || 0,
+        projectId: proj.id,
+        projectName: proj.name,
+        projectColor: proj.color || "#a0a0b0",
+        refId: item.refId,
+        _item: item,
+        _proj: proj,
+      });
+    }
+  }
+
+  // Monitor changes matched to projects
+  for (const change of monitorChanges) {
+    const matchedProjs = urlToProjects.get(change.monitorUrl) || [];
+    if (matchedProjs.length) {
+      for (const proj of matchedProjs) {
+        entries.push({
+          kind: "monitor",
+          title: change.monitorTitle || "Monitor Change",
+          url: change.monitorUrl || "",
+          summary: (change.aiSummary || change.newTextSnippet || "").substring(0, 280),
+          preset: "",
+          date: change.detectedAt || 0,
+          projectId: proj.id,
+          projectName: proj.name,
+          projectColor: proj.color || "#a0a0b0",
+          _change: change,
+        });
+      }
+    } else {
+      entries.push({
+        kind: "monitor",
+        title: change.monitorTitle || "Monitor Change",
+        url: change.monitorUrl || "",
+        summary: (change.aiSummary || change.newTextSnippet || "").substring(0, 280),
+        preset: "",
+        date: change.detectedAt || 0,
+        projectId: null,
+        projectName: null,
+        projectColor: null,
+        _change: change,
+      });
+    }
+  }
+
+  // History items not in any project
+  const projRefIds = new Set();
+  for (const proj of allProjects) {
+    for (const item of (proj.items || [])) {
+      if (item.refId) projRefIds.add(item.refId);
+    }
+  }
+  for (const h of historyItems) {
+    if (projRefIds.has(h.id)) continue; // already included via project
+    entries.push({
+      kind: "analysis",
+      title: h.pageTitle || "Untitled",
+      url: h.pageUrl || "",
+      summary: (h.content || "").substring(0, 280).replace(/[#*_`]/g, ""),
+      preset: h.presetLabel || h.preset || "",
+      date: h.timestamp || 0,
+      projectId: null,
+      projectName: null,
+      projectColor: null,
+      _historyItem: h,
+    });
+  }
+
+  // Search filter
+  if (query) {
+    const q = query.toLowerCase();
+    entries = entries.filter(e =>
+      (e.title || "").toLowerCase().includes(q) ||
+      (e.url || "").toLowerCase().includes(q) ||
+      (e.summary || "").toLowerCase().includes(q) ||
+      (e.projectName || "").toLowerCase().includes(q)
+    );
+  }
+
+  // Sort by date descending
+  entries.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  // Render project filter pills
+  bar.replaceChildren();
+  const allPill = document.createElement("button");
+  allPill.className = "feed-project-pill" + (feedActiveProject === null ? " active" : "");
+  allPill.textContent = `All (${entries.length})`;
+  allPill.addEventListener("click", () => { feedActiveProject = null; loadFeed(query); });
+  bar.appendChild(allPill);
+
+  for (const proj of allProjects) {
+    const count = entries.filter(e => e.projectId === proj.id).length;
+    if (!count) continue;
+    const pill = document.createElement("button");
+    pill.className = "feed-project-pill" + (feedActiveProject === proj.id ? " active" : "");
+    const dot = document.createElement("span");
+    dot.className = "pill-dot";
+    dot.style.background = proj.color || "#a0a0b0";
+    pill.appendChild(dot);
+    pill.appendChild(document.createTextNode(`${proj.name} (${count})`));
+    pill.addEventListener("click", () => { feedActiveProject = proj.id; loadFeed(query); });
+    bar.appendChild(pill);
+  }
+
+  // Unassigned pill
+  const unassignedCount = entries.filter(e => e.projectId === null).length;
+  if (unassignedCount) {
+    const pill = document.createElement("button");
+    pill.className = "feed-project-pill" + (feedActiveProject === "__none__" ? " active" : "");
+    pill.textContent = `Unassigned (${unassignedCount})`;
+    pill.addEventListener("click", () => { feedActiveProject = "__none__"; loadFeed(query); });
+    bar.appendChild(pill);
+  }
+
+  // Filter by selected project
+  let visible = entries;
+  if (feedActiveProject === "__none__") {
+    visible = entries.filter(e => e.projectId === null);
+  } else if (feedActiveProject !== null) {
+    visible = entries.filter(e => e.projectId === feedActiveProject);
+  }
+
+  // Render entries
+  feedItems.replaceChildren();
+  if (!visible.length) {
+    const emptyDiv = document.createElement("div");
+    emptyDiv.className = "empty-text";
+    emptyDiv.textContent = "No items yet.";
+    feedItems.appendChild(emptyDiv);
+    return;
+  }
+
+  // Group by project when showing "All"
+  if (feedActiveProject === null && allProjects.length) {
+    const grouped = new Map();
+    for (const e of visible) {
+      const key = e.projectId || "__none__";
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(e);
+    }
+
+    // Projects first, then unassigned
+    for (const proj of allProjects) {
+      const items = grouped.get(proj.id);
+      if (!items || !items.length) continue;
+      renderFeedGroup(feedItems, proj.name, proj.color || "#a0a0b0", items);
+    }
+    const unassigned = grouped.get("__none__");
+    if (unassigned && unassigned.length) {
+      renderFeedGroup(feedItems, "Unassigned", "#6a6a80", unassigned);
+    }
+  } else {
+    for (const entry of visible) {
+      feedItems.appendChild(buildFeedCard(entry));
+    }
+  }
+}
+
+function renderFeedGroup(container, name, color, items) {
+  const header = document.createElement("div");
+  header.className = "feed-group-header";
+  const dot = document.createElement("span");
+  dot.className = "feed-group-dot";
+  dot.style.background = color;
+  header.appendChild(dot);
+  header.appendChild(document.createTextNode(name));
+  const countSpan = document.createElement("span");
+  countSpan.className = "feed-group-count";
+  countSpan.textContent = `(${items.length})`;
+  header.appendChild(countSpan);
+  container.appendChild(header);
+
+  for (const entry of items) {
+    container.appendChild(buildFeedCard(entry));
+  }
+}
+
+function buildFeedCard(entry) {
+  const div = document.createElement("div");
+  const isLink = entry.kind === "url" || entry.kind === "bookmark" || entry.kind === "feed";
+  const isNote = entry.kind === "note";
+  div.className = "history-item" + (isLink ? " feed-link" : "") + (isNote ? " feed-note" : "");
+
+  div.addEventListener("click", () => {
+    if (entry._historyItem) {
+      openDetail(entry._historyItem);
+    } else if (entry._change) {
+      openMonitorChangeDetail(entry._change);
+    } else if (entry._item && entry._item.analysisContent) {
+      // Open analysis content inline
+      currentItem = {
+        id: entry._item.refId || entry._item.id,
+        content: entry._item.analysisContent,
+        pageTitle: entry.title,
+        pageUrl: entry.url,
+        presetLabel: entry.preset,
+      };
+      openDetail(currentItem);
+    } else if (entry.url) {
+      window.open(entry.url, "_blank");
+    }
+  });
+
+  const info = document.createElement("div");
+  info.className = "history-item-info";
+
+  const titleDiv = document.createElement("div");
+  titleDiv.className = "history-item-title";
+  titleDiv.textContent = entry.title;
+
+  const metaDiv = document.createElement("div");
+  metaDiv.className = "history-item-meta";
+
+  if (entry.date) {
+    const date = new Date(entry.date);
+    const timeSpan = document.createElement("span");
+    timeSpan.textContent = date.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
+      " " + date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+    metaDiv.appendChild(timeSpan);
+  }
+
+  // Type badge
+  const badge = document.createElement("span");
+  badge.className = "history-badge";
+  if (entry.kind === "analysis") {
+    badge.textContent = entry.preset || "Analysis";
+  } else if (entry.kind === "monitor") {
+    badge.className += " monitor";
+    badge.textContent = "Monitor";
+  } else if (entry.kind === "note") {
+    badge.className += " note";
+    badge.textContent = "Note";
+  } else if (entry.kind === "bookmark") {
+    badge.className += " bookmark";
+    badge.textContent = "Bookmark";
+  } else {
+    badge.className += " link";
+    badge.textContent = "Link";
+  }
+  metaDiv.appendChild(badge);
+
+  // Project tag (when not filtered to a specific project)
+  if (entry.projectName && feedActiveProject === null) {
+    const projTag = document.createElement("span");
+    projTag.className = "history-project-tag";
+    const projDot = document.createElement("span");
+    projDot.className = "history-project-dot";
+    projDot.style.background = entry.projectColor;
+    projTag.appendChild(projDot);
+    projTag.appendChild(document.createTextNode(entry.projectName));
+    metaDiv.appendChild(projTag);
+  }
+
+  info.appendChild(titleDiv);
+  info.appendChild(metaDiv);
+
+  // Summary / preview (abbreviated for links)
+  if (entry.summary) {
+    const previewDiv = document.createElement("div");
+    previewDiv.className = isLink ? "history-item-preview" : "history-item-preview";
+    previewDiv.textContent = isLink ? entry.summary.substring(0, 100) : entry.summary.substring(0, 280);
+    info.appendChild(previewDiv);
+  } else if (entry.url && isLink) {
+    const urlDiv = document.createElement("div");
+    urlDiv.className = "history-item-preview";
+    urlDiv.textContent = entry.url;
+    info.appendChild(urlDiv);
+  }
+
+  div.appendChild(info);
+  return div;
+}
 
 function attachListeners() {
   elements.searchInput.addEventListener("input", () => {
@@ -30,7 +386,9 @@ function attachListeners() {
     searchTimeout = setTimeout(() => {
       const query = elements.searchInput.value.trim();
       const activeTab = document.querySelector(".history-tab.active");
-      if (activeTab && activeTab.dataset.tab === "monitors") {
+      if (activeTab && activeTab.dataset.tab === "feed") {
+        loadFeed(query);
+      } else if (activeTab && activeTab.dataset.tab === "monitors") {
         loadMonitorChanges(query);
       } else if (query) {
         searchHistory(query);
@@ -41,7 +399,7 @@ function attachListeners() {
   });
 
   elements.clearAll.addEventListener("click", async () => {
-    if (!confirm("Clear all analysis history? This cannot be undone.")) return;
+    if (!confirm("Clear all reports? This cannot be undone.")) return;
     await browser.runtime.sendMessage({ action: "clearHistory" });
     loadHistory();
   });
@@ -176,7 +534,7 @@ async function loadHistory() {
   if (!resp || !resp.success) {
     const errDiv = document.createElement("div");
     errDiv.className = "empty-text";
-    errDiv.textContent = "Failed to load history.";
+    errDiv.textContent = "Failed to load reports.";
     elements.historyList.replaceChildren(errDiv);
     return;
   }
@@ -193,7 +551,7 @@ function renderHistory(items, total) {
   if (!items.length) {
     const emptyDiv = document.createElement("div");
     emptyDiv.className = "empty-text";
-    emptyDiv.textContent = "No analysis history yet.";
+    emptyDiv.textContent = "No reports yet.";
     elements.historyList.replaceChildren(emptyDiv);
     return;
   }
@@ -253,6 +611,25 @@ function renderHistory(items, total) {
 
     info.appendChild(titleDiv);
     info.appendChild(metaDiv);
+
+    // Project association tags
+    const projects = projectMap.get(item.id);
+    if (projects && projects.length) {
+      const tagsDiv = document.createElement("div");
+      tagsDiv.className = "history-project-tags";
+      for (const proj of projects) {
+        const tag = document.createElement("span");
+        tag.className = "history-project-tag";
+        const dot = document.createElement("span");
+        dot.className = "history-project-dot";
+        dot.style.background = proj.color;
+        tag.appendChild(dot);
+        tag.appendChild(document.createTextNode(proj.name));
+        tagsDiv.appendChild(tag);
+      }
+      info.appendChild(tagsDiv);
+    }
+
     info.appendChild(previewDiv);
     div.appendChild(info);
 
@@ -303,30 +680,35 @@ clearMonitorBtn.addEventListener("click", async () => {
 });
 
 // ── Tab switching ──
+const feedList = document.getElementById("feed-list");
 const monitorList = document.getElementById("monitor-changes-list");
 let monitorChangesLoaded = false;
+let historyLoaded = false;
 
 document.querySelectorAll(".history-tab").forEach(tab => {
   tab.addEventListener("click", () => {
     document.querySelectorAll(".history-tab").forEach(t => t.classList.remove("active"));
     tab.classList.add("active");
     const which = tab.dataset.tab;
-    if (which === "analysis") {
+    feedList.style.display = "none";
+    elements.historyList.style.display = "none";
+    monitorList.style.display = "none";
+    elements.clearAll.style.display = "none";
+    clearMonitorBtn.style.display = "none";
+    if (which === "feed") {
+      feedList.style.display = "";
+      elements.searchInput.placeholder = "Search project feed...";
+      if (!feedLoaded) loadFeed();
+    } else if (which === "analysis") {
       elements.historyList.style.display = "";
-      monitorList.style.display = "none";
-      elements.searchInput.placeholder = "Search history...";
+      elements.searchInput.placeholder = "Search reports...";
       elements.clearAll.style.display = "";
-      clearMonitorBtn.style.display = "none";
+      if (!historyLoaded) { historyLoaded = true; loadHistory(); }
     } else {
-      elements.historyList.style.display = "none";
       monitorList.style.display = "";
       elements.searchInput.placeholder = "Search monitor changes...";
-      elements.clearAll.style.display = "none";
       clearMonitorBtn.style.display = "";
-      if (!monitorChangesLoaded) {
-        monitorChangesLoaded = true;
-        loadMonitorChanges();
-      }
+      if (!monitorChangesLoaded) { monitorChangesLoaded = true; loadMonitorChanges(); }
     }
   });
 });

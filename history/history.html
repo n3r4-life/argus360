@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Analysis History - Argus</title>
+  <title>Reports - Argus</title>
   <link rel="stylesheet" href="history.css">
   <link rel="stylesheet" href="../shared/ribbon.css">
 </head>
@@ -12,7 +12,7 @@
   <header class="header">
     <div class="header-left">
       <img src="../icons/icon-32.png" alt="" class="header-icon">
-      <h1 class="header-title">History</h1>
+      <h1 class="header-title">Reports</h1>
     </div>
     <div class="header-actions">
       <input type="text" id="search-input" placeholder="Search history..." class="search-input">
@@ -22,11 +22,17 @@
   </header>
 
   <div class="history-tabs">
-    <button class="history-tab active" data-tab="analysis">Analysis</button>
+    <button class="history-tab active" data-tab="feed">Project Feed</button>
+    <button class="history-tab" data-tab="analysis">Analyses</button>
     <button class="history-tab" data-tab="monitors">Monitor Changes</button>
   </div>
 
-  <div id="history-list" class="history-list">
+  <div id="feed-list" class="history-list">
+    <div id="feed-project-bar" class="feed-project-bar"></div>
+    <div id="feed-items"></div>
+  </div>
+
+  <div id="history-list" class="history-list" style="display:none;">
     <div class="loading-text">Loading history...</div>
   </div>
 

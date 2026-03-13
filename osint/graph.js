@@ -650,17 +650,39 @@
       });
     });
 
-    // Project panel toggle
-    document.getElementById('projectPanelToggle').addEventListener('click', () => {
-      const panel = document.getElementById('projectPanel');
-      const isOpen = panel.classList.contains('open');
-      panel.classList.toggle('hidden', isOpen);
-      panel.classList.toggle('open', !isOpen);
+    // Project panel toggle + draggable tab
+    const projTab = document.getElementById('projectPanelToggle');
+    const projPanel = document.getElementById('projectPanel');
+    let tabDragging = false, tabDragStartY = 0, tabStartTop = 0, tabMoved = false;
+
+    projTab.addEventListener('mousedown', (e) => {
+      tabDragging = true;
+      tabDragStartY = e.clientY;
+      tabStartTop = projTab.getBoundingClientRect().top;
+      tabMoved = false;
+      e.preventDefault();
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!tabDragging) return;
+      const dy = e.clientY - tabDragStartY;
+      if (Math.abs(dy) > 3) tabMoved = true;
+      const newTop = Math.max(50, Math.min(window.innerHeight - 40, tabStartTop + dy));
+      projTab.style.top = newTop + 'px';
+      projPanel.style.top = newTop + 'px';
+    });
+    window.addEventListener('mouseup', () => {
+      if (!tabDragging) return;
+      tabDragging = false;
+      if (!tabMoved) {
+        // It was a click, not a drag — toggle panel
+        const isOpen = projPanel.classList.contains('open');
+        projPanel.classList.toggle('hidden', isOpen);
+        projPanel.classList.toggle('open', !isOpen);
+      }
     });
     document.getElementById('projectPanelClose').addEventListener('click', () => {
-      const panel = document.getElementById('projectPanel');
-      panel.classList.add('hidden');
-      panel.classList.remove('open');
+      projPanel.classList.add('hidden');
+      projPanel.classList.remove('open');
     });
     document.getElementById('projToggleAll').addEventListener('change', (e) => {
       showUnassigned = e.target.checked;

@@ -137,8 +137,14 @@ const KnowledgeGraph = (() => {
     const name = normalizeName(rawEntity.name);
     let type = normalizeType(rawEntity.type);
     if (!name || name.length < 2) return null;
-    // Demote "person" if it doesn't look like a real person name
-    if (type === "person" && !looksLikePersonName(name)) type = "other";
+    // User overrides take absolute priority over all heuristics
+    const overrideType = getOverrideType(name);
+    if (overrideType) {
+      type = overrideType;
+    } else if (type === "person" && !looksLikePersonName(name)) {
+      // Demote "person" if it doesn't look like a real person name
+      type = "other";
+    }
 
     const canon = canonicalize(name);
     const id = nodeId(type, canon);
@@ -398,6 +404,7 @@ const KnowledgeGraph = (() => {
   let _userCustomNouns = new Set();
   let _userCustomLocations = new Set();
   let _userCustomOrgs = new Set();
+  let _userOverrides = new Map(); // canonicalName → forced type (highest priority)
 
   // Load user dictionary customizations from storage
   async function loadUserDictionaries() {
@@ -409,12 +416,21 @@ const KnowledgeGraph = (() => {
       _userCustomNouns = new Set(d.commonNouns || []);
       _userCustomLocations = new Set(d.locations || []);
       _userCustomOrgs = new Set(d.orgs || []);
+      // Entity overrides: { "kari lake": "person", "arizona iced tea": "organization" }
+      _userOverrides = new Map(Object.entries(d.overrides || {}));
       console.log("[KG] User dictionaries loaded:", {
         noise: _userCustomNoise.size, notPerson: _userCustomNotPerson.size,
         nouns: _userCustomNouns.size, locations: _userCustomLocations.size,
-        orgs: _userCustomOrgs.size
+        orgs: _userCustomOrgs.size, overrides: _userOverrides.size
       });
     } catch (e) { console.warn("[KG] Failed to load user dictionaries:", e); }
+  }
+
+  // Check if an entity name has a user-defined strict type override
+  function getOverrideType(name) {
+    if (!_userOverrides.size) return null;
+    const lower = name.toLowerCase().trim();
+    return _userOverrides.get(lower) || null;
   }
   loadUserDictionaries();
 
@@ -426,7 +442,7 @@ const KnowledgeGraph = (() => {
   // Expose for message handlers
   function getUserDictionaries() {
     return browser.storage.local.get("kgUserDictionaries").then(d => d.kgUserDictionaries || {
-      noise: [], notPersonFirstWords: [], commonNouns: [], locations: [], orgs: []
+      noise: [], notPersonFirstWords: [], commonNouns: [], locations: [], orgs: [], overrides: {}
     });
   }
   function saveUserDictionaries(dict) {
@@ -454,6 +470,8 @@ const KnowledgeGraph = (() => {
 
   function looksLikePersonName(name) {
     if (!name) return false;
+    // If user override says this is a person, skip all heuristics
+    if (_userOverrides.get(name.toLowerCase().trim()) === "person") return true;
     const words = name.split(/\s+/);
     // Person names are typically 2-3 words
     if (words.length < 2 || words.length > 4) return false;
@@ -507,6 +525,8 @@ const KnowledgeGraph = (() => {
 
   function isNoiseEntity(name) {
     const lower = name.toLowerCase().trim();
+    // User overrides are never noise
+    if (_userOverrides.has(lower)) return false;
     if (inDict(KG_NOISE_ENTITIES, _userCustomNoise, lower)) return true;
     if (KG_NOT_PERSON_PHRASES.has(lower)) return true;
     // Single common words that get through as 2-word with article/preposition
@@ -568,10 +588,12 @@ const KnowledgeGraph = (() => {
       if (promptExclusions && promptExclusions.has(key)) continue;
       seen.add(key);
 
-      // Guess type — check known sets first, then keyword heuristics, then fallback
+      // Guess type — user overrides first, then known sets, then keyword heuristics
       const nameLower = name.toLowerCase();
       let type = "other";
-      if (inDict(KG_KNOWN_LOCATIONS, _userCustomLocations, nameLower)) type = "location";
+      const ov = getOverrideType(name);
+      if (ov) type = ov;
+      else if (inDict(KG_KNOWN_LOCATIONS, _userCustomLocations, nameLower)) type = "location";
       else if (inDict(KG_KNOWN_ORGS, _userCustomOrgs, nameLower)) type = "organization";
       else if (ORG_SUFFIXES.test(name)) type = "organization";
       else if (/\b(University|Institute|Foundation|Association|Agency|Department|Ministry|Committee|Commission|Bureau|Council|Board|Party|Union|Bank|Fund|Alliance|Network|Society|Federation|Authority|Office|Service|Corps|Regiment|Brigade|Fleet|Squadron|Church|Temple|Mosque|Synagogue|Cathedral|Hospital|Clinic|School|Academy|College|Library|Museum|Theater|Theatre|Stadium|Center|Centre|Palace|Embassy|Consulate|Court|Police|Guard|Force|Corps|Command|Intelligence|Security|Administration|Commission|Tribunal|Legislature|Parliament|Congress|Senate|Assembly)\b/i.test(name)) type = "organization";
@@ -926,11 +948,13 @@ const KnowledgeGraph = (() => {
         continue;
       }
 
-      // Re-run the type-guesser on the display name
+      // Re-run the type-guesser on the display name (overrides first)
       const name = node.displayName;
       const nameLower = name.toLowerCase();
       let newType = "other";
-      if (inDict(KG_KNOWN_LOCATIONS, _userCustomLocations, nameLower)) newType = "location";
+      const ovType = getOverrideType(name);
+      if (ovType) newType = ovType;
+      else if (inDict(KG_KNOWN_LOCATIONS, _userCustomLocations, nameLower)) newType = "location";
       else if (inDict(KG_KNOWN_ORGS, _userCustomOrgs, nameLower)) newType = "organization";
       else if (ORG_SUFFIXES.test(name)) newType = "organization";
       else if (/\b(University|Institute|Foundation|Association|Agency|Department|Ministry|Committee|Commission|Bureau|Council|Board|Party|Union|Bank|Fund|Alliance|Network|Society|Federation|Authority|Office|Service|Corps|Regiment|Brigade|Fleet|Squadron|Church|Temple|Mosque|Synagogue|Cathedral|Hospital|Clinic|School|Academy|College|Library|Museum|Theater|Theatre|Stadium|Center|Centre|Palace|Embassy|Consulate|Court|Police|Guard|Force|Corps|Command|Intelligence|Security|Administration|Commission|Tribunal|Legislature|Parliament|Congress|Senate|Assembly)\b/i.test(name)) newType = "organization";

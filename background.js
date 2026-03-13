@@ -983,6 +983,7 @@ async function saveToHistory(entry) {
   }
 
   await ArgusDB.History.add(entry);
+  notifyDataChanged("history");
 
   // Extract entities for knowledge graph (non-blocking)
   try {
@@ -1283,6 +1284,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "getMonitorSnapshots") return handleGetMonitorSnapshots(message);
   if (message.action === "getMonitorDiff") return handleGetMonitorDiff(message);
   if (message.action === "getMonitorStorageUsage") return handleGetMonitorStorageUsage();
+  if (message.action === "purgeOpfsFiles") return (typeof OpfsStorage !== "undefined" ? OpfsStorage.deleteAll() : Promise.resolve()).then(() => ({ success: true }));
   if (message.action === "snapshotPage") return handleSnapshotPage(message);
   if (message.action === "getSnapshotScreenshot") return handleGetSnapshotScreenshot(message);
   if (message.action === "getSnapshotHtml") return handleGetSnapshotHtml(message);
@@ -1320,6 +1322,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "addProjectItem") return handleAddProjectItem(message);
   if (message.action === "updateProjectItem") return handleUpdateProjectItem(message);
   if (message.action === "removeProjectItem") return handleRemoveProjectItem(message);
+  if (message.action === "unRejectProjectUrl") return handleUnRejectProjectUrl(message);
   if (message.action === "exportProject") return handleExportProject(message);
   if (message.action === "exportAllProjects") return handleExportAllProjects();
   if (message.action === "importProject") return handleImportProject(message);
@@ -1443,11 +1446,13 @@ async function handleGetHistoryItem(message) {
 
 async function handleDeleteHistoryItem(message) {
   await ArgusDB.History.remove(message.id);
+  notifyDataChanged("history");
   return { success: true };
 }
 
 async function handleClearHistory() {
   await ArgusDB.History.clear();
+  notifyDataChanged("history");
   return { success: true };
 }
 
@@ -4237,9 +4242,10 @@ async function applyKeywordRoutes(entries, feedId, notify) {
         entry.routeKeywords = entry.routeKeywords || [];
         entry.routeKeywords.push(...matchedKws);
         matched = true;
-        // Add to project (dedup by URL)
+        // Add to project (dedup by URL, respect rejected list)
         const proj = await ArgusDB.Projects.get(route.projectId);
-        if (proj && !proj.items.some(i => i.url === entry.link)) {
+        if (proj && !proj.items.some(i => i.url === entry.link)
+            && !(proj.rejectedUrls && proj.rejectedUrls.includes(entry.link))) {
           await handleAddProjectItem({
             projectId: route.projectId,
             item: {
@@ -4541,7 +4547,28 @@ async function handleUpdateProjectItem(message) {
 async function handleRemoveProjectItem(message) {
   const proj = await ArgusDB.Projects.get(message.projectId);
   if (!proj) return { success: false, error: "Project not found" };
+  // If reject flag set, add URL to project's rejected list so routing won't re-add it
+  if (message.reject) {
+    const item = proj.items.find(i => i.id === message.itemId);
+    if (item && item.url) {
+      proj.rejectedUrls = proj.rejectedUrls || [];
+      if (!proj.rejectedUrls.includes(item.url)) {
+        proj.rejectedUrls.push(item.url);
+        console.log(`[Projects] Rejected URL from "${proj.name}": ${item.url}`);
+      }
+    }
+  }
   proj.items = proj.items.filter(i => i.id !== message.itemId);
+  proj.updatedAt = new Date().toISOString();
+  await ArgusDB.Projects.save(proj);
+  notifyDataChanged("projects");
+  return { success: true };
+}
+
+async function handleUnRejectProjectUrl(message) {
+  const proj = await ArgusDB.Projects.get(message.projectId);
+  if (!proj) return { success: false, error: "Project not found" };
+  proj.rejectedUrls = (proj.rejectedUrls || []).filter(u => u !== message.url);
   proj.updatedAt = new Date().toISOString();
   await ArgusDB.Projects.save(proj);
   notifyDataChanged("projects");

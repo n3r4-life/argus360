@@ -864,6 +864,15 @@ textarea {
   border-color: var(--accent);
 }
 
+.proj-item-card.unanalyzed {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+.proj-item-card.unanalyzed:hover {
+  opacity: 0.85;
+}
+
 .proj-item-body {
   flex: 1;
   min-width: 0;
