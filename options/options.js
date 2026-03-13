@@ -3981,6 +3981,7 @@ function initMainTabs() {
   }
 
   const appNavMap = {
+    "open-projects-nav": null, // handled separately — navigates to #projects on this page
     "open-kg-nav": "osint/graph.html?mode=global",
     "open-chat-nav": "chat/chat.html",
     "open-workbench-nav": "workbench/workbench.html",
@@ -3991,13 +3992,98 @@ function initMainTabs() {
   };
   for (const [id, path] of Object.entries(appNavMap)) {
     const btn = document.getElementById(id);
-    if (btn) {
+    if (!btn) continue;
+    if (path) {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
         focusOrCreatePage(path);
       });
+    } else {
+      // Projects tab — switch to projects panel on this page
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const navTabs = document.querySelectorAll(".nav-tab[data-tab]");
+        const navPanels = document.querySelectorAll(".tab-panel[data-panel]");
+        switchMainTab("projects", navTabs, navPanels);
+        window.location.hash = "projects";
+      });
     }
   }
+
+  // ── Console app-nav drag-to-reorder + saved order ──
+  const consoleAppNav = document.getElementById("console-app-nav");
+  const CONSOLE_DEFAULT_ORDER = ["open-projects-nav", "open-reader-nav", "open-history-nav", "open-kg-nav", "open-workbench-nav", "open-draft-nav", "open-images-nav", "open-chat-nav"];
+  // Mapping from ribbon tab IDs to console nav IDs
+  const ribbonToConsole = {
+    "app-projects": "open-projects-nav", "app-reader": "open-reader-nav",
+    "app-reports": "open-history-nav", "app-kg": "open-kg-nav",
+    "app-workbench": "open-workbench-nav", "app-draft": "open-draft-nav",
+    "app-images": "open-images-nav", "app-chat": "open-chat-nav"
+  };
+  const consoleToRibbon = Object.fromEntries(Object.entries(ribbonToConsole).map(([k, v]) => [v, k]));
+
+  (async function initConsoleAppNavOrder() {
+    try {
+      const stored = await browser.storage.local.get("appTabOrder");
+      if (Array.isArray(stored.appTabOrder) && stored.appTabOrder.length === CONSOLE_DEFAULT_ORDER.length) {
+        const consoleOrder = stored.appTabOrder.map(rid => ribbonToConsole[rid]).filter(Boolean);
+        if (consoleOrder.length === CONSOLE_DEFAULT_ORDER.length) {
+          for (const cid of consoleOrder) {
+            const btn = document.getElementById(cid);
+            if (btn) consoleAppNav.appendChild(btn);
+          }
+        }
+      }
+    } catch (e) { /* use default HTML order */ }
+
+    // Setup drag-to-reorder for console app-nav (custom mouse-based, threshold to avoid eating clicks)
+    const DRAG_THRESHOLD = 8;
+    let dragState = null;
+
+    consoleAppNav.addEventListener("mousedown", (e) => {
+      const tab = e.target.closest(".app-tab");
+      if (!tab || e.button !== 0) return;
+      dragState = { tab, startX: e.clientX, startY: e.clientY, active: false };
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (!dragState) return;
+      if (!dragState.active) {
+        const dx = Math.abs(e.clientX - dragState.startX);
+        const dy = Math.abs(e.clientY - dragState.startY);
+        if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return;
+        dragState.active = true;
+        dragState.tab.classList.add("dragging");
+      }
+      const target = document.elementFromPoint(e.clientX, e.clientY)?.closest(".app-tab");
+      consoleAppNav.querySelectorAll(".app-tab").forEach(t => t.classList.remove("drag-over"));
+      if (target && target !== dragState.tab) target.classList.add("drag-over");
+    });
+
+    window.addEventListener("mouseup", (e) => {
+      if (!dragState) return;
+      const { tab, active } = dragState;
+      if (active) {
+        const target = document.elementFromPoint(e.clientX, e.clientY)?.closest(".app-tab");
+        if (target && target !== tab) {
+          const tabs = [...consoleAppNav.querySelectorAll(".app-tab")];
+          const dragIdx = tabs.indexOf(tab);
+          const dropIdx = tabs.indexOf(target);
+          if (dragIdx < dropIdx) {
+            target.insertAdjacentElement("afterend", tab);
+          } else {
+            target.insertAdjacentElement("beforebegin", tab);
+          }
+          const newOrder = [...consoleAppNav.querySelectorAll(".app-tab")].map(t => consoleToRibbon[t.dataset.tabId]).filter(Boolean);
+          browser.storage.local.set({ appTabOrder: newOrder });
+        }
+        tab.classList.remove("dragging");
+        consoleAppNav.querySelectorAll(".app-tab").forEach(t => t.classList.remove("drag-over"));
+        tab.addEventListener("click", (ev) => { ev.stopImmediatePropagation(); ev.preventDefault(); }, { once: true, capture: true });
+      }
+      dragState = null;
+    });
+  })();
 
   // Wipe icon — quick link to Settings wipe section
   const wipeNavBtn = document.getElementById("wipe-nav");

@@ -534,6 +534,7 @@
     document.getElementById("download-selected").disabled = selected.size === 0;
     document.getElementById("save-to-cloud").disabled = selected.size === 0;
     document.getElementById("insert-to-draft").disabled = selected.size === 0;
+    document.getElementById("insert-to-chat").disabled = selected.size === 0;
     const cmpBtn = document.getElementById("compare-selected");
     if (cmpBtn) cmpBtn.disabled = selected.size < 2;
   }
@@ -1020,6 +1021,47 @@
     btn.textContent = "Sent!";
     btn.disabled = false;
     setTimeout(() => { btn.textContent = "To Draft"; }, 1500);
+  });
+
+  // ── Insert to Chat ──
+
+  async function sendToChat(content, source) {
+    await browser.storage.local.set({
+      chatPendingInsert: { content, source: source || "Image Grabber", timestamp: Date.now() }
+    });
+    const chatUrl = browser.runtime.getURL("chat/chat.html");
+    const existing = await browser.tabs.query({ url: chatUrl + "*" });
+    if (existing.length > 0) {
+      await browser.tabs.update(existing[0].id, { active: true });
+      await browser.windows.update(existing[0].windowId, { focused: true });
+    } else {
+      await browser.tabs.create({ url: chatUrl });
+    }
+  }
+
+  document.getElementById("insert-to-chat").addEventListener("click", async () => {
+    const btn = document.getElementById("insert-to-chat");
+    btn.disabled = true;
+    btn.textContent = "Inserting...";
+    const selectedImages = images.filter(img => selected.has(img.src));
+    const md = await buildImageMarkdown(selectedImages);
+    await sendToChat(md);
+    btn.textContent = "Sent!";
+    setTimeout(() => { btn.textContent = "Insert to Chat"; btn.disabled = selected.size === 0; }, 2000);
+  });
+
+  // Preview modal — insert single image to chat
+  document.getElementById("preview-insert-chat").addEventListener("click", async () => {
+    const btn = document.getElementById("preview-insert-chat");
+    if (previewCurrentIndex < 0 || !previewCurrentImages[previewCurrentIndex]) return;
+    btn.textContent = "Sending...";
+    btn.disabled = true;
+    const img = previewCurrentImages[previewCurrentIndex];
+    const md = await buildImageMarkdown([img]);
+    await sendToChat(md);
+    btn.textContent = "Sent!";
+    btn.disabled = false;
+    setTimeout(() => { btn.textContent = "To Chat"; }, 1500);
   });
 
   // ── AI Vision Search ──

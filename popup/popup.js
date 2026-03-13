@@ -581,45 +581,41 @@ function attachEventListeners() {
     focusOrCreateConsole("help-getting-started");
   });
 
-  document.getElementById("open-resources").addEventListener("click", () => {
-    focusOrCreateConsole("resources");
-  });
-
-  document.getElementById("open-feeds").addEventListener("click", async () => {
-    const feedsUrl = browser.runtime.getURL("feeds/feeds.html");
-    const existing = await browser.tabs.query({ url: feedsUrl + "*" });
+  // App icon button handlers — focus-or-create pattern
+  async function focusOrCreatePage(urlPath) {
+    const fullUrl = browser.runtime.getURL(urlPath);
+    const baseUrl = fullUrl.split("?")[0];
+    const existing = await browser.tabs.query({ url: baseUrl + "*" });
     if (existing.length > 0) {
       await browser.tabs.update(existing[0].id, { active: true });
       await browser.windows.update(existing[0].windowId, { focused: true });
     } else {
-      await browser.tabs.create({ url: feedsUrl });
+      await browser.tabs.create({ url: fullUrl });
     }
     window.close();
-  });
+  }
 
-  document.getElementById("open-chat").addEventListener("click", async () => {
-    const chatUrl = browser.runtime.getURL("chat/chat.html");
-    const existing = await browser.tabs.query({ url: chatUrl + "*" });
-    if (existing.length > 0) {
-      await browser.tabs.update(existing[0].id, { active: true });
-      await browser.windows.update(existing[0].windowId, { focused: true });
-    } else {
-      await browser.tabs.create({ url: chatUrl });
-    }
-    window.close();
-  });
+  document.getElementById("open-projects").addEventListener("click", () => focusOrCreateConsole("projects"));
+  document.getElementById("open-feeds").addEventListener("click", () => focusOrCreatePage("feeds/feeds.html"));
+  document.getElementById("open-chat").addEventListener("click", () => focusOrCreatePage("chat/chat.html"));
+  document.getElementById("open-workbench").addEventListener("click", () => focusOrCreatePage("workbench/workbench.html"));
+  document.getElementById("open-draft").addEventListener("click", () => focusOrCreatePage("reporting/reporting.html"));
+  document.getElementById("open-images").addEventListener("click", () => focusOrCreatePage("osint/images.html"));
 
-  document.getElementById("open-workbench").addEventListener("click", async () => {
-    const wbUrl = browser.runtime.getURL("workbench/workbench.html");
-    const existing = await browser.tabs.query({ url: wbUrl + "*" });
-    if (existing.length > 0) {
-      await browser.tabs.update(existing[0].id, { active: true });
-      await browser.windows.update(existing[0].windowId, { focused: true });
-    } else {
-      await browser.tabs.create({ url: wbUrl });
-    }
-    window.close();
-  });
+  // Reorder popup app icon buttons based on saved appTabOrder
+  (async () => {
+    try {
+      const stored = await browser.storage.local.get("appTabOrder");
+      if (!Array.isArray(stored.appTabOrder)) return;
+      const container = document.getElementById("popup-app-icons");
+      const buttons = [...container.querySelectorAll("[data-app-tab]")];
+      const btnMap = {};
+      for (const btn of buttons) btnMap[btn.dataset.appTab] = btn;
+      for (const tabId of stored.appTabOrder) {
+        if (btnMap[tabId]) container.appendChild(btnMap[tabId]);
+      }
+    } catch (e) { /* use default HTML order */ }
+  })();
 
   // Archive redirect toggle
   const redirectBtn = document.getElementById("toggle-redirect");
@@ -658,29 +654,8 @@ function attachEventListeners() {
     });
   })();
 
-  document.getElementById("open-kg").addEventListener("click", async () => {
-    const kgUrl = browser.runtime.getURL("osint/graph.html?mode=global");
-    const existing = await browser.tabs.query({ url: browser.runtime.getURL("osint/graph.html") + "*" });
-    if (existing.length > 0) {
-      await browser.tabs.update(existing[0].id, { active: true });
-      await browser.windows.update(existing[0].windowId, { focused: true });
-    } else {
-      await browser.tabs.create({ url: kgUrl });
-    }
-    window.close();
-  });
-
-  document.getElementById("open-history").addEventListener("click", async () => {
-    const histUrl = browser.runtime.getURL("history/history.html");
-    const existing = await browser.tabs.query({ url: histUrl + "*" });
-    if (existing.length > 0) {
-      await browser.tabs.update(existing[0].id, { active: true });
-      await browser.windows.update(existing[0].windowId, { focused: true });
-    } else {
-      await browser.tabs.create({ url: histUrl });
-    }
-    window.close();
-  });
+  document.getElementById("open-kg").addEventListener("click", () => focusOrCreatePage("osint/graph.html?mode=global"));
+  document.getElementById("open-history").addEventListener("click", () => focusOrCreatePage("history/history.html"));
 
   elements.toggleKeyVis.addEventListener("click", () => {
     elements.apiKey.type = elements.apiKey.type === "password" ? "text" : "password";

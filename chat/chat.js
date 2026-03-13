@@ -48,6 +48,29 @@
     sendMessage();
   }
 
+  // Check for pending insert from Images or other pages
+  try {
+    const { chatPendingInsert } = await browser.storage.local.get("chatPendingInsert");
+    if (chatPendingInsert && chatPendingInsert.content && (Date.now() - chatPendingInsert.timestamp) < 30000) {
+      await browser.storage.local.remove("chatPendingInsert");
+      if (!currentSessionId) await startNewSession();
+      chatInput.value = chatPendingInsert.content;
+      chatInput.focus();
+    }
+  } catch (e) { /* ignore */ }
+
+  // Listen for inserts while chat is open
+  browser.storage.onChanged.addListener((changes) => {
+    if (changes.chatPendingInsert?.newValue) {
+      const insert = changes.chatPendingInsert.newValue;
+      if (insert.content && (Date.now() - insert.timestamp) < 30000) {
+        browser.storage.local.remove("chatPendingInsert");
+        if (!currentSessionId) startNewSession().then(() => { chatInput.value = insert.content; chatInput.focus(); });
+        else { chatInput.value = insert.content; chatInput.focus(); }
+      }
+    }
+  });
+
   // ── Floating panel: draggable by header ──
   setupFloatingPanel(panel);
 
