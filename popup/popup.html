@@ -70,8 +70,17 @@
           </svg>
         </button>
       </span>
+      <button id="popup-console-home" class="icon-btn" title="Open Console">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+      </button>
     </div>
   </header>
+
+  <!-- App icon picker overlay (long-press / right-click to open) -->
+  <div id="popup-icon-picker" class="popup-icon-picker hidden"></div>
 
   <!-- Settings panel (shown when no API key set) -->
   <section id="settings-panel" class="settings-panel hidden">

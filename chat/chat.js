@@ -73,9 +73,16 @@
 
   // ── Floating panel: draggable by header ──
   setupFloatingPanel(panel);
+  PanelState.apply(panel, "chat", "sessions");
 
-  panelTab.addEventListener("click", () => panel.classList.toggle("hidden"));
-  panelClose.addEventListener("click", () => panel.classList.add("hidden"));
+  panelTab.addEventListener("click", () => {
+    panel.classList.toggle("hidden");
+    PanelState.save("chat", "sessions", { visible: !panel.classList.contains("hidden") });
+  });
+  panelClose.addEventListener("click", () => {
+    panel.classList.add("hidden");
+    PanelState.save("chat", "sessions", { visible: false });
+  });
 
   function setupFloatingPanel(p) {
     const header = p.querySelector(".chat-panel-header");
@@ -111,6 +118,8 @@
       dragging = false;
       p.classList.remove("dragging");
       p.style.zIndex = "";
+      const rect = p.getBoundingClientRect();
+      PanelState.save("chat", "sessions", { left: rect.left, top: rect.top });
     });
   }
 

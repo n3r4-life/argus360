@@ -1128,4 +1128,91 @@ textarea {
   margin: 4px 16px;
 }
 
+/* Console Home button — subtle separator from app icons */
+#popup-console-home {
+  margin-left: 2px;
+  border-left: 1px solid var(--border);
+  padding-left: 10px;
+  border-radius: 0 4px 4px 0;
+}
+
+/* App icon picker overlay */
+.popup-icon-picker {
+  position: relative;
+  z-index: 150;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 12px;
+}
+.popup-icon-picker-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.popup-icon-picker-title span {
+  font-weight: 400;
+  font-size: 9px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+.popup-icon-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+.popup-icon-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: var(--font);
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+/* Active/selected shortcut — bright white */
+.popup-icon-picker-item.picker-active {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+}
+.popup-icon-picker-item.picker-active:hover {
+  background: rgba(255, 82, 82, 0.12);
+  border-color: rgba(255, 82, 82, 0.4);
+  color: #ff8a8a;
+}
+/* Available to pick — slightly bright, inviting */
+.popup-icon-picker-item.picker-available {
+  color: var(--text-secondary);
+}
+.popup-icon-picker-item.picker-available:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+/* Disabled — slots full, can't add */
+.popup-icon-picker-item.picker-disabled {
+  opacity: 0.2;
+  cursor: not-allowed;
+}
+.popup-icon-picker-item.picker-disabled:hover {
+  background: transparent;
+  color: var(--text-secondary);
+}
+.popup-icon-picker-item svg {
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+}
+
 .hidden { display: none !important; }

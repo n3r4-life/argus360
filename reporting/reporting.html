@@ -10,6 +10,7 @@
 </head>
 <body>
   <script src="../shared/ribbon.js"></script>
+  <script src="../shared/panel-state.js"></script>
 
   <!-- ── Header bar ── -->
   <header class="rp-header">
@@ -40,7 +41,7 @@
   </header>
 
   <!-- ── Quick Post compose panel (floating) ── -->
-  <div class="rp-compose-panel hidden" id="composePanel">
+  <div class="rp-compose-panel hidden" id="composePanel" data-panel-id="compose">
     <div class="rp-snippets-header">
       <span class="rp-snippets-title">Quick Post</span>
       <button class="rp-snippets-close" id="composeClose">&times;</button>
@@ -72,7 +73,7 @@
   </div>
 
   <!-- ── Asset Library panel (floating) ── -->
-  <div class="rp-snippets-panel" id="snippetsPanel">
+  <div class="rp-snippets-panel" id="snippetsPanel" data-panel-id="snippets">
     <div class="rp-snippets-header">
       <span class="rp-snippets-title">Asset Library</span>
       <button class="rp-snippets-close" id="snippetsClose">&times;</button>
@@ -97,7 +98,7 @@
   </button>
 
   <!-- ── Drafts panel (floating right) ── -->
-  <div class="rp-drafts-panel hidden" id="draftsPanel">
+  <div class="rp-drafts-panel hidden" id="draftsPanel" data-panel-id="drafts">
     <div class="rp-snippets-header">
       <span class="rp-snippets-title">Saved Drafts</span>
       <button class="rp-snippets-close" id="draftsClose">&times;</button>

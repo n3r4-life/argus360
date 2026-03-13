@@ -257,10 +257,22 @@
   });
 
   // Panel toggles
-  snippetsTab.addEventListener("click", () => snippetsPanel.classList.toggle("hidden"));
-  snippetsClose.addEventListener("click", () => snippetsPanel.classList.add("hidden"));
-  draftsTab.addEventListener("click", () => draftsPanel.classList.toggle("hidden"));
-  draftsClose.addEventListener("click", () => draftsPanel.classList.add("hidden"));
+  snippetsTab.addEventListener("click", () => {
+    snippetsPanel.classList.toggle("hidden");
+    PanelState.save("reporting", "snippets", { visible: !snippetsPanel.classList.contains("hidden") });
+  });
+  snippetsClose.addEventListener("click", () => {
+    snippetsPanel.classList.add("hidden");
+    PanelState.save("reporting", "snippets", { visible: false });
+  });
+  draftsTab.addEventListener("click", () => {
+    draftsPanel.classList.toggle("hidden");
+    PanelState.save("reporting", "drafts", { visible: !draftsPanel.classList.contains("hidden") });
+  });
+  draftsClose.addEventListener("click", () => {
+    draftsPanel.classList.add("hidden");
+    PanelState.save("reporting", "drafts", { visible: false });
+  });
 
   // ── Draggable + Resizable floating panels ──
   function makeDraggable(panel) {
@@ -287,12 +299,18 @@
       panel.style.left = (startLeft + dx) + "px";
       panel.style.top = (startTop + dy) + "px";
       panel.style.right = "auto";
+      panel.style.transform = "none";
     });
 
     document.addEventListener("mouseup", () => {
       if (dragging) {
         dragging = false;
         header.style.cursor = "grab";
+        const pid = panel.dataset.panelId;
+        if (pid) {
+          const rect = panel.getBoundingClientRect();
+          PanelState.save("reporting", pid, { left: rect.left, top: rect.top });
+        }
       }
     });
   }
@@ -319,13 +337,28 @@
       panel.style.height = Math.max(200, startH + (e.clientY - startY)) + "px";
     });
 
-    document.addEventListener("mouseup", () => { resizing = false; });
+    document.addEventListener("mouseup", () => {
+      if (resizing) {
+        resizing = false;
+        const pid = panel.dataset.panelId;
+        if (pid) {
+          PanelState.save("reporting", pid, { width: panel.offsetWidth, height: panel.offsetHeight });
+        }
+      }
+    });
   }
 
   makeDraggable(snippetsPanel);
   makeDraggable(draftsPanel);
+  makeDraggable(composePanel);
   makeResizable(snippetsPanel);
   makeResizable(draftsPanel);
+  makeResizable(composePanel);
+
+  // Restore saved panel positions
+  PanelState.apply(snippetsPanel, "reporting", "snippets");
+  PanelState.apply(draftsPanel, "reporting", "drafts");
+  PanelState.apply(composePanel, "reporting", "compose");
 
   // ── Drafts ──
   async function loadDrafts() {

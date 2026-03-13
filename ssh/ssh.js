@@ -304,10 +304,16 @@
 
   function togglePanel() {
     panel.classList.toggle("hidden");
+    PanelState.save("ssh", "connect", { visible: !panel.classList.contains("hidden") });
   }
 
   panelTab.addEventListener("click", togglePanel);
-  panelClose.addEventListener("click", () => panel.classList.add("hidden"));
+  panelClose.addEventListener("click", () => {
+    panel.classList.add("hidden");
+    PanelState.save("ssh", "connect", { visible: false });
+  });
+
+  PanelState.apply(panel, "ssh", "connect");
 
   (function setupPanelDrag() {
     let dragging = false, offsetX = 0, offsetY = 0;
@@ -335,6 +341,8 @@
       if (!dragging) return;
       dragging = false;
       panel.classList.remove("dragging");
+      const rect = panel.getBoundingClientRect();
+      PanelState.save("ssh", "connect", { left: rect.left, top: rect.top });
     });
   })();
 

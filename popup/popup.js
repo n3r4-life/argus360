@@ -619,20 +619,180 @@ function attachEventListeners() {
   document.getElementById("open-images").addEventListener("click", () => focusOrCreatePage("osint/images.html"));
   document.getElementById("open-terminal").addEventListener("click", () => focusOrCreatePage("ssh/ssh.html"));
 
-  // Reorder popup app icon buttons based on saved appTabOrder
-  (async () => {
-    try {
-      const stored = await browser.storage.local.get("appTabOrder");
-      if (!Array.isArray(stored.appTabOrder)) return;
-      const container = document.getElementById("popup-app-icons");
-      const buttons = [...container.querySelectorAll("[data-app-tab]")];
-      const btnMap = {};
-      for (const btn of buttons) btnMap[btn.dataset.appTab] = btn;
-      for (const tabId of stored.appTabOrder) {
-        if (btnMap[tabId]) container.appendChild(btnMap[tabId]);
+  // ── Popup app icons: show only 4 user-chosen, ordered by appTabOrder ──
+  const POPUP_DEFAULT_VISIBLE = ["app-projects", "app-reader", "app-reports", "app-chat"];
+  const POPUP_MAX_VISIBLE = 4;
+
+  const popupAppContainer = document.getElementById("popup-app-icons");
+  const allAppBtns = [...popupAppContainer.querySelectorAll("[data-app-tab]")];
+  const appBtnMap = {};
+  for (const btn of allAppBtns) appBtnMap[btn.dataset.appTab] = btn;
+
+  async function applyPopupAppVisibility() {
+    const stored = await browser.storage.local.get(["popupVisibleApps", "appTabOrder"]);
+    const visible = Array.isArray(stored.popupVisibleApps) && stored.popupVisibleApps.length > 0
+      ? stored.popupVisibleApps : POPUP_DEFAULT_VISIBLE;
+    const order = Array.isArray(stored.appTabOrder) && stored.appTabOrder.length > 0
+      ? stored.appTabOrder : null;
+
+    // Build ordered list: visible apps sorted by appTabOrder position
+    const visibleSet = new Set(visible);
+    let ordered;
+    if (order) {
+      ordered = order.filter(id => visibleSet.has(id) && appBtnMap[id]);
+      // Append any visible apps not in saved order
+      for (const id of visible) {
+        if (!ordered.includes(id) && appBtnMap[id]) ordered.push(id);
       }
-    } catch (e) { /* use default HTML order */ }
-  })();
+    } else {
+      ordered = visible.filter(id => appBtnMap[id]);
+    }
+
+    // Hide all, then show + reorder the chosen ones
+    for (const btn of allAppBtns) btn.style.display = "none";
+    for (const id of ordered) {
+      appBtnMap[id].style.display = "";
+      popupAppContainer.appendChild(appBtnMap[id]);
+    }
+  }
+
+  applyPopupAppVisibility();
+
+  // Console Home button — click navigates, long-press opens picker
+  const consoleHomeBtn = document.getElementById("popup-console-home");
+  const pickerOverlay = document.getElementById("popup-icon-picker");
+  let longPressTimer = null;
+  let longPressFired = false;
+
+  consoleHomeBtn.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    longPressFired = false;
+    longPressTimer = setTimeout(() => {
+      longPressTimer = null;
+      longPressFired = true;
+      openIconPicker();
+    }, 1000);
+  });
+  consoleHomeBtn.addEventListener("mouseup", () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  });
+  consoleHomeBtn.addEventListener("mouseleave", () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  });
+  consoleHomeBtn.addEventListener("click", () => {
+    if (longPressFired) { longPressFired = false; return; } // swallow click after long-press
+    focusOrCreateConsole();
+  });
+
+  // ── App icon picker ──
+  // State: null = browsing, "removing" = user deselected one and can now pick a replacement
+  let pickerMode = null;
+  let pickerCurrentVisible = [];
+
+  function openIconPicker() {
+    if (!pickerOverlay.classList.contains("hidden")) { closeIconPicker(); return; }
+    pickerMode = null;
+    renderIconPicker();
+    pickerOverlay.classList.remove("hidden");
+  }
+
+  function closeIconPicker() {
+    pickerOverlay.classList.add("hidden");
+    pickerOverlay.innerHTML = "";
+    pickerMode = null;
+  }
+
+  async function renderIconPicker() {
+    const stored = await browser.storage.local.get(["popupVisibleApps", "appTabOrder"]);
+    pickerCurrentVisible = Array.isArray(stored.popupVisibleApps) && stored.popupVisibleApps.length > 0
+      ? [...stored.popupVisibleApps] : [...POPUP_DEFAULT_VISIBLE];
+    const order = Array.isArray(stored.appTabOrder) && stored.appTabOrder.length > 0
+      ? stored.appTabOrder : null;
+
+    const allIds = order
+      ? [...order.filter(id => appBtnMap[id]), ...allAppBtns.map(b => b.dataset.appTab).filter(id => !order.includes(id))]
+      : allAppBtns.map(b => b.dataset.appTab);
+
+    const visibleSet = new Set(pickerCurrentVisible);
+    const isFull = pickerCurrentVisible.length >= POPUP_MAX_VISIBLE;
+
+    pickerOverlay.innerHTML = `
+      <div class="popup-icon-picker-title">
+        ${pickerMode === "removing" ? "Pick replacement" : "Choose shortcuts"}
+        <span>${pickerCurrentVisible.length}/${POPUP_MAX_VISIBLE}</span>
+      </div>
+      <div class="popup-icon-picker-grid">
+        ${allIds.map(id => {
+          const btn = appBtnMap[id];
+          if (!btn) return "";
+          const isActive = visibleSet.has(id);
+          const svg = btn.querySelector("svg").outerHTML;
+          const label = btn.title || id.replace("app-", "");
+
+          let cls = "popup-icon-picker-item";
+          if (isActive) {
+            cls += " picker-active";
+          } else if (pickerMode === "removing") {
+            cls += " picker-available";
+          } else if (isFull) {
+            cls += " picker-disabled";
+          } else {
+            cls += " picker-available";
+          }
+          return `<button class="${cls}" data-pick-id="${id}">${svg} ${label}</button>`;
+        }).join("")}
+      </div>`;
+
+    attachPickerHandlers();
+  }
+
+  function attachPickerHandlers() {
+    pickerOverlay.querySelectorAll(".popup-icon-picker-item").forEach(item => {
+      item.addEventListener("click", async () => {
+        const pickId = item.dataset.pickId;
+        const isActive = item.classList.contains("picker-active");
+
+        if (isActive) {
+          // Deselect — grey it out, enter "removing" mode so user can pick replacement
+          if (pickerCurrentVisible.length <= 1) return;
+          pickerCurrentVisible = pickerCurrentVisible.filter(id => id !== pickId);
+          pickerMode = "removing";
+          await browser.storage.local.set({ popupVisibleApps: pickerCurrentVisible });
+          applyPopupAppVisibility();
+          renderIconPicker();
+        } else if (item.classList.contains("picker-disabled")) {
+          return; // full, can't add
+        } else {
+          // Select — add it, close picker
+          if (pickerCurrentVisible.length >= POPUP_MAX_VISIBLE) return;
+          pickerCurrentVisible.push(pickId);
+          await browser.storage.local.set({ popupVisibleApps: pickerCurrentVisible });
+          applyPopupAppVisibility();
+          closeIconPicker();
+        }
+      });
+    });
+  }
+
+  // Close picker on click outside
+  document.addEventListener("click", (e) => {
+    if (!pickerOverlay.classList.contains("hidden") &&
+        !pickerOverlay.contains(e.target) &&
+        !consoleHomeBtn.contains(e.target)) {
+      closeIconPicker();
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !pickerOverlay.classList.contains("hidden")) {
+      closeIconPicker();
+    }
+  });
 
   // Archive redirect toggle
   const redirectBtn = document.getElementById("toggle-redirect");

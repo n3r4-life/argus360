@@ -65,26 +65,37 @@
   });
 
   // ── Floating panels: truly draggable by header ──
-  setupFloatingPanel(panelLeft);
-  setupFloatingPanel(panelRight);
+  setupFloatingPanel(panelLeft, "left");
+  setupFloatingPanel(panelRight, "right");
+
+  // Restore saved panel positions
+  PanelState.apply(panelLeft, "workbench", "left");
+  PanelState.apply(panelRight, "workbench", "right");
 
   // Edge tabs just toggle visibility
-  tabLeft.addEventListener("click", () => panelLeft.classList.toggle("hidden"));
-  tabRight.addEventListener("click", () => panelRight.classList.toggle("hidden"));
+  tabLeft.addEventListener("click", () => {
+    panelLeft.classList.toggle("hidden");
+    PanelState.save("workbench", "left", { visible: !panelLeft.classList.contains("hidden") });
+  });
+  tabRight.addEventListener("click", () => {
+    panelRight.classList.toggle("hidden");
+    PanelState.save("workbench", "right", { visible: !panelRight.classList.contains("hidden") });
+  });
 
   document.getElementById("wb-panel-left-close").addEventListener("click", () => {
     panelLeft.classList.add("hidden");
+    PanelState.save("workbench", "left", { visible: false });
   });
   document.getElementById("wb-panel-right-close").addEventListener("click", () => {
     panelRight.classList.add("hidden");
+    PanelState.save("workbench", "right", { visible: false });
   });
 
-  function setupFloatingPanel(panel) {
+  function setupFloatingPanel(panel, panelId) {
     const header = panel.querySelector(".wb-panel-header");
     let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
 
     header.addEventListener("mousedown", (e) => {
-      // Don't drag if clicking the close button
       if (e.target.closest(".wb-panel-close")) return;
       dragging = true;
       startX = e.clientX;
@@ -93,9 +104,7 @@
       origLeft = rect.left;
       origTop = rect.top;
       panel.classList.add("dragging");
-      // Bring to front
       panel.style.zIndex = 25;
-      // Clear right positioning so left works freely
       panel.style.right = "auto";
       panel.style.left = origLeft + "px";
       e.preventDefault();
@@ -116,6 +125,8 @@
       dragging = false;
       panel.classList.remove("dragging");
       panel.style.zIndex = "";
+      const rect = panel.getBoundingClientRect();
+      PanelState.save("workbench", panelId, { left: rect.left, top: rect.top });
     });
   }
 

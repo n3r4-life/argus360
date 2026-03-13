@@ -618,8 +618,9 @@
 
   function hideSidebar() {
     document.getElementById('sidebar').classList.remove('open');
-    sidebarCollapsed = true; // stay closed until user toggles back
+    sidebarCollapsed = true;
     selectedNode = null;
+    PanelState.save("graph", "details", { visible: false });
   }
 
   function toggleSidebar() {
@@ -628,7 +629,6 @@
       hideSidebar();
     } else {
       sidebarCollapsed = false;
-      // If a node is selected, re-show its details
       if (selectedNode) {
         showSidebar(selectedNode);
       }
@@ -670,39 +670,104 @@
       });
     });
 
-    // Project panel toggle + draggable tab
+    // Project panel: tab toggles visibility, panel header is draggable
     const projTab = document.getElementById('projectPanelToggle');
     const projPanel = document.getElementById('projectPanel');
-    let tabDragging = false, tabDragStartY = 0, tabStartTop = 0, tabMoved = false;
 
-    projTab.addEventListener('mousedown', (e) => {
-      tabDragging = true;
-      tabDragStartY = e.clientY;
-      tabStartTop = projTab.getBoundingClientRect().top;
-      tabMoved = false;
-      e.preventDefault();
-    });
-    window.addEventListener('mousemove', (e) => {
-      if (!tabDragging) return;
-      const dy = e.clientY - tabDragStartY;
-      if (Math.abs(dy) > 3) tabMoved = true;
-      const newTop = Math.max(50, Math.min(window.innerHeight - 40, tabStartTop + dy));
-      projTab.style.top = newTop + 'px';
-      projPanel.style.top = newTop + 'px';
-    });
-    window.addEventListener('mouseup', () => {
-      if (!tabDragging) return;
-      tabDragging = false;
-      if (!tabMoved) {
-        // It was a click, not a drag — toggle panel
-        const isOpen = projPanel.classList.contains('open');
-        projPanel.classList.toggle('hidden', isOpen);
-        projPanel.classList.toggle('open', !isOpen);
-      }
+    projTab.addEventListener('click', () => {
+      const isOpen = !projPanel.classList.contains('hidden');
+      projPanel.classList.toggle('hidden', isOpen);
+      PanelState.save("graph", "projects", { visible: !isOpen });
     });
     document.getElementById('projectPanelClose').addEventListener('click', () => {
       projPanel.classList.add('hidden');
-      projPanel.classList.remove('open');
+      PanelState.save("graph", "projects", { visible: false });
+    });
+
+    // Drag project panel by header
+    (function setupProjPanelDrag() {
+      const header = projPanel.querySelector('.project-panel-header');
+      let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+
+      header.addEventListener('mousedown', (e) => {
+        if (e.target.closest('.project-panel-close')) return;
+        dragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        const rect = projPanel.getBoundingClientRect();
+        origLeft = rect.left;
+        origTop = rect.top;
+        projPanel.classList.add('dragging');
+        projPanel.style.zIndex = 25;
+        projPanel.style.right = 'auto';
+        projPanel.style.left = origLeft + 'px';
+        e.preventDefault();
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        const newLeft = Math.max(0, Math.min(window.innerWidth - 60, origLeft + dx));
+        const newTop = Math.max(46, Math.min(window.innerHeight - 60, origTop + dy));
+        projPanel.style.left = newLeft + 'px';
+        projPanel.style.top = newTop + 'px';
+      });
+      window.addEventListener('mouseup', () => {
+        if (!dragging) return;
+        dragging = false;
+        projPanel.classList.remove('dragging');
+        projPanel.style.zIndex = '';
+        const rect = projPanel.getBoundingClientRect();
+        PanelState.save("graph", "projects", { left: rect.left, top: rect.top });
+      });
+    })();
+
+    // Drag sidebar by header
+    (function setupSidebarDrag() {
+      const sidebarEl = document.getElementById('sidebar');
+      const header = sidebarEl.querySelector('.sidebar-header');
+      let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+
+      header.addEventListener('mousedown', (e) => {
+        if (e.target.closest('.sidebar-close')) return;
+        dragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        const rect = sidebarEl.getBoundingClientRect();
+        origLeft = rect.left;
+        origTop = rect.top;
+        sidebarEl.classList.add('dragging');
+        sidebarEl.style.zIndex = 25;
+        sidebarEl.style.right = 'auto';
+        sidebarEl.style.left = origLeft + 'px';
+        e.preventDefault();
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        const newLeft = Math.max(0, Math.min(window.innerWidth - 60, origLeft + dx));
+        const newTop = Math.max(46, Math.min(window.innerHeight - 60, origTop + dy));
+        sidebarEl.style.left = newLeft + 'px';
+        sidebarEl.style.top = newTop + 'px';
+      });
+      window.addEventListener('mouseup', () => {
+        if (!dragging) return;
+        dragging = false;
+        sidebarEl.classList.remove('dragging');
+        sidebarEl.style.zIndex = '';
+        const rect = sidebarEl.getBoundingClientRect();
+        PanelState.save("graph", "details", { left: rect.left, top: rect.top });
+      });
+    })();
+
+    // Restore saved panel positions
+    PanelState.apply(projPanel, "graph", "projects");
+    PanelState.apply(document.getElementById('sidebar'), "graph", "details", { skipVisibility: true });
+
+    // Restore sidebarCollapsed from saved state
+    PanelState.load("graph", "details").then(state => {
+      if (state && state.visible === false) sidebarCollapsed = true;
     });
     document.getElementById('projToggleAll').addEventListener('change', (e) => {
       showUnassigned = e.target.checked;
