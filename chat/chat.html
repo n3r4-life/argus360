@@ -10,60 +10,59 @@
 </head>
 <body>
   <script src="../shared/ribbon.js"></script>
-  <div class="chat-layout">
-    <!-- Sidebar: session list -->
-    <aside class="chat-sidebar" id="chat-sidebar">
-      <div class="sidebar-header">
-        <img src="../icons/icon-32.png" alt="" class="sidebar-icon">
-        <span class="sidebar-title">Chat</span>
-        <button id="new-chat" class="btn-icon" title="New chat">+</button>
-      </div>
-      <div class="sidebar-search">
-        <input type="text" id="session-search" placeholder="Search chats..." />
-      </div>
-      <div class="session-list" id="session-list"></div>
-    </aside>
 
-    <!-- Main chat area -->
-    <main class="chat-main">
-      <header class="chat-header">
-        <button id="toggle-sidebar" class="btn-icon" title="Toggle sidebar">&#9776;</button>
-        <div class="chat-header-center">
-          <span id="chat-title" class="chat-title">New Chat</span>
-        </div>
-        <div class="chat-header-actions">
-          <select id="chat-provider" title="AI Provider">
-            <option value="">Default</option>
-            <option value="xai">Grok</option>
-            <option value="openai">OpenAI</option>
-            <option value="anthropic">Claude</option>
-            <option value="gemini">Gemini</option>
-            <option value="custom">Custom</option>
-          </select>
-          <button id="chat-export" class="btn-small" title="Export">Export</button>
-          <button id="chat-email" class="btn-small" title="Email+">Email+</button>
-        </div>
-      </header>
+  <!-- ── Header bar ── -->
+  <header class="chat-header">
+    <img src="../icons/icon-32.png" alt="" class="chat-header-icon">
+    <span class="chat-header-title">Chat</span>
+    <span id="chat-title" class="chat-title">New Chat</span>
+    <span class="chat-header-spacer"></span>
+    <select id="chat-provider" title="AI Provider" class="chat-provider-select">
+      <option value="">Default</option>
+      <option value="xai">Grok</option>
+      <option value="openai">OpenAI</option>
+      <option value="anthropic">Claude</option>
+      <option value="gemini">Gemini</option>
+      <option value="custom">Custom</option>
+    </select>
+    <button id="new-chat" class="chat-btn-sm" title="New chat">+ New</button>
+    <button id="chat-export" class="chat-btn-sm" title="Export" style="display:none;">Export</button>
+    <button id="chat-email" class="chat-btn-sm" title="Email+" style="display:none;">Email+</button>
+  </header>
 
-      <div class="chat-messages" id="chat-messages">
-        <div class="chat-empty" id="chat-empty">
-          <div class="chat-empty-icon">&#128172;</div>
-          <h2>Start a conversation</h2>
-          <p>Just chat. No projects, no analysis presets, no hidden context. Pick a provider above and start talking.</p>
-        </div>
+  <!-- ── Chat area (center, full width) ── -->
+  <main class="chat-main">
+    <div class="chat-messages" id="chat-messages">
+      <div class="chat-empty" id="chat-empty">
+        <div class="chat-empty-icon">&#128172;</div>
+        <h2>Start a conversation</h2>
+        <p>Just chat. No projects, no analysis presets, no hidden context. Pick a provider above and start talking.</p>
       </div>
+    </div>
+    <div class="chat-input-area">
+      <div class="chat-input-row">
+        <textarea id="chat-input" placeholder="Type a message..." rows="1"></textarea>
+        <button id="chat-send" class="chat-send-btn" title="Send">&#10148;</button>
+      </div>
+      <div class="chat-input-meta" id="chat-status"></div>
+    </div>
+  </main>
 
-      <div class="chat-input-area">
-        <div class="chat-input-row">
-          <textarea id="chat-input" placeholder="Type a message..." rows="1"></textarea>
-          <button id="chat-send" class="chat-send-btn" title="Send">&#10148;</button>
-        </div>
-        <div class="chat-input-meta">
-          <span id="chat-status"></span>
-        </div>
-      </div>
-    </main>
+  <!-- ── Floating panel: Chat History ── -->
+  <div class="chat-panel hidden" id="chat-panel">
+    <div class="chat-panel-header">
+      <span class="chat-panel-title">History</span>
+      <span class="chat-panel-count" id="chat-session-count"></span>
+      <button class="chat-panel-close" id="chat-panel-close">&times;</button>
+    </div>
+    <div class="chat-panel-search">
+      <input type="text" id="session-search" placeholder="Search chats...">
+    </div>
+    <div class="session-list" id="session-list"></div>
   </div>
+  <button class="chat-panel-tab" id="chat-panel-tab" title="Toggle chat history">
+    <span class="tab-icon">&#128218;</span>
+  </button>
 
   <script src="../lib/purify.min.js"></script>
   <script src="../lib/marked.min.js"></script>

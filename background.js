@@ -1845,6 +1845,11 @@ async function handleWorkbenchAnalyze(message) {
     const { projectId, selectedItems, prompt, provider: providerOverride } = message;
     const settings = await getProviderSettings(providerOverride || "");
 
+    // Resolve workbench system prompt (allow user override via Advanced Prompts)
+    const advOverrides = (await browser.storage.local.get({ advancedPrompts: {} })).advancedPrompts;
+    const wbSystemDefault = "You are an OSINT research analyst embedded in an investigation workbench called Argus. The user has selected specific items from their project and placed them on a work surface for deep analysis. Your job is to find connections, patterns, contradictions, and actionable insights across the selected data. Be thorough but concise. Reference specific items, entities, and sources by name. When you identify new entities or relationships, call them out explicitly so the user can add them to their knowledge graph. Always consider: who, what, when, where, why, and how. If the data is insufficient to draw a conclusion, say so and suggest what additional data would help.";
+    const systemPrompt = advOverrides["workbench"]?.system || wbSystemDefault;
+
     // Build context from selected items
     let contextBlock = "";
     for (const item of (selectedItems || [])) {
@@ -1854,8 +1859,16 @@ async function handleWorkbenchAnalyze(message) {
       contextBlock += `\n--- ${header}${url} ---\n${content.slice(0, 3000)}\n`;
     }
 
-    const systemPrompt = "You are a research analyst assistant. The user has selected multiple items from their investigation project and wants you to analyze them together. Provide thorough, actionable analysis.";
-    const userPrompt = `${prompt || "Analyze the following items and identify key patterns, connections, and insights."}\n\n${contextBlock}`;
+    // Add project context summary if available
+    let projectContext = "";
+    if (projectId) {
+      try {
+        const projCtx = await gatherProjectContext(projectId, "", Math.floor(settings.maxInputChars * 0.15));
+        if (projCtx) projectContext = projCtx;
+      } catch (e) { /* non-critical */ }
+    }
+
+    const userPrompt = `${prompt || "Analyze the following items and identify key patterns, connections, and insights."}\n${projectContext}\n${contextBlock}`;
 
     const apiMessages = [
       { role: "system", content: systemPrompt },
@@ -2158,7 +2171,10 @@ async function handleRegexAnalyze(message) {
     }
     const findingsText = findingSections.join("\n\n");
 
-    const prompts = {
+    // Check for user overrides via Advanced Prompts
+    const advOverrides = (await browser.storage.local.get({ advancedPrompts: {} })).advancedPrompts;
+
+    const defaultPrompts = {
       threat: {
         system: "You are a cybersecurity analyst specializing in exposure assessment and data leak detection. Analyze regex scan findings from a web page and produce a structured security assessment. Be direct and actionable.",
         user: `Analyze these patterns extracted from ${pageUrl || "a web page"} for security exposure:\n\n${findingsText}\n\nProvide:\n1. **Severity** — Overall risk rating (Critical/High/Medium/Low/Info)\n2. **Exposed Secrets** — Any API keys, tokens, credentials, or sensitive data found (with risk explanation)\n3. **PII Exposure** — Emails, phone numbers, SSNs, credit cards — who/what is exposed\n4. **Infrastructure Leaks** — IPs, internal domains, AWS keys, server details that shouldn't be public\n5. **Actionable Findings** — Specific items that need immediate attention, ordered by severity\n6. **Context** — Whether findings are likely intentional (e.g. contact info) vs accidental leaks\n\nBe concise. Flag only genuinely concerning items, not routine public information.`
@@ -2174,7 +2190,13 @@ async function handleRegexAnalyze(message) {
     };
 
     const mode = analysisMode || "threat";
-    const prompt = prompts[mode] || prompts.threat;
+    const defaultPrompt = defaultPrompts[mode] || defaultPrompts.threat;
+    // Apply user override for system prompt if customized via Advanced Prompts
+    const advKey = `regex.${mode}`;
+    const prompt = {
+      system: advOverrides[advKey]?.system || defaultPrompt.system,
+      user: defaultPrompt.user
+    };
     const messages = buildMessages(prompt.system, prompt.user);
     const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
 

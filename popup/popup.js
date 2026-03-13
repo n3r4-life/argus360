@@ -581,24 +581,12 @@ function attachEventListeners() {
     focusOrCreateConsole("help-getting-started");
   });
 
-  document.getElementById("open-options").addEventListener("click", () => {
-    focusOrCreateConsole();
-  });
-
   document.getElementById("open-bookmarks").addEventListener("click", () => {
     focusOrCreateConsole("bookmarks");
   });
 
-  document.getElementById("open-resources").addEventListener("click", () => {
-    focusOrCreateConsole("resources");
-  });
-
   document.getElementById("open-projects").addEventListener("click", () => {
     focusOrCreateConsole("projects");
-  });
-
-  document.getElementById("open-osint").addEventListener("click", () => {
-    focusOrCreateConsole("osint");
   });
 
   document.getElementById("open-feeds").addEventListener("click", async () => {
@@ -613,22 +601,26 @@ function attachEventListeners() {
     window.close();
   });
 
-  document.getElementById("open-automation").addEventListener("click", async () => {
-    let prefillUrl = "";
-    try {
-      const activeTabs = await browser.tabs.query({ active: true, currentWindow: true });
-      if (activeTabs[0]?.url && !activeTabs[0].url.startsWith("about:") && !activeTabs[0].url.startsWith("moz-extension:")) {
-        prefillUrl = activeTabs[0].url;
-      }
-    } catch {}
-    const consoleUrl = browser.runtime.getURL("options/options.html");
-    const param = prefillUrl ? `?prefillRule=${encodeURIComponent(prefillUrl)}` : "";
-    const existing = await browser.tabs.query({ url: consoleUrl + "*" });
+  document.getElementById("open-chat").addEventListener("click", async () => {
+    const chatUrl = browser.runtime.getURL("chat/chat.html");
+    const existing = await browser.tabs.query({ url: chatUrl + "*" });
     if (existing.length > 0) {
-      await browser.tabs.update(existing[0].id, { active: true, url: `${consoleUrl}${param}#automation` });
+      await browser.tabs.update(existing[0].id, { active: true });
       await browser.windows.update(existing[0].windowId, { focused: true });
     } else {
-      await browser.tabs.create({ url: `${consoleUrl}${param}#automation` });
+      await browser.tabs.create({ url: chatUrl });
+    }
+    window.close();
+  });
+
+  document.getElementById("open-workbench").addEventListener("click", async () => {
+    const wbUrl = browser.runtime.getURL("workbench/workbench.html");
+    const existing = await browser.tabs.query({ url: wbUrl + "*" });
+    if (existing.length > 0) {
+      await browser.tabs.update(existing[0].id, { active: true });
+      await browser.windows.update(existing[0].windowId, { focused: true });
+    } else {
+      await browser.tabs.create({ url: wbUrl });
     }
     window.close();
   });

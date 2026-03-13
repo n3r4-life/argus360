@@ -6,11 +6,6 @@
   "use strict";
 
   // ── Elements ──
-  const sidebar = document.getElementById("chat-sidebar");
-  const sessionList = document.getElementById("session-list");
-  const sessionSearch = document.getElementById("session-search");
-  const newChatBtn = document.getElementById("new-chat");
-  const toggleSidebarBtn = document.getElementById("toggle-sidebar");
   const chatTitle = document.getElementById("chat-title");
   const chatProvider = document.getElementById("chat-provider");
   const chatMessages = document.getElementById("chat-messages");
@@ -18,8 +13,17 @@
   const chatInput = document.getElementById("chat-input");
   const chatSend = document.getElementById("chat-send");
   const chatStatus = document.getElementById("chat-status");
+  const newChatBtn = document.getElementById("new-chat");
   const exportBtn = document.getElementById("chat-export");
   const emailBtn = document.getElementById("chat-email");
+
+  // Panel
+  const panel = document.getElementById("chat-panel");
+  const panelTab = document.getElementById("chat-panel-tab");
+  const panelClose = document.getElementById("chat-panel-close");
+  const sessionList = document.getElementById("session-list");
+  const sessionSearch = document.getElementById("session-search");
+  const sessionCount = document.getElementById("chat-session-count");
 
   // ── State ──
   let currentSessionId = null;
@@ -44,10 +48,54 @@
     sendMessage();
   }
 
+  // ── Floating panel: draggable by header ──
+  setupFloatingPanel(panel);
+
+  panelTab.addEventListener("click", () => panel.classList.toggle("hidden"));
+  panelClose.addEventListener("click", () => panel.classList.add("hidden"));
+
+  function setupFloatingPanel(p) {
+    const header = p.querySelector(".chat-panel-header");
+    let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+
+    header.addEventListener("mousedown", (e) => {
+      if (e.target.closest(".chat-panel-close")) return;
+      dragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      const rect = p.getBoundingClientRect();
+      origLeft = rect.left;
+      origTop = rect.top;
+      p.classList.add("dragging");
+      p.style.zIndex = 25;
+      p.style.right = "auto";
+      p.style.left = origLeft + "px";
+      e.preventDefault();
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      const newLeft = Math.max(0, Math.min(window.innerWidth - 60, origLeft + dx));
+      const newTop = Math.max(46, Math.min(window.innerHeight - 60, origTop + dy));
+      p.style.left = newLeft + "px";
+      p.style.top = newTop + "px";
+    });
+
+    window.addEventListener("mouseup", () => {
+      if (!dragging) return;
+      dragging = false;
+      p.classList.remove("dragging");
+      p.style.zIndex = "";
+    });
+  }
+
   // ── Sessions ──
   async function loadSessions() {
     const resp = await browser.runtime.sendMessage({ action: "chatGetSessions" });
     sessions = resp?.sessions || [];
+    sessionCount.textContent = sessions.length || "";
     renderSessionList();
   }
 
@@ -93,7 +141,7 @@
 
       const del = document.createElement("button");
       del.className = "session-item-delete";
-      del.textContent = "×";
+      del.textContent = "\u00D7";
       del.title = "Delete";
       del.addEventListener("click", async (e) => {
         e.stopPropagation();
@@ -101,6 +149,7 @@
         if (session.id === currentSessionId) {
           currentSessionId = null;
           renderEmptyChat();
+          showSessionButtons(false);
         }
         await loadSessions();
       });
@@ -114,6 +163,7 @@
     currentSessionId = null;
     chatTitle.textContent = "New Chat";
     renderEmptyChat();
+    showSessionButtons(false);
     chatInput.focus();
     renderSessionList();
   }
@@ -126,6 +176,7 @@
     chatTitle.textContent = session.title || "Chat";
     if (session.provider) chatProvider.value = session.provider;
     renderMessages(session.messages || []);
+    showSessionButtons(true);
     renderSessionList();
     scrollToBottom();
     chatInput.focus();
@@ -134,6 +185,11 @@
   function renderEmptyChat() {
     chatMessages.replaceChildren();
     chatMessages.appendChild(chatEmpty.cloneNode(true));
+  }
+
+  function showSessionButtons(show) {
+    exportBtn.style.display = show ? "" : "none";
+    emailBtn.style.display = show ? "" : "none";
   }
 
   // ── Message rendering ──
@@ -147,7 +203,6 @@
   }
 
   function appendMessageBubble(role, content, timestamp) {
-    // Remove empty state if present
     const emptyEl = chatMessages.querySelector(".chat-empty");
     if (emptyEl) emptyEl.remove();
 
@@ -199,11 +254,9 @@
     chatInput.value = "";
     autoResize();
 
-    // Show user bubble
     appendMessageBubble("user", text, Date.now());
     scrollToBottom();
 
-    // Create streaming placeholder for assistant
     const assistantDiv = appendMessageBubble("assistant", "", Date.now());
     assistantDiv.classList.add("streaming");
     const assistantBody = assistantDiv.querySelector(".chat-msg-body");
@@ -229,13 +282,12 @@
         return;
       }
 
-      // We now have a streamId — poll for chunks
       currentSessionId = resp.sessionId;
       const streamId = resp.streamId;
 
       await pollStream(streamId, assistantDiv, assistantBody);
 
-      // Refresh sidebar
+      showSessionButtons(true);
       await loadSessions();
       renderSessionList();
 
@@ -252,7 +304,7 @@
 
   async function pollStream(streamId, msgDiv, bodyEl) {
     const POLL_MS = 80;
-    const MAX_POLLS = 1200; // 96 seconds
+    const MAX_POLLS = 1200;
     let polls = 0;
 
     return new Promise((resolve) => {
@@ -271,7 +323,6 @@
         }
 
         if (state.status === "streaming" || state.status === "done") {
-          // Render markdown live
           if (typeof marked !== "undefined" && state.content) {
             bodyEl.innerHTML = DOMPurify.sanitize(marked.parse(state.content));
           } else {
@@ -290,7 +341,6 @@
           chatStatus.textContent = state.usage
             ? `${state.model || ""} · ${state.usage.totalTokens || "?"} tokens`
             : "";
-          // Clean up transient storage
           browser.storage.local.remove(streamId);
           resolve();
         }
@@ -316,17 +366,11 @@
   });
   chatSend.addEventListener("click", sendMessage);
 
-  // Auto-resize textarea
   function autoResize() {
     chatInput.style.height = "auto";
     chatInput.style.height = Math.min(chatInput.scrollHeight, 200) + "px";
   }
   chatInput.addEventListener("input", autoResize);
-
-  // ── Sidebar toggle ──
-  toggleSidebarBtn.addEventListener("click", () => {
-    sidebar.classList.toggle("collapsed");
-  });
 
   // ── New chat ──
   newChatBtn.addEventListener("click", startNewSession);
@@ -395,7 +439,7 @@
 
     EmailShare.compose({
       subject: `Chat: ${session.title || "Conversation"} - Argus`,
-      body: body.slice(0, 3000) + (body.length > 3000 ? "\n..." : "") + "\n\n— Shared via Argus"
+      body: body.slice(0, 3000) + (body.length > 3000 ? "\n..." : "") + "\n\n\u2014 Shared via Argus"
     });
   });
 

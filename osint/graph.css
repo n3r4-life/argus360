@@ -18,6 +18,8 @@
   box-sizing: border-box;
 }
 
+html { background: var(--bg-primary); }
+
 body {
   background: var(--bg-primary);
   color: var(--text-primary);
@@ -26,13 +28,18 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  max-width: 1200px;
+  margin: 0 auto;
 }
+
+.header-icon { width: 22px; height: 22px; }
 
 .graph-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
+  padding: 8px 16px;
+  height: 46px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   z-index: 10;
@@ -46,9 +53,8 @@ body {
 }
 
 .project-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  color: var(--accent);
 }
 
 .project-name {

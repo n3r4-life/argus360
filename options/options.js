@@ -1,4 +1,18 @@
 // ──────────────────────────────────────────────
+// Focus existing tab or create new (single instance per page)
+// ──────────────────────────────────────────────
+async function focusOrCreatePage(urlPath) {
+  const fullUrl = browser.runtime.getURL(urlPath);
+  const existing = await browser.tabs.query({ url: fullUrl + "*" });
+  if (existing.length > 0) {
+    await browser.tabs.update(existing[0].id, { active: true });
+    await browser.windows.update(existing[0].windowId, { focused: true });
+  } else {
+    await browser.tabs.create({ url: fullUrl });
+  }
+}
+
+// ──────────────────────────────────────────────
 // Default presets (mirrors background.js)
 // ──────────────────────────────────────────────
 const DEFAULT_PRESETS = {
@@ -410,6 +424,33 @@ const ADVANCED_PROMPT_DEFS = {
     label: "Research \u2014 Claims & Gaps Analysis", group: "Source Pipelines",
     system: "You are a research analyst specializing in academic and investigative content. Respond ONLY with valid JSON.",
     prompt: 'Analyze this research/wiki content for claims and knowledge gaps. Return JSON:\n{\n  "title": "",\n  "topic": "",\n  "summary": "2-3 sentences",\n  "key_claims": [\n    {"claim": "", "evidence": "strong|moderate|weak|none", "verifiable": true, "source_cited": true}\n  ],\n  "knowledge_coverage": {\n    "strong_areas": ["topics well-covered"],\n    "weak_areas": ["topics mentioned but not substantiated"],\n    "gaps": ["important related topics not addressed"]\n  },\n  "entities": {\n    "people": [{"name": "", "role": ""}],\n    "organizations": [{"name": ""}],\n    "concepts": [{"name": "", "definition": ""}]\n  },\n  "methodology_notes": "if applicable",\n  "suggested_followup": ["questions or sources to investigate"]\n}'
+  },
+  // Regex Scanner prompts
+  "regex.threat": {
+    label: "Regex \u2014 Threat Check", group: "Regex Scanner",
+    system: "You are a cybersecurity analyst specializing in exposure assessment and data leak detection. Analyze regex scan findings from a web page and produce a structured security assessment. Be direct and actionable.",
+    prompt: "(Auto-generated from regex findings. Edit the system prompt to change the analyst persona.)"
+  },
+  "regex.entities": {
+    label: "Regex \u2014 Entity Analysis", group: "Regex Scanner",
+    system: "You are an OSINT analyst. Extract and classify entities from regex scan findings into a structured intelligence report. Identify relationships, affiliations, and patterns.",
+    prompt: "(Auto-generated from regex findings. Edit the system prompt to change the analyst persona.)"
+  },
+  "regex.summary": {
+    label: "Regex \u2014 Summary", group: "Regex Scanner",
+    system: "You are a research assistant producing concise intelligence summaries from automated data extraction results.",
+    prompt: "(Auto-generated from regex findings. Edit the system prompt to change the analyst persona.)"
+  },
+  // Workbench & Chat system prompts (viewable in Advanced Prompts)
+  "workbench": {
+    label: "Workbench Analysis", group: "Workbench & Chat",
+    system: "You are an OSINT research analyst embedded in an investigation workbench called Argus. The user has selected specific items from their project and placed them on a work surface for deep analysis. Your job is to find connections, patterns, contradictions, and actionable insights across the selected data. Be thorough but concise. Reference specific items, entities, and sources by name. When you identify new entities or relationships, call them out explicitly so the user can add them to their knowledge graph. Always consider: who, what, when, where, why, and how. If the data is insufficient to draw a conclusion, say so and suggest what additional data would help.",
+    prompt: "(Auto-generated from selected work surface items. Edit only the system prompt to change the analyst persona.)"
+  },
+  "chat": {
+    label: "General Chat", group: "Workbench & Chat",
+    system: "(No system prompt \u2014 Chat sends messages directly to the AI with no hidden instructions. This is intentional: Chat is a clean, unbiased conversation space.)",
+    prompt: "(No user prompt template \u2014 the user's message is sent as-is.)"
   },
 };
 
@@ -2664,7 +2705,7 @@ function attachListeners() {
   // History
   el.maxHistory.addEventListener("input", scheduleSave);
   el.openHistory.addEventListener("click", () => {
-    browser.tabs.create({ url: browser.runtime.getURL("history/history.html") });
+    focusOrCreatePage("history/history.html");
   });
   el.clearHistory.addEventListener("click", async () => {
     if (confirm("Clear all analysis history? This cannot be undone.")) {
@@ -2789,7 +2830,7 @@ function attachListeners() {
   checkDetectedFeeds();
   el.addFeed.addEventListener("click", addFeedHandler);
   el.openFeedReader.addEventListener("click", () => {
-    browser.tabs.create({ url: browser.runtime.getURL("feeds/feeds.html") });
+    focusOrCreatePage("feeds/feeds.html");
   });
   document.getElementById("delete-all-feeds").addEventListener("click", async () => {
     if (!confirm("Delete all feeds and their entries? This cannot be undone.")) return;
@@ -3841,13 +3882,43 @@ function updateReasoningControls() {
 // Main tab navigation
 // ──────────────────────────────────────────────
 function initMainTabs() {
+  // Inject sub-header bars into tab panels (matching Workbench/Reports style)
+  const panelIcons = {
+    home: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
+    bookmarks: '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
+    projects: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+    monitors: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+    feeds: '<path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>',
+    osint: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+    automation: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+    archive: '<polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>',
+    prompts: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    providers: '<path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>',
+    resources: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+    settings: '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>',
+    help: '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>'
+  };
+  const panelTitles = {
+    home: "Argus Console", bookmarks: "Bookmarks", projects: "Projects", monitors: "Monitors",
+    feeds: "Feeds", osint: "OSINT", automation: "Automation", archive: "Redirects",
+    prompts: "Prompts", providers: "Providers", resources: "Resources", settings: "Settings", help: "Help"
+  };
+  document.querySelectorAll(".tab-panel[data-panel]").forEach(panel => {
+    const key = panel.dataset.panel;
+    if (!panelIcons[key]) return;
+    const bar = document.createElement("div");
+    bar.className = "panel-subheader";
+    bar.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${panelIcons[key]}</svg><span class="panel-subheader-title">${panelTitles[key] || key}</span>`;
+    panel.insertBefore(bar, panel.firstChild);
+  });
+
   const nav = document.getElementById("main-nav");
   const tabs = nav.querySelectorAll(".nav-tab");
   const panels = document.querySelectorAll(".tab-panel");
 
   // Restore last active tab from URL hash or sessionStorage
   const hash = window.location.hash.replace("#", "");
-  const savedTab = hash || sessionStorage.getItem("argus-activeTab") || "bookmarks";
+  const savedTab = hash || sessionStorage.getItem("argus-activeTab") || "home";
 
   switchMainTab(savedTab, tabs, panels);
 
@@ -3885,47 +3956,21 @@ function initMainTabs() {
     handleHashNav(hash, tabs, panels);
   }
 
-  // History icon button (not a tab — opens history page)
-  // KG button (not a tab — opens global knowledge graph)
-  const kgNavBtn = document.getElementById("open-kg-nav");
-  if (kgNavBtn) {
-    kgNavBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      browser.tabs.create({ url: browser.runtime.getURL("osint/graph.html?mode=global") });
-    });
-  }
-
-  const chatNavBtn = document.getElementById("open-chat-nav");
-  if (chatNavBtn) {
-    chatNavBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      browser.tabs.create({ url: browser.runtime.getURL("chat/chat.html") });
-    });
-  }
-
-  const workbenchNavBtn = document.getElementById("open-workbench-nav");
-  if (workbenchNavBtn) {
-    workbenchNavBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      browser.tabs.create({ url: browser.runtime.getURL("workbench/workbench.html") });
-    });
-  }
-
-  const histNavBtn = document.getElementById("open-history-nav");
-  if (histNavBtn) {
-    histNavBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      browser.tabs.create({ url: browser.runtime.getURL("history/history.html") });
-    });
-  }
-
-  // Reader button (not a tab — opens feeds/reader page)
-  const readerNavBtn = document.getElementById("open-reader-nav");
-  if (readerNavBtn) {
-    readerNavBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      browser.tabs.create({ url: browser.runtime.getURL("feeds/feeds.html") });
-    });
+  const appNavMap = {
+    "open-kg-nav": "osint/graph.html?mode=global",
+    "open-chat-nav": "chat/chat.html",
+    "open-workbench-nav": "workbench/workbench.html",
+    "open-history-nav": "history/history.html",
+    "open-reader-nav": "feeds/feeds.html"
+  };
+  for (const [id, path] of Object.entries(appNavMap)) {
+    const btn = document.getElementById(id);
+    if (btn) {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        focusOrCreatePage(path);
+      });
+    }
   }
 
   // Wipe icon — quick link to Settings wipe section
@@ -3942,6 +3987,28 @@ function initMainTabs() {
       }, 100);
     });
   }
+
+  // Logo click → home tab
+  const logoBtn = document.querySelector(".header-left");
+  if (logoBtn) {
+    logoBtn.style.cursor = "pointer";
+    logoBtn.addEventListener("click", () => {
+      switchMainTab("home", tabs, panels);
+      sessionStorage.setItem("argus-activeTab", "home");
+      window.location.hash = "home";
+    });
+  }
+
+  // Home landing: icon guide + quick link clicks → navigate to that tab
+  document.querySelectorAll("[data-goto]").forEach(el => {
+    el.style.cursor = "pointer";
+    el.addEventListener("click", () => {
+      const target = el.dataset.goto;
+      switchMainTab(target, tabs, panels);
+      sessionStorage.setItem("argus-activeTab", target);
+      window.location.hash = target;
+    });
+  });
 }
 
 function initHelpBackToTop() {
@@ -4721,9 +4788,16 @@ function initProjects() {
   document.getElementById("proj-anomaly").addEventListener("click", projAnomalyScan);
   document.getElementById("proj-dashboard").addEventListener("click", projOpenDashboard);
   document.getElementById("proj-skeleton").addEventListener("click", projBuildSkeleton);
-  document.getElementById("proj-workbench").addEventListener("click", () => {
+  document.getElementById("proj-workbench").addEventListener("click", async () => {
     if (!projCurrentId) return;
-    browser.tabs.create({ url: browser.runtime.getURL(`workbench/workbench.html?project=${projCurrentId}`) });
+    const wbUrl = browser.runtime.getURL("workbench/workbench.html");
+    const existing = await browser.tabs.query({ url: wbUrl + "*" });
+    if (existing.length > 0) {
+      await browser.tabs.update(existing[0].id, { active: true, url: `${wbUrl}?project=${projCurrentId}` });
+      await browser.windows.update(existing[0].windowId, { focused: true });
+    } else {
+      await browser.tabs.create({ url: `${wbUrl}?project=${projCurrentId}` });
+    }
   });
 
   projLoadProjects();
@@ -6232,7 +6306,7 @@ function initStorageManagement() {
 
   // Knowledge Graph
   document.getElementById("kg-open-graph").addEventListener("click", () => {
-    browser.tabs.create({ url: browser.runtime.getURL("osint/graph.html?mode=global") });
+    focusOrCreatePage("osint/graph.html?mode=global");
   });
   document.getElementById("kg-run-inference").addEventListener("click", async () => {
     const resp = await browser.runtime.sendMessage({ action: "runKGInference" });

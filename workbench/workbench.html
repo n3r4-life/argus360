@@ -10,73 +10,89 @@
 </head>
 <body>
   <script src="../shared/ribbon.js"></script>
-  <div class="wb-layout">
-    <!-- Left: Project Tree -->
-    <aside class="wb-tree" id="wb-tree">
-      <div class="wb-tree-header">
-        <img src="../icons/icon-32.png" alt="" class="wb-icon">
-        <span class="wb-tree-title">Workbench</span>
-      </div>
-      <div class="wb-project-select">
-        <select id="wb-project" title="Select project">
-          <option value="">Select a project...</option>
-        </select>
-      </div>
-      <div class="wb-tree-body" id="wb-tree-body">
-        <div class="wb-tree-empty">Select a project to load its data.</div>
-      </div>
-      <div class="wb-tree-footer">
-        <button id="wb-select-all" class="wb-btn-sm">Select All</button>
-        <button id="wb-clear-surface" class="wb-btn-sm">Clear Surface</button>
-      </div>
-    </aside>
 
-    <!-- Center: Work Surface -->
-    <main class="wb-surface">
-      <div class="wb-surface-header">
-        <span class="wb-surface-title" id="wb-surface-title">Work Surface</span>
-        <span class="wb-surface-stats" id="wb-surface-stats"></span>
-      </div>
-      <div class="wb-surface-body" id="wb-surface-body">
-        <div class="wb-surface-empty" id="wb-surface-empty">
-          <div class="wb-surface-empty-icon">&#128203;</div>
-          <h3>Drop zone</h3>
-          <p>Click items in the project tree to place them here. Select multiple items, then analyze them together with AI.</p>
-        </div>
-      </div>
-    </main>
+  <!-- ── Header bar ── -->
+  <header class="wb-header">
+    <img src="../icons/icon-32.png" alt="" class="wb-header-icon">
+    <span class="wb-header-title">Workbench</span>
+    <select id="wb-project" title="Select project" class="wb-project-select">
+      <option value="">Select a project...</option>
+    </select>
+    <span class="wb-header-spacer"></span>
+    <select id="wb-provider" title="AI Provider" class="wb-provider-select">
+      <option value="">Default</option>
+      <option value="xai">Grok</option>
+      <option value="openai">OpenAI</option>
+      <option value="anthropic">Claude</option>
+      <option value="gemini">Gemini</option>
+      <option value="custom">Custom</option>
+    </select>
+    <button id="wb-save-result" class="wb-btn-sm" style="display:none;">+ Save to Project</button>
+    <button id="wb-copy-result" class="wb-btn-sm" style="display:none;">Copy</button>
+    <button id="wb-export-result" class="wb-btn-sm" style="display:none;">Export .md</button>
+    <button id="wb-email-result" class="wb-btn-sm" style="display:none;">Email+</button>
+  </header>
 
-    <!-- Right: AI Panel -->
-    <aside class="wb-ai" id="wb-ai">
-      <div class="wb-ai-header">
-        <span class="wb-ai-title">AI Analysis</span>
-        <select id="wb-provider" title="AI Provider">
-          <option value="">Default</option>
-          <option value="xai">Grok</option>
-          <option value="openai">OpenAI</option>
-          <option value="anthropic">Claude</option>
-          <option value="gemini">Gemini</option>
-          <option value="custom">Custom</option>
-        </select>
+  <!-- ── Chat area (center, full width) ── -->
+  <main class="wb-chat">
+    <div class="wb-messages" id="wb-messages">
+      <div class="wb-chat-empty" id="wb-chat-empty">
+        <div class="wb-chat-empty-icon">&#128300;</div>
+        <h2>Workbench</h2>
+        <p>Select a project, pick items from the tree, and start a conversation. The AI has full context of your selected data.</p>
       </div>
-      <div class="wb-ai-prompt">
-        <textarea id="wb-prompt" placeholder="Custom prompt (optional)... e.g. 'Cross-reference these entities and identify hidden relationships'" rows="3"></textarea>
+    </div>
+    <div class="wb-input-area">
+      <div class="wb-input-row">
+        <textarea id="wb-input" placeholder="Ask about the selected items..." rows="1"></textarea>
+        <button id="wb-send" class="wb-send-btn" title="Send">&#10148;</button>
       </div>
-      <div class="wb-ai-actions">
-        <button id="wb-analyze" class="wb-analyze-btn">Analyze Selection</button>
-        <button id="wb-save-result" class="wb-btn-sm" style="display:none;">+ Save to Project</button>
-      </div>
-      <div class="wb-ai-status" id="wb-ai-status"></div>
-      <div class="wb-ai-result" id="wb-ai-result">
-        <div class="wb-ai-result-empty">Analysis results will appear here.</div>
-      </div>
-      <div class="wb-ai-result-actions" id="wb-result-actions" style="display:none;">
-        <button id="wb-copy-result" class="wb-btn-sm">Copy</button>
-        <button id="wb-export-result" class="wb-btn-sm">Export .md</button>
-        <button id="wb-email-result" class="wb-btn-sm">Email+</button>
-      </div>
-    </aside>
+      <div class="wb-input-meta" id="wb-status"></div>
+    </div>
+  </main>
+
+  <!-- ── Left floating panel: Project Tree ── -->
+  <div class="wb-panel wb-panel-left hidden" id="wb-panel-left">
+    <div class="wb-panel-header">
+      <span class="wb-panel-title">Project Tree</span>
+      <button class="wb-panel-close" id="wb-panel-left-close">&times;</button>
+    </div>
+    <div class="wb-tree-toolbar">
+      <input type="text" id="wb-tree-search" class="wb-tree-search" placeholder="Filter items...">
+      <select id="wb-tree-sort" class="wb-tree-sort" title="Sort items">
+        <option value="type">By Type</option>
+        <option value="alpha">A → Z</option>
+        <option value="alpha-desc">Z → A</option>
+        <option value="size">By Size</option>
+        <option value="date">By Date</option>
+      </select>
+    </div>
+    <div class="wb-tree-body" id="wb-tree-body">
+      <div class="wb-tree-empty">Select a project to load its data.</div>
+    </div>
+    <div class="wb-tree-footer">
+      <button id="wb-select-all" class="wb-btn-sm">Select All</button>
+      <button id="wb-clear-items" class="wb-btn-sm">Clear</button>
+    </div>
   </div>
+  <button class="wb-panel-tab wb-panel-tab-left" id="wb-tab-left" title="Toggle project tree">
+    <span class="tab-icon">&#9776;</span>
+  </button>
+
+  <!-- ── Right floating panel: Selected Items ── -->
+  <div class="wb-panel wb-panel-right hidden" id="wb-panel-right">
+    <div class="wb-panel-header">
+      <span class="wb-panel-title">Selected Items</span>
+      <span class="wb-panel-count" id="wb-surface-stats"></span>
+      <button class="wb-panel-close" id="wb-panel-right-close">&times;</button>
+    </div>
+    <div class="wb-surface-body" id="wb-surface-body">
+      <div class="wb-surface-empty">No items selected.</div>
+    </div>
+  </div>
+  <button class="wb-panel-tab wb-panel-tab-right" id="wb-tab-right" title="Toggle selected items">
+    <span class="tab-icon">&#128203;</span>
+  </button>
 
   <script src="../lib/purify.min.js"></script>
   <script src="../lib/marked.min.js"></script>
