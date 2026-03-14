@@ -42,6 +42,10 @@
         <button class="nav-tab nav-icon" data-tab="archive" title="Redirects">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
         </button>
+        <button class="nav-tab nav-icon" data-tab="tracker" title="Page Tracker">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+          <span class="nav-badge" id="badge-tracker"></span>
+        </button>
         <span class="nav-icon-sep"></span>
         <button class="nav-tab nav-icon" data-tab="prompts" title="Prompts">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
@@ -119,10 +123,98 @@
     <!-- ═══════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="home">
       <div class="home-landing">
-        <img src="../icons/icon-128.png" alt="Argus" class="home-logo">
-        <h2 class="home-title">Argus</h2>
-        <p class="home-tagline">The all-seeing guardian of the web</p>
-        <p class="home-lore">In Greek mythology, Argus Panoptes was a giant with a hundred eyes &mdash; ever watchful, never sleeping. Your Argus extension watches the pages you care about, extracts intelligence, and keeps everything organized so nothing slips past.</p>
+        <div class="home-brand">
+          <img src="../icons/icon-128.png" alt="Argus" class="home-logo">
+          <h2 class="home-title">Argus</h2>
+        </div>
+        <!-- Search bar -->
+        <div class="home-search-bar">
+          <div class="home-search-row">
+            <select id="home-search-engine" class="search-engine-select" title="Search engine">
+              <option value="duckduckgo">DuckDuckGo</option>
+              <option value="startpage">Startpage</option>
+              <option value="brave">Brave</option>
+              <option value="searx">SearX</option>
+              <option value="mojeek">Mojeek</option>
+              <option value="google">Google</option>
+              <option value="dogpile">Dogpile</option>
+              <option value="yandex">Yandex</option>
+              <option value="bing">Bing</option>
+            </select>
+            <input type="text" id="home-search-query" class="home-search-input" placeholder="Search the web...">
+            <button id="home-search-go" class="btn-search-go" title="Search">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+            </button>
+            <label class="deep-dive-label" title="AI-powered deep dive: crawl search results, extract content, and produce an AI synopsis">
+              <input type="checkbox" id="home-deep-dive-toggle">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+              </svg>
+              <span>Deep Dive</span>
+            </label>
+            <select id="home-deep-dive-pages" class="deep-dive-pages-select hidden" title="Number of search result pages to crawl">
+              <option value="3">3pg</option>
+              <option value="5" selected>5pg</option>
+              <option value="10">10pg</option>
+              <option value="15">15pg</option>
+              <option value="25">25pg</option>
+            </select>
+          </div>
+          <div id="home-multi-engine-row" class="multi-engine-row hidden">
+            <span class="multi-engine-label">Engines:</span>
+            <label class="me-chip"><input type="checkbox" value="duckduckgo" checked>DDG</label>
+            <label class="me-chip"><input type="checkbox" value="startpage">Start</label>
+            <label class="me-chip"><input type="checkbox" value="brave">Brave</label>
+            <label class="me-chip"><input type="checkbox" value="searx">SearX</label>
+            <label class="me-chip"><input type="checkbox" value="mojeek">Mojeek</label>
+            <label class="me-chip"><input type="checkbox" value="google">Google</label>
+            <label class="me-chip"><input type="checkbox" value="dogpile">Dogpile</label>
+            <label class="me-chip"><input type="checkbox" value="yandex">Yandex</label>
+            <label class="me-chip"><input type="checkbox" value="bing">Bing</label>
+          </div>
+        </div>
+
+        <!-- Scrolling ticker -->
+        <div class="home-ticker-wrap">
+          <div class="home-ticker" id="home-ticker">
+            <p class="home-ticker-msg">BYO API keys. Use your own accounts &mdash; no middleman, no markup.</p>
+            <p class="home-ticker-msg">Cheaper than you think. Direct API calls cost pennies compared to monthly subscriptions.</p>
+            <p class="home-ticker-msg">Every feature talks to every other feature. Bookmarks feed Projects, Monitors trigger Analyses, OSINT enriches everything.</p>
+            <p class="home-ticker-msg">Five AI providers, one interface. Grok, OpenAI, Claude, Gemini, or your own custom endpoint.</p>
+            <p class="home-ticker-msg">Switch providers on the fly. Start with Grok, follow up with Claude &mdash; mid-conversation.</p>
+            <p class="home-ticker-msg">Deep Dive doesn&rsquo;t just search. It crawls, reads, and synthesizes entire pages of results into one brief.</p>
+            <p class="home-ticker-msg">Monitor any page for changes. Get notified when competitors update pricing, filings drop, or articles go live.</p>
+            <p class="home-ticker-msg">Smart Bookmarks capture your analysis alongside the URL. Build a searchable knowledge base over time.</p>
+            <p class="home-ticker-msg">Projects keep related work together. Investigations, research threads, client dossiers &mdash; all in one place.</p>
+            <p class="home-ticker-msg">RSS feeds with AI routing. Subscribe once, let Argus sort and summarize for you.</p>
+            <p class="home-ticker-msg">OSINT tools built in. Entity extraction, domain lookups, and link analysis &mdash; no extra software.</p>
+            <p class="home-ticker-msg">Automation rules let you set it and forget it. Pages get processed without you lifting a finger.</p>
+            <p class="home-ticker-msg">Export anything. Markdown, HTML, plain text, or print to PDF &mdash; your data, your format.</p>
+            <p class="home-ticker-msg">Share to X, Reddit, LinkedIn, or email with one click. Or paste to Gist and PrivateBin.</p>
+            <p class="home-ticker-msg">No cloud accounts required. Everything runs locally in your browser with your own keys.</p>
+            <p class="home-ticker-msg">Archive pages to archive.is directly from your analysis. Preserve evidence before it disappears.</p>
+            <p class="home-ticker-msg">Follow-up questions keep the conversation going. Dig deeper without starting over.</p>
+            <p class="home-ticker-msg">Re-analyze with a different preset or provider. Same page, fresh perspective, one click.</p>
+            <p class="home-ticker-msg">Regex search across page content. Pattern matching for the power user.</p>
+            <p class="home-ticker-msg">Vault encryption protects your sensitive data. Passcode lock with AES-GCM &mdash; browser-grade security.</p>
+            <p class="home-ticker-msg">Custom analysis presets. Define your own prompts and reuse them across any page.</p>
+            <p class="home-ticker-msg">Built for researchers, journalists, analysts, and anyone who reads the internet seriously.</p>
+            <p class="home-ticker-msg">No telemetry. No tracking. No data leaves your machine unless you send it to an AI provider.</p>
+            <p class="home-ticker-msg">Open source. Inspect every line of code. Fork it, extend it, make it yours.</p>
+            <p class="home-ticker-msg">Argus Panoptes had a hundred eyes. This extension has yours covered.</p>
+          </div>
+          <button id="ticker-egg-btn" class="ticker-egg-btn" title="Customize ticker">&#9881;</button>
+        </div>
+        <div id="ticker-mode-picker" class="ticker-mode-picker hidden">
+          <button class="ticker-mode-btn" data-mode="default" title="Normal">Normal</button>
+          <button class="ticker-mode-btn" data-mode="vegas" title="Vegas baby">Vegas</button>
+          <button class="ticker-mode-btn" data-mode="robot" title="Clack clack ding">Typewriter</button>
+          <button class="ticker-mode-btn" data-mode="silly" title="Chaos mode">Silly</button>
+          <button class="ticker-mode-btn" data-mode="matrix" title="Follow the white rabbit">Matrix</button>
+          <button class="ticker-mode-btn" data-mode="retro" title="Back to the 80s">Retro</button>
+        </div>
 
         <div class="home-section">
           <h3>Quick Navigation</h3>
@@ -1517,6 +1609,59 @@
     </div>
 
     <!-- ═══════════════════════════════════════════ -->
+    <!-- TAB: Page Tracker                            -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="tracker">
+
+      <section class="card">
+        <h2 class="card-title">Page Tracker
+          <span class="badge" id="tracker-count-badge">0 pages</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Your personal browsing ledger — independent of browser history. Every page visit and Argus action is recorded here as long as "Track My Pages" is enabled in Settings. Clearing browser history or cache will <strong>not</strong> delete this data.</p>
+
+          <div class="form-row" style="margin-bottom:10px;">
+            <div class="form-group flex-1">
+              <input type="text" id="tracker-search" class="input" placeholder="Search URLs, titles, or actions...">
+            </div>
+            <div class="form-group">
+              <select id="tracker-action-filter">
+                <option value="">All actions</option>
+                <option value="visit">Visits only</option>
+                <option value="analyze">Analyzed</option>
+                <option value="bookmark">Bookmarked</option>
+                <option value="monitor">Monitored</option>
+                <option value="snapshot">Snapshotted</option>
+                <option value="osint">OSINT</option>
+                <option value="techstack">Tech Stack</option>
+                <option value="feed">Feed</option>
+              </select>
+            </div>
+            <button id="tracker-refresh" class="btn btn-secondary btn-sm" title="Refresh">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            </button>
+          </div>
+
+          <div id="tracker-list" style="display:flex;flex-direction:column;gap:2px;max-height:600px;overflow-y:auto;"></div>
+
+          <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
+            <button id="tracker-load-more" class="btn btn-secondary btn-sm hidden">Load more</button>
+            <button id="tracker-export" class="btn btn-secondary btn-sm">Export CSV</button>
+            <button id="tracker-clear" class="btn btn-secondary btn-sm" style="color:var(--error);margin-left:auto;">Clear All Tracked Data</button>
+          </div>
+          <div id="tracker-clear-confirm" class="hidden" style="margin-top:8px;padding:10px;border:1px solid var(--error);border-radius:6px;background:var(--bg-secondary);">
+            <p style="margin:0 0 8px;color:var(--error);font-weight:600;">Delete all tracked browsing data? This cannot be undone.</p>
+            <div style="display:flex;gap:8px;">
+              <button id="tracker-clear-yes" class="btn btn-secondary" style="color:var(--error);border-color:var(--error);">Yes, Clear</button>
+              <button id="tracker-clear-no" class="btn btn-secondary">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
     <!-- TAB: Resources                               -->
     <!-- ═══════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="resources">
@@ -1672,6 +1817,15 @@
                 <span>Show badge count on toolbar icon</span>
               </label>
               <span class="hint">Show unread monitor change count on the Argus icon</span>
+            </div>
+          </div>
+          <div class="form-row" style="margin-top:8px;">
+            <div class="form-group flex-1">
+              <label class="toggle-label">
+                <input type="checkbox" id="track-my-pages">
+                <span>Track My Pages</span>
+              </label>
+              <span class="hint">Record every page you visit and every Argus action you take — stored in IndexedDB, independent of browser history. Clearing your browser cache or history will NOT delete this data.</span>
             </div>
           </div>
         </div>

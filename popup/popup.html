@@ -179,6 +179,13 @@
     </div>
   </div>
 
+  <!-- Page tracking indicator -->
+  <div id="tracking-badge" class="tracking-badge hidden">
+    <span class="tracking-dot"></span>
+    <span>Tracking</span>
+    <a id="tracking-badge-link" title="View timeline">Timeline</a>
+  </div>
+
   <!-- Previous analysis indicator -->
   <div id="prev-analysis" class="prev-analysis hidden"></div>
   <!-- Archive availability indicator -->
@@ -393,6 +400,32 @@
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
         </button>
+        <label class="deep-dive-label" title="AI-powered deep dive: crawl search results, extract content, and produce an AI synopsis">
+          <input type="checkbox" id="deep-dive-toggle">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+          </svg>
+          <span>Deep Dive</span>
+        </label>
+        <select id="deep-dive-pages" class="deep-dive-pages-select hidden" title="Number of search result pages to crawl">
+          <option value="3">3pg</option>
+          <option value="5" selected>5pg</option>
+          <option value="10">10pg</option>
+          <option value="15">15pg</option>
+          <option value="25">25pg</option>
+        </select>
+      </div>
+      <div id="multi-engine-row" class="multi-engine-row hidden">
+        <span class="multi-engine-label">Engines:</span>
+        <label class="me-chip"><input type="checkbox" value="duckduckgo" checked>DDG</label>
+        <label class="me-chip"><input type="checkbox" value="startpage">Start</label>
+        <label class="me-chip"><input type="checkbox" value="brave">Brave</label>
+        <label class="me-chip"><input type="checkbox" value="searx">SearX</label>
+        <label class="me-chip"><input type="checkbox" value="mojeek">Mojeek</label>
+        <label class="me-chip"><input type="checkbox" value="google">Google</label>
+        <label class="me-chip"><input type="checkbox" value="dogpile">Dogpile</label>
+        <label class="me-chip"><input type="checkbox" value="yandex">Yandex</label>
+        <label class="me-chip"><input type="checkbox" value="bing">Bing</label>
       </div>
       <div class="search-prompts-row">
         <button class="search-prompt-chip" data-prompt="" title="Plain search">plain</button>

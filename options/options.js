@@ -465,6 +465,7 @@ const el = {
   temperature: document.getElementById("temperature"),
   tempValue: document.getElementById("temp-value"),
   showBadge: document.getElementById("show-badge"),
+  trackMyPages: document.getElementById("track-my-pages"),
   responseLanguage: document.getElementById("response-language"),
   reasoningEffort: document.getElementById("reasoning-effort"),
   openaiReasoningEffort: document.getElementById("openai-reasoning-effort"),
@@ -1025,6 +1026,7 @@ async function loadAllSettings() {
     advancedPrompts: {},
     maxHistorySize: 200,
     showBadge: true,
+    trackMyPages: false,
     responseLanguage: "auto",
     apiKey: "",
     dataProviders: DEFAULT_DATA_PROVIDERS,
@@ -1056,6 +1058,7 @@ async function loadAllSettings() {
   el.temperature.value = settings.temperature;
   el.tempValue.textContent = settings.temperature;
   el.showBadge.checked = settings.showBadge !== false;
+  el.trackMyPages.checked = settings.trackMyPages === true;
   el.responseLanguage.value = settings.responseLanguage ?? "auto";
   el.reasoningEffort.value = settings.reasoningEffort;
   el.openaiReasoningEffort.value = settings.openaiReasoningEffort || "medium";
@@ -1687,6 +1690,7 @@ async function saveAllSettings() {
     advancedPrompts,
     maxHistorySize: parseInt(el.maxHistory.value, 10) || 200,
     showBadge: el.showBadge.checked,
+    trackMyPages: el.trackMyPages.checked,
     responseLanguage: el.responseLanguage.value,
     dataProviders,
     pasteProviders,
@@ -2709,6 +2713,7 @@ function attachListeners() {
   el.thinkingBudget.addEventListener("input", scheduleSave);
   el.responseLanguage.addEventListener("change", scheduleSave);
   el.showBadge.addEventListener("change", scheduleSave);
+  el.trackMyPages.addEventListener("change", scheduleSave);
 
   // History
   el.maxHistory.addEventListener("input", scheduleSave);
@@ -4094,7 +4099,7 @@ function initMainTabs() {
   };
   document.querySelectorAll(".tab-panel[data-panel]").forEach(panel => {
     const key = panel.dataset.panel;
-    if (!panelIcons[key]) return;
+    if (!panelIcons[key] || key === "home") return;
     const bar = document.createElement("div");
     bar.className = "panel-subheader";
     bar.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${panelIcons[key]}</svg><span class="panel-subheader-title">${panelTitles[key] || key}</span>`;
@@ -4374,6 +4379,140 @@ function initMainTabs() {
       window.location.hash = target;
     });
   });
+
+  // ── Home search bar ──
+  const SEARCH_ENGINES = {
+    duckduckgo: "https://duckduckgo.com/?q=",
+    startpage:  "https://www.startpage.com/do/dsearch?query=",
+    brave:      "https://search.brave.com/search?q=",
+    searx:      "https://searxng.org/search?q=",
+    mojeek:     "https://www.mojeek.com/search?q=",
+    google:     "https://www.google.com/search?q=",
+    dogpile:    "https://www.dogpile.com/serp?q=",
+    yandex:     "https://yandex.com/search/?text=",
+    bing:       "https://www.bing.com/search?q=",
+  };
+
+  const homeSearchGo = document.getElementById("home-search-go");
+  const homeSearchQuery = document.getElementById("home-search-query");
+  const homeSearchEngine = document.getElementById("home-search-engine");
+  const homeDeepDive = document.getElementById("home-deep-dive-toggle");
+  const homeDeepPages = document.getElementById("home-deep-dive-pages");
+
+  const homeMultiEngineRow = document.getElementById("home-multi-engine-row");
+  if (homeDeepDive) {
+    homeDeepDive.addEventListener("change", () => {
+      const on = homeDeepDive.checked;
+      homeDeepPages.classList.toggle("hidden", !on);
+      homeMultiEngineRow.classList.toggle("hidden", !on);
+      if (on) {
+        const primary = homeSearchEngine.value;
+        homeMultiEngineRow.querySelectorAll("input[type=checkbox]").forEach(cb => {
+          cb.checked = cb.value === primary;
+        });
+      }
+    });
+    homeSearchEngine.addEventListener("change", () => {
+      if (homeDeepDive.checked) {
+        const cb = homeMultiEngineRow.querySelector(`input[value="${homeSearchEngine.value}"]`);
+        if (cb) cb.checked = true;
+      }
+    });
+  }
+
+  function getHomeSelectedEngines() {
+    const checked = [...homeMultiEngineRow.querySelectorAll("input[type=checkbox]:checked")].map(cb => cb.value);
+    return checked.length > 0 ? checked : [homeSearchEngine.value];
+  }
+
+  function executeHomeSearch() {
+    const q = homeSearchQuery.value.trim();
+    if (!q) return;
+    const engine = homeSearchEngine.value;
+    const baseUrl = SEARCH_ENGINES[engine] || SEARCH_ENGINES.duckduckgo;
+
+    if (homeDeepDive && homeDeepDive.checked) {
+      const resultId = `deepdive-${Date.now()}`;
+      const pagesToCrawl = parseInt(homeDeepPages.value) || 5;
+      const engines = getHomeSelectedEngines();
+      const engineNames = engines.map(e => e.charAt(0).toUpperCase() + e.slice(1));
+      const diveLabel = `Deep Dive — ${engineNames.join(" + ")}`;
+      browser.storage.local.set({
+        [resultId]: {
+          status: "loading",
+          deepDive: true,
+          presetLabel: diveLabel,
+          pageTitle: `${diveLabel}: ${q}`,
+          pageUrl: baseUrl + encodeURIComponent(q),
+          progress: { phase: "starting", statusText: "Initializing deep dive search..." }
+        }
+      });
+      const resultsUrl = browser.runtime.getURL(`results/results.html?id=${encodeURIComponent(resultId)}`);
+      browser.tabs.update({ url: resultsUrl });
+      browser.runtime.sendMessage({
+        action: "deepDiveSearch",
+        query: q,
+        rawQuery: q,
+        engines,
+        engine: engines[0],
+        resultId,
+        pagesToCrawl
+      });
+      return;
+    }
+
+    browser.tabs.create({ url: baseUrl + encodeURIComponent(q) });
+  }
+
+  if (homeSearchGo) homeSearchGo.addEventListener("click", executeHomeSearch);
+  if (homeSearchQuery) homeSearchQuery.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") executeHomeSearch();
+  });
+
+  // ── Scrolling ticker ──
+  const ticker = document.getElementById("home-ticker");
+  const tickerWrap = ticker ? ticker.closest(".home-ticker-wrap") : null;
+  if (ticker) {
+    // Duplicate all messages so the scroll loops seamlessly
+    const origHTML = ticker.innerHTML;
+    ticker.innerHTML = origHTML + origHTML;
+    // Set scroll speed: ~6s per message
+    const count = ticker.querySelectorAll(".home-ticker-msg").length / 2;
+    ticker.style.setProperty("--ticker-duration", `${count * 6}s`);
+
+    // Easter egg: tiny gear icon in ticker corner toggles mode picker
+    const eggBtn = document.getElementById("ticker-egg-btn");
+    if (eggBtn) {
+      eggBtn.addEventListener("click", () => {
+        document.getElementById("ticker-mode-picker").classList.toggle("hidden");
+      });
+    }
+
+    // Restore saved mode (default to typewriter)
+    browser.storage.local.get({ tickerMode: "robot" }).then(({ tickerMode }) => {
+      applyTickerMode(tickerMode || "robot");
+    });
+
+    // Mode buttons
+    document.querySelectorAll(".ticker-mode-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const mode = btn.dataset.mode;
+        applyTickerMode(mode);
+        browser.storage.local.set({ tickerMode: mode });
+        document.getElementById("ticker-mode-picker").classList.add("hidden");
+      });
+    });
+  }
+
+  function applyTickerMode(mode) {
+    if (!tickerWrap) return;
+    const modes = ["vegas", "robot", "silly", "matrix", "retro"];
+    modes.forEach(m => tickerWrap.classList.remove(m));
+    if (mode !== "default") tickerWrap.classList.add(mode);
+    document.querySelectorAll(".ticker-mode-btn").forEach(b => {
+      b.classList.toggle("active", b.dataset.mode === mode);
+    });
+  }
 }
 
 const ARGUS_HELP_URL = "https://github.com/n3r4-life/argus360#readme";
@@ -4400,6 +4539,9 @@ function switchMainTab(tabName, tabs, panels) {
   // Check for detected feeds when switching to feeds tab
   if (tabName === "feeds") {
     checkDetectedFeeds();
+  }
+  if (tabName === "tracker") {
+    loadTracker();
   }
 }
 
@@ -7328,4 +7470,285 @@ async function loadPendingMerges() {
       list.appendChild(row);
     }
   } catch { /* non-critical */ }
+}
+
+// ══════════════════════════════════════════════════════════════
+// Page Tracker UI
+// ══════════════════════════════════════════════════════════════
+
+const TRACKER_PAGE_SIZE = 50;
+let trackerOffset = 0;
+let trackerData = [];
+
+async function loadTracker(reset = true) {
+  if (reset) trackerOffset = 0;
+  try {
+    const searchQ = document.getElementById("tracker-search")?.value?.trim() || "";
+    const actionFilter = document.getElementById("tracker-action-filter")?.value || "";
+    let all;
+    if (searchQ) {
+      all = await ArgusDB.PageTracker.search(searchQ);
+    } else {
+      all = await ArgusDB.PageTracker.getAll();
+    }
+    // Filter by action type if selected
+    if (actionFilter) {
+      all = all.filter(entry =>
+        actionFilter === "visit"
+          ? entry.visits > 0
+          : (entry.actions || []).some(a => a.type === actionFilter)
+      );
+    }
+    trackerData = all;
+    renderTrackerList();
+    const badge = document.getElementById("tracker-count-badge");
+    if (badge) badge.textContent = `${all.length} page${all.length !== 1 ? "s" : ""}`;
+  } catch (e) {
+    console.warn("[Tracker] load error:", e);
+  }
+}
+
+const ACTION_LABELS = {
+  analyze: "Analyzed",
+  bookmark: "Bookmarked",
+  monitor: "Monitored",
+  snapshot: "Snapshotted",
+  osint: "OSINT",
+  techstack: "Tech Stack",
+  feed: "Feed Added",
+  compare: "Compared",
+  followup: "Follow-up",
+  deepdive: "Deep Dive",
+  chat: "Chat",
+};
+
+// Active = user explicitly triggered Argus on this page
+const ACTIVE_ACTIONS = new Set(["analyze", "osint", "techstack", "compare", "followup", "deepdive", "chat", "snapshot"]);
+// Passive = Argus acted in the background or one-time setup
+const PASSIVE_ACTIONS = new Set(["bookmark", "monitor", "feed"]);
+
+function buildTimelineEvents(entries) {
+  // Flatten entries into individual timeline events, sorted newest-first
+  const events = [];
+  for (const entry of entries) {
+    // Add visit event (last visit)
+    events.push({
+      timestamp: entry.lastVisit,
+      type: "visit",
+      entry,
+      visits: entry.visits,
+    });
+    // Add each action as its own event
+    for (const action of (entry.actions || [])) {
+      events.push({
+        timestamp: action.timestamp,
+        type: action.type,
+        detail: action.detail,
+        entry,
+      });
+    }
+  }
+  events.sort((a, b) => b.timestamp - a.timestamp);
+  return events;
+}
+
+function groupByDay(events) {
+  const groups = new Map();
+  for (const ev of events) {
+    const day = new Date(ev.timestamp).toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "short", day: "numeric" });
+    if (!groups.has(day)) groups.set(day, []);
+    groups.get(day).push(ev);
+  }
+  return groups;
+}
+
+function renderTrackerList() {
+  const list = document.getElementById("tracker-list");
+  if (!list) return;
+  list.innerHTML = "";
+
+  const slice = trackerData.slice(0, trackerOffset + TRACKER_PAGE_SIZE);
+  if (!slice.length) {
+    list.innerHTML = '<div class="tracker-empty">No tracked pages yet. Enable "Track My Pages" in Settings and start browsing.</div>';
+    return;
+  }
+
+  const events = buildTimelineEvents(slice);
+  const dayGroups = groupByDay(events);
+
+  const timeline = document.createElement("div");
+  timeline.className = "tracker-timeline";
+
+  for (const [dayLabel, dayEvents] of dayGroups) {
+    const group = document.createElement("div");
+    group.className = "tracker-day-group";
+
+    const label = document.createElement("div");
+    label.className = "tracker-day-label";
+    label.textContent = dayLabel;
+    group.appendChild(label);
+
+    // Dedupe: group consecutive visits to same URL within same day
+    const seen = new Set();
+    for (const ev of dayEvents) {
+      const dedupeKey = ev.type === "visit" ? `visit-${ev.entry.url}` : `${ev.type}-${ev.entry.url}-${ev.timestamp}`;
+      if (ev.type === "visit" && seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+
+      const row = document.createElement("div");
+      const hasActions = ev.type !== "visit";
+      row.className = `tracker-entry${hasActions ? " has-actions" : ""}`;
+
+      // Time
+      const time = document.createElement("div");
+      time.className = "tracker-entry-time";
+      time.textContent = new Date(ev.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      row.appendChild(time);
+
+      // Favicon
+      const fav = document.createElement("img");
+      fav.src = ev.entry.favicon || "../icons/icon-16.png";
+      fav.width = 16; fav.height = 16;
+      fav.style.cssText = "margin-top:2px;flex-shrink:0;border-radius:2px;";
+      fav.onerror = function() { this.src = "../icons/icon-16.png"; };
+      row.appendChild(fav);
+
+      const info = document.createElement("div");
+      info.className = "tracker-entry-info";
+
+      // Title
+      const titleEl = document.createElement("div");
+      titleEl.className = "tracker-entry-title";
+      titleEl.textContent = ev.entry.title || ev.entry.url;
+      titleEl.title = ev.entry.title || ev.entry.url;
+      info.appendChild(titleEl);
+
+      // URL
+      const urlEl = document.createElement("a");
+      urlEl.className = "tracker-entry-url";
+      urlEl.href = ev.entry.url;
+      urlEl.target = "_blank";
+      urlEl.rel = "noopener";
+      urlEl.textContent = ev.entry.url;
+      info.appendChild(urlEl);
+
+      // Action tag
+      const tags = document.createElement("div");
+      tags.style.cssText = "display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;";
+
+      if (ev.type === "visit") {
+        const tag = document.createElement("span");
+        tag.className = "tracker-tag tracker-tag-visit";
+        tag.textContent = `Visited${ev.visits > 1 ? ` (${ev.visits}x)` : ""}`;
+        tags.appendChild(tag);
+        // Show all actions for this entry as summary tags
+        const typeCounts = {};
+        for (const a of (ev.entry.actions || [])) {
+          typeCounts[a.type] = (typeCounts[a.type] || 0) + 1;
+        }
+        for (const [type, cnt] of Object.entries(typeCounts)) {
+          const atag = document.createElement("span");
+          atag.className = `tracker-tag ${ACTIVE_ACTIONS.has(type) ? "tracker-tag-active" : "tracker-tag-passive"}`;
+          atag.textContent = (ACTION_LABELS[type] || type) + (cnt > 1 ? ` x${cnt}` : "");
+          tags.appendChild(atag);
+        }
+      } else {
+        const atag = document.createElement("span");
+        atag.className = `tracker-tag ${ACTIVE_ACTIONS.has(ev.type) ? "tracker-tag-active" : "tracker-tag-passive"}`;
+        atag.textContent = ACTION_LABELS[ev.type] || ev.type;
+        tags.appendChild(atag);
+        // Show detail (preset, etc.)
+        if (ev.detail?.preset) {
+          const dtag = document.createElement("span");
+          dtag.className = "tracker-tag tracker-tag-passive";
+          dtag.textContent = ev.detail.preset;
+          tags.appendChild(dtag);
+        }
+      }
+      info.appendChild(tags);
+      row.appendChild(info);
+
+      // Delete button
+      const delBtn = document.createElement("button");
+      delBtn.className = "icon-btn";
+      delBtn.title = "Remove from tracker";
+      delBtn.style.cssText = "flex-shrink:0;color:var(--text-muted);";
+      delBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+      delBtn.addEventListener("click", async () => {
+        await ArgusDB.PageTracker.remove(ev.entry.id);
+        trackerData = trackerData.filter(e => e.id !== ev.entry.id);
+        const badge = document.getElementById("tracker-count-badge");
+        if (badge) badge.textContent = `${trackerData.length} page${trackerData.length !== 1 ? "s" : ""}`;
+        renderTrackerList();
+      });
+      row.appendChild(delBtn);
+
+      group.appendChild(row);
+    }
+
+    timeline.appendChild(group);
+  }
+
+  list.appendChild(timeline);
+
+  // Load more button
+  const loadMore = document.getElementById("tracker-load-more");
+  if (loadMore) {
+    if (trackerData.length > trackerOffset + TRACKER_PAGE_SIZE) {
+      loadMore.classList.remove("hidden");
+    } else {
+      loadMore.classList.add("hidden");
+    }
+  }
+}
+
+// Tracker event listeners
+document.getElementById("tracker-search")?.addEventListener("input", debounce(() => loadTracker(), 300));
+document.getElementById("tracker-action-filter")?.addEventListener("change", () => loadTracker());
+document.getElementById("tracker-refresh")?.addEventListener("click", () => loadTracker());
+document.getElementById("tracker-load-more")?.addEventListener("click", () => {
+  trackerOffset += TRACKER_PAGE_SIZE;
+  renderTrackerList();
+});
+
+// Export CSV
+document.getElementById("tracker-export")?.addEventListener("click", async () => {
+  const all = await ArgusDB.PageTracker.getAll();
+  const rows = [["URL", "Title", "Visits", "First Visit", "Last Visit", "Actions"].join(",")];
+  for (const e of all) {
+    const actions = (e.actions || []).map(a => a.type).join("; ");
+    rows.push([
+      `"${(e.url || "").replace(/"/g, '""')}"`,
+      `"${(e.title || "").replace(/"/g, '""')}"`,
+      e.visits,
+      new Date(e.firstVisit).toISOString(),
+      new Date(e.lastVisit).toISOString(),
+      `"${actions}"`,
+    ].join(","));
+  }
+  const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `argus-page-tracker-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+// Clear all
+document.getElementById("tracker-clear")?.addEventListener("click", () => {
+  document.getElementById("tracker-clear-confirm")?.classList.remove("hidden");
+});
+document.getElementById("tracker-clear-no")?.addEventListener("click", () => {
+  document.getElementById("tracker-clear-confirm")?.classList.add("hidden");
+});
+document.getElementById("tracker-clear-yes")?.addEventListener("click", async () => {
+  await ArgusDB.PageTracker.clear();
+  document.getElementById("tracker-clear-confirm")?.classList.add("hidden");
+  loadTracker();
+});
+
+// Simple debounce for tracker search
+function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }

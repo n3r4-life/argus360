@@ -434,6 +434,77 @@ async function pollForResult(id) {
     updatePageInfo(data);
 
     if (data.status === "loading") {
+      // Deep Dive: show rich progress text and link tracker during crawl phases
+      if (data.deepDive && data.progress) {
+        elements.loadingText.textContent = data.progress.statusText || "Searching...";
+        const linksEl = document.getElementById("loading-links");
+        if (linksEl && data.progress.links) {
+          linksEl.classList.remove("hidden");
+          const statusIcons = { pending: "...", fetching: "\u21bb", fetched: "\u2713", reading: "\u25b6", done: "\u2713\u2713", skip: "\u2717" };
+          const statusClass = { pending: "", fetching: "", fetched: "", reading: "reading", done: "done", skip: "skip" };
+          linksEl.innerHTML = data.progress.links.map(l =>
+            `<div class="ll-item"><span class="ll-num">${l.num}.</span>${l.engine ? `<span class="ll-engine">${l.engine}</span>` : ""}<span class="ll-url" title="${l.url}">${l.title || l.url}</span><span class="ll-status ${statusClass[l.status] || ""}">${statusIcons[l.status] || ""}</span></div>`
+          ).join("");
+        }
+      }
+      await sleep(POLL_INTERVAL);
+      continue;
+    }
+
+    if (data.status === "select_sources") {
+      // Show source selection UI — only build once
+      if (!document.getElementById("ss-continue")) {
+        elements.loadingText.textContent = "Select which sources to analyze:";
+        const spinner = document.querySelector(".loading-spinner");
+        if (spinner) spinner.style.display = "none";
+        const linksEl = document.getElementById("loading-links");
+        if (linksEl && data.fetchedSources) {
+          linksEl.classList.remove("hidden");
+          linksEl.innerHTML =
+            `<div class="ss-controls">
+              <button id="ss-select-all" class="btn btn-secondary btn-small">Select All</button>
+              <button id="ss-select-none" class="btn btn-secondary btn-small">Select None</button>
+              <span id="ss-count" class="ss-count">${data.fetchedSources.length} selected</span>
+              <button id="ss-continue" class="btn btn-primary btn-small" style="margin-left:auto;">Continue</button>
+            </div>` +
+            data.fetchedSources.map(s =>
+              `<label class="ss-item">
+                <input type="checkbox" class="ss-check" data-index="${s.index}" checked>
+                <span class="ll-num">${s.index}.</span>
+                ${s.engine ? `<span class="ll-engine">${s.engine}</span>` : ""}
+                <span class="ll-url" title="${s.url}">${s.title || s.url}</span>
+                <span class="ss-len">${Math.round(s.textLength / 1000)}k chars</span>
+              </label>`
+            ).join("");
+
+          const updateCount = () => {
+            const checked = linksEl.querySelectorAll(".ss-check:checked").length;
+            document.getElementById("ss-count").textContent = `${checked} selected`;
+          };
+
+          linksEl.querySelectorAll(".ss-check").forEach(cb => cb.addEventListener("change", updateCount));
+
+          document.getElementById("ss-select-all").addEventListener("click", () => {
+            linksEl.querySelectorAll(".ss-check").forEach(cb => { cb.checked = true; });
+            updateCount();
+          });
+          document.getElementById("ss-select-none").addEventListener("click", () => {
+            linksEl.querySelectorAll(".ss-check").forEach(cb => { cb.checked = false; });
+            updateCount();
+          });
+
+          document.getElementById("ss-continue").addEventListener("click", async () => {
+            const selected = [...linksEl.querySelectorAll(".ss-check:checked")].map(cb => parseInt(cb.dataset.index));
+            if (selected.length === 0) return;
+            const key = resultId + "_selection";
+            await browser.storage.local.set({ [key]: { selectedIndices: selected } });
+            linksEl.innerHTML = "";
+            linksEl.classList.add("hidden");
+            elements.loadingText.textContent = "Resuming analysis with selected sources...";
+            if (spinner) spinner.style.display = "";
+          });
+        }
+      }
       await sleep(POLL_INTERVAL);
       continue;
     }

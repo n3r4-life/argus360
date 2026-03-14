@@ -36,7 +36,7 @@ browser.tabs.onRemoved.addListener(tabId => {
 // ── RSS/Atom feed detection cache (tabId → { feedUrl, feedTitle }) ──
 const feedDetectionCache = new Map();
 
-browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
+browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.url) {
     conversationHistory.delete(tabId);
     feedDetectionCache.delete(tabId);
@@ -44,7 +44,33 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.url || changeInfo.status === "complete") updateBrowserActionForTab(tabId);
   // Auto-detect RSS/Atom feeds when page finishes loading
   if (changeInfo.status === "complete") detectFeedOnTab(tabId);
+  // Page Tracker: record visit when page finishes loading
+  if (changeInfo.status === "complete" && tab?.url) {
+    trackPageVisit(tab.url, tab.title, tab.favIconUrl);
+  }
 });
+
+// ──────────────────────────────────────────────
+// Page Tracker — independent browsing history
+// ──────────────────────────────────────────────
+async function trackPageVisit(url, title, favicon) {
+  try {
+    const { trackMyPages } = await browser.storage.local.get({ trackMyPages: false });
+    if (!trackMyPages) return;
+    // Skip internal pages
+    if (!url || url.startsWith("about:") || url.startsWith("moz-extension:") || url.startsWith("chrome:") || url.startsWith("chrome-extension:")) return;
+    await ArgusDB.PageTracker.trackVisit(url, title, favicon);
+  } catch (e) { console.warn("[PageTracker] visit error:", e); }
+}
+
+async function trackPageAction(url, actionType, detail) {
+  try {
+    const { trackMyPages } = await browser.storage.local.get({ trackMyPages: false });
+    if (!trackMyPages) return;
+    if (!url) return;
+    await ArgusDB.PageTracker.logAction(url, actionType, detail);
+  } catch (e) { console.warn("[PageTracker] action error:", e); }
+}
 
 browser.tabs.onActivated.addListener(({ tabId }) => updateBrowserActionForTab(tabId));
 
@@ -1163,6 +1189,9 @@ async function saveToHistory(entry) {
   entry._historyId = saved.id;
   notifyDataChanged("history");
 
+  // Page Tracker: log the analysis action
+  trackPageAction(entry.pageUrl, "analyze", { title: entry.pageTitle, preset: entry.presetLabel || entry.preset });
+
   // Extract entities for knowledge graph (non-blocking)
   try {
     if (entry.content && entry.pageUrl) {
@@ -1465,6 +1494,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "getOpenTabs") return handleGetOpenTabs();
   if (message.action === "getConversationState") return handleGetConversationState(message);
   if (message.action === "analyzeInTab") return handleAnalyzeInTab(message);
+  if (message.action === "deepDiveSearch") return handleDeepDiveSearch(message);
   if (message.action === "initConversation") return handleInitConversation(message);
   if (message.action === "followUp") return handleFollowUp(message);
   if (message.action === "startConversation") return handleStartConversation(message);
@@ -1534,6 +1564,11 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "discoverFeed") return handleDiscoverFeed(message);
   if (message.action === "feedRouteRescan") return handleFeedRouteRescan();
   if (message.action === "analyzeBookmarks") return handleAnalyzeBookmarks(message);
+  // Page Tracker
+  if (message.action === "getTrackerPages") return ArgusDB.PageTracker.getAll().then(pages => ({ success: true, pages }));
+  if (message.action === "searchTrackerPages") return ArgusDB.PageTracker.search(message.query).then(pages => ({ success: true, pages }));
+  if (message.action === "deleteTrackerPage") return ArgusDB.PageTracker.remove(message.id).then(() => ({ success: true }));
+  if (message.action === "clearTracker") return ArgusDB.PageTracker.clear().then(() => ({ success: true }));
   // Projects
   if (message.action === "getProjects") return handleGetProjects(message);
   if (message.action === "getDefaultProject") return browser.storage.local.get({ defaultProjectId: null }).then(s => ({ defaultProjectId: s.defaultProjectId }));
@@ -1755,6 +1790,7 @@ async function handleWipeEverything() {
       ArgusDB.KGNodes.clear(),
       ArgusDB.KGEdges.clear(),
       ArgusDB.Drafts.clear(),
+      ArgusDB.PageTracker.clear(),
     ]);
     // Clear OPFS snapshots
     await OpfsStorage.deleteAll();
@@ -2623,6 +2659,532 @@ async function streamAnalysisToStorage(resultId, page, message, settings, preset
       }
     });
   }
+}
+
+// ──────────────────────────────────────────────
+// Deep Dive Search
+// ──────────────────────────────────────────────
+const DEEP_DIVE_ENGINES = {
+  duckduckgo: { base: "https://html.duckduckgo.com/html/?q=", page: (url, p) => url + `&s=${(p - 1) * 30}` },
+  google:     { base: "https://www.google.com/search?q=", page: (url, p) => url + `&start=${(p - 1) * 10}` },
+  bing:       { base: "https://www.bing.com/search?q=", page: (url, p) => url + `&first=${(p - 1) * 10 + 1}` },
+  startpage:  { base: "https://www.startpage.com/do/dsearch?query=", page: (url, p) => url + `&page=${p}` },
+  brave:      { base: "https://search.brave.com/search?q=", page: (url, p) => url + `&offset=${(p - 1) * 10}` },
+  searx:      { base: "https://searxng.org/search?q=", page: (url, p) => url + `&pageno=${p}` },
+  mojeek:     { base: "https://www.mojeek.com/search?q=", page: (url, p) => url + `&s=${(p - 1) * 10 + 1}` },
+  dogpile:    { base: "https://www.dogpile.com/serp?q=", page: (url, p) => url + `&page=${p}` },
+  yandex:     { base: "https://yandex.com/search/?text=", page: (url, p) => url + `&p=${p - 1}` },
+};
+
+async function handleDeepDiveSearch(message) {
+  const { query, rawQuery, engine, engines, resultId, pagesToCrawl } = message;
+  const engineList = engines || [engine];
+  // Fire-and-forget — run the deep dive pipeline in background
+  runDeepDive(resultId, query, rawQuery, engineList, pagesToCrawl);
+  return { success: true };
+}
+
+function waitForSourceSelection(resultId) {
+  return new Promise((resolve) => {
+    const key = resultId + "_selection";
+    const check = async () => {
+      const data = (await browser.storage.local.get(key))[key];
+      if (data) {
+        await browser.storage.local.remove(key);
+        resolve(data.selectedIndices); // array of index numbers, or null for "all"
+        return;
+      }
+      setTimeout(check, 500);
+    };
+    check();
+  });
+}
+
+async function runDeepDive(resultId, query, rawQuery, engines, pagesToCrawl) {
+  const engineNames = engines.map(e => e.charAt(0).toUpperCase() + e.slice(1));
+  const diveLabel = `Deep Dive — ${engineNames.join(" + ")}`;
+  const primaryConfig = DEEP_DIVE_ENGINES[engines[0]] || DEEP_DIVE_ENGINES.duckduckgo;
+  const baseSearchUrl = primaryConfig.base + encodeURIComponent(query);
+
+  async function updateProgress(progress, extra = {}) {
+    const current = (await browser.storage.local.get(resultId))[resultId] || {};
+    await browser.storage.local.set({
+      [resultId]: {
+        ...current,
+        status: "loading",
+        deepDive: true,
+        presetLabel: diveLabel,
+        pageTitle: `${diveLabel}: ${rawQuery}`,
+        pageUrl: baseSearchUrl,
+        progress,
+        ...extra
+      }
+    });
+  }
+
+  try {
+    // Phase 1: Fetch search engine result pages and extract links (multi-engine)
+    const allLinks = []; // { url, engine }
+    const seenUrls = new Set();
+
+    for (const eng of engines) {
+      const engLabel = eng.charAt(0).toUpperCase() + eng.slice(1);
+      const engConfig = DEEP_DIVE_ENGINES[eng] || DEEP_DIVE_ENGINES.duckduckgo;
+      const engBaseUrl = engConfig.base + encodeURIComponent(query);
+
+      for (let page = 1; page <= pagesToCrawl; page++) {
+        await updateProgress({
+          phase: "fetching_results",
+          currentPage: page,
+          totalPages: pagesToCrawl,
+          linksFound: allLinks.length,
+          statusText: `Searching ${engLabel} — page ${page} of ${pagesToCrawl}...`
+        });
+
+        const searchUrl = page === 1 ? engBaseUrl : engConfig.page(engBaseUrl, page);
+        try {
+          const resp = await fetch(searchUrl, {
+            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; rv:128.0) Gecko/20100101 Firefox/128.0" }
+          });
+          if (!resp.ok) continue;
+          const html = await resp.text();
+          const links = extractSearchResultLinks(html, eng);
+          for (const url of links) {
+            if (!seenUrls.has(url)) {
+              seenUrls.add(url);
+              allLinks.push({ url, engine: engLabel });
+            }
+          }
+        } catch (e) {
+          console.warn(`[DeepDive] Failed to fetch ${engLabel} page ${page}:`, e.message);
+        }
+      }
+    }
+
+    // Cap at 100 results
+    const uniqueEntries = allLinks.slice(0, 100);
+    const uniqueLinks = uniqueEntries.map(e => e.url);
+
+    if (uniqueLinks.length === 0) {
+      await browser.storage.local.set({
+        [resultId]: {
+          status: "error",
+          deepDive: true,
+          presetLabel: diveLabel,
+          pageTitle: `${diveLabel}: ${rawQuery}`,
+          pageUrl: baseSearchUrl,
+          error: `No search results could be extracted from ${engineNames.join(", ")}. The search engine(s) may require JavaScript or block automated requests. Try different engines.`
+        }
+      });
+      return;
+    }
+
+    // Build link tracker for progress display (with engine attribution)
+    const linkTracker = uniqueEntries.map((entry, i) => ({ num: i + 1, url: entry.url, engine: entry.engine, status: "pending" }));
+
+    await updateProgress({
+      phase: "fetching_content",
+      statusText: `Found ${uniqueLinks.length} links across ${engineNames.join(" + ")}. Fetching page content...`,
+      links: linkTracker
+    });
+
+    // Phase 2: Fetch content from result links
+    const pageContents = [];
+    const maxContentPerPage = 4000; // characters per page
+    const concurrentFetches = 3;
+
+    for (let i = 0; i < uniqueLinks.length; i += concurrentFetches) {
+      const batch = uniqueLinks.slice(i, i + concurrentFetches);
+      // Mark batch as fetching
+      for (let b = 0; b < batch.length; b++) linkTracker[i + b].status = "fetching";
+
+      const batchPromises = batch.map(async (url, batchIdx) => {
+        const idx = i + batchIdx;
+        try {
+          const resp = await fetch(url, {
+            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; rv:128.0) Gecko/20100101 Firefox/128.0" },
+            signal: AbortSignal.timeout(10000)
+          });
+          if (!resp.ok) { linkTracker[idx].status = "skip"; return null; }
+          const contentType = resp.headers.get("content-type") || "";
+          if (!contentType.includes("text/html")) { linkTracker[idx].status = "skip"; return null; }
+          const html = await resp.text();
+          const { text, title } = extractReadableContent(html);
+          if (text.length < 50) { linkTracker[idx].status = "skip"; return null; }
+          linkTracker[idx].status = "fetched";
+          linkTracker[idx].title = title || url;
+          return { index: idx + 1, url, text: text.substring(0, maxContentPerPage), title: title || url, engine: uniqueEntries[idx].engine };
+        } catch {
+          linkTracker[idx].status = "skip";
+          return null;
+        }
+      });
+
+      const results = await Promise.all(batchPromises);
+      for (const r of results) if (r) pageContents.push(r);
+
+      await updateProgress({
+        phase: "fetching_content",
+        statusText: `Fetching content: ${Math.min(i + concurrentFetches, uniqueLinks.length)}/${uniqueLinks.length} pages (${pageContents.length} with content)...`,
+        links: linkTracker
+      });
+    }
+
+    if (pageContents.length === 0) {
+      await browser.storage.local.set({
+        [resultId]: {
+          status: "error",
+          deepDive: true,
+          presetLabel: diveLabel,
+          pageTitle: `${diveLabel}: ${rawQuery}`,
+          pageUrl: baseSearchUrl,
+          error: "Could not extract readable content from any search results. Sites may be blocking automated access."
+        }
+      });
+      return;
+    }
+
+    // Pause: let user select which sources to send to AI
+    await browser.storage.local.set({
+      [resultId]: {
+        status: "select_sources",
+        deepDive: true,
+        presetLabel: diveLabel,
+        pageTitle: `${diveLabel}: ${rawQuery}`,
+        pageUrl: baseSearchUrl,
+        fetchedSources: pageContents.map(p => ({ index: p.index, url: p.url, title: p.title, textLength: p.text.length, engine: p.engine })),
+        links: linkTracker
+      }
+    });
+
+    // Wait for user selection
+    const selectedIndices = await waitForSourceSelection(resultId);
+
+    // Filter to selected sources
+    const selectedContents = selectedIndices
+      ? pageContents.filter(p => selectedIndices.includes(p.index))
+      : pageContents; // if null, use all (auto-continue)
+
+    if (selectedContents.length === 0) {
+      await browser.storage.local.set({
+        [resultId]: {
+          status: "error",
+          deepDive: true,
+          presetLabel: diveLabel,
+          pageTitle: `${diveLabel}: ${rawQuery}`,
+          pageUrl: baseSearchUrl,
+          error: "No sources were selected for analysis."
+        }
+      });
+      return;
+    }
+
+    // Update tracker for selected vs skipped
+    const selectedSet = new Set(selectedContents.map(p => p.index));
+    for (const lt of linkTracker) {
+      if (lt.status === "fetched" && !selectedSet.has(lt.num)) lt.status = "skip";
+    }
+
+    // Phase 3: Per-source AI extraction — force the AI to actually read each source
+    const settings = await getProviderSettings();
+    const extractionPrompt = `You are extracting key information from a single web page relevant to a search query. Return ONLY the important facts, claims, data points, and quotes from this source that are relevant to the query. Be specific and factual. If the page has nothing relevant, say "No relevant content." Keep your response under 300 words.`;
+
+    const sourceSummaries = [];
+    const extractBatchSize = 3;
+
+    for (let i = 0; i < selectedContents.length; i += extractBatchSize) {
+      const batch = selectedContents.slice(i, i + extractBatchSize);
+
+      // Mark current batch as reading
+      for (const p of batch) linkTracker[p.index - 1].status = "reading";
+
+      await updateProgress({
+        phase: "reading_sources",
+        statusText: `AI is reading source ${i + 1} of ${selectedContents.length}...`,
+        links: linkTracker
+      });
+
+      const batchResults = await Promise.all(batch.map(async (p) => {
+        try {
+          const msgs = buildMessages(extractionPrompt, `Search query: "${rawQuery}"\n\nSource URL: ${p.url}\nSource title: ${p.title}\n\nPage content:\n${p.text}`);
+          const r = await callProviderStream(
+            settings.provider, settings.apiKey, settings.model, msgs,
+            { maxTokens: 1024, temperature: 0.3 },
+            null, null
+          );
+          linkTracker[p.index - 1].status = "done";
+          return { ...p, summary: r.content || "No relevant content." };
+        } catch (e) {
+          console.warn(`[DeepDive] Extraction failed for source ${p.index}:`, e.message);
+          linkTracker[p.index - 1].status = "done";
+          return { ...p, summary: "Extraction failed." };
+        }
+      }));
+
+      for (const r of batchResults) sourceSummaries.push(r);
+
+      await updateProgress({
+        phase: "reading_sources",
+        statusText: `AI read ${Math.min(i + extractBatchSize, selectedContents.length)} of ${selectedContents.length} sources...`,
+        links: linkTracker
+      });
+    }
+
+    // Filter out empty/irrelevant sources
+    const usefulSources = sourceSummaries.filter(s =>
+      s.summary && !s.summary.toLowerCase().includes("no relevant content") && !s.summary.toLowerCase().includes("extraction failed")
+    );
+
+    if (usefulSources.length === 0) {
+      await browser.storage.local.set({
+        [resultId]: {
+          status: "error",
+          deepDive: true,
+          presetLabel: diveLabel,
+          pageTitle: `${diveLabel}: ${rawQuery}`,
+          pageUrl: baseSearchUrl,
+          error: "None of the search results contained relevant content for this query."
+        }
+      });
+      return;
+    }
+
+    // Phase 4: Synthesis with mandatory footnotes
+    await updateProgress({
+      phase: "synthesizing",
+      pagesWithContent: usefulSources.length,
+      statusText: `Synthesizing ${usefulSources.length} sources with AI...`
+    });
+
+    const sourceSections = usefulSources.map((p, i) =>
+      `--- [${i + 1}] ${p.title} (${p.url}) [via ${p.engine || "Unknown"}] ---\n${p.summary}`
+    ).join("\n\n");
+
+    // Renumber sources sequentially for the synthesis
+    const sourceMap = usefulSources.map((p, i) => ({ num: i + 1, title: p.title, url: p.url, engine: p.engine || "Unknown" }));
+
+    const footnoteBlock = sourceMap.map(s => `- **[${s.num}]** [${s.title}](${s.url}) *(via ${s.engine})*`).join("\n");
+
+    const systemPrompt = `You are a deep research analyst. You have been given AI-extracted summaries from ${usefulSources.length} web sources. Each source has already been individually analyzed. Your job is to synthesize them into a comprehensive research brief.
+
+CRITICAL RULES:
+- You MUST cite sources using footnote markers like [1], [2], etc. throughout your text
+- Every factual claim must have at least one citation
+- Different sources may corroborate or contradict each other — note both
+
+Structure your response as:
+1. **Executive Summary** — 2-3 sentence overview
+2. **Key Findings** — Main discoveries organized by theme, with citations [N]
+3. **Detailed Analysis** — Deeper examination with citations [N]
+4. **Contradictions & Gaps** — Where sources disagree or where information is missing
+5. **Further Research Suggestions** — Related queries that might yield more insight
+
+After your analysis, add this exact section:
+
+---
+## Sources
+${footnoteBlock}`;
+
+    const userPrompt = `Search query: "${rawQuery}"
+Search engines: ${engineNames.join(", ")}
+Pages crawled: ${pagesToCrawl}
+Sources with relevant content: ${usefulSources.length} of ${uniqueLinks.length} result links
+
+Here are the extracted insights from each source:
+
+${sourceSections}
+
+Provide a comprehensive deep-dive research synthesis with proper footnote citations.`;
+
+    const messages = buildMessages(systemPrompt, userPrompt);
+    const opts = { maxTokens: settings.maxTokens, temperature: settings.temperature, reasoningEffort: settings.reasoningEffort, extendedThinking: settings.extendedThinking };
+
+    let streamedContent = "";
+    const result = await callProviderStream(
+      settings.provider, settings.apiKey, settings.model, messages,
+      opts,
+      async (chunk) => {
+        streamedContent += chunk;
+        await browser.storage.local.set({
+          [resultId]: {
+            status: "streaming",
+            deepDive: true,
+            content: streamedContent,
+            model: settings.model,
+            provider: settings.provider,
+            presetLabel: diveLabel,
+            pageTitle: `${diveLabel}: ${rawQuery}`,
+            pageUrl: baseSearchUrl,
+            progress: {
+              phase: "streaming",
+              pagesWithContent: usefulSources.length,
+              statusText: "AI is synthesizing results..."
+            }
+          }
+        });
+      },
+      null
+    );
+
+    // Build source list for results page
+    const sources = sourceMap.map(s => ({
+      index: s.num,
+      title: s.title,
+      url: s.url,
+      engine: s.engine
+    }));
+
+    // Done
+    const resultData = {
+      status: "done",
+      deepDive: true,
+      content: result.content,
+      thinking: result.thinking,
+      model: result.model,
+      usage: result.usage,
+      provider: settings.provider,
+      presetLabel: diveLabel,
+      pageTitle: `${diveLabel}: ${rawQuery}`,
+      pageUrl: baseSearchUrl,
+      isResearch: true,
+      sources,
+      resultId
+    };
+    await browser.storage.local.set({ [resultId]: resultData });
+
+    // Save to history
+    await saveToHistory({
+      pageTitle: `${diveLabel}: ${rawQuery}`,
+      pageUrl: baseSearchUrl,
+      provider: settings.provider,
+      model: result.model,
+      preset: "deep-dive",
+      presetLabel: diveLabel,
+      content: result.content,
+      thinking: result.thinking,
+      usage: result.usage,
+      promptText: systemPrompt + "\n" + userPrompt
+    });
+
+  } catch (err) {
+    console.error("[DeepDive] Error:", err.message, err.stack);
+    await browser.storage.local.set({
+      [resultId]: {
+        status: "error",
+        deepDive: true,
+        presetLabel: diveLabel,
+        pageTitle: `${diveLabel}: ${rawQuery}`,
+        pageUrl: baseSearchUrl,
+        error: `Deep dive failed: ${err.message}`
+      }
+    });
+  }
+}
+
+function extractSearchResultLinks(html, engine) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  const links = [];
+  const seen = new Set();
+
+  // Engine-specific selectors
+  const selectors = {
+    duckduckgo: "a.result__a, a.result__snippet",
+    google: "div.g a[href], div.tF2Cxc a[href]",
+    bing: "li.b_algo a[href], .b_title a[href]",
+    startpage: ".w-gl__result a[href], .result a[href]",
+    brave: "a.result-header[href], .snippet a[href]",
+    dogpile: ".web-bing__result a[href], .web__result a[href]",
+    yandex: "a.OrganicTitle-Link, .organic__url a",
+    searx: "article a[href], .result a[href]",
+    mojeek: ".results-standard a[href]",
+  };
+
+  // Try engine-specific selectors first
+  const engineSelector = selectors[engine];
+  if (engineSelector) {
+    doc.querySelectorAll(engineSelector).forEach(a => {
+      const href = a.href || a.getAttribute("href");
+      if (href) links.push(href);
+    });
+  }
+
+  // Fallback: grab all external-looking links
+  if (links.length === 0) {
+    doc.querySelectorAll("a[href]").forEach(a => {
+      const href = a.href || a.getAttribute("href");
+      if (href) links.push(href);
+    });
+  }
+
+  // Filter and clean
+  const blockedDomains = [
+    // Search engines
+    "duckduckgo.com", "google.com", "bing.com", "startpage.com",
+    "brave.com", "dogpile.com", "yandex.com", "yandex.ru",
+    "searx.org", "searxng.org", "mojeek.com",
+    // Google subdomains
+    "accounts.google", "support.google", "maps.google", "play.google",
+    // Search engine parent companies / meta pages
+    "system1.com", "infospace.com", "blucora.com",
+    // Common junk
+    "about.com", "w3.org", "schema.org", "creativecommons.org",
+    "facebook.com", "twitter.com", "instagram.com", "tiktok.com",
+    "pinterest.com", "linkedin.com",
+    // YouTube (often just video embeds, no extractable text)
+    "youtube.com", "youtu.be",
+  ];
+
+  for (const raw of links) {
+    let url = raw;
+
+    // DuckDuckGo wraps URLs in redirects
+    if (url.includes("//duckduckgo.com/l/?uddg=")) {
+      try { url = decodeURIComponent(new URL(url).searchParams.get("uddg") || url); } catch {}
+    }
+    // Google wraps URLs in /url?q= redirects
+    if (url.includes("/url?") && url.includes("q=")) {
+      try { url = decodeURIComponent(new URL(url, "https://www.google.com").searchParams.get("q") || url); } catch {}
+    }
+    // Dogpile/System1 wraps URLs in redirect URLs
+    if (url.includes("dogpile.com/click") || url.includes("system1.com")) {
+      try {
+        const dpu = new URL(url, "https://www.dogpile.com");
+        const ru = dpu.searchParams.get("ru") || dpu.searchParams.get("u") || dpu.searchParams.get("url");
+        if (ru) url = decodeURIComponent(ru);
+      } catch {}
+    }
+
+    try {
+      const parsed = new URL(url, "https://example.com");
+      if (!["http:", "https:"].includes(parsed.protocol)) continue;
+      const host = parsed.hostname.toLowerCase();
+      if (blockedDomains.some(d => host.includes(d))) continue;
+      if (host.includes("javascript:")) continue;
+      // Skip very short paths that are likely homepages/landing pages
+      if (parsed.pathname === "/" && !parsed.search) continue;
+      const clean = parsed.origin + parsed.pathname + parsed.search;
+      if (!seen.has(clean)) {
+        seen.add(clean);
+      }
+    } catch { continue; }
+  }
+
+  return [...seen];
+}
+
+function extractReadableContent(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  const title = doc.querySelector("title")?.textContent?.trim() || "";
+  // Remove script, style, nav, footer, header elements
+  doc.querySelectorAll("script, style, nav, footer, header, aside, iframe, noscript, svg, form").forEach(el => el.remove());
+  // Get text content
+  const text = (doc.body?.textContent || "")
+    .replace(/\s+/g, " ")
+    .replace(/\n\s*\n/g, "\n")
+    .trim();
+  return { text, title };
 }
 
 // Initialize conversation history for pre-existing analyses (e.g. project item views)
@@ -3796,6 +4358,9 @@ async function handleBookmarkPage(message) {
 
     const bookmark = await saveBookmark(page, tagData);
 
+    // Page Tracker: log bookmark action
+    trackPageAction(page.url, "bookmark", { title: page.title });
+
     // Fire tech stack detection in the background (non-blocking)
     if (tabId) {
       bookmarkDetectTechStack(tabId, bookmark.id).catch(e =>
@@ -4292,6 +4857,9 @@ async function handleSnapshotPage(message) {
       await OpfsStorage.writeSnapshot(snapshotId, { html, screenshotBlob });
     }
 
+    // Page Tracker: log snapshot action
+    trackPageAction(url, "snapshot", { title });
+
     return { success: true, snapshotId };
   } catch (err) {
     console.error("[Snapshot] Failed:", err);
@@ -4424,6 +4992,8 @@ async function handleAddMonitor(message) {
     });
 
     notifyDataChanged("monitors");
+    // Page Tracker: log monitor action
+    trackPageAction(message.url, "monitor", { title: message.title });
     return { success: true, monitor };
   } catch (err) {
     return { success: false, error: err.message };
@@ -5200,6 +5770,8 @@ async function handleAddFeed(message) {
     });
 
     notifyDataChanged("feeds");
+    // Page Tracker: log feed action
+    trackPageAction(feedUrl, "feed", { title: feed.title });
     return { success: true, feed };
   } catch (err) {
     return { success: false, error: err.message };

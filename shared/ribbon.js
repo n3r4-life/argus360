@@ -82,6 +82,11 @@
     ["polyline", { points: "21 16 21 21 16 21" }],
     ["line", { x1: "15", y1: "15", x2: "21", y2: "21" }]
   ]));
+  icons.appendChild(makeIcon("ribbon-tracker", "Page Tracker", [
+    ["path", { d: "M12 20V10" }],
+    ["path", { d: "M18 20V4" }],
+    ["path", { d: "M6 20v-4" }]
+  ]));
 
   const sep1 = document.createElement("span");
   sep1.className = "ribbon-icon-sep";
@@ -204,7 +209,7 @@
   const CONSOLE_TAB_LABELS = {
     bookmarks: "Bookmarks", projects: "Projects", monitors: "Monitors",
     feeds: "Feeds", osint: "OSINT", automation: "Automate",
-    archive: "Redirects", prompts: "Prompts", providers: "Providers",
+    archive: "Redirects", tracker: "Tracker", prompts: "Prompts", providers: "Providers",
     resources: "Resources", settings: "Settings"
   };
 
@@ -339,6 +344,7 @@
   document.getElementById("ribbon-osint").addEventListener("click", () => nav("osint"));
   document.getElementById("ribbon-automate").addEventListener("click", () => nav("automation"));
   document.getElementById("ribbon-redirects").addEventListener("click", () => nav("archive"));
+  document.getElementById("ribbon-tracker").addEventListener("click", () => nav("tracker"));
   document.getElementById("ribbon-prompts").addEventListener("click", () => nav("prompts"));
   document.getElementById("ribbon-providers").addEventListener("click", () => nav("providers"));
   document.getElementById("ribbon-resources").addEventListener("click", () => nav("resources"));
@@ -365,6 +371,7 @@
     { id: "osint", label: "OSINT", ribbonId: "ribbon-osint" },
     { id: "automation", label: "Automate", ribbonId: "ribbon-automate" },
     { id: "archive", label: "Redirects", ribbonId: "ribbon-redirects" },
+    { id: "tracker", label: "Page Tracker", ribbonId: "ribbon-tracker" },
     { id: "prompts", label: "Prompts", ribbonId: "ribbon-prompts" },
     { id: "providers", label: "Providers", ribbonId: "ribbon-providers" },
     { id: "resources", label: "Resources", ribbonId: "ribbon-resources" },

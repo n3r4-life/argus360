@@ -94,6 +94,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await checkWaybackAvailability();
   await checkFeedAvailability();
   await checkMonitorBookmarkStatus();
+  await checkTrackingStatus();
 });
 
 async function loadSettings() {
@@ -503,6 +504,24 @@ async function checkMonitorBookmarkStatus() {
   } catch (e) { /* ignore */ }
 }
 
+async function checkTrackingStatus() {
+  try {
+    const { trackMyPages } = await browser.storage.local.get({ trackMyPages: false });
+    const badge = document.getElementById("tracking-badge");
+    if (!badge) return;
+    if (trackMyPages) {
+      badge.classList.remove("hidden");
+      const link = document.getElementById("tracking-badge-link");
+      if (link) {
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          browser.tabs.create({ url: browser.runtime.getURL("options/options.html#tracker") });
+        });
+      }
+    }
+  } catch { /* ignore */ }
+}
+
 // ──────────────────────────────────────────────
 // Mode management
 // ──────────────────────────────────────────────
@@ -695,7 +714,7 @@ function attachEventListeners() {
   });
   consoleHomeBtn.addEventListener("click", () => {
     if (longPressFired) { longPressFired = false; return; } // swallow click after long-press
-    focusOrCreateConsole();
+    focusOrCreateConsole("home");
   });
 
   // ── App icon picker ──
@@ -1148,7 +1167,7 @@ function attachEventListeners() {
     duckduckgo: "https://duckduckgo.com/?q=",
     startpage:  "https://www.startpage.com/do/dsearch?query=",
     brave:      "https://search.brave.com/search?q=",
-    searx:      "https://searx.org/search?q=",
+    searx:      "https://searxng.org/search?q=",
     mojeek:     "https://www.mojeek.com/search?q=",
     google:     "https://www.google.com/search?q=",
     dogpile:    "https://www.dogpile.com/serp?q=",
@@ -1179,12 +1198,76 @@ function attachEventListeners() {
     }
   });
 
+  // Deep Dive toggle — show/hide page count selector
+  const deepDiveToggle = document.getElementById("deep-dive-toggle");
+  const deepDivePages = document.getElementById("deep-dive-pages");
+  const multiEngineRow = document.getElementById("multi-engine-row");
+  deepDiveToggle.addEventListener("change", () => {
+    const on = deepDiveToggle.checked;
+    deepDivePages.classList.toggle("hidden", !on);
+    multiEngineRow.classList.toggle("hidden", !on);
+    // Sync the main dropdown selection to the multi-engine checkboxes
+    if (on) {
+      const primary = document.getElementById("search-engine").value;
+      multiEngineRow.querySelectorAll("input[type=checkbox]").forEach(cb => {
+        cb.checked = cb.value === primary;
+      });
+    }
+  });
+
+  // When main dropdown changes while deep dive is on, check that engine
+  document.getElementById("search-engine").addEventListener("change", () => {
+    if (deepDiveToggle.checked) {
+      const primary = document.getElementById("search-engine").value;
+      const cb = multiEngineRow.querySelector(`input[value="${primary}"]`);
+      if (cb) cb.checked = true;
+    }
+  });
+
+  function getSelectedEngines() {
+    const checked = [...multiEngineRow.querySelectorAll("input[type=checkbox]:checked")].map(cb => cb.value);
+    return checked.length > 0 ? checked : [document.getElementById("search-engine").value];
+  }
+
   function executeSearch() {
     const q = document.getElementById("search-query").value.trim();
     if (!q) return;
     const engine = document.getElementById("search-engine").value;
     const baseUrl = SEARCH_ENGINES[engine] || SEARCH_ENGINES.duckduckgo;
     const fullQuery = searchPromptPrefix + q;
+
+    if (deepDiveToggle.checked) {
+      // Deep Dive mode — open results page and run AI-powered search synthesis
+      const resultId = `deepdive-${Date.now()}`;
+      const pagesToCrawl = parseInt(deepDivePages.value) || 5;
+      const engines = getSelectedEngines();
+      const engineNames = engines.map(e => e.charAt(0).toUpperCase() + e.slice(1));
+      const diveLabel = `Deep Dive — ${engineNames.join(" + ")}`;
+      browser.storage.local.set({
+        [resultId]: {
+          status: "loading",
+          deepDive: true,
+          presetLabel: diveLabel,
+          pageTitle: `${diveLabel}: ${q}`,
+          pageUrl: baseUrl + encodeURIComponent(fullQuery),
+          progress: { phase: "starting", statusText: "Initializing deep dive search..." }
+        }
+      });
+      const resultsUrl = browser.runtime.getURL(`results/results.html?id=${encodeURIComponent(resultId)}`);
+      navigateArgusTab(resultsUrl);
+      browser.runtime.sendMessage({
+        action: "deepDiveSearch",
+        query: fullQuery,
+        rawQuery: q,
+        engines,
+        engine: engines[0],
+        resultId,
+        pagesToCrawl
+      });
+      window.close();
+      return;
+    }
+
     browser.tabs.create({ url: baseUrl + encodeURIComponent(fullQuery) });
     window.close();
   }
