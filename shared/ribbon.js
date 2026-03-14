@@ -83,9 +83,7 @@
     ["line", { x1: "15", y1: "15", x2: "21", y2: "21" }]
   ]));
   icons.appendChild(makeIcon("ribbon-tracker", "Page Tracker", [
-    ["path", { d: "M12 20V10" }],
-    ["path", { d: "M18 20V4" }],
-    ["path", { d: "M6 20v-4" }]
+    ["polyline", { points: "22 12 18 12 15 21 9 3 6 12 2 12" }]
   ]));
 
   const sep1 = document.createElement("span");

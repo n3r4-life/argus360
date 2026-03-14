@@ -658,38 +658,72 @@ textarea {
   border-top: 1px solid var(--border);
 }
 
-/* Page tracking indicator */
-.tracking-badge {
-  padding: 5px 16px;
-  font-size: 11px;
-  color: var(--text-muted);
+/* Status bar: tracking + private */
+.status-bar {
+  padding: 4px 16px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   gap: 6px;
 }
-.tracking-badge .tracking-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  flex-shrink: 0;
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.status-chip:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+  background: rgba(233, 69, 96, 0.08);
+}
+.status-chip svg { flex-shrink: 0; }
+/* Track chip active state (pulsing accent when tracking is on) */
+.status-chip.status-track-on {
+  color: var(--accent);
+  border-color: rgba(233, 69, 96, 0.4);
+  background: rgba(233, 69, 96, 0.08);
+}
+.status-chip.status-track-on svg {
   animation: tracking-pulse 2s ease-in-out infinite;
 }
 @keyframes tracking-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
 }
-.tracking-badge a {
-  color: var(--accent);
-  text-decoration: none;
-  cursor: pointer;
-  margin-left: auto;
-  font-weight: 600;
+/* Private chip hover — purple tint */
+#open-incognito:hover {
+  color: #ce93d8;
+  border-color: #ce93d8;
+  background: rgba(206, 147, 216, 0.1);
 }
-.tracking-badge a:hover {
-  text-decoration: underline;
+/* Forced-private indicator */
+.status-forced {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #ce93d8;
+  font-weight: 600;
+  font-size: 9px;
+  margin-left: auto;
+}
+.status-forced-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ce93d8;
+  flex-shrink: 0;
+  animation: tracking-pulse 2s ease-in-out infinite;
 }
 
 /* Previous analysis indicator */

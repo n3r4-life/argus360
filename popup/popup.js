@@ -95,6 +95,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await checkFeedAvailability();
   await checkMonitorBookmarkStatus();
   await checkTrackingStatus();
+  await initIncognitoBar();
 });
 
 async function loadSettings() {
@@ -511,13 +512,49 @@ async function checkTrackingStatus() {
     if (!badge) return;
     if (trackMyPages) {
       badge.classList.remove("hidden");
-      const link = document.getElementById("tracking-badge-link");
-      if (link) {
-        link.addEventListener("click", (e) => {
-          e.preventDefault();
-          browser.tabs.create({ url: browser.runtime.getURL("options/options.html#tracker") });
-        });
-      }
+      badge.classList.add("status-track-on");
+      badge.addEventListener("click", () => {
+        browser.tabs.create({ url: browser.runtime.getURL("options/options.html#tracker") });
+      });
+    }
+  } catch { /* ignore */ }
+}
+
+// ──────────────────────────────────────────────
+// Private Window button
+// ──────────────────────────────────────────────
+async function initIncognitoBar() {
+  try {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    const pageUrl = tab?.url || "";
+    let pageDomain = "";
+    try { pageDomain = new URL(pageUrl).hostname.replace(/^www\./, ""); } catch {}
+
+    const openBtn = document.getElementById("open-incognito");
+    if (openBtn) {
+      openBtn.addEventListener("click", async () => {
+        if (!pageUrl || pageUrl.startsWith("about:") || pageUrl.startsWith("moz-extension:")) {
+          showToast("Cannot open this page in a private window", "error");
+          return;
+        }
+        try {
+          const resp = await browser.runtime.sendMessage({ action: "openIncognito", url: pageUrl });
+          if (resp && resp.success) {
+            showToast("Opened in private window", "success");
+          } else {
+            showToast(resp?.error || "Private window failed — is Argus allowed in private mode?", "error");
+          }
+        } catch (err) {
+          showToast("Private window failed — is Argus allowed in private mode?", "error");
+        }
+      });
+    }
+
+    // Check if current domain is on forced-private list
+    const { incognitoSites } = await browser.storage.local.get({ incognitoSites: [] });
+    const forced = document.getElementById("incognito-forced");
+    if (forced && pageDomain && incognitoSites.some(d => pageDomain === d || pageDomain.endsWith("." + d))) {
+      forced.classList.remove("hidden");
     }
   } catch { /* ignore */ }
 }

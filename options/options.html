@@ -43,7 +43,7 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
         </button>
         <button class="nav-tab nav-icon" data-tab="tracker" title="Page Tracker">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           <span class="nav-badge" id="badge-tracker"></span>
         </button>
         <span class="nav-icon-sep"></span>
@@ -1826,6 +1826,35 @@
                 <span>Track My Pages</span>
               </label>
               <span class="hint">Record every page you visit and every Argus action you take — stored in IndexedDB, independent of browser history. Clearing your browser cache or history will NOT delete this data.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Forced Private / Incognito Sites -->
+      <section class="card">
+        <h2 class="card-title">Forced Private Sites
+          <span class="badge">Privacy</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Domains listed here will automatically open in a private/incognito window. When you navigate to a matching site, Argus will redirect it to a private window and close the original tab. Requires the <strong>webNavigation</strong> permission.</p>
+          <div class="form-row" style="margin-bottom:8px;">
+            <div class="form-group flex-1">
+              <label class="toggle-label">
+                <input type="checkbox" id="incognito-force-enabled">
+                <span>Enable forced-private mode</span>
+              </label>
+              <span class="hint">When enabled, navigating to any domain below will automatically redirect to a private window.</span>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <div style="display:flex;gap:6px;margin-bottom:8px;">
+                <input type="text" id="incognito-add-domain" placeholder="e.g. cia.gov" style="flex:1;font-size:13px;padding:8px;">
+                <button id="incognito-add-btn" class="btn btn-secondary" style="width:auto;padding:8px 16px;font-size:13px;">Add</button>
+              </div>
+              <div id="incognito-sites-list" class="incognito-sites-list"></div>
+              <span class="hint" style="margin-top:6px;">Add domains without http/www (e.g. <code>cia.gov</code>, <code>fbi.gov</code>). Subdomains are matched automatically.</span>
             </div>
           </div>
         </div>

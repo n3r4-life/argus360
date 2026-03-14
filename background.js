@@ -1613,6 +1613,20 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "vaultDecrypt") return ArgusVault.decrypt(message.iv, message.ciphertext);
   if (message.action === "vaultReadSensitive") return ArgusVault.readSensitive(message.key).then(v => ({ value: v }));
   if (message.action === "vaultWriteSensitive") return ArgusVault.writeSensitive(message.key, message.value).then(() => ({ success: true }));
+  // ── Incognito / Forced-Private Sites ──
+  if (message.action === "openIncognito") {
+    return (async () => {
+      try {
+        await browser.windows.create({ url: message.url, incognito: true });
+        return { success: true };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    })();
+  }
+  if (message.action === "initIncognitoForce") {
+    return initIncognitoForce().then(ok => ({ success: ok }));
+  }
   if (message.action === "wipeEverything") return handleWipeEverything();
   if (message.action === "buildProjectSkeleton") return handleBuildProjectSkeleton(message.projectId);
   // Cloud Backup
@@ -4197,6 +4211,65 @@ const autoAnalyzeCallback = async (details) => {
   }
 };
 initWebNavigation(autoAnalyzeCallback).then(ok => { autoAnalyzeRegistered = ok; });
+
+// ──────────────────────────────────────────────
+// Forced-Private / Incognito Sites
+// ──────────────────────────────────────────────
+let incognitoForceRegistered = false;
+
+const incognitoForceCallback = async (details) => {
+  // Only main frame navigations
+  if (details.frameId !== 0) return;
+  const url = details.url;
+  if (!url || url.startsWith("about:") || url.startsWith("moz-extension:") || url.startsWith("chrome:")) return;
+
+  // Check if feature is enabled
+  const { incognitoForceEnabled, incognitoSites } = await browser.storage.local.get({
+    incognitoForceEnabled: false,
+    incognitoSites: []
+  });
+  if (!incognitoForceEnabled || !incognitoSites.length) return;
+
+  // Check if already in a private window — don't redirect again
+  try {
+    const win = await browser.windows.get(details.windowId || (await browser.tabs.get(details.tabId)).windowId);
+    if (win.incognito) return;
+  } catch { return; }
+
+  // Match domain
+  let hostname = "";
+  try { hostname = new URL(url).hostname.replace(/^www\./, ""); } catch { return; }
+
+  const isForced = incognitoSites.some(d => hostname === d || hostname.endsWith("." + d));
+  if (!isForced) return;
+
+  // Open in private window and close the original tab
+  try {
+    await browser.windows.create({ url, incognito: true });
+    // Close the tab that triggered this navigation (go back or close)
+    await browser.tabs.remove(details.tabId);
+    console.log(`[Argus] Forced private window for: ${hostname}`);
+  } catch (err) {
+    console.warn("[Argus] Could not force private window:", err.message);
+  }
+};
+
+async function initIncognitoForce() {
+  if (incognitoForceRegistered) return true;
+  if (await hasPermission("webNavigation")) {
+    browser.webNavigation.onBeforeNavigate.addListener(incognitoForceCallback);
+    incognitoForceRegistered = true;
+    console.log("[Argus] Incognito force listener registered");
+    return true;
+  }
+  return false;
+}
+
+// Auto-register on startup if enabled
+(async () => {
+  const { incognitoForceEnabled } = await browser.storage.local.get({ incognitoForceEnabled: false });
+  if (incognitoForceEnabled) initIncognitoForce();
+})();
 
 // ──────────────────────────────────────────────
 // Smart Bookmarking

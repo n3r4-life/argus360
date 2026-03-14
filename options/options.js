@@ -466,6 +466,10 @@ const el = {
   tempValue: document.getElementById("temp-value"),
   showBadge: document.getElementById("show-badge"),
   trackMyPages: document.getElementById("track-my-pages"),
+  incognitoForceEnabled: document.getElementById("incognito-force-enabled"),
+  incognitoAddDomain: document.getElementById("incognito-add-domain"),
+  incognitoAddBtn: document.getElementById("incognito-add-btn"),
+  incognitoSitesList: document.getElementById("incognito-sites-list"),
   responseLanguage: document.getElementById("response-language"),
   reasoningEffort: document.getElementById("reasoning-effort"),
   openaiReasoningEffort: document.getElementById("openai-reasoning-effort"),
@@ -1027,6 +1031,8 @@ async function loadAllSettings() {
     maxHistorySize: 200,
     showBadge: true,
     trackMyPages: false,
+    incognitoForceEnabled: false,
+    incognitoSites: [],
     responseLanguage: "auto",
     apiKey: "",
     dataProviders: DEFAULT_DATA_PROVIDERS,
@@ -1059,6 +1065,8 @@ async function loadAllSettings() {
   el.tempValue.textContent = settings.temperature;
   el.showBadge.checked = settings.showBadge !== false;
   el.trackMyPages.checked = settings.trackMyPages === true;
+  el.incognitoForceEnabled.checked = settings.incognitoForceEnabled === true;
+  renderIncognitoSites(settings.incognitoSites || []);
   el.responseLanguage.value = settings.responseLanguage ?? "auto";
   el.reasoningEffort.value = settings.reasoningEffort;
   el.openaiReasoningEffort.value = settings.openaiReasoningEffort || "medium";
@@ -1691,6 +1699,7 @@ async function saveAllSettings() {
     maxHistorySize: parseInt(el.maxHistory.value, 10) || 200,
     showBadge: el.showBadge.checked,
     trackMyPages: el.trackMyPages.checked,
+    incognitoForceEnabled: el.incognitoForceEnabled.checked,
     responseLanguage: el.responseLanguage.value,
     dataProviders,
     pasteProviders,
@@ -2714,6 +2723,26 @@ function attachListeners() {
   el.responseLanguage.addEventListener("change", scheduleSave);
   el.showBadge.addEventListener("change", scheduleSave);
   el.trackMyPages.addEventListener("change", scheduleSave);
+  el.incognitoForceEnabled.addEventListener("change", async () => {
+    if (el.incognitoForceEnabled.checked) {
+      // Request webNavigation permission if needed
+      const has = await browser.permissions.contains({ permissions: ["webNavigation"] });
+      if (!has) {
+        const granted = await browser.permissions.request({ permissions: ["webNavigation"] }).catch(() => false);
+        if (!granted) {
+          el.incognitoForceEnabled.checked = false;
+          return;
+        }
+      }
+      // Tell background to register the incognito listener
+      browser.runtime.sendMessage({ action: "initIncognitoForce" });
+    }
+    scheduleSave();
+  });
+  el.incognitoAddBtn.addEventListener("click", addIncognitoSite);
+  el.incognitoAddDomain.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") addIncognitoSite();
+  });
 
   // History
   el.maxHistory.addEventListener("input", scheduleSave);
@@ -7751,4 +7780,46 @@ document.getElementById("tracker-clear-yes")?.addEventListener("click", async ()
 function debounce(fn, ms) {
   let t;
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+// ──────────────────────────────────────────────
+// Incognito / Forced-Private Sites
+// ──────────────────────────────────────────────
+function renderIncognitoSites(sites) {
+  const list = el.incognitoSitesList;
+  if (!list) return;
+  list.innerHTML = "";
+  for (const domain of sites) {
+    const item = document.createElement("div");
+    item.className = "incognito-site-item";
+    item.innerHTML = `<span class="site-domain">${domain}</span><button class="site-remove" title="Remove">&times;</button>`;
+    item.querySelector(".site-remove").addEventListener("click", () => removeIncognitoSite(domain));
+    list.appendChild(item);
+  }
+}
+
+async function addIncognitoSite() {
+  let domain = el.incognitoAddDomain.value.trim().toLowerCase();
+  if (!domain) return;
+  // Strip protocol and www
+  domain = domain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+  if (!domain) return;
+  const { incognitoSites } = await browser.storage.local.get({ incognitoSites: [] });
+  if (incognitoSites.includes(domain)) {
+    el.incognitoAddDomain.value = "";
+    return;
+  }
+  incognitoSites.push(domain);
+  await browser.storage.local.set({ incognitoSites });
+  el.incognitoAddDomain.value = "";
+  renderIncognitoSites(incognitoSites);
+  // Notify background to update listener
+  browser.runtime.sendMessage({ action: "initIncognitoForce" });
+}
+
+async function removeIncognitoSite(domain) {
+  const { incognitoSites } = await browser.storage.local.get({ incognitoSites: [] });
+  const updated = incognitoSites.filter(d => d !== domain);
+  await browser.storage.local.set({ incognitoSites: updated });
+  renderIncognitoSites(updated);
 }
