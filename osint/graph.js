@@ -32,6 +32,7 @@
   let projectFilterActive = false; // false = show everything (no project filtering)
   let visibleProjects = new Set(); // which project IDs are toggled on
   let showUnassigned = true;       // show nodes not in any project
+  let defaultProjectId = null;     // user's configured default project
 
   let canvas, ctx;
   let width, height;
@@ -100,7 +101,8 @@
   function loadData() {
     const params = new URLSearchParams(window.location.search);
     const storeKey = params.get('id');
-    const mode = params.get('mode') || (storeKey ? 'project' : 'global');
+    const hasProjectContext = storeKey || params.get('project') || defaultProjectId;
+    const mode = params.get('mode') || (hasProjectContext ? 'project' : 'global');
     setMode(mode);
 
     if (mode === 'global') {
@@ -173,15 +175,16 @@
       ]);
       if (!resp || !resp.success || !resp.projects) return;
       const defaultId = defResp?.defaultProjectId || null;
+      defaultProjectId = defaultId;
       allProjects = resp.projects.map(p => ({
         id: p.id,
         name: p.name + (p.id === defaultId ? ' (default)' : ''),
         color: p.color || '#e94560',
         urls: new Set((p.items || []).map(i => i.url).filter(Boolean))
       }));
-      // Check for ?project= param to auto-filter to a specific project
+      // Check for ?project= param or fall back to default project
       const urlParams = new URLSearchParams(window.location.search);
-      const filterProjectId = urlParams.get('project');
+      const filterProjectId = urlParams.get('project') || defaultId;
       if (filterProjectId && allProjects.some(p => p.id === filterProjectId)) {
         visibleProjects = new Set([filterProjectId]);
         showUnassigned = false;
@@ -797,13 +800,13 @@
           // Switch to project-scoped view
           const params = new URLSearchParams(window.location.search);
           const storeKey = params.get('id');
-          const filterProjectId = params.get('project');
-          if (filterProjectId && allProjects.some(p => p.id === filterProjectId)) {
-            // Re-apply project filter from URL param
-            visibleProjects = new Set([filterProjectId]);
+          const filterProjId = params.get('project') || defaultProjectId;
+          if (filterProjId && allProjects.some(p => p.id === filterProjId)) {
+            // Apply project filter from URL param or default project
+            visibleProjects = new Set([filterProjId]);
             showUnassigned = false;
             projectFilterActive = true;
-            const fp = allProjects.find(p => p.id === filterProjectId);
+            const fp = allProjects.find(p => p.id === filterProjId);
             // Load global KG data but with project filter active
             browser.runtime.sendMessage({ action: 'getKGGraph' }).then(resp => {
               if (resp && resp.nodes && resp.nodes.length) {
@@ -952,12 +955,12 @@
   }
 
   /* ---- Init ---- */
-  function init() {
+  async function init() {
     canvas = document.getElementById('graphCanvas');
     ctx = canvas.getContext('2d');
     resizeCanvas();
     setupEvents();
-    loadProjects(); // fetch projects for overlay filter
+    await loadProjects(); // fetch projects + default before loading data
     loadData();
   }
 

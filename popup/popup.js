@@ -961,7 +961,8 @@ function attachEventListeners() {
         if (svg) svg.setAttribute("fill", "currentColor");
         elements.bookmarkBtn.title = "Bookmarked!";
         showToast("Bookmarked with AI tags!", "success");
-        setTimeout(() => window.close(), 1200);
+        // Navigate to bookmarks tab so user sees the new tile
+        setTimeout(() => focusOrCreateConsole("bookmarks"), 800);
       } else {
         elements.bookmarkBtn.classList.remove("bookmark-btn-saving");
         elements.bookmarkBtn.disabled = false;

@@ -37,6 +37,15 @@
   const draftsList = document.getElementById("draftsList");
   const draftCountEl = document.getElementById("draftCount");
 
+  // Compose panel
+  const composePanel = document.getElementById("composePanel");
+  const composeClose = document.getElementById("composeClose");
+  const composePlatform = document.getElementById("compose-platform");
+  const composeLimit = document.getElementById("compose-limit");
+  const composeGenerate = document.getElementById("compose-generate");
+  const composeOutput = document.getElementById("compose-output");
+  const composeChars = document.getElementById("compose-chars");
+
   // ── State ──
   let currentDraftId = null;
   let drafts = [];
@@ -756,13 +765,6 @@
   });
 
   // ── Quick Post (AI summarize) ──
-  const composePanel = document.getElementById("composePanel");
-  const composeClose = document.getElementById("composeClose");
-  const composePlatform = document.getElementById("compose-platform");
-  const composeLimit = document.getElementById("compose-limit");
-  const composeGenerate = document.getElementById("compose-generate");
-  const composeOutput = document.getElementById("compose-output");
-  const composeChars = document.getElementById("compose-chars");
 
   const PLATFORM_LIMITS = {
     "x": 280, "reddit-title": 300, "linkedin": 700, "mastodon": 500, "bluesky": 300, "custom": 280
