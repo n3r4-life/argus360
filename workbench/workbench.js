@@ -43,21 +43,28 @@
   let currentSort = "type";
 
   // ── Init: Load projects ──
-  const projResp = await browser.runtime.sendMessage({ action: "getProjects" });
+  const [projResp, defProjResp] = await Promise.all([
+    browser.runtime.sendMessage({ action: "getProjects" }),
+    browser.runtime.sendMessage({ action: "getDefaultProject" })
+  ]);
   const projects = projResp?.projects || [];
+  const defaultProjectId = defProjResp?.defaultProjectId || null;
   for (const p of projects) {
     const opt = document.createElement("option");
     opt.value = p.id;
-    opt.textContent = p.name;
+    opt.textContent = p.name + (p.id === defaultProjectId ? " (default)" : "");
     projectSelect.appendChild(opt);
   }
 
-  // Check URL for pre-selected project
+  // Check URL for pre-selected project, then fall back to default
   const params = new URLSearchParams(location.search);
   const urlProject = params.get("project");
   if (urlProject && projectSelect.querySelector(`option[value="${urlProject}"]`)) {
     projectSelect.value = urlProject;
     await loadProject(urlProject);
+  } else if (defaultProjectId && projectSelect.querySelector(`option[value="${defaultProjectId}"]`)) {
+    projectSelect.value = defaultProjectId;
+    await loadProject(defaultProjectId);
   }
 
   projectSelect.addEventListener("change", () => {

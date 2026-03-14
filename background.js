@@ -1173,6 +1173,37 @@ async function saveToHistory(entry) {
       );
     }
   } catch (e) { console.warn("[KG] entity extraction failed:", e); }
+
+  // Auto-associate with default project (non-blocking)
+  try {
+    const { defaultProjectId } = await browser.storage.local.get({ defaultProjectId: null });
+    if (defaultProjectId) {
+      const proj = await ArgusDB.Projects.get(defaultProjectId);
+      if (proj) {
+        // Avoid duplicating if same URL + preset already exists
+        const isDupe = proj.items.some(i => i.url === entry.pageUrl && i.analysisPreset === (entry.presetLabel || entry.preset));
+        if (!isDupe) {
+          proj.items.unshift({
+            id: genId("item"),
+            type: "analysis",
+            refId: saved.id?.toString() || null,
+            url: entry.pageUrl || "",
+            title: entry.pageTitle || "",
+            summary: (entry.content || "").slice(0, 500),
+            analysisContent: entry.content || "",
+            analysisPreset: entry.presetLabel || entry.preset || "",
+            notes: "",
+            tags: [],
+            addedAt: new Date().toISOString()
+          });
+          proj.updatedAt = new Date().toISOString();
+          await ArgusDB.Projects.save(proj);
+          notifyDataChanged("projects");
+        }
+      }
+    }
+  } catch (e) { console.warn("[DefaultProject] auto-associate failed:", e); }
+
   return saved;
 }
 
@@ -1505,6 +1536,8 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "analyzeBookmarks") return handleAnalyzeBookmarks(message);
   // Projects
   if (message.action === "getProjects") return handleGetProjects(message);
+  if (message.action === "getDefaultProject") return browser.storage.local.get({ defaultProjectId: null }).then(s => ({ defaultProjectId: s.defaultProjectId }));
+  if (message.action === "setDefaultProject") return browser.storage.local.set({ defaultProjectId: message.projectId }).then(() => ({ success: true }));
   if (message.action === "createProject") return handleCreateProject(message);
   if (message.action === "updateProject") return handleUpdateProject(message);
   if (message.action === "deleteProject") return handleDeleteProject(message);
@@ -2462,7 +2495,7 @@ async function handleAnalyzeInTab(message) {
     });
 
     const resultsUrl = browser.runtime.getURL(`results/results.html?id=${encodeURIComponent(resultId)}`);
-    await browser.tabs.create({ url: resultsUrl });
+    await openArgusPage(resultsUrl);
 
     // Fire-and-forget streaming
     streamAnalysisToStorage(resultId, page, message, settings, presetLabel);
@@ -3197,7 +3230,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
           [storeKey]: { ...scanResults, pageUrl: tab.url, pageTitle: tab.title, sourceKey },
           [sourceKey]: { html, text }
         });
-        await browser.tabs.create({ url: browser.runtime.getURL(`osint/regex.html?id=${encodeURIComponent(storeKey)}`) });
+        await openArgusPage(browser.runtime.getURL(`osint/regex.html?id=${encodeURIComponent(storeKey)}`));
       } else {
         safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus", message: resp?.error || "Regex scan failed" });
       }
@@ -3245,7 +3278,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
       if (result.success) {
         const storeKey = `metadata-${Date.now()}`;
         await browser.storage.local.set({ [storeKey]: { ...result.metadata, pageUrl: tab.url, pageTitle: tab.title } });
-        browser.tabs.create({ url: browser.runtime.getURL(`results/results.html?metadata=${encodeURIComponent(storeKey)}`) });
+        openArgusPage(browser.runtime.getURL(`results/results.html?metadata=${encodeURIComponent(storeKey)}`));
       } else {
         safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus", message: result.error || "Failed to extract metadata." });
       }
@@ -3276,7 +3309,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
       if (result.success) {
         const storeKey = `whois-${Date.now()}`;
         await browser.storage.local.set({ [storeKey]: { ...result, pageUrl: tab.url, pageTitle: tab.title } });
-        browser.tabs.create({ url: browser.runtime.getURL(`results/results.html?whois=${encodeURIComponent(storeKey)}`) });
+        openArgusPage(browser.runtime.getURL(`results/results.html?whois=${encodeURIComponent(storeKey)}`));
       }
     } catch (err) {
       safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus - Error", message: err.message });
@@ -3305,7 +3338,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
   });
 
   const resultsUrl = browser.runtime.getURL(`results/results.html?id=${encodeURIComponent(resultId)}`);
-  await browser.tabs.create({ url: resultsUrl });
+  await openArgusPage(resultsUrl);
 
   try {
     let page;
@@ -3409,7 +3442,7 @@ browser.commands.onCommand.addListener(async (command) => {
       [resultId]: { status: "loading", presetLabel: "Summary", pageTitle: tab.title, pageUrl: tab.url }
     });
     const resultsUrl = browser.runtime.getURL(`results/results.html?id=${encodeURIComponent(resultId)}`);
-    await browser.tabs.create({ url: resultsUrl });
+    await openArgusPage(resultsUrl);
 
     try {
       const settings = await getProviderSettings();
@@ -3458,7 +3491,7 @@ browser.commands.onCommand.addListener(async (command) => {
       [resultId]: { status: "loading", presetLabel: "Selection Analysis", pageTitle: tab.title, pageUrl: tab.url }
     });
     const resultsUrl = browser.runtime.getURL(`results/results.html?id=${encodeURIComponent(resultId)}`);
-    await browser.tabs.create({ url: resultsUrl });
+    await openArgusPage(resultsUrl);
 
     try {
       const settings = await getProviderSettings();
@@ -3547,7 +3580,7 @@ const autoAnalyzeCallback = async (details) => {
       [resultId]: { status: "loading", presetLabel: preset?.label || presetKey, pageTitle: tab.title, pageUrl: tab.url }
     });
     const resultsUrl = browser.runtime.getURL(`results/results.html?id=${encodeURIComponent(resultId)}`);
-    await browser.tabs.create({ url: resultsUrl });
+    await openArgusPage(resultsUrl);
 
     try {
       const settings = await getProviderSettings(rule.provider || null);
@@ -4003,7 +4036,7 @@ async function handleAnalyzeBookmarks(message) {
     });
 
     const resultsUrl = browser.runtime.getURL(`results/results.html?id=${encodeURIComponent(resultId)}`);
-    await browser.tabs.create({ url: resultsUrl });
+    await openArgusPage(resultsUrl);
 
     // Build combined text from bookmarks
     const maxPerSource = Math.floor(settings.maxInputChars / bookmarks.length);

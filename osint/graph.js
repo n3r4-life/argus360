@@ -167,11 +167,15 @@
   async function loadProjects() {
     if (typeof browser === 'undefined' || !browser.runtime) return;
     try {
-      const resp = await browser.runtime.sendMessage({ action: 'getProjects' });
+      const [resp, defResp] = await Promise.all([
+        browser.runtime.sendMessage({ action: 'getProjects' }),
+        browser.runtime.sendMessage({ action: 'getDefaultProject' })
+      ]);
       if (!resp || !resp.success || !resp.projects) return;
+      const defaultId = defResp?.defaultProjectId || null;
       allProjects = resp.projects.map(p => ({
         id: p.id,
-        name: p.name,
+        name: p.name + (p.id === defaultId ? ' (default)' : ''),
         color: p.color || '#e94560',
         urls: new Set((p.items || []).map(i => i.url).filter(Boolean))
       }));

@@ -193,23 +193,28 @@ async function checkSelection() {
 
 async function initContextPanel() {
   try {
-    const resp = await browser.runtime.sendMessage({ action: "getProjects" });
+    const [resp, defResp] = await Promise.all([
+      browser.runtime.sendMessage({ action: "getProjects" }),
+      browser.runtime.sendMessage({ action: "getDefaultProject" })
+    ]);
     if (!resp || !resp.success || !resp.projects.length) return;
+    const defaultId = defResp?.defaultProjectId || null;
 
     // Populate project dropdown
     elements.contextProject.replaceChildren();
     for (const proj of resp.projects) {
       const opt = document.createElement("option");
       opt.value = proj.id;
-      opt.textContent = proj.name;
+      opt.textContent = proj.name + (proj.id === defaultId ? " (default)" : "");
       elements.contextProject.appendChild(opt);
     }
 
-    // Restore saved project selection but always start unchecked
+    // Restore saved project selection, fall back to default, always start unchecked
     const { contextualMode } = await browser.storage.local.get({ contextualMode: { enabled: false, projectId: null } });
     elements.contextEnabled.checked = false;
-    if (contextualMode.projectId && elements.contextProject.querySelector(`option[value="${contextualMode.projectId}"]`)) {
-      elements.contextProject.value = contextualMode.projectId;
+    const savedId = contextualMode.projectId || defaultId;
+    if (savedId && elements.contextProject.querySelector(`option[value="${savedId}"]`)) {
+      elements.contextProject.value = savedId;
     }
 
     // Toggle project dropdown visibility based on checkbox
@@ -294,8 +299,7 @@ async function checkPreviousAnalysis() {
           model: latest.model
         }
       });
-      browser.tabs.create({ url: browser.runtime.getURL(`results/results.html?id=${encodeURIComponent(resultId)}`) });
-      window.close();
+      navigateArgusTab(browser.runtime.getURL(`results/results.html?id=${encodeURIComponent(resultId)}`));
     });
   } catch { /* ignore */ }
 }
@@ -974,8 +978,7 @@ function attachEventListeners() {
       const storeKey = `metadata-${Date.now()}`;
       const tabs = await browser.tabs.query({ active: true, currentWindow: true });
       await browser.storage.local.set({ [storeKey]: { ...resp.metadata, pageUrl: tabs[0]?.url, pageTitle: tabs[0]?.title } });
-      browser.tabs.create({ url: browser.runtime.getURL(`results/results.html?metadata=${encodeURIComponent(storeKey)}`) });
-      window.close();
+      navigateArgusTab(browser.runtime.getURL(`results/results.html?metadata=${encodeURIComponent(storeKey)}`));
     } else {
       showToast(resp?.error || "Failed to extract metadata.", "error");
     }
@@ -1004,8 +1007,7 @@ function attachEventListeners() {
       if (resp && resp.success) {
         const storeKey = `whois-${Date.now()}`;
         await browser.storage.local.set({ [storeKey]: { ...resp, pageUrl: tabs[0].url, pageTitle: tabs[0].title } });
-        browser.tabs.create({ url: browser.runtime.getURL(`results/results.html?whois=${encodeURIComponent(storeKey)}`) });
-        window.close();
+        navigateArgusTab(browser.runtime.getURL(`results/results.html?whois=${encodeURIComponent(storeKey)}`));
       } else {
         showToast(resp?.error || "Whois lookup failed.", "error");
       }
@@ -1127,8 +1129,7 @@ function attachEventListeners() {
           [storeKey]: { ...scanResults, pageUrl: tabs[0]?.url, pageTitle: tabs[0]?.title, sourceKey },
           [sourceKey]: { html, text }
         });
-        browser.tabs.create({ url: browser.runtime.getURL(`osint/regex.html?id=${encodeURIComponent(storeKey)}`) });
-        window.close();
+        navigateArgusTab(browser.runtime.getURL(`osint/regex.html?id=${encodeURIComponent(storeKey)}`));
       } else {
         showToast(resp?.error || "Regex scan failed.", "error");
       }

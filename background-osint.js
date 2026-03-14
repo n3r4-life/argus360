@@ -151,7 +151,34 @@ async function handleExtractMetadata(message) {
       })()`
     });
 
-    return { success: true, metadata: results[0] };
+    const metadata = results[0];
+
+    // Auto-save to history for Reports timeline
+    try {
+      const tabInfo = await browser.tabs.get(message.tabId);
+      const m = metadata;
+      const lines = [];
+      if (m.meta?.title) lines.push(`- **Title**: ${m.meta.title}`);
+      if (m.meta?.description) lines.push(`- **Description**: ${m.meta.description}`);
+      if (m.meta?.author || m.author?.meta) lines.push(`- **Author**: ${m.meta?.author || m.author?.meta}`);
+      if (m.lang) lines.push(`- **Language**: ${m.lang}`);
+      if (m.charset) lines.push(`- **Charset**: ${m.charset}`);
+      const ogKeys = Object.keys(m.og || {});
+      if (ogKeys.length) lines.push(`- **Open Graph**: ${ogKeys.length} tags`);
+      const twKeys = Object.keys(m.twitter || {});
+      if (twKeys.length) lines.push(`- **Twitter Cards**: ${twKeys.length} tags`);
+      if (m.jsonLd?.length) lines.push(`- **JSON-LD**: ${m.jsonLd.length} block${m.jsonLd.length === 1 ? "" : "s"}`);
+      const content = `# Metadata Extraction\n\n${lines.join("\n") || "No metadata found."}`;
+      await saveToHistory({
+        pageTitle: tabInfo.title || "Metadata Extraction",
+        pageUrl: tabInfo.url || "",
+        content,
+        preset: "metadata-extract",
+        presetLabel: "Metadata Extraction",
+      });
+    } catch (e) { console.warn("[Metadata] Failed to save to history:", e); }
+
+    return { success: true, metadata };
   } catch (err) {
     return { success: false, error: err.message || "Failed to extract metadata" };
   }
@@ -271,7 +298,32 @@ async function handleExtractLinks(message) {
       })()`
     });
 
-    return { success: true, ...results[0] };
+    const data = results[0];
+
+    // Auto-save to history for Reports timeline
+    try {
+      const tab = await browser.tabs.get(message.tabId);
+      const l = data.links;
+      const s = data.stats;
+      const lines = [];
+      if (l.external?.length) lines.push(`- **External links**: ${l.external.length}`);
+      if (l.internal?.length) lines.push(`- **Internal links**: ${l.internal.length}`);
+      if (l.social?.length) lines.push(`- **Social links**: ${l.social.length}`);
+      if (l.emails?.length) lines.push(`- **Email addresses**: ${l.emails.length}`);
+      if (l.phones?.length) lines.push(`- **Phone numbers**: ${l.phones.length}`);
+      if (l.files?.length) lines.push(`- **File links**: ${l.files.length}`);
+      if (s.topDomains?.length) lines.push(`\n### Top Domains\n${s.topDomains.slice(0, 10).map(d => "- " + d.domain + " (" + d.count + ")").join("\n")}`);
+      const content = `# Link Map\n\n**${s.totalLinks} links** across ${s.uniqueDomains} domains\n\n${lines.join("\n")}`;
+      await saveToHistory({
+        pageTitle: tab.title || "Link Map",
+        pageUrl: tab.url || "",
+        content,
+        preset: "link-map",
+        presetLabel: `Link Map (${s.totalLinks} links)`,
+      });
+    } catch (e) { console.warn("[LinkMap] Failed to save to history:", e); }
+
+    return { success: true, ...data };
   } catch (err) {
     return { success: false, error: err.message || "Failed to extract links" };
   }
@@ -426,6 +478,28 @@ async function handleWhoisLookup(message) {
 
     // Cache result
     whoisCache.set(domain, { whois, dns, timestamp: Date.now() });
+
+    // Auto-save to history for Reports timeline (skip cached results)
+    try {
+      const lines = [];
+      if (whois.registrar) lines.push(`- **Registrar**: ${whois.registrar}`);
+      if (whois.created) lines.push(`- **Created**: ${whois.created}`);
+      if (whois.expires) lines.push(`- **Expires**: ${whois.expires}`);
+      if (whois.nameservers?.length) lines.push(`- **Nameservers**: ${whois.nameservers.join(", ")}`);
+      if (dns.a?.length) lines.push(`- **A Records**: ${dns.a.join(", ")}`);
+      if (dns.ns?.length) lines.push(`- **NS Records**: ${dns.ns.join(", ")}`);
+      if (dns.mx?.length) lines.push(`- **MX Records**: ${dns.mx.map(r => r.exchange).join(", ")}`);
+      if (whois.registrant?.name) lines.push(`- **Registrant**: ${whois.registrant.name}`);
+      if (whois.registrant?.org) lines.push(`- **Organization**: ${whois.registrant.org}`);
+      const content = `# Whois / DNS Lookup: ${domain}\n\n${lines.join("\n") || "No WHOIS data found."}`;
+      await saveToHistory({
+        pageTitle: domain,
+        pageUrl: `https://${domain}`,
+        content,
+        preset: "whois-lookup",
+        presetLabel: `Whois: ${domain}`,
+      });
+    } catch (e) { console.warn("[Whois] Failed to save to history:", e); }
 
     return { success: true, whois, dns, cached: false };
   } catch (err) {
@@ -2122,16 +2196,34 @@ async function handleExtractImages(message) {
     const enriched = [...byBase.values()];
 
     console.log(`[ImageGrabber] Found ${enriched.length} images on ${data.pageUrl}`);
+
+    const stats = {
+      total: enriched.length,
+      bySource: enriched.reduce((acc, img) => { acc[img.source] = (acc[img.source] || 0) + 1; return acc; }, {}),
+      byType: enriched.reduce((acc, img) => { acc[img.type] = (acc[img.type] || 0) + 1; return acc; }, {}),
+    };
+
+    // Auto-save to history for Reports timeline
+    try {
+      const srcLines = Object.entries(stats.bySource).map(([s, n]) => `- ${s}: ${n}`).join("\n");
+      const typeLines = Object.entries(stats.byType).map(([t, n]) => `- ${t}: ${n}`).join("\n");
+      const imgList = enriched.slice(0, 30).map(img => `- ${img.filename || "image"} (${img.width || "?"}x${img.height || "?"}) — ${img.src.slice(0, 100)}`).join("\n");
+      const content = `# Image Scan Results\n\n**${enriched.length} images** found\n\n## By Source\n${srcLines}\n\n## By Type\n${typeLines}\n\n## Images\n${imgList}${enriched.length > 30 ? "\n- ..." : ""}`;
+      await saveToHistory({
+        pageTitle: data.pageTitle || "Image Scan",
+        pageUrl: data.pageUrl || "",
+        content,
+        preset: "image-scan",
+        presetLabel: `Image Scan (${enriched.length} images)`,
+      });
+    } catch (e) { console.warn("[ImageGrabber] Failed to save to history:", e); }
+
     return {
       success: true,
       images: enriched,
       pageUrl: data.pageUrl,
       pageTitle: data.pageTitle,
-      stats: {
-        total: enriched.length,
-        bySource: enriched.reduce((acc, img) => { acc[img.source] = (acc[img.source] || 0) + 1; return acc; }, {}),
-        byType: enriched.reduce((acc, img) => { acc[img.type] = (acc[img.type] || 0) + 1; return acc; }, {}),
-      }
+      stats
     };
   } catch (e) {
     console.error("[ImageGrabber] Failed:", e);
@@ -2185,6 +2277,23 @@ async function handleRegexScanPage(message) {
     if (!data) return { success: false, error: "No data returned from page scan" };
 
     console.log(`[RegexScan] Found ${data.totalMatches} matches across ${Object.keys(data.found).length} categories`);
+
+    // Auto-save to history for Reports timeline
+    try {
+      const tab = await browser.tabs.get(message.tabId);
+      const cats = Object.entries(data.found);
+      const summary = cats.map(([cat, matches]) => `- **${cat.replace(/_/g, " ")}**: ${matches.length} match${matches.length === 1 ? "" : "es"}`).join("\n");
+      const details = cats.map(([cat, matches]) => `### ${cat.replace(/_/g, " ")}\n\`\`\`\n${matches.slice(0, 20).join("\n")}${matches.length > 20 ? "\n..." : ""}\n\`\`\``).join("\n\n");
+      const content = `# Regex Scan Results\n\n**${data.totalMatches} matches** across ${cats.length} categories\n\n${summary}\n\n${details}`;
+      await saveToHistory({
+        pageTitle: tab.title || "Regex Scan",
+        pageUrl: tab.url || "",
+        content,
+        preset: "regex-scan",
+        presetLabel: `Regex Scan (${data.totalMatches} matches)`,
+      });
+    } catch (e) { console.warn("[RegexScan] Failed to save to history:", e); }
+
     return { success: true, ...data };
   } catch (e) {
     console.error("[RegexScan] Failed:", e);

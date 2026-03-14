@@ -176,13 +176,8 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.textContent = "Sent!";
     setTimeout(() => { btn.textContent = "Draft"; }, 1500);
     const draftUrl = browser.runtime.getURL("reporting/reporting.html");
-    const existing = await browser.tabs.query({ url: draftUrl + "*" });
-    if (existing.length > 0) {
-      await browser.tabs.update(existing[0].id, { active: true });
-      await browser.windows.update(existing[0].windowId, { focused: true });
-    } else {
-      await browser.tabs.create({ url: draftUrl });
-    }
+    const tab = await browser.tabs.getCurrent();
+    await browser.tabs.update(tab.id, { url: draftUrl });
   });
 
   // Save to Archive
@@ -272,8 +267,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const projPicker = document.getElementById("proj-picker");
 
   projBtn.addEventListener("click", async () => {
-    const resp = await browser.runtime.sendMessage({ action: "getProjects" });
+    const [resp, defResp] = await Promise.all([
+      browser.runtime.sendMessage({ action: "getProjects" }),
+      browser.runtime.sendMessage({ action: "getDefaultProject" })
+    ]);
     if (!resp || !resp.success) return;
+    const defaultId = defResp?.defaultProjectId || null;
 
     projPicker.innerHTML = "";
     if (resp.projects.length === 0) {
@@ -282,14 +281,16 @@ document.addEventListener("DOMContentLoaded", () => {
       emptyEl.textContent = "No projects yet. Create one in the Console.";
       projPicker.appendChild(emptyEl);
     } else {
-      for (const proj of resp.projects) {
+      // Show default project first
+      const sorted = [...resp.projects].sort((a, b) => (b.id === defaultId ? 1 : 0) - (a.id === defaultId ? 1 : 0));
+      for (const proj of sorted) {
         const btn = document.createElement("button");
         btn.className = "proj-picker-item";
         const colorDot = document.createElement("span");
         colorDot.className = "proj-color-dot";
         colorDot.style.cssText = `background:${proj.color || '#e94560'};width:8px;height:8px;border-radius:50%;display:inline-block;`;
         btn.appendChild(colorDot);
-        btn.append(" " + proj.name);
+        btn.append(" " + proj.name + (proj.id === defaultId ? " (default)" : ""));
         btn.addEventListener("click", async () => {
           const url = elements.pageUrl.href !== "#" ? elements.pageUrl.href : "";
           await browser.runtime.sendMessage({

@@ -66,23 +66,33 @@
     }
   } catch (e) { /* ignore */ }
 
+  // Check for pending content from other pages (e.g. "Send to Draft" from Results)
+  await checkPendingInsert();
+
   // ── Projects dropdown ──
   async function loadProjects() {
-    const resp = await browser.runtime.sendMessage({ action: "getProjects" });
+    const [resp, defResp] = await Promise.all([
+      browser.runtime.sendMessage({ action: "getProjects" }),
+      browser.runtime.sendMessage({ action: "getDefaultProject" })
+    ]);
     if (!resp?.projects) return;
     projects = resp.projects;
+    const defaultId = defResp?.defaultProjectId || null;
     for (const p of projects) {
+      const label = p.name || p.id;
+      const suffix = p.id === defaultId ? " (default)" : "";
       // Attach-to-project dropdown (header)
       const opt = document.createElement("option");
       opt.value = p.id;
-      opt.textContent = p.name || p.id;
+      opt.textContent = label + suffix;
       projectSelect.appendChild(opt);
       // Asset Library project filter
       const opt2 = document.createElement("option");
       opt2.value = p.id;
-      opt2.textContent = p.name || p.id;
+      opt2.textContent = label + suffix;
       assetProjectSelect.appendChild(opt2);
     }
+    if (defaultId && !projectSelect.value) projectSelect.value = defaultId;
   }
 
   // Re-filter assets when the Asset Library project selector changes
@@ -899,8 +909,6 @@
       await browser.storage.local.remove("draftPendingInsert");
     }
   }
-
-  await checkPendingInsert();
 
   // Listen for live pushes while the page is open
   browser.storage.onChanged.addListener((changes, area) => {

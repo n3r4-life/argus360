@@ -204,21 +204,26 @@ function renderEntries() {
     projBtn.className = "btn btn-small btn-secondary";
     projBtn.textContent = "+ Project";
     projBtn.addEventListener("click", async () => {
-      const resp = await browser.runtime.sendMessage({ action: "getProjects" });
+      const [resp, defResp] = await Promise.all([
+        browser.runtime.sendMessage({ action: "getProjects" }),
+        browser.runtime.sendMessage({ action: "getDefaultProject" })
+      ]);
       if (!resp.success || !resp.projects.length) {
         alert("No projects yet. Create one in the Argus console first.");
         return;
       }
+      const defaultId = defResp?.defaultProjectId || null;
       // Simple dropdown picker
       let picker = projBtn.parentElement.querySelector(".proj-picker");
       if (picker) { picker.remove(); return; }
       picker = document.createElement("div");
       picker.className = "proj-picker";
       picker.style.cssText = "position:absolute;z-index:99;background:var(--bg-secondary,#1a1a2e);border:1px solid var(--border,#333);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.4);max-height:200px;overflow-y:auto;min-width:180px;margin-top:4px;";
-      for (const proj of resp.projects) {
+      const sorted = [...resp.projects].sort((a, b) => (b.id === defaultId ? 1 : 0) - (a.id === defaultId ? 1 : 0));
+      for (const proj of sorted) {
         const opt = document.createElement("div");
         opt.style.cssText = "padding:8px 12px;cursor:pointer;font-size:13px;";
-        opt.textContent = proj.name;
+        opt.textContent = proj.name + (proj.id === defaultId ? " (default)" : "");
         opt.addEventListener("mouseenter", () => opt.style.background = "var(--bg-hover,#2a2a4a)");
         opt.addEventListener("mouseleave", () => opt.style.background = "");
         opt.addEventListener("click", async () => {

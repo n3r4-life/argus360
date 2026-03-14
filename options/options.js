@@ -4160,7 +4160,8 @@ function initMainTabs() {
     "open-draft-nav": "reporting/reporting.html",
     "open-reader-nav": "feeds/feeds.html",
     "open-images-nav": "osint/images.html",
-    "open-terminal-nav": "ssh/ssh.html"
+    "open-terminal-nav": "ssh/ssh.html",
+    "open-results-nav": "results/results.html"
   };
   for (const [id, path] of Object.entries(appNavMap)) {
     const btn = document.getElementById(id);
@@ -4184,14 +4185,15 @@ function initMainTabs() {
 
   // ── Console app-nav drag-to-reorder + saved order ──
   const consoleAppNav = document.getElementById("console-app-nav");
-  const CONSOLE_DEFAULT_ORDER = ["open-projects-nav", "open-reader-nav", "open-history-nav", "open-kg-nav", "open-workbench-nav", "open-draft-nav", "open-images-nav", "open-chat-nav", "open-terminal-nav"];
+  const CONSOLE_DEFAULT_ORDER = ["open-projects-nav", "open-reader-nav", "open-history-nav", "open-kg-nav", "open-workbench-nav", "open-draft-nav", "open-images-nav", "open-chat-nav", "open-terminal-nav", "open-results-nav"];
   // Mapping from ribbon tab IDs to console nav IDs
   const ribbonToConsole = {
     "app-projects": "open-projects-nav", "app-reader": "open-reader-nav",
     "app-reports": "open-history-nav", "app-kg": "open-kg-nav",
     "app-workbench": "open-workbench-nav", "app-draft": "open-draft-nav",
     "app-images": "open-images-nav", "app-chat": "open-chat-nav",
-    "app-terminal": "open-terminal-nav"
+    "app-terminal": "open-terminal-nav",
+    "app-results": "open-results-nav"
   };
   const consoleToRibbon = Object.fromEntries(Object.entries(ribbonToConsole).map(([k, v]) => [v, k]));
 
@@ -5022,7 +5024,8 @@ const projState = {
   activeProjectId: null,
   editingProjectId: null,
   editingItemId: null,
-  query: ""
+  query: "",
+  defaultProjectId: null
 };
 
 const projEl = {};
@@ -5119,7 +5122,11 @@ async function checkRunningBatch() {
 }
 
 async function projLoadProjects() {
-  const resp = await browser.runtime.sendMessage({ action: "getProjects" });
+  const [resp, defResp] = await Promise.all([
+    browser.runtime.sendMessage({ action: "getProjects" }),
+    browser.runtime.sendMessage({ action: "getDefaultProject" })
+  ]);
+  projState.defaultProjectId = defResp?.defaultProjectId || null;
   if (resp && resp.success) {
     projState.projects = resp.projects;
     projRenderSidebar();
@@ -5162,6 +5169,12 @@ function projRenderSidebar() {
     const nameSpan = document.createElement("span");
     nameSpan.className = "proj-list-name";
     nameSpan.textContent = proj.name;
+    if (proj.id === projState.defaultProjectId) {
+      const defBadge = document.createElement("span");
+      defBadge.className = "proj-default-badge";
+      defBadge.textContent = "default";
+      nameSpan.appendChild(defBadge);
+    }
     const countSpan = document.createElement("span");
     countSpan.className = "proj-list-count";
     countSpan.textContent = proj.items.length;
@@ -5240,10 +5253,17 @@ function projRenderDetail() {
   deleteBtn2.className = "btn btn-secondary btn-sm";
   deleteBtn2.id = "proj-delete-btn";
   deleteBtn2.textContent = "Delete";
+  const defaultBtn = document.createElement("button");
+  defaultBtn.className = "btn btn-secondary btn-sm";
+  defaultBtn.id = "proj-default-btn";
+  const isDefault = proj.id === projState.defaultProjectId;
+  defaultBtn.textContent = isDefault ? "Default \u2713" : "Set as Default";
+  if (isDefault) defaultBtn.setAttribute("style", "color:var(--accent);border-color:var(--accent);");
   const metaSpan = document.createElement("span");
   metaSpan.setAttribute("style", "font-size:11px;color:var(--text-muted);margin-left:auto;");
   metaSpan.textContent = proj.items.length + " items \u00B7 Updated " + new Date(proj.updatedAt).toLocaleDateString();
   actionsDiv.appendChild(editBtn2);
+  actionsDiv.appendChild(defaultBtn);
   actionsDiv.appendChild(deleteBtn2);
   actionsDiv.appendChild(metaSpan);
   projEl.detailHeader.appendChild(actionsDiv);
@@ -5251,6 +5271,13 @@ function projRenderDetail() {
   document.getElementById("proj-detail-star").addEventListener("click", () => projToggleStar(proj.id));
   document.getElementById("proj-edit-btn").addEventListener("click", () => projOpenModal(proj));
   document.getElementById("proj-delete-btn").addEventListener("click", () => projDelete(proj.id));
+  document.getElementById("proj-default-btn").addEventListener("click", async () => {
+    const newDefault = projState.defaultProjectId === proj.id ? null : proj.id;
+    await browser.runtime.sendMessage({ action: "setDefaultProject", projectId: newDefault });
+    projState.defaultProjectId = newDefault;
+    projRenderSidebar();
+    projRenderDetail();
+  });
 
   // Populate automation toolbar for this project
   projPopulateAutomations(proj.id);

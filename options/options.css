@@ -1059,6 +1059,19 @@ textarea {
   color: var(--text-muted);
 }
 
+.proj-default-badge {
+  display: inline-block;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: var(--accent);
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 .proj-star-btn {
   background: none;
   border: none;

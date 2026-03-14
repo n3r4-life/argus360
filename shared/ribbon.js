@@ -152,10 +152,11 @@
     "app-draft":    { label: "Draft",    icon: [["path", { d: "M12 20h9" }], ["path", { d: "M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" }]], path: "reporting/reporting.html" },
     "app-images":   { label: "Images",   icon: [["rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" }], ["circle", { cx: "8.5", cy: "8.5", r: "1.5" }], ["polyline", { points: "21 15 16 10 5 21" }]], path: "osint/images.html" },
     "app-chat":     { label: "Chat",     icon: [["path", { d: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" }]], path: "chat/chat.html" },
-    "app-terminal": { label: "Terminal", icon: [["polyline", { points: "4 17 10 11 4 5" }], ["line", { x1: "12", y1: "19", x2: "20", y2: "19" }]], path: "ssh/ssh.html" }
+    "app-terminal": { label: "Terminal", icon: [["polyline", { points: "4 17 10 11 4 5" }], ["line", { x1: "12", y1: "19", x2: "20", y2: "19" }]], path: "ssh/ssh.html" },
+    "app-results":  { label: "Results",  icon: [["path", { d: "M9 11l3 3L22 4" }], ["path", { d: "M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" }]], path: "results/results.html" }
   };
 
-  const DEFAULT_TAB_ORDER = ["app-projects", "app-reader", "app-reports", "app-kg", "app-workbench", "app-draft", "app-images", "app-chat", "app-terminal"];
+  const DEFAULT_TAB_ORDER = ["app-projects", "app-reader", "app-reports", "app-kg", "app-workbench", "app-draft", "app-images", "app-chat", "app-terminal", "app-results"];
 
   // Active-state detection map (pathname fragment → tab id)
   const ACTIVE_MAP = {
@@ -167,7 +168,9 @@
     "/reporting/": "app-draft",
     "/osint/images": "app-images",
     "/chat/": "app-chat",
-    "/ssh/": "app-terminal"
+    "/ssh/": "app-terminal",
+    "/results/": "app-results",
+    "/osint/regex": "app-results"
   };
 
   function renderAppTabs(order) {
