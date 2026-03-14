@@ -154,22 +154,31 @@ body {
   padding: 10px 8px;
 }
 
-/* Combined controls row: context + preset + provider */
+/* Combined controls row: preset + provider + context project + APC pill */
 .combined-controls-row {
   display: flex;
   align-items: center;
   gap: 5px;
   padding: 3px 16px 5px;
 }
-.combined-controls-row > select,
-.combined-controls-row > .context-project-select {
-  width: auto !important;
-  font-size: 11px !important;
-  padding: 5px 6px !important;
+.ccr-select {
+  flex: 1 1 0;
   min-width: 0;
+  font-size: 10px;
+  padding: 5px 4px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  text-overflow: ellipsis;
 }
-.combined-controls-row > .flex-grow { flex: 1; min-width: 0; }
-.combined-controls-row > #analysis-provider { min-width: 72px; flex-shrink: 0; }
+.ccr-select:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.ccr-select:focus {
+  outline: 1px solid var(--accent);
+}
 
 .form-group label {
   display: block;
@@ -368,26 +377,32 @@ textarea {
   white-space: nowrap;
 }
 
-/* Context toggle (inline in combined row) */
-.context-toggle {
+/* APC pill toggle */
+.apc-pill {
   display: flex;
   align-items: center;
-  gap: 3px;
   cursor: pointer;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  font-size: 11px;
   flex-shrink: 0;
+  user-select: none;
 }
-.context-toggle input:checked + span { color: var(--accent); }
-
-.context-project-select {
-  width: auto;
-  min-width: 0;
-  max-width: 100px;
-  font-size: 11px;
-  padding: 5px 4px;
-  flex-shrink: 1;
+.apc-pill input[type="checkbox"] {
+  display: none;
+}
+.apc-pill span {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-muted);
+  background: transparent;
+  transition: all 0.15s;
+}
+.apc-pill input:checked + span {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
 }
 
 /* Thinking container */
@@ -781,66 +796,82 @@ textarea {
 }
 
 /* OSINT tools row */
-.btn-row.osint-tools-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
+/* Tools accordion layout */
+.tools-accordion {
+  margin: 6px 0 4px;
+  padding: 0 16px;
 }
-.btn-osint {
-  flex: 1 1 calc(33.33% - 4px);
-  max-width: calc(33.33% - 4px);
+.tools-cat-row {
+  display: flex;
+  gap: 4px;
+}
+.tools-cat-btn {
+  flex: 1 1 0;
   min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  padding: 6px 4px;
-  font-size: 11px;
-  font-weight: 500;
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  padding: 5px 0;
   border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.12s;
   font-family: var(--font);
+  text-align: center;
 }
-.btn-osint:hover {
+.tools-cat-btn:hover {
   color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.4);
+  background: var(--border);
+}
+.tools-cat-btn.active {
+  color: var(--accent);
   border-color: var(--accent);
   background: rgba(233, 69, 96, 0.1);
 }
-/* Media & Extract tools row */
-.media-tools-row {
+/* Drawer */
+.tools-drawer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.2s ease;
+}
+.tools-drawer.open {
+  max-height: 200px;
+}
+.tools-drawer-items {
+  display: none;
+  flex-wrap: wrap;
   gap: 4px;
-  margin-top: -2px;
-}
-.btn-media {
-  flex: 1 1 calc(20% - 4px);
-  max-width: calc(20% - 4px);
-  min-width: 0;
-  display: flex;
-  align-items: center;
+  padding: 24px 0 8px;
   justify-content: center;
-  gap: 3px;
-  padding: 4px 3px;
-  font-size: 10px;
-  font-weight: 500;
-  background: var(--bg-primary);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: var(--font);
 }
-.btn-media:hover {
+.tools-drawer-items.visible {
+  display: flex;
+}
+/* Tool chips (inside drawer) — tinted accent to distinguish from search chips */
+.tool-chip {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 3px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(233, 69, 96, 0.25);
+  background: rgba(233, 69, 96, 0.06);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.12s;
+  font-family: var(--font);
+  text-align: center;
+  white-space: nowrap;
+}
+.tool-chip:hover {
   color: var(--text-primary);
   border-color: var(--accent);
-  background: rgba(233, 69, 96, 0.08);
+  background: rgba(233, 69, 96, 0.15);
 }
-.btn-media svg { opacity: 0.7; }
-.btn-media:hover svg { opacity: 1; }
 /* RSS subscribe button in header */
 .feed-subscribe-btn {
   display: flex;
@@ -964,12 +995,28 @@ textarea {
   flex: 1;
 }
 
+.btn-row-equal {
+  align-items: stretch;
+}
+.btn-row-equal > .btn,
+.btn-row-equal > .monitor-btn-wrap,
+.btn-row-equal > .bookmark-btn-wrap,
+.btn-row-equal > .analyze-btn-wrap {
+  flex: 1 1 0;
+  min-width: 0;
+}
 .btn-row-equal .btn {
-  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
+  width: 100%;
+}
+/* Button fills remaining space in wrap so all columns match height */
+.monitor-btn-wrap .btn-stacked,
+.bookmark-btn-wrap .btn-stacked,
+.analyze-btn-wrap .btn-stacked {
+  flex: 1;
 }
 
 .btn-stacked {
@@ -986,6 +1033,56 @@ textarea {
   display: block;
   content: "";
   margin: 2px 0;
+}
+
+/* Button with dropdown selector — border on the wrap */
+.monitor-btn-wrap,
+.bookmark-btn-wrap,
+.analyze-btn-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+/* Remove individual borders — the wrap handles it */
+.monitor-btn-wrap .btn-stacked,
+.bookmark-btn-wrap .btn-stacked,
+.analyze-btn-wrap .btn-stacked {
+  border: none;
+  border-radius: 0;
+  flex: 1;
+}
+.btn-sub-select {
+  font-size: 10px;
+  padding: 2px 4px;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.btn-sub-select:focus {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+/* Override indicator — per-feature override is active */
+.btn-sub-select.override-active {
+  color: #6cb4ee;
+}
+/* Active state — highlight covers entire button+dropdowns unit */
+.monitor-btn-wrap.wrap-active,
+.bookmark-btn-wrap.wrap-active {
+  border-color: var(--accent);
+}
+.monitor-btn-wrap.wrap-active .btn-stacked,
+.bookmark-btn-wrap.wrap-active .btn-stacked {
+  color: var(--accent);
+  background: rgba(233, 69, 96, 0.1);
 }
 
 /* Toast notification */

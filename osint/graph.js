@@ -154,7 +154,7 @@
 
   function transformKGData(resp) {
     return {
-      projectName: 'Global Knowledge Graph',
+      projectName: 'Global KG',
       nodes: resp.nodes.map(n => ({
         id: n.id,
         label: n.displayName,
@@ -206,10 +206,12 @@
         const fp = allProjects.find(p => p.id === filterProjectId);
         if (fp) {
           const nameEl = document.getElementById('projectName');
-          if (nameEl) nameEl.textContent = fp.name + ' — Entities';
+          if (nameEl) nameEl.textContent = fp.name + ' — KG';
         }
       } else {
-        visibleProjects = new Set(allProjects.map(p => p.id));
+        // No default project — show unassigned, all project toggles off
+        visibleProjects = new Set();
+        showUnassigned = true;
       }
       // If graph already loaded, rebuild mapping now
       if (nodes.length) {
@@ -247,8 +249,8 @@
 
   function buildProjectPanel() {
     const body = document.getElementById('projectPanelBody');
-    // Clear existing project toggles (keep the "All" toggle)
-    const existing = body.querySelectorAll('.project-toggle:not(:first-child)');
+    // Clear existing project toggles (keep the "All (unassigned)" pill toggle)
+    const existing = body.querySelectorAll('.pill-toggle:not(#projToggleAllLabel)');
     existing.forEach(el => el.remove());
 
     // Sync the "All (unassigned)" toggle
@@ -267,10 +269,10 @@
 
       const isChecked = visibleProjects.has(proj.id);
       const label = document.createElement('label');
-      label.className = 'project-toggle';
+      label.className = 'pill-toggle';
       label.innerHTML = `<input type="checkbox" data-project="${proj.id}" ${isChecked ? 'checked' : ''}>` +
-        `<span class="project-dot" style="background:${proj.color}"></span>` +
-        `<span class="project-toggle-label">${proj.name}</span>` +
+        `<span class="pill-track" style="--pill-color:${proj.color}"><span class="pill-knob"></span></span>` +
+        `<span class="pill-label">${proj.name}</span>` +
         `<span class="project-toggle-count">${count}</span>`;
       body.appendChild(label);
 
@@ -293,8 +295,8 @@
 
   function setMode(mode) {
     graphMode = mode;
-    const btns = document.querySelectorAll('.mode-btn');
-    btns.forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+    const modeInput = document.getElementById('modeToggleInput');
+    if (modeInput) modeInput.checked = (mode === 'global');
     // Show/hide KG-specific sidebar details
     document.querySelectorAll('.kg-detail').forEach(el => {
       el.classList.toggle('hidden', mode !== 'global');
@@ -330,7 +332,7 @@
 
   function initGraph(data) {
     if (data.projectName) {
-      document.getElementById('projectName').textContent = data.projectName + ' - Connection Graph';
+      document.getElementById('projectName').textContent = data.projectName;
     }
 
     const nodeMap = {};
@@ -864,16 +866,69 @@
       }
     });
 
-    // Filter checkboxes
-    document.querySelectorAll('.filter-checkbox input').forEach(cb => {
+    // Entity Filters floating panel
+    const filtersPanel = document.getElementById('kgFiltersPanel');
+    const filtersToggle = document.getElementById('kgFiltersToggle');
+    const filtersClose = document.getElementById('kgFiltersClose');
+
+    // Pill toggle checkboxes → visibleTypes
+    filtersPanel.querySelectorAll('.pill-toggle input').forEach(cb => {
+      const type = cb.closest('.pill-toggle').dataset.type;
       cb.addEventListener('change', () => {
-        const type = cb.dataset.type;
         if (cb.checked) visibleTypes.add(type);
         else visibleTypes.delete(type);
-        // Restart sim briefly so layout adjusts
         simStep = Math.max(0, simStep - 60);
       });
     });
+
+    // Toggle panel visibility
+    filtersToggle.addEventListener('click', () => {
+      const isOpen = !filtersPanel.classList.contains('hidden');
+      filtersPanel.classList.toggle('hidden', isOpen);
+      PanelState.save("graph", "filters", { visible: !isOpen });
+    });
+    filtersClose.addEventListener('click', () => {
+      filtersPanel.classList.add('hidden');
+      PanelState.save("graph", "filters", { visible: false });
+    });
+
+    // Drag filters panel by header
+    (function setupFiltersPanelDrag() {
+      const header = filtersPanel.querySelector('.kg-filters-header');
+      let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+
+      header.addEventListener('mousedown', (e) => {
+        if (e.target.closest('.kg-filters-close')) return;
+        dragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        const rect = filtersPanel.getBoundingClientRect();
+        origLeft = rect.left;
+        origTop = rect.top;
+        filtersPanel.classList.add('dragging');
+        filtersPanel.style.zIndex = 25;
+        filtersPanel.style.right = 'auto';
+        filtersPanel.style.left = origLeft + 'px';
+        e.preventDefault();
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        const newLeft = Math.max(0, Math.min(window.innerWidth - 60, origLeft + dx));
+        const newTop = Math.max(46, Math.min(window.innerHeight - 60, origTop + dy));
+        filtersPanel.style.left = newLeft + 'px';
+        filtersPanel.style.top = newTop + 'px';
+      });
+      window.addEventListener('mouseup', () => {
+        if (!dragging) return;
+        dragging = false;
+        filtersPanel.classList.remove('dragging');
+        filtersPanel.style.zIndex = '';
+        const rect = filtersPanel.getBoundingClientRect();
+        PanelState.save("graph", "filters", { left: rect.left, top: rect.top });
+      });
+    })();
 
     // Project panel: tab toggles visibility, panel header is draggable
     const projTab = document.getElementById('projectPanelToggle');
@@ -968,6 +1023,7 @@
 
     // Restore saved panel positions
     PanelState.apply(projPanel, "graph", "projects");
+    PanelState.apply(filtersPanel, "graph", "filters");
     PanelState.apply(document.getElementById('sidebar'), "graph", "details", { skipVisibility: true });
 
     // Restore sidebarCollapsed from saved state
@@ -980,56 +1036,51 @@
       simStep = Math.max(0, simStep - 60);
     });
 
-    // Mode toggle (project vs global KG)
-    document.querySelectorAll('.mode-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const mode = btn.dataset.mode;
-        setMode(mode);
-        if (mode === 'global') {
-          // Reset project filter to show everything
-          visibleProjects = new Set(allProjects.map(p => p.id));
-          showUnassigned = true;
-          projectFilterActive = false;
-          buildProjectPanel();
-          const nameEl = document.getElementById('projectName');
-          if (nameEl) nameEl.textContent = 'Global Knowledge Graph';
-          loadGlobalKG();
-        } else {
-          // Switch to project-scoped view
-          const params = new URLSearchParams(window.location.search);
-          const storeKey = params.get('id');
-          const filterProjId = params.get('project') || defaultProjectId;
-          if (filterProjId && allProjects.some(p => p.id === filterProjId)) {
-            // Apply project filter from URL param or default project
-            visibleProjects = new Set([filterProjId]);
-            showUnassigned = false;
-            projectFilterActive = true;
-            const fp = allProjects.find(p => p.id === filterProjId);
-            // Load global KG data but with project filter active
-            browser.runtime.sendMessage({ action: 'getKGGraph' }).then(resp => {
-              if (resp && resp.nodes && resp.nodes.length) {
-                initGraph(transformKGData(resp));
-              } else {
-                initGraph(demoData());
-              }
-              // Override name after initGraph sets it
-              const nameEl = document.getElementById('projectName');
-              if (nameEl) nameEl.textContent = (fp ? fp.name : '') + ' — Entities';
-              buildProjectPanel();
-            }).catch(() => {});
-          } else if (storeKey && typeof browser !== 'undefined' && browser.storage) {
-            browser.storage.local.get(storeKey).then(result => {
-              if (result[storeKey]) initGraph(result[storeKey]);
-              else initGraph(demoData());
-            });
-          } else {
-            // No specific project — show global with all projects visible
+    // Mode pill toggle (project vs global KG)
+    const modeInput = document.getElementById('modeToggleInput');
+    modeInput.addEventListener('change', () => {
+      const mode = modeInput.checked ? 'global' : 'project';
+      setMode(mode);
+      if (mode === 'global') {
+        // Reset project filter to show everything
+        visibleProjects = new Set(allProjects.map(p => p.id));
+        showUnassigned = true;
+        projectFilterActive = false;
+        buildProjectPanel();
+        const nameEl = document.getElementById('projectName');
+        if (nameEl) nameEl.textContent = 'Global KG';
+        loadGlobalKG();
+      } else {
+        // Switch to project-scoped view
+        const params = new URLSearchParams(window.location.search);
+        const storeKey = params.get('id');
+        const filterProjId = params.get('project') || defaultProjectId;
+        if (filterProjId && allProjects.some(p => p.id === filterProjId)) {
+          visibleProjects = new Set([filterProjId]);
+          showUnassigned = false;
+          projectFilterActive = true;
+          const fp = allProjects.find(p => p.id === filterProjId);
+          browser.runtime.sendMessage({ action: 'getKGGraph' }).then(resp => {
+            if (resp && resp.nodes && resp.nodes.length) {
+              initGraph(transformKGData(resp));
+            } else {
+              initGraph(demoData());
+            }
             const nameEl = document.getElementById('projectName');
-            if (nameEl) nameEl.textContent = 'Connection Graph';
-            loadGlobalKG();
-          }
+            if (nameEl) nameEl.textContent = (fp ? fp.name : '') + ' — KG';
+            buildProjectPanel();
+          }).catch(() => {});
+        } else if (storeKey && typeof browser !== 'undefined' && browser.storage) {
+          browser.storage.local.get(storeKey).then(result => {
+            if (result[storeKey]) initGraph(result[storeKey]);
+            else initGraph(demoData());
+          });
+        } else {
+          const nameEl = document.getElementById('projectName');
+          if (nameEl) nameEl.textContent = 'KG';
+          loadGlobalKG();
         }
-      });
+      }
     });
 
     // Search
@@ -1307,9 +1358,56 @@
     toggle.addEventListener("click", () => {
       const open = !panel.classList.contains("hidden");
       panel.classList.toggle("hidden", open);
+      PanelState.save("graph", "assets", { visible: !open });
       if (!loaded) { loaded = true; loadAssets(); }
     });
-    closeBtn.addEventListener("click", () => panel.classList.add("hidden"));
+    closeBtn.addEventListener("click", () => {
+      panel.classList.add("hidden");
+      PanelState.save("graph", "assets", { visible: false });
+    });
+
+    // Drag asset library panel by header
+    (function setupAssetsDrag() {
+      const header = panel.querySelector('.kg-assets-header');
+      let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+
+      header.addEventListener('mousedown', (e) => {
+        if (e.target.closest('.kg-assets-close')) return;
+        dragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        const rect = panel.getBoundingClientRect();
+        origLeft = rect.left;
+        origTop = rect.top;
+        panel.classList.add('dragging');
+        panel.style.zIndex = 25;
+        panel.style.right = 'auto';
+        panel.style.left = origLeft + 'px';
+        e.preventDefault();
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (!dragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        const newLeft = Math.max(0, Math.min(window.innerWidth - 60, origLeft + dx));
+        const newTop = Math.max(46, Math.min(window.innerHeight - 60, origTop + dy));
+        panel.style.left = newLeft + 'px';
+        panel.style.top = newTop + 'px';
+      });
+      window.addEventListener('mouseup', () => {
+        if (!dragging) return;
+        dragging = false;
+        panel.classList.remove('dragging');
+        panel.style.zIndex = '';
+        const rect = panel.getBoundingClientRect();
+        PanelState.save("graph", "assets", { left: rect.left, top: rect.top });
+      });
+    })();
+
+    // Restore saved position/visibility
+    PanelState.apply(panel, "graph", "assets").then(state => {
+      if (state && state.visible && !loaded) { loaded = true; loadAssets(); }
+    });
 
     tabs.forEach(t => {
       t.addEventListener("click", () => {

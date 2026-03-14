@@ -15,11 +15,13 @@
     <div class="header-left">
       <svg class="header-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <h1 class="project-title">OSINT</h1>
-      <span class="project-name" id="projectName">Connection Graph</span>
-      <div class="mode-toggle" id="modeToggle">
-        <button class="mode-btn active" data-mode="project">Project</button>
-        <button class="mode-btn" data-mode="global">Global KG</button>
-      </div>
+      <span class="project-name" id="projectName">KG</span>
+      <label class="pill-toggle mode-pill" id="modeToggle" title="Toggle between Project and Global KG">
+        <span class="mode-pill-label mode-pill-left">Project</span>
+        <input type="checkbox" id="modeToggleInput">
+        <span class="pill-track" style="--pill-color:var(--accent)"><span class="pill-knob"></span></span>
+        <span class="mode-pill-label mode-pill-right">Global KG</span>
+      </label>
       <span class="header-sep"></span>
       <button id="addToProjectBtn" class="kg-header-btn" title="Add data to a project">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
@@ -35,39 +37,12 @@
       </button>
     </div>
     <div class="header-controls">
-      <div class="filter-group">
-        <label class="filter-checkbox">
-          <input type="checkbox" data-type="person" checked>
-          <span class="filter-dot" style="background:#e94560"></span>
-          People
-        </label>
-        <label class="filter-checkbox">
-          <input type="checkbox" data-type="organization" checked>
-          <span class="filter-dot" style="background:#64b5f6"></span>
-          Orgs
-        </label>
-        <label class="filter-checkbox">
-          <input type="checkbox" data-type="location" checked>
-          <span class="filter-dot" style="background:#4caf50"></span>
-          Places
-        </label>
-        <label class="filter-checkbox">
-          <input type="checkbox" data-type="date" checked>
-          <span class="filter-dot" style="background:#ffb74d"></span>
-          Dates
-        </label>
-        <label class="filter-checkbox">
-          <input type="checkbox" data-type="other" checked>
-          <span class="filter-dot" style="background:#a0a0b0"></span>
-          Other
-        </label>
-      </div>
+      <input type="text" id="graphSearch" class="graph-search" placeholder="Search entities...">
       <div class="zoom-controls">
         <button id="zoomIn" title="Zoom in">+</button>
         <button id="zoomReset" title="Reset zoom">Reset</button>
         <button id="zoomOut" title="Zoom out">&minus;</button>
       </div>
-      <input type="text" id="graphSearch" class="graph-search" placeholder="Search entities...">
     </div>
   </header>
 
@@ -78,10 +53,10 @@
       <button class="project-panel-close" id="projectPanelClose">&times;</button>
     </div>
     <div class="project-panel-body" id="projectPanelBody">
-      <label class="project-toggle">
+      <label class="pill-toggle" id="projToggleAllLabel">
         <input type="checkbox" id="projToggleAll" checked>
-        <span class="project-dot" style="background:var(--text-secondary)"></span>
-        <span class="project-toggle-label">All (unassigned)</span>
+        <span class="pill-track" style="--pill-color:var(--text-secondary)"><span class="pill-knob"></span></span>
+        <span class="pill-label">All (unassigned)</span>
       </label>
     </div>
   </div>
@@ -164,6 +139,44 @@
   <button class="kg-assets-toggle" id="kgAssetsToggle" title="Asset Library">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
     <span id="kgAssetCount"></span>
+  </button>
+
+  <!-- ── Entity Filters floating panel ── -->
+  <div class="kg-filters-panel hidden" id="kgFiltersPanel" data-panel-id="filters">
+    <div class="kg-filters-header">
+      <span class="kg-filters-title">Entity Filters</span>
+      <button class="kg-filters-close" id="kgFiltersClose">&times;</button>
+    </div>
+    <div class="kg-filters-body">
+      <label class="pill-toggle" data-type="person">
+        <input type="checkbox" checked>
+        <span class="pill-track" style="--pill-color:#e94560"><span class="pill-knob"></span></span>
+        <span class="pill-label">People</span>
+      </label>
+      <label class="pill-toggle" data-type="organization">
+        <input type="checkbox" checked>
+        <span class="pill-track" style="--pill-color:#64b5f6"><span class="pill-knob"></span></span>
+        <span class="pill-label">Organizations</span>
+      </label>
+      <label class="pill-toggle" data-type="location">
+        <input type="checkbox" checked>
+        <span class="pill-track" style="--pill-color:#4caf50"><span class="pill-knob"></span></span>
+        <span class="pill-label">Places</span>
+      </label>
+      <label class="pill-toggle" data-type="date">
+        <input type="checkbox" checked>
+        <span class="pill-track" style="--pill-color:#ffb74d"><span class="pill-knob"></span></span>
+        <span class="pill-label">Dates</span>
+      </label>
+      <label class="pill-toggle" data-type="other">
+        <input type="checkbox" checked>
+        <span class="pill-track" style="--pill-color:#a0a0b0"><span class="pill-knob"></span></span>
+        <span class="pill-label">Other</span>
+      </label>
+    </div>
+  </div>
+  <button class="kg-filters-toggle" id="kgFiltersToggle" title="Entity Filters">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
   </button>
 
   <script src="../lib/purify.min.js"></script>

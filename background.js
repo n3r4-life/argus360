@@ -403,13 +403,13 @@ async function createContextMenus() {
   });
 
 
-  // Add to Project submenu
+  // Save Link to Project submenu
   const argusProjects = await ArgusDB.Projects.getAll();
   if (argusProjects.length > 0) {
     browser.contextMenus.create({
       id: "argus-project-parent",
       parentId: "argus-parent",
-      title: "\uD83D\uDCC1 Add to Project",
+      title: "\uD83D\uDCC1 Save Link to Project",
       contexts: ["page", "frame"]
     });
     for (const proj of argusProjects) {
@@ -1579,6 +1579,8 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "getProjects") return handleGetProjects(message);
   if (message.action === "getDefaultProject") return browser.storage.local.get({ defaultProjectId: null }).then(s => ({ defaultProjectId: s.defaultProjectId }));
   if (message.action === "setDefaultProject") return browser.storage.local.set({ defaultProjectId: message.projectId }).then(() => ({ success: true }));
+  if (message.action === "getFeatureProjectOverrides") return browser.storage.local.get({ monitorDefaultProjectId: null, bookmarkDefaultProjectId: null });
+  if (message.action === "setFeatureProjectOverride") return browser.storage.local.set({ [message.key]: message.projectId || null }).then(() => ({ success: true }));
   if (message.action === "createProject") return handleCreateProject(message);
   if (message.action === "updateProject") return handleUpdateProject(message);
   if (message.action === "deleteProject") return handleDeleteProject(message);
@@ -3730,7 +3732,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
         type: "basic",
         iconUrl: "icons/icon-96.png",
         title: "Argus",
-        message: `Added to project: ${tab.title || tab.url}`
+        message: `Saved link to project: ${tab.title || tab.url}`
       });
     } catch (err) {
       safeNotify(null, {
@@ -4427,6 +4429,7 @@ async function saveBookmark(pageData, options = {}) {
     aiTagged: !!options.aiTagged,
     // Smart bookmark fields
     folderId: options.folderId || (existing ? existing.folderId : "") || "",
+    projectId: options.projectId || (existing ? existing.projectId : "") || "",
     tldr: options.tldr || "",
     contentType: options.contentType || "",
     language: options.language || "",
@@ -4533,11 +4536,28 @@ async function handleBookmarkPage(message) {
       }
     }
 
-    // Save with folder assignment if provided
+    // Save with folder and project assignment if provided
     if (message.folderId) tagData.folderId = message.folderId;
+    if (message.projectId) tagData.projectId = message.projectId;
     tagData.meta = pageMeta;
 
     const bookmark = await saveBookmark(page, tagData);
+
+    // Save link to project if attached
+    if (message.projectId) {
+      try {
+        await handleAddProjectItem({
+          projectId: message.projectId,
+          item: {
+            type: "bookmark",
+            url: page.url,
+            title: page.title || page.url,
+            summary: (tagData.summary || tagData.tldr || "").slice(0, 500),
+            tags: ["bookmark", ...(tagData.tags || [])]
+          }
+        });
+      } catch { /* non-critical */ }
+    }
 
     // Page Tracker: log bookmark action
     trackPageAction(page.url, "bookmark", { title: page.title });
@@ -5141,6 +5161,7 @@ async function handleAddMonitor(message) {
       autoBookmark: message.autoBookmark !== false,
       analysisPreset: message.analysisPreset || "",
       automationId: message.automationId || "",
+      projectId: message.projectId || "",
       duration: message.duration || 0,
       expiresAt: message.duration ? new Date(Date.now() + message.duration * 3600000).toISOString() : null
     };
@@ -5164,6 +5185,22 @@ async function handleAddMonitor(message) {
         const pageData = { url: message.url, title: message.title || message.url, text: text.slice(0, 50000) };
         await saveBookmark(pageData, { tags: ["monitored"], category: "monitored", summary: `Auto-bookmarked — monitored every ${monitor.intervalMinutes}min` });
       } catch { /* bookmark failed, non-critical */ }
+    }
+
+    // Save initial link to project if attached
+    if (monitor.projectId) {
+      try {
+        await handleAddProjectItem({
+          projectId: monitor.projectId,
+          item: {
+            type: "monitor-link",
+            url: monitor.url,
+            title: monitor.title,
+            summary: `Monitoring every ${monitor.intervalMinutes}min`,
+            tags: ["monitor"]
+          }
+        });
+      } catch { /* non-critical */ }
     }
 
     // Set alarm — first fire after the full interval, then repeat
@@ -5530,6 +5567,26 @@ Summarize the key differences in 2-4 bullet points.`;
           }
         } catch (err) {
           console.warn(`[Monitor] Automation failed for "${monitor.title}":`, err.message);
+        }
+      }
+
+      // Route change to linked project
+      if (monitor.projectId) {
+        try {
+          await handleAddProjectItem({
+            projectId: monitor.projectId,
+            item: {
+              type: "monitor-change",
+              url: monitor.url,
+              title: monitor.title,
+              summary: (changeEntry.aiSummary || `Content changed (${new Date(now).toLocaleString()})`).slice(0, 500),
+              analysisContent: changeEntry.aiSummary || "",
+              tags: ["monitor", "change-detected"]
+            }
+          });
+          console.log(`[Monitor] Routed change to project for "${monitor.title}"`);
+        } catch (err) {
+          console.warn(`[Monitor] Project routing failed for "${monitor.title}":`, err.message);
         }
       }
     } else {
@@ -7015,6 +7072,30 @@ function handleCancelBatch() {
     await ArgusDB.migrateFromStorage();
   } catch (e) {
     console.warn("[ArgusDB] Migration error (will retry next startup):", e);
+  }
+
+  // Seed default bookmark folders on first run (if none exist)
+  try {
+    const existing = await ArgusDB.BookmarkFolders.getAll();
+    if (!existing || existing.length === 0) {
+      const defaultFolders = [
+        "Unsorted", "Tech", "News", "Sports", "Science",
+        "Finance", "Entertainment", "Politics", "Security", "Research"
+      ];
+      for (let i = 0; i < defaultFolders.length; i++) {
+        await ArgusDB.BookmarkFolders.save({
+          id: `bmf-seed-${i}`,
+          name: defaultFolders[i],
+          parentId: "",
+          projectId: "",
+          sortOrder: i,
+          createdAt: new Date().toISOString()
+        });
+      }
+      console.log("[Argus] Seeded default bookmark folders");
+    }
+  } catch (e) {
+    console.warn("[Argus] Failed to seed bookmark folders:", e);
   }
 
   // Clean up stale temporary keys from browser.storage.local

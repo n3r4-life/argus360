@@ -528,6 +528,7 @@ const el = {
   monitorDuration: document.getElementById("monitor-duration"),
   monitorPreset: document.getElementById("monitor-preset"),
   monitorAutomation: document.getElementById("monitor-automation"),
+  monitorProjectSelect: document.getElementById("monitor-project-select"),
   addMonitor: document.getElementById("add-monitor"),
   monitorStatus: document.getElementById("monitor-status"),
   monitorStorageBar: document.getElementById("monitor-storage-bar"),
@@ -1292,6 +1293,9 @@ async function loadAllSettings() {
   const defPasteEl = document.getElementById("default-paste-provider");
   if (defCloudEl) defCloudEl.value = settings.defaultCloudProvider || "all";
   if (defPasteEl) defPasteEl.value = settings.defaultPasteProvider || "";
+
+  // Load default project settings
+  initSettingsProjectDropdowns();
 
   if (settings.apiKey && !providers.xai.apiKey) {
     providers.xai.apiKey = settings.apiKey;
@@ -3363,7 +3367,7 @@ function stepTypeLabel(type) {
     analyze: "Analyze (Preset)",
     prompt: "Custom Prompt",
     extractEntities: "Extract Entities",
-    addToProject: "Add to Project",
+    addToProject: "Save Link to Project",
     addToMonitors: "Add to Monitors",
     runPipeline: "Run Pipeline",
     paste: "Paste to Service",
@@ -4139,6 +4143,7 @@ function attachListeners() {
   // Monitors
   populateMonitorPresetDropdown();
   populateMonitorAutomationDropdown();
+  populateMonitorProjectDropdown();
   el.addMonitor.addEventListener("click", addMonitor);
 
   // RSS Feeds
@@ -5018,6 +5023,67 @@ async function populateMonitorAutomationDropdown() {
   } catch { /* ignore */ }
 }
 
+async function initSettingsProjectDropdowns() {
+  try {
+    const [projResp, defResp, overrides] = await Promise.all([
+      browser.runtime.sendMessage({ action: "getProjects" }),
+      browser.runtime.sendMessage({ action: "getDefaultProject" }),
+      browser.runtime.sendMessage({ action: "getFeatureProjectOverrides" })
+    ]);
+    if (!projResp?.success) return;
+    const projects = projResp.projects;
+    const globalId = defResp?.defaultProjectId || "";
+    const monId = overrides?.monitorDefaultProjectId || "";
+    const bmId = overrides?.bookmarkDefaultProjectId || "";
+
+    const globalEl = document.getElementById("settings-default-project");
+    const monEl = document.getElementById("settings-monitor-project");
+    const bmEl = document.getElementById("settings-bookmark-project");
+
+    function fill(sel, value, keepFirst) {
+      if (!sel) return;
+      while (sel.options.length > 1) sel.remove(1);
+      for (const p of projects) {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.name;
+        sel.appendChild(opt);
+      }
+      sel.value = value;
+    }
+
+    fill(globalEl, globalId);
+    fill(monEl, monId);
+    fill(bmEl, bmId);
+
+    if (globalEl) globalEl.addEventListener("change", () => {
+      browser.runtime.sendMessage({ action: "setDefaultProject", projectId: globalEl.value || null });
+    });
+    if (monEl) monEl.addEventListener("change", () => {
+      browser.runtime.sendMessage({ action: "setFeatureProjectOverride", key: "monitorDefaultProjectId", projectId: monEl.value || null });
+    });
+    if (bmEl) bmEl.addEventListener("change", () => {
+      browser.runtime.sendMessage({ action: "setFeatureProjectOverride", key: "bookmarkDefaultProjectId", projectId: bmEl.value || null });
+    });
+  } catch { /* ignore */ }
+}
+
+async function populateMonitorProjectDropdown() {
+  if (!el.monitorProjectSelect) return;
+  while (el.monitorProjectSelect.options.length > 1) el.monitorProjectSelect.remove(1);
+  try {
+    const resp = await browser.runtime.sendMessage({ action: "getProjects" });
+    if (resp?.success && resp.projects) {
+      for (const proj of resp.projects) {
+        const opt = document.createElement("option");
+        opt.value = proj.id;
+        opt.textContent = proj.name;
+        el.monitorProjectSelect.appendChild(opt);
+      }
+    }
+  } catch { /* ignore */ }
+}
+
 async function renderMonitors() {
   const response = await browser.runtime.sendMessage({ action: "getMonitors" });
   if (!response || !response.success) return;
@@ -5873,7 +5939,8 @@ async function addMonitor() {
     autoOpen: el.monitorAutoOpen.checked,
     autoBookmark: el.monitorAutoBookmark.checked,
     analysisPreset: el.monitorPreset.value || "",
-    automationId: el.monitorAutomation.value || ""
+    automationId: el.monitorAutomation.value || "",
+    projectId: el.monitorProjectSelect?.value || ""
   });
 
   el.addMonitor.disabled = false;

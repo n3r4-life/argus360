@@ -20,14 +20,17 @@ const elements = {
   modeSelection: document.getElementById("mode-selection"),
   modeCompare: document.getElementById("mode-compare"),
   modeMultipage: document.getElementById("mode-multipage"),
+  analyzeMode: document.getElementById("analyze-mode"),
   comparePanel: document.getElementById("compare-panel"),
   multipagePanel: document.getElementById("multipage-panel"),
   tabList: document.getElementById("tab-list"),
   selectionInfo: document.getElementById("selection-info"),
   selectionTextPreview: document.getElementById("selection-text-preview"),
   monitorBtn: document.getElementById("monitor-btn"),
+  monitorProject: document.getElementById("monitor-project"),
   defaultBookmarkFolder: document.getElementById("default-bookmark-folder"),
   bookmarkBtn: document.getElementById("bookmark-btn"),
+  bookmarkProject: document.getElementById("bookmark-project"),
   contextPanel: document.getElementById("context-panel"),
   contextEnabled: document.getElementById("context-enabled"),
   contextProject: document.getElementById("context-project"),
@@ -36,6 +39,10 @@ const elements = {
 let providerData = {};
 let currentProviders = {};
 let activeMode = "normal"; // normal, selection, compare, multipage
+// Project cascade: popup dropdown > per-feature override > global default > none
+let defaultProjectId = null;
+let monitorOverrideProjectId = null;
+let bookmarkOverrideProjectId = null;
 let currentTabId = null;
 let selectedText = "";
 
@@ -123,6 +130,8 @@ async function loadSettings() {
     elements.settingsPanel.classList.remove("hidden");
   }
 
+  // Store default for the analysis provider dropdown
+  elements.analysisProvider.dataset.defaultProvider = settings.defaultProvider;
   updateAnalysisProviderOptions();
 }
 
@@ -144,15 +153,30 @@ function loadProviderFields(providerKey) {
 }
 
 function updateAnalysisProviderOptions() {
-  elements.analysisProvider.querySelectorAll("option").forEach(opt => {
-    if (opt.value && currentProviders[opt.value]?.apiKey) {
-      if (!opt.textContent.endsWith(" \u2713")) opt.textContent += " \u2713";
-    }
-  });
+  const sel = elements.analysisProvider;
+  const defaultProvider = sel.dataset.defaultProvider || "xai";
+  const providerLabels = { xai: "Grok", openai: "OpenAI", anthropic: "Claude", gemini: "Gemini", custom: "Custom" };
+
+  sel.replaceChildren();
+  for (const [key, label] of Object.entries(providerLabels)) {
+    const opt = document.createElement("option");
+    opt.value = key;
+    const hasKey = !!currentProviders[key]?.apiKey;
+    const isDefault = key === defaultProvider;
+    let text = label;
+    if (hasKey) text += " ✓";
+    if (isDefault) text += " ★";
+    opt.textContent = text;
+    sel.appendChild(opt);
+  }
+  // Pre-select the default provider
+  sel.value = defaultProvider;
 }
 
 async function populatePresets() {
   const response = await browser.runtime.sendMessage({ action: "getPresets" });
+  const { defaultPreset } = await browser.storage.local.get({ defaultPreset: "summary" });
+
   if (response && response.success) {
     response.presets.forEach(preset => {
       const option = document.createElement("option");
@@ -163,17 +187,19 @@ async function populatePresets() {
         const provNames = { xai: "Grok", openai: "OpenAI", anthropic: "Claude", gemini: "Gemini" };
         label += ` → ${provNames[preset.provider] || preset.provider}`;
       }
+      if (preset.key === defaultPreset) label += " ★";
       option.textContent = label;
       elements.analysisType.appendChild(option);
     });
   }
   const customOpt = document.createElement("option");
   customOpt.value = "custom";
-  customOpt.textContent = "Custom Prompt...";
+  let customLabel = "Custom Prompt...";
+  if (defaultPreset === "custom") customLabel += " ★";
+  customOpt.textContent = customLabel;
   elements.analysisType.appendChild(customOpt);
 
   // Apply user's default preset
-  const { defaultPreset } = await browser.storage.local.get({ defaultPreset: "summary" });
   if (defaultPreset && elements.analysisType.querySelector(`option[value="${defaultPreset}"]`)) {
     elements.analysisType.value = defaultPreset;
   }
@@ -206,9 +232,48 @@ async function initContextPanel() {
     if (!resp || !resp.success || !resp.projects.length) return;
     const defaultId = defResp?.defaultProjectId || null;
 
-    // Populate project dropdown
+    // Store global default and load per-feature overrides
+    defaultProjectId = defaultId;
+    const overrides = await browser.storage.local.get({ monitorDefaultProjectId: null, bookmarkDefaultProjectId: null });
+    monitorOverrideProjectId = overrides.monitorDefaultProjectId || null;
+    bookmarkOverrideProjectId = overrides.bookmarkDefaultProjectId || null;
+
+    const projects = resp.projects;
+
+    // Helper: populate a project <select> with dual-star indicators
+    // ★ gold = global default, ✦ grey = per-feature override
+    function populateProjectSelect(sel, overrideId) {
+      if (!sel) return;
+      sel.replaceChildren();
+      const none = document.createElement("option");
+      none.value = "";
+      none.textContent = "No project";
+      sel.appendChild(none);
+      for (const proj of projects) {
+        const opt = document.createElement("option");
+        opt.value = proj.id;
+        let label = proj.name;
+        if (proj.id === defaultId) label += " ★";       // gold star = global default
+        if (proj.id === overrideId) label += " ✦";       // grey star = override
+        opt.textContent = label;
+        sel.appendChild(opt);
+      }
+      // Pre-select: override > global default > none
+      sel.value = overrideId || defaultId || "";
+      // Blue border if override is active
+      sel.classList.toggle("override-active", !!overrideId);
+      if (overrideId) sel.title = "Per-feature override active (set in console settings)";
+    }
+
+    // Monitor project dropdown
+    populateProjectSelect(elements.monitorProject, monitorOverrideProjectId);
+
+    // Bookmark project dropdown
+    populateProjectSelect(elements.bookmarkProject, bookmarkOverrideProjectId);
+
+    // Populate context project dropdown
     elements.contextProject.replaceChildren();
-    for (const proj of resp.projects) {
+    for (const proj of projects) {
       const opt = document.createElement("option");
       opt.value = proj.id;
       opt.textContent = proj.name + (proj.id === defaultId ? " (default)" : "");
@@ -223,15 +288,15 @@ async function initContextPanel() {
       elements.contextProject.value = savedId;
     }
 
-    // Toggle project dropdown visibility based on checkbox
-    const updateProjectVisibility = () => {
-      elements.contextProject.classList.toggle("hidden", !elements.contextEnabled.checked);
+    // Enable/disable context project dropdown based on APC toggle
+    const updateContextState = () => {
+      elements.contextProject.disabled = !elements.contextEnabled.checked;
     };
-    updateProjectVisibility();
+    updateContextState();
 
     // Persist on change
     const saveState = () => {
-      updateProjectVisibility();
+      updateContextState();
       browser.storage.local.set({
         contextualMode: { enabled: elements.contextEnabled.checked, projectId: elements.contextProject.value }
       });
@@ -239,7 +304,7 @@ async function initContextPanel() {
     elements.contextEnabled.addEventListener("change", saveState);
     elements.contextProject.addEventListener("change", saveState);
 
-    // Show context toggle (projects exist)
+    // Show APC pill (projects exist)
     elements.contextPanel.classList.remove("hidden");
   } catch { /* no projects or error — panel stays hidden */ }
 }
@@ -486,22 +551,42 @@ async function checkMonitorBookmarkStatus() {
     if (!tab || !tab.url || tab.url.startsWith("about:") || tab.url.startsWith("moz-extension:")) return;
     const url = tab.url;
 
-    // Check monitors
+    // Check monitors — if already monitored, light up wrap and show its project
     const monResp = await browser.runtime.sendMessage({ action: "getMonitors" });
-    if (monResp?.success && monResp.monitors.some(m => m.url === url)) {
-      elements.monitorBtn.classList.add("btn-active-indicator");
-      elements.monitorBtn.title = "Already monitoring this page";
-      const svg = elements.monitorBtn.querySelector("svg");
-      if (svg) svg.setAttribute("fill", "currentColor");
+    if (monResp?.success) {
+      const match = monResp.monitors.find(m => m.url === url);
+      if (match) {
+        const wrap = elements.monitorBtn.closest(".monitor-btn-wrap");
+        if (wrap) wrap.classList.add("wrap-active");
+        elements.monitorBtn.title = "Already monitoring this page";
+        const svg = elements.monitorBtn.querySelector("svg");
+        if (svg) svg.setAttribute("fill", "currentColor");
+        // Show the project this monitor is attached to
+        if (match.projectId && elements.monitorProject) {
+          elements.monitorProject.value = match.projectId;
+        }
+      }
     }
 
-    // Check bookmarks
+    // Check bookmarks — if already bookmarked, light up wrap and show its project + folder
     const bmResp = await browser.runtime.sendMessage({ action: "getBookmarks" });
-    if (bmResp?.success && bmResp.bookmarks.some(b => b.url === url)) {
-      elements.bookmarkBtn.classList.add("btn-active-indicator");
-      elements.bookmarkBtn.title = "Already bookmarked";
-      const svg = elements.bookmarkBtn.querySelector("svg");
-      if (svg) svg.setAttribute("fill", "currentColor");
+    if (bmResp?.success) {
+      const match = bmResp.bookmarks.find(b => b.url === url);
+      if (match) {
+        const wrap = elements.bookmarkBtn.closest(".bookmark-btn-wrap");
+        if (wrap) wrap.classList.add("wrap-active");
+        elements.bookmarkBtn.title = "Already bookmarked";
+        const svg = elements.bookmarkBtn.querySelector("svg");
+        if (svg) svg.setAttribute("fill", "currentColor");
+        // Show the folder this bookmark is filed in
+        if (match.folderId && elements.defaultBookmarkFolder) {
+          elements.defaultBookmarkFolder.value = match.folderId;
+        }
+        // Show the project this bookmark is attached to
+        if (match.projectId && elements.bookmarkProject) {
+          elements.bookmarkProject.value = match.projectId;
+        }
+      }
     }
   } catch (e) { /* ignore */ }
 }
@@ -565,6 +650,11 @@ async function initIncognitoBar() {
 // ──────────────────────────────────────────────
 function setMode(mode) {
   activeMode = mode;
+
+  // Sync dropdown
+  if (elements.analyzeMode && elements.analyzeMode.value !== mode) {
+    elements.analyzeMode.value = mode;
+  }
 
   elements.modeSelection.classList.toggle("active", mode === "selection");
   elements.modeCompare.classList.toggle("active", mode === "compare");
@@ -996,15 +1086,9 @@ function attachEventListeners() {
     }
   });
 
-  // Mode toggles
-  elements.modeSelection.addEventListener("click", () => {
-    setMode(activeMode === "selection" ? "normal" : "selection");
-  });
-  elements.modeCompare.addEventListener("click", () => {
-    setMode(activeMode === "compare" ? "normal" : "compare");
-  });
-  elements.modeMultipage.addEventListener("click", () => {
-    setMode(activeMode === "multipage" ? "normal" : "multipage");
+  // Mode dropdown (replaces toggle buttons)
+  elements.analyzeMode.addEventListener("change", () => {
+    setMode(elements.analyzeMode.value);
   });
 
   // Default bookmark folder — save choice to storage
@@ -1037,7 +1121,8 @@ function attachEventListeners() {
         intervalMinutes: 60,
         duration: 72,
         aiAnalysis: true,
-        autoBookmark: true
+        autoBookmark: true,
+        projectId: elements.monitorProject?.value || ""
       });
       elements.monitorBtn.classList.remove("bookmark-btn-saving");
       if (response && response.success) {
@@ -1068,7 +1153,8 @@ function attachEventListeners() {
         action: "bookmarkPage",
         tabId: currentTabId,
         aiTag: true,
-        folderId
+        folderId,
+        projectId: elements.bookmarkProject?.value || ""
       });
       if (response && response.success) {
         elements.bookmarkBtn.classList.remove("bookmark-btn-saving");
@@ -1089,6 +1175,45 @@ function attachEventListeners() {
       showToast(err.message, "error");
     }
   });
+
+  // ── Tools Accordion ──
+  {
+    const catBtns = document.querySelectorAll(".tools-cat-btn");
+    const drawer = document.getElementById("tools-drawer");
+    const accordion = document.querySelector(".tools-accordion");
+    let activeCat = null;
+
+    catBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        const cat = btn.dataset.toolsCat;
+        if (activeCat === cat) {
+          // toggle off
+          btn.classList.remove("active");
+          drawer.classList.remove("open");
+          drawer.querySelectorAll(".tools-drawer-items").forEach(d => d.classList.remove("visible"));
+          activeCat = null;
+          return;
+        }
+        catBtns.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        drawer.querySelectorAll(".tools-drawer-items").forEach(d => d.classList.remove("visible"));
+        drawer.querySelector(`.tools-drawer-items[data-tools-cat="${cat}"]`).classList.add("visible");
+        drawer.classList.add("open");
+        activeCat = cat;
+      });
+    });
+
+    // Close when mouse leaves the entire accordion area
+    if (accordion) {
+      accordion.addEventListener("mouseleave", () => {
+        if (!activeCat) return;
+        catBtns.forEach(b => b.classList.remove("active"));
+        drawer.classList.remove("open");
+        drawer.querySelectorAll(".tools-drawer-items").forEach(d => d.classList.remove("visible"));
+        activeCat = null;
+      });
+    }
+  }
 
   // ── OSINT Tool Buttons ──
   document.getElementById("osint-metadata").addEventListener("click", async () => {

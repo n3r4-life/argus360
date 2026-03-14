@@ -699,6 +699,37 @@
         </div>
       </section>
 
+      <!-- Default Project -->
+      <section class="card">
+        <h2 class="card-title">Default Project</h2>
+        <div class="card-body">
+          <p class="info-text">Set the global default project. Monitors, bookmarks, and analyses route here unless overridden per-feature below.</p>
+          <div class="form-row" style="gap:16px;">
+            <div class="form-group flex-1">
+              <label for="settings-default-project">Global Default</label>
+              <select id="settings-default-project">
+                <option value="">No project</option>
+              </select>
+              <span class="hint">Same as "Set as Default" on the Projects tab</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="settings-monitor-project">Monitor Override</label>
+              <select id="settings-monitor-project">
+                <option value="">Use global default</option>
+              </select>
+              <span class="hint">All new monitors use this project instead of global default</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="settings-bookmark-project">Bookmark Override</label>
+              <select id="settings-bookmark-project">
+                <option value="">Use global default</option>
+              </select>
+              <span class="hint">All bookmarks use this project instead of global default</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Backup Schedule -->
       <section class="card">
         <h2 class="card-title">Backup Schedule</h2>
@@ -1039,7 +1070,7 @@
                   <option value="prompt">Custom Prompt</option>
                   <option value="extractEntities">Extract Entities</option>
                   <option value="runPipeline">Run Pipeline</option>
-                  <option value="addToProject">Add to Project</option>
+                  <option value="addToProject">Save Link to Project</option>
                   <option value="addToMonitors">Add to Monitors</option>
                   <option value="paste">Paste to Service</option>
                   <option value="saveToCloud">Save to Cloud</option>
@@ -1556,6 +1587,16 @@
         <div class="card-body">
           <p class="info-text">Monitor pages for changes. Argus will periodically check for updates and notify you when content changes. Optionally uses AI to summarize what changed.</p>
 
+          <div class="form-row" style="margin-bottom:8px;">
+            <div class="form-group flex-1">
+              <label for="monitor-default-project">Default Project Override</label>
+              <select id="monitor-default-project">
+                <option value="">Use global default</option>
+              </select>
+              <small class="info-text" style="margin-top:2px;">Overrides the global default project for all monitors</small>
+            </div>
+          </div>
+
           <div class="rule-form">
             <div class="form-row">
               <div class="form-group flex-2">
@@ -1597,6 +1638,12 @@
               <div class="form-group flex-1">
                 <label for="monitor-automation">Run Automation</label>
                 <select id="monitor-automation">
+                  <option value="">None</option>
+                </select>
+              </div>
+              <div class="form-group flex-1">
+                <label for="monitor-project-select">Attach to Project</label>
+                <select id="monitor-project-select">
                   <option value="">None</option>
                 </select>
               </div>

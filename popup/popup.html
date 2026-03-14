@@ -225,59 +225,59 @@
   <section id="analysis-panel">
     <!-- Row 2: Action buttons (prominent) -->
     <div class="form-group btn-row btn-row-equal">
-      <button id="analyze-btn" class="btn btn-primary btn-stacked">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
-          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-        </svg>
-        <br>
-        <span class="btn-text">Analyze It</span>
-        <span class="btn-spinner hidden"></span>
-      </button>
-      <button id="monitor-btn" class="btn btn-secondary btn-stacked" title="Monitor this page for changes">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-          <circle cx="12" cy="12" r="3"/>
-        </svg>
-        <br>
-        <span>Monitor It</span>
-      </button>
-      <button id="bookmark-btn" class="btn btn-secondary btn-stacked" title="Bookmark with AI tags">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-             stroke="currentColor" stroke-width="2">
-          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-        </svg>
-        <br>
-        <span>Bookmark It</span>
-      </button>
+      <div class="analyze-btn-wrap">
+        <button id="analyze-btn" class="btn btn-primary btn-stacked">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+          <br>
+          <span class="btn-text">Analyze It</span>
+          <span class="btn-spinner hidden"></span>
+        </button>
+        <select id="analyze-mode" class="btn-sub-select" title="Analysis mode">
+          <option value="normal">full-page</option>
+          <option value="selection">selection</option>
+          <option value="compare">compare</option>
+          <option value="multipage">multi-tab</option>
+        </select>
+      </div>
+      <div class="monitor-btn-wrap">
+        <button id="monitor-btn" class="btn btn-secondary btn-stacked" title="Monitor this page for changes">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          <br>
+          <span>Monitor It</span>
+        </button>
+        <select id="monitor-project" class="btn-sub-select" title="Route to project">
+          <option value="">No project</option>
+        </select>
+      </div>
+      <div class="bookmark-btn-wrap">
+        <button id="bookmark-btn" class="btn btn-secondary btn-stacked" title="Bookmark with AI tags">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2">
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+          </svg>
+          <br>
+          <span>Bookmark It</span>
+        </button>
+        <select id="bookmark-project" class="btn-sub-select" title="Route to project">
+          <option value="">No project</option>
+        </select>
+        <select id="default-bookmark-folder" class="btn-sub-select" title="Bookmark folder">
+          <option value="">&#128278; Unsorted</option>
+        </select>
+      </div>
     </div>
 
-    <!-- Row 3: Mode toggles -->
-    <div class="mode-toggles">
-      <button id="mode-selection" class="mode-btn" title="Analyze selected text only">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M4 7V4h3"/><path d="M20 7V4h-3"/><path d="M4 17v3h3"/><path d="M20 17v3h-3"/>
-          <line x1="9" y1="12" x2="15" y2="12"/>
-        </svg>
-        <span>Selection</span>
-      </button>
-      <button id="mode-compare" class="mode-btn" title="Compare results across AI providers">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="8" height="18" rx="1"/><rect x="13" y="3" width="8" height="18" rx="1"/>
-        </svg>
-        <span>Compare AIs</span>
-      </button>
-      <button id="mode-multipage" class="mode-btn" title="Analyze multiple open tabs">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
-        </svg>
-        <span>Multi-Tab</span>
-      </button>
-      <select id="default-bookmark-folder" class="mode-select" title="Default bookmark folder — bookmarks go here">
-        <option value="">&#128278; Unsorted</option>
-      </select>
-    </div>
+    <!-- Hidden mode buttons (functionality moved to analyze-mode dropdown) -->
+    <button id="mode-selection" class="hidden"></button>
+    <button id="mode-compare" class="hidden"></button>
+    <button id="mode-multipage" class="hidden"></button>
 
     <!-- Compare provider checkboxes (hidden by default) -->
     <div id="compare-panel" class="compare-panel hidden">
@@ -302,22 +302,15 @@
       <span id="selection-text-preview"></span>
     </div>
 
-    <!-- Combined: context + preset + provider -->
+    <!-- Combined: preset + provider + context project + APC toggle -->
     <div class="combined-controls-row">
-      <label id="context-panel" class="context-toggle hidden" title="Include project context in analysis">
+      <select id="analysis-type" class="ccr-select"></select>
+      <select id="analysis-provider" class="ccr-select" title="Choose AI provider"></select>
+      <select id="context-project" class="ccr-select" title="Project context for analysis" disabled></select>
+      <label id="context-panel" class="apc-pill hidden" title="Add Project Context — include project data in analysis">
         <input type="checkbox" id="context-enabled">
-        <span>add context</span>
+        <span>APC</span>
       </label>
-      <select id="context-project" class="context-project-select hidden" title="Select project for context"></select>
-      <select id="analysis-type" class="flex-grow"></select>
-      <select id="analysis-provider" title="Choose AI provider">
-        <option value="">Default</option>
-        <option value="xai">Grok</option>
-        <option value="openai">OpenAI</option>
-        <option value="anthropic">Claude</option>
-        <option value="gemini">Gemini</option>
-        <option value="custom">Custom</option>
-      </select>
     </div>
 
     <div id="custom-prompt-group" class="form-group hidden">
@@ -328,83 +321,32 @@
 
     <hr class="popup-divider">
 
-    <!-- OSINT Quick Tools -->
-    <div class="form-group btn-row osint-tools-row">
-      <button id="osint-metadata" class="btn btn-osint" title="Extract page metadata, OG tags, JSON-LD">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-        </svg>
-        <span>Meta</span>
-      </button>
-      <button id="osint-whois" class="btn btn-osint" title="Whois & DNS lookup for this domain">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
-          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-        </svg>
-        <span>Whois</span>
-      </button>
-      <button id="osint-techstack" class="btn btn-osint" title="Detect website technologies">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="4" y="4" width="16" height="16" rx="2"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="10" y1="4" x2="10" y2="20"/>
-        </svg>
-        <span>T-Stack</span>
-      </button>
-      <button id="osint-archive" class="btn btn-osint" title="Check archive.is for a saved version">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/>
-        </svg>
-        <span>Archive</span>
-      </button>
-      <button id="osint-wayback" class="btn btn-osint" title="Check Wayback Machine for snapshots">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-        </svg>
-        <span>Wayback</span>
-      </button>
-      <button id="osint-downdetector" class="btn btn-osint" title="Check if sites are up or down">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6 6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .3.3"/>
-          <path d="M8 15v1a6 6 0 0 0 6 6 6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/>
-        </svg>
-        <span>Health</span>
-      </button>
-    </div>
-
-    <!-- Media & Extract row -->
-    <div class="form-group btn-row media-tools-row">
-      <button id="osint-links" class="btn btn-media" title="Map all links on this page">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-        </svg>
-        <span>Links</span>
-      </button>
-      <button id="osint-images" class="btn btn-media" title="Grab all images from this page">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
-        </svg>
-        <span>Images</span>
-      </button>
-      <button id="osint-images-all" class="btn btn-media" title="Grab images from ALL open tabs">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="16" height="16" rx="2"/><circle cx="8" cy="8" r="1.5"/><path d="M19 13l-4-4L5 19"/>
-          <rect x="6" y="1" width="16" height="16" rx="2" opacity="0.35"/>
-        </svg>
-        <span>All Tabs</span>
-      </button>
-      <button id="osint-screenshot" class="btn btn-media" title="Capture visible page as image">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
-        </svg>
-        <span>Screenshot</span>
-      </button>
-      <button id="osint-regex" class="btn btn-media" title="Regex search: find emails, IPs, phone numbers, patterns in page source">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M8 8l6 6" stroke-width="1.5"/>
-        </svg>
-        <span>Regex</span>
-      </button>
+    <!-- OSINT & Tools — accordion categories -->
+    <div class="tools-accordion">
+      <div class="tools-cat-row">
+        <button class="tools-cat-btn" data-tools-cat="recon">Recon</button>
+        <button class="tools-cat-btn" data-tools-cat="media">Grab</button>
+        <button class="tools-cat-btn" data-tools-cat="archive">Archive</button>
+      </div>
+      <div class="tools-drawer" id="tools-drawer">
+        <div class="tools-drawer-items" data-tools-cat="recon">
+          <button id="osint-downdetector" class="tool-chip" title="Check if sites are up or down">Health</button>
+          <button id="osint-whois" class="tool-chip" title="Whois & DNS lookup">Whois</button>
+          <button id="osint-techstack" class="tool-chip" title="Detect technologies">T-Stack</button>
+          <button id="osint-metadata" class="tool-chip" title="Extract metadata, OG tags, JSON-LD">Meta</button>
+          <button id="osint-regex" class="tool-chip" title="Regex search: emails, IPs, patterns">Regex</button>
+          <button id="osint-links" class="tool-chip" title="Map all links on this page">Links</button>
+        </div>
+        <div class="tools-drawer-items" data-tools-cat="media">
+          <button id="osint-images" class="tool-chip" title="Grab all images from this page">Images</button>
+          <button id="osint-images-all" class="tool-chip" title="Grab images from ALL open tabs">All Tabs</button>
+          <button id="osint-screenshot" class="tool-chip" title="Capture visible page as image">Screenshot</button>
+        </div>
+        <div class="tools-drawer-items" data-tools-cat="archive">
+          <button id="osint-archive" class="tool-chip" title="Check archive.is for saved version">Archive</button>
+          <button id="osint-wayback" class="tool-chip" title="Check Wayback Machine">Wayback</button>
+        </div>
+      </div>
     </div>
 
     <!-- Quick Search bar -->
