@@ -65,17 +65,21 @@ body {
 }
 
 .graph-motto {
-  position: fixed;
-  top: 72px;
-  left: calc(50% + 298px);
-  transform: translateX(-50%);
-  font-size: 12px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 42px;
+  font-weight: 800;
   font-style: italic;
   color: var(--text-muted, #6a6a80);
-  opacity: 0.4;
+  opacity: 0.06;
   pointer-events: none;
-  z-index: 15;
-  letter-spacing: 0.5px;
+  z-index: 1;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  user-select: none;
 }
 
 .header-controls {
@@ -146,6 +150,44 @@ body {
   font-size: 11px;
 }
 
+.header-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.kg-header-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.kg-header-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+  background: rgba(233, 69, 96, 0.08);
+}
+.kg-header-btn svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.kg-header-btn:hover svg { opacity: 1; }
+
+/* Legacy .btn-export kept for active/flash states on Sources button */
 .btn-export {
   padding: 6px 14px;
   background: var(--accent);
@@ -525,16 +567,18 @@ body {
 }
 
 /* ── Sources overlay ── */
-.btn-export.active {
+.kg-header-btn.active {
   background: #00e5ff;
   color: #111;
+  border-color: #00e5ff;
 }
-.btn-export.flash {
+.kg-header-btn.active svg { opacity: 1; }
+.kg-header-btn.flash {
   animation: flashBtn 0.8s ease;
 }
 @keyframes flashBtn {
-  0%, 100% { background: var(--accent); }
-  50% { background: #ff5252; }
+  0%, 100% { border-color: var(--accent); background: rgba(233, 69, 96, 0.15); }
+  50% { border-color: #ff5252; background: rgba(255, 82, 82, 0.2); }
 }
 
 /* Source match info in sidebar */

@@ -20,9 +20,21 @@
         <button class="mode-btn active" data-mode="project">Project</button>
         <button class="mode-btn" data-mode="global">Global KG</button>
       </div>
+      <span class="header-sep"></span>
+      <button id="addToProjectBtn" class="kg-header-btn" title="Add data to a project">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+        To Project
+      </button>
+      <button id="overlaySourcesBtn" class="kg-header-btn" title="Cross-reference Sources with KG entities">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Sources
+      </button>
+      <button id="exportPng" class="kg-header-btn" title="Export graph as PNG">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export
+      </button>
     </div>
     <div class="header-controls">
-      <input type="text" id="graphSearch" class="graph-search" placeholder="Search entities...">
       <div class="filter-group">
         <label class="filter-checkbox">
           <input type="checkbox" data-type="person" checked>
@@ -32,12 +44,12 @@
         <label class="filter-checkbox">
           <input type="checkbox" data-type="organization" checked>
           <span class="filter-dot" style="background:#64b5f6"></span>
-          Organizations
+          Orgs
         </label>
         <label class="filter-checkbox">
           <input type="checkbox" data-type="location" checked>
           <span class="filter-dot" style="background:#4caf50"></span>
-          Locations
+          Places
         </label>
         <label class="filter-checkbox">
           <input type="checkbox" data-type="date" checked>
@@ -55,12 +67,9 @@
         <button id="zoomReset" title="Reset zoom">Reset</button>
         <button id="zoomOut" title="Zoom out">&minus;</button>
       </div>
-      <button id="overlaySourcesBtn" class="btn-export" title="Cross-reference Sources with KG entities">Sources</button>
-      <button id="exportPng" class="btn-export">Export PNG</button>
+      <input type="text" id="graphSearch" class="graph-search" placeholder="Search entities...">
     </div>
   </header>
-
-  <div class="graph-motto">Cum hoc ergo propter hoc</div>
 
   <!-- Project overlay panel -->
   <div class="project-panel hidden" id="projectPanel">
@@ -81,6 +90,7 @@
   </button>
 
   <main class="graph-container">
+    <div class="graph-motto">Cum hoc ergo propter hoc</div>
     <canvas id="graphCanvas"></canvas>
   </main>
 

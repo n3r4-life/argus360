@@ -101,6 +101,10 @@
 }
 
 /* ── App launcher tabs (below ribbon) ── */
+@keyframes appTabsFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .argus-app-tabs {
   display: flex;
   gap: 0;
@@ -109,6 +113,9 @@
   border-bottom: 1px solid #2a2a4a;
   margin-bottom: 24px;
   position: relative;
+  z-index: 100;
+  opacity: 0;
+  animation: appTabsFadeIn 0.3s ease 0.1s forwards;
 }
 .app-tab-btn {
   display: flex;
@@ -228,7 +235,7 @@
   align-items: center;
   justify-content: center;
   padding: 8px 14px;
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 700;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color: #6a6a80;
@@ -262,9 +269,7 @@
 }
 
 .app-tab-picker {
-  position: absolute;
-  top: 100%;
-  right: 0;
+  position: fixed;
   z-index: 1000;
   background: #1a1a2e;
   border: 1px solid #2a2a4a;
@@ -275,6 +280,7 @@
   grid-template-columns: 1fr 1fr;
   gap: 4px;
   min-width: 300px;
+  transition: opacity 0.15s ease;
 }
 .app-tab-picker.hidden { display: none; }
 

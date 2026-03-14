@@ -186,8 +186,6 @@
 
   // MFT (tool) tabs — selectable in pickers, can be pinned/visible
   const ALL_TAB_IDS = ["app-projects", "app-reader", "app-reports", "app-kg", "app-workbench", "app-draft", "app-images", "app-chat", "app-terminal", "app-finance"];
-  // MFTr (results) tabs — navigable but not selectable; transient output pages
-  const RESULT_TAB_IDS = ["app-results"];
   const DEFAULT_TAB_ORDER = [...ALL_TAB_IDS];
   const DEFAULT_VISIBLE_TABS = ["app-projects", "app-reader", "app-reports", "app-kg", "app-workbench", "app-chat", "app-terminal", "app-finance"];
   const MAX_VISIBLE_TABS = 8;
@@ -298,7 +296,7 @@
   function renderQuickJump() {
     const effective = getEffectiveVisible();
     const visibleSet = new Set(effective);
-    const hiddenTabs = currentTabOrder.filter(id => !visibleSet.has(id) && APP_TAB_DEFS[id]);
+    const hiddenTabs = currentTabOrder.filter(id => !visibleSet.has(id) && ALL_TAB_IDS.includes(id));
     if (hiddenTabs.length === 0) {
       quickJumpOverlay.innerHTML = '<div class="app-tab-picker-title">All tabs visible</div>';
       return;
@@ -336,12 +334,31 @@
     });
   }
 
+  function positionOverlay(overlay, e) {
+    // Position from the click event coordinates — let layout settle, then fade in
+    overlay.style.opacity = "0";
+    overlay.style.left = "auto";
+    overlay.style.right = "auto";
+    requestAnimationFrame(() => {
+      const x = e.clientX;
+      const y = e.clientY;
+      // Right-align: overlay extends leftward from click point
+      const right = Math.max(0, window.innerWidth - x - 20);
+      overlay.style.top = (y + 16) + "px";
+      overlay.style.right = right + "px";
+      overlay.style.opacity = "1";
+    });
+  }
+
   quickJumpBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     tabPickerOverlay.classList.add("hidden"); // close the other overlay
     const isHidden = quickJumpOverlay.classList.contains("hidden");
     quickJumpOverlay.classList.toggle("hidden");
-    if (isHidden) renderQuickJump();
+    if (isHidden) {
+      renderQuickJump();
+      positionOverlay(quickJumpOverlay, e);
+    }
   });
 
   tabPickerBtn.addEventListener("click", (e) => {
@@ -349,7 +366,10 @@
     quickJumpOverlay.classList.add("hidden"); // close the other overlay
     const isHidden = tabPickerOverlay.classList.contains("hidden");
     tabPickerOverlay.classList.toggle("hidden");
-    if (isHidden) renderTabPicker();
+    if (isHidden) {
+      renderTabPicker();
+      positionOverlay(tabPickerOverlay, e);
+    }
   });
 
   document.addEventListener("click", (e) => {

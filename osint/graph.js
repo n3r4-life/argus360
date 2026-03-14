@@ -835,6 +835,35 @@
     document.getElementById('exportPng').addEventListener('click', exportPng);
     document.getElementById('overlaySourcesBtn').addEventListener('click', toggleSourcesOverlay);
 
+    // "To Project" — add current graph data to a project
+    document.getElementById('addToProjectBtn').addEventListener('click', async () => {
+      try {
+        const res = await browser.runtime.sendMessage({ action: "getProjects" });
+        const projects = Array.isArray(res?.projects) ? res.projects : [];
+        if (projects.length === 0) {
+          alert("No projects found. Create a project first from the Projects tab.");
+          return;
+        }
+        // Simple picker: list project names
+        const names = projects.map((p, i) => `${i + 1}. ${p.name}`).join("\n");
+        const choice = prompt("Add graph data to which project?\n\n" + names + "\n\nEnter number:");
+        if (!choice) return;
+        const idx = parseInt(choice, 10) - 1;
+        if (isNaN(idx) || idx < 0 || idx >= projects.length) return;
+        const project = projects[idx];
+        // Collect current graph nodes as entity data
+        const entities = nodes.map(n => ({ label: n.label, type: n.type, count: n.count }));
+        await browser.runtime.sendMessage({
+          action: "addProjectEntities",
+          projectId: project.id,
+          entities
+        });
+        alert(`Added ${entities.length} entities to "${project.name}".`);
+      } catch (e) {
+        console.error("Add to project failed:", e);
+      }
+    });
+
     // Filter checkboxes
     document.querySelectorAll('.filter-checkbox input').forEach(cb => {
       cb.addEventListener('change', () => {

@@ -6031,8 +6031,7 @@ function initMainTabs() {
     "open-draft-nav": "reporting/reporting.html",
     "open-reader-nav": "feeds/feeds.html",
     "open-images-nav": "osint/images.html",
-    "open-terminal-nav": "ssh/ssh.html",
-    "open-results-nav": "results/results.html"
+    "open-terminal-nav": "ssh/ssh.html"
   };
   for (const [id, path] of Object.entries(appNavMap)) {
     const btn = document.getElementById(id);
@@ -6132,34 +6131,213 @@ function initMainTabs() {
     }
   });
 
-  // ── Console app-nav drag-to-reorder + saved order ──
+  // ── Console app-nav: visibility, quick-jump, config, drag-to-reorder ──
   const consoleAppNav = document.getElementById("console-app-nav");
-  const CONSOLE_DEFAULT_ORDER = ["open-projects-nav", "open-reader-nav", "open-history-nav", "open-kg-nav", "open-workbench-nav", "open-draft-nav", "open-images-nav", "open-chat-nav", "open-terminal-nav", "open-results-nav"];
+  const CONSOLE_ALL_IDS = ["open-projects-nav", "open-reader-nav", "open-history-nav", "open-kg-nav", "open-workbench-nav", "open-draft-nav", "open-images-nav", "open-chat-nav", "open-terminal-nav"];
+  const CONSOLE_DEFAULT_VISIBLE = ["open-projects-nav", "open-reader-nav", "open-history-nav", "open-kg-nav", "open-workbench-nav", "open-chat-nav", "open-terminal-nav"];
+  const CONSOLE_MAX_VISIBLE = 8;
+  const CONSOLE_PINNED = ["open-projects-nav"];
   // Mapping from ribbon tab IDs to console nav IDs
   const ribbonToConsole = {
     "app-projects": "open-projects-nav", "app-reader": "open-reader-nav",
     "app-reports": "open-history-nav", "app-kg": "open-kg-nav",
     "app-workbench": "open-workbench-nav", "app-draft": "open-draft-nav",
     "app-images": "open-images-nav", "app-chat": "open-chat-nav",
-    "app-terminal": "open-terminal-nav",
-    "app-results": "open-results-nav"
+    "app-terminal": "open-terminal-nav"
   };
   const consoleToRibbon = Object.fromEntries(Object.entries(ribbonToConsole).map(([k, v]) => [v, k]));
 
-  (async function initConsoleAppNavOrder() {
-    try {
-      const stored = await browser.storage.local.get("appTabOrder");
-      if (Array.isArray(stored.appTabOrder) && stored.appTabOrder.length > 0) {
-        const consoleOrder = stored.appTabOrder.map(rid => ribbonToConsole[rid]).filter(Boolean);
-        // Append any new tabs not in saved order
-        const missing = CONSOLE_DEFAULT_ORDER.filter(id => !consoleOrder.includes(id));
-        const fullOrder = [...consoleOrder, ...missing];
-        for (const cid of fullOrder) {
-          const btn = document.getElementById(cid);
-          if (btn) consoleAppNav.appendChild(btn);
-        }
+  // Cache SVG + label from each HTML button before any are hidden
+  const consoleTabMeta = {};
+  for (const cid of CONSOLE_ALL_IDS) {
+    const btn = document.getElementById(cid);
+    if (btn) {
+      consoleTabMeta[cid] = {
+        svg: btn.querySelector("svg")?.outerHTML || "",
+        label: btn.querySelector("span")?.textContent || cid
+      };
+    }
+  }
+
+  let consoleCurrentOrder = [...CONSOLE_ALL_IDS];
+  let consoleVisibleTabs = [...CONSOLE_DEFAULT_VISIBLE];
+  let consoleSessionVisible = null; // ephemeral swap state
+
+  function consoleGetEffective() {
+    return consoleSessionVisible || consoleVisibleTabs;
+  }
+
+  function consoleApplyVisibility() {
+    const effective = new Set(consoleGetEffective());
+    const quickJumpBtn = document.getElementById("console-quick-jump");
+    for (const cid of CONSOLE_ALL_IDS) {
+      const btn = document.getElementById(cid);
+      if (!btn) continue;
+      btn.style.display = effective.has(cid) ? "" : "none";
+      // Reorder: insert visible tabs before the quick-jump button
+      if (effective.has(cid)) {
+        consoleAppNav.insertBefore(btn, quickJumpBtn);
       }
-    } catch (e) { /* use default HTML order */ }
+    }
+  }
+
+  // Quick-jump button + overlay
+  const cQuickJumpBtn = document.getElementById("console-quick-jump");
+  const cQuickJumpOverlay = document.getElementById("console-quick-jump-overlay");
+
+  function renderConsoleQuickJump() {
+    const effective = consoleGetEffective();
+    const visibleSet = new Set(effective);
+    const hidden = consoleCurrentOrder.filter(id => !visibleSet.has(id) && consoleTabMeta[id]);
+    if (hidden.length === 0) {
+      cQuickJumpOverlay.innerHTML = '<div class="console-picker-title">All tabs visible</div>';
+      return;
+    }
+    let html = '<div class="console-picker-title">Jump to</div>';
+    for (const cid of hidden) {
+      const m = consoleTabMeta[cid];
+      html += `<button class="console-picker-item" data-jump-id="${cid}">${m.svg} <span>${m.label}</span></button>`;
+    }
+    cQuickJumpOverlay.innerHTML = html;
+
+    cQuickJumpOverlay.querySelectorAll("[data-jump-id]").forEach(item => {
+      item.addEventListener("click", () => {
+        const cid = item.dataset.jumpId;
+        cQuickJumpOverlay.classList.add("hidden");
+
+        // Swap: bump leftmost non-pinned tab, add this one at the end
+        const swapped = [...consoleGetEffective()];
+        const bumpIdx = swapped.findIndex(t => !CONSOLE_PINNED.includes(t));
+        if (bumpIdx >= 0) {
+          swapped.splice(bumpIdx, 1);
+          swapped.push(cid);
+          consoleSessionVisible = swapped;
+          consoleApplyVisibility();
+        }
+
+        // Navigate — click the actual tab button
+        const btn = document.getElementById(cid);
+        if (btn) btn.click();
+      });
+    });
+  }
+
+  function positionConsoleOverlay(overlay, e) {
+    overlay.style.opacity = "0";
+    overlay.style.left = "auto";
+    overlay.style.right = "auto";
+    requestAnimationFrame(() => {
+      const x = e.clientX;
+      const y = e.clientY;
+      const right = Math.max(0, window.innerWidth - x - 20);
+      overlay.style.top = (y + 16) + "px";
+      overlay.style.right = right + "px";
+      overlay.style.opacity = "1";
+    });
+  }
+
+  cQuickJumpBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    document.getElementById("console-tab-config-overlay").classList.add("hidden");
+    const isHidden = cQuickJumpOverlay.classList.contains("hidden");
+    cQuickJumpOverlay.classList.toggle("hidden");
+    if (isHidden) {
+      renderConsoleQuickJump();
+      positionConsoleOverlay(cQuickJumpOverlay, e);
+    }
+  });
+
+  // Tab config button + overlay
+  const cTabConfigBtn = document.getElementById("console-tab-config");
+  const cTabConfigOverlay = document.getElementById("console-tab-config-overlay");
+
+  function renderConsoleTabConfig() {
+    const visibleSet = new Set(consoleVisibleTabs);
+    let html = '<div class="console-picker-title">Visible Tabs</div>';
+    html += '<div class="console-picker-hint">Max ' + CONSOLE_MAX_VISIBLE + ' tabs. Drag to reorder.</div>';
+    for (const cid of CONSOLE_ALL_IDS) {
+      const m = consoleTabMeta[cid];
+      if (!m) continue;
+      const isPinned = CONSOLE_PINNED.includes(cid);
+      const isVisible = visibleSet.has(cid);
+      const pinnedCls = isPinned ? " console-picker-pinned" : "";
+      const activeCls = isVisible ? " console-picker-active" : "";
+      html += `<button class="console-picker-item${activeCls}${pinnedCls}" data-pick-id="${cid}" ${isPinned ? 'disabled' : ''}>`;
+      html += `${m.svg} <span>${m.label}</span>`;
+      if (isPinned) html += '<span class="console-picker-pin" title="Always visible">&#128274;</span>';
+      else if (isVisible) html += '<span class="console-picker-toggle">✕</span>';
+      else html += '<span class="console-picker-toggle">+</span>';
+      html += '</button>';
+    }
+    cTabConfigOverlay.innerHTML = html;
+
+    cTabConfigOverlay.querySelectorAll(".console-picker-item:not([disabled])").forEach(item => {
+      item.addEventListener("click", async () => {
+        const cid = item.dataset.pickId;
+        const idx = consoleVisibleTabs.indexOf(cid);
+        if (idx >= 0) {
+          consoleVisibleTabs.splice(idx, 1);
+        } else if (consoleVisibleTabs.length < CONSOLE_MAX_VISIBLE) {
+          consoleVisibleTabs.push(cid);
+        } else {
+          return;
+        }
+        // Save as ribbon-format IDs so ribbon.js stays in sync
+        // Preserve any ribbon-only tabs (e.g. app-finance) that have no console equivalent
+        const { appVisibleTabs: prevRibbon } = await browser.storage.local.get({ appVisibleTabs: [] });
+        const mappedRibbonIds = new Set(Object.keys(ribbonToConsole));
+        const ribbonOnlyTabs = (prevRibbon || []).filter(rid => !mappedRibbonIds.has(rid));
+        const ribbonVis = [...consoleVisibleTabs.map(c => consoleToRibbon[c]).filter(Boolean), ...ribbonOnlyTabs];
+        await browser.storage.local.set({ appVisibleTabs: ribbonVis });
+        consoleSessionVisible = null;
+        consoleApplyVisibility();
+        renderConsoleTabConfig();
+      });
+    });
+  }
+
+  cTabConfigBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    cQuickJumpOverlay.classList.add("hidden");
+    const isHidden = cTabConfigOverlay.classList.contains("hidden");
+    cTabConfigOverlay.classList.toggle("hidden");
+    if (isHidden) {
+      renderConsoleTabConfig();
+      positionConsoleOverlay(cTabConfigOverlay, e);
+    }
+  });
+
+  // Close overlays on outside click
+  document.addEventListener("click", (e) => {
+    if (!cQuickJumpOverlay.contains(e.target) && e.target !== cQuickJumpBtn) {
+      cQuickJumpOverlay.classList.add("hidden");
+    }
+    if (!cTabConfigOverlay.contains(e.target) && e.target !== cTabConfigBtn && !cTabConfigBtn.contains(e.target)) {
+      cTabConfigOverlay.classList.add("hidden");
+    }
+  });
+
+  (async function initConsoleAppNav() {
+    try {
+      const stored = await browser.storage.local.get(["appTabOrder", "appVisibleTabs"]);
+      if (Array.isArray(stored.appTabOrder) && stored.appTabOrder.length > 0) {
+        const mapped = stored.appTabOrder.map(rid => ribbonToConsole[rid]).filter(Boolean);
+        const missing = CONSOLE_ALL_IDS.filter(id => !mapped.includes(id));
+        consoleCurrentOrder = [...mapped, ...missing];
+      }
+      if (Array.isArray(stored.appVisibleTabs) && stored.appVisibleTabs.length > 0) {
+        consoleVisibleTabs = stored.appVisibleTabs.map(rid => ribbonToConsole[rid]).filter(Boolean);
+        // Ensure pinned tabs are always included
+        for (const pin of CONSOLE_PINNED) {
+          if (!consoleVisibleTabs.includes(pin)) consoleVisibleTabs.unshift(pin);
+        }
+        if (consoleVisibleTabs.length > CONSOLE_MAX_VISIBLE) consoleVisibleTabs = consoleVisibleTabs.slice(0, CONSOLE_MAX_VISIBLE);
+      }
+    } catch (e) { /* use defaults */ }
+
+    consoleApplyVisibility();
+    // Fade in the tab bar once visibility is applied
+    consoleAppNav.classList.add("ready");
 
     // Setup drag-to-reorder for console app-nav (custom mouse-based, threshold to avoid eating clicks)
     const DRAG_THRESHOLD = 8;
@@ -6209,6 +6387,31 @@ function initMainTabs() {
       dragState = null;
     });
   })();
+
+  // Sync visibility when storage changes (e.g. from an MFT page's ribbon)
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") return;
+    if (changes.appVisibleTabs) {
+      const vis = changes.appVisibleTabs.newValue;
+      if (Array.isArray(vis)) {
+        consoleVisibleTabs = vis.map(rid => ribbonToConsole[rid]).filter(Boolean);
+        for (const pin of CONSOLE_PINNED) {
+          if (!consoleVisibleTabs.includes(pin)) consoleVisibleTabs.unshift(pin);
+        }
+        consoleSessionVisible = null;
+        consoleApplyVisibility();
+      }
+    }
+    if (changes.appTabOrder) {
+      const ord = changes.appTabOrder.newValue;
+      if (Array.isArray(ord)) {
+        const mapped = ord.map(rid => ribbonToConsole[rid]).filter(Boolean);
+        const missing = CONSOLE_ALL_IDS.filter(id => !mapped.includes(id));
+        consoleCurrentOrder = [...mapped, ...missing];
+        consoleApplyVisibility();
+      }
+    }
+  });
 
   // Wipe icon — quick link to Settings wipe section
   const wipeNavBtn = document.getElementById("wipe-nav");

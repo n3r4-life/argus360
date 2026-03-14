@@ -860,6 +860,10 @@ a:hover {
   margin-right: -20px;
   margin-bottom: 24px;
   border-bottom: 1px solid var(--border);
+  opacity: 0;
+}
+.app-nav.ready {
+  animation: fadeIn 0.25s ease forwards;
 }
 
 .app-tab {
@@ -891,6 +895,122 @@ a:hover {
 }
 .app-tab.dragging { opacity: 0.4; cursor: grabbing; border-style: dashed; }
 .app-tab.drag-over { border-color: var(--accent); background: rgba(233, 69, 96, 0.1); }
+
+/* ── App-nav manage buttons (⋯ quick-jump + 4-square config) ── */
+.app-tab-manage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font);
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-bottom: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-left: 2px;
+  flex-shrink: 0;
+  letter-spacing: 2px;
+  position: relative;
+  z-index: 2;
+}
+.app-tab-manage:hover {
+  color: #e94560;
+  border-color: #e94560;
+  background: rgba(233, 69, 96, 0.06);
+}
+.app-tab-manage-config {
+  padding: 8px 10px;
+  font-size: 13px;
+  letter-spacing: 0;
+}
+.app-tab-manage-config svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+/* ── Console tab picker overlays ── */
+.console-tab-picker {
+  position: fixed;
+  z-index: 1000;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  min-width: 300px;
+  transition: opacity 0.15s ease;
+}
+.console-tab-picker.hidden { display: none; }
+
+.console-picker-title {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: #6a6a8a;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 4px 8px 2px;
+  text-align: center;
+}
+.console-picker-hint {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  color: #4a4a6a;
+  text-align: center;
+  padding: 0 8px 6px;
+}
+.console-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: var(--font);
+  transition: all 0.15s;
+}
+.console-picker-item:hover:not([disabled]) {
+  background: #2a2a4a;
+  color: var(--text-primary);
+}
+.console-picker-item.console-picker-active {
+  color: var(--text-primary);
+  border-color: #3a3a5a;
+  background: rgba(30, 42, 74, 0.5);
+}
+.console-picker-item.console-picker-pinned {
+  color: #e94560;
+  border-color: rgba(233, 69, 96, 0.3);
+  background: rgba(233, 69, 96, 0.08);
+  cursor: default;
+}
+.console-picker-item[disabled] { opacity: 0.8; }
+.console-picker-item svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+.console-picker-toggle {
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.5;
+}
+.console-picker-item:hover .console-picker-toggle { opacity: 1; }
+.console-picker-pin {
+  margin-left: auto;
+  font-size: 10px;
+}
 
 /* ═══ Tab Panels ═══ */
 .tab-panel {
