@@ -63,6 +63,7 @@
       "background-kg.js",
       "background-pipelines.js",
       "background-agents.js",
+      "data/prebuilt-automations.js",
       "background-automations.js"
     ],
     "persistent": true

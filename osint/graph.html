@@ -131,6 +131,31 @@
 
   <div id="argus-chat-container" style="padding:16px 20px;"></div>
 
+  <!-- ── Asset Library panel ── -->
+  <div class="kg-assets-panel hidden" id="kgAssetsPanel">
+    <div class="kg-assets-header">
+      <span class="kg-assets-title">Asset Library</span>
+      <button class="kg-assets-close" id="kgAssetsClose">&times;</button>
+    </div>
+    <div class="kg-assets-search-row">
+      <input type="text" id="kgAssetSearch" class="kg-assets-search" placeholder="Search assets...">
+    </div>
+    <div class="kg-assets-tabs" id="kgAssetTabs">
+      <button class="kg-asset-tab active" data-tab="analyses">Analyses</button>
+      <button class="kg-asset-tab" data-tab="bookmarks">Bookmarks</button>
+      <button class="kg-asset-tab" data-tab="monitors">Monitors</button>
+      <button class="kg-asset-tab" data-tab="feeds">Feeds</button>
+      <button class="kg-asset-tab" data-tab="techstack">TechStack</button>
+      <button class="kg-asset-tab" data-tab="snapshots">Snapshots</button>
+      <button class="kg-asset-tab" data-tab="timeline">Timeline</button>
+    </div>
+    <div class="kg-assets-list" id="kgAssetsList"></div>
+  </div>
+  <button class="kg-assets-toggle" id="kgAssetsToggle" title="Asset Library">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+    <span id="kgAssetCount"></span>
+  </button>
+
   <script src="../lib/purify.min.js"></script>
   <script src="../lib/marked.min.js"></script>
   <script src="../lib/argus-chat.js"></script>

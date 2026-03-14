@@ -654,3 +654,179 @@ body {
 .src-match-open:hover { opacity: 0.85; }
 
 .hidden { display: none !important; }
+
+/* ── Asset Library panel ── */
+.kg-assets-panel {
+  position: fixed;
+  top: 86px;
+  left: 40px;
+  width: 320px;
+  max-height: calc(100vh - 100px);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  z-index: 18;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 4px 4px 16px rgba(0,0,0,0.3);
+}
+.kg-assets-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.kg-assets-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+.kg-assets-close {
+  width: 22px;
+  height: 22px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.kg-assets-close:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.kg-assets-search-row {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.kg-assets-search {
+  width: 100%;
+  padding: 5px 8px;
+  font-size: 12px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  outline: none;
+}
+.kg-assets-search:focus { border-color: var(--accent); }
+.kg-assets-search::placeholder { color: var(--text-secondary); }
+.kg-assets-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.kg-asset-tab {
+  flex: 0 1 auto;
+  padding: 5px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.kg-asset-tab:hover { color: var(--text-primary); }
+.kg-asset-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.kg-assets-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.kg-asset-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.kg-asset-item:hover { background: rgba(255,255,255,0.04); }
+.kg-asset-info { flex: 1; min-width: 0; }
+.kg-asset-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kg-asset-preview {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.kg-asset-meta {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-top: 3px;
+  opacity: 0.6;
+}
+.kg-asset-insert {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(233,69,96,0.08);
+  border: 1px solid rgba(233,69,96,0.2);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  align-self: center;
+}
+.kg-asset-insert:hover {
+  background: rgba(233,69,96,0.15);
+  border-color: var(--accent);
+}
+.kg-assets-empty {
+  padding: 20px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.kg-assets-toggle {
+  position: fixed;
+  top: 150px;
+  left: 0;
+  width: 28px;
+  height: 48px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  z-index: 19;
+  transition: background 0.15s;
+}
+.kg-assets-toggle:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+.kg-assets-toggle span {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--accent);
+}

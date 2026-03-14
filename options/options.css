@@ -3007,36 +3007,114 @@ textarea {
   flex-direction: column;
   gap: 8px;
 }
-.auto-step-item {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 10px 12px;
-  background: rgba(255,255,255,0.02);
-}
-.auto-step-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-.auto-step-header strong {
-  font-size: 13px;
-  color: var(--accent);
-}
-.auto-step-btns {
-  display: flex;
-  gap: 4px;
-}
-.auto-step-btns .btn {
-  padding: 2px 8px;
-  font-size: 12px;
-  min-width: 0;
-}
-.auto-step-config {
+/* ── Step list ── */
+.auto-steps-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
+
+.auto-step-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255,255,255,0.02);
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+.auto-step-item.expanded {
+  border-color: var(--accent);
+}
+
+/* ── Collapsed header row ── */
+.auto-step-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+}
+.auto-step-header:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.auto-step-chevron {
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+}
+.auto-step-item.expanded .auto-step-chevron {
+  transform: rotate(90deg);
+}
+
+.auto-step-number {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--bg-primary);
+  background: var(--accent);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.auto-step-item[data-logic="true"] .auto-step-number {
+  background: #b388ff;
+}
+
+.auto-step-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.auto-step-summary {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.auto-step-btns {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.auto-step-btns .btn {
+  padding: 2px 7px;
+  font-size: 11px;
+  min-width: 0;
+  opacity: 0.5;
+  transition: opacity 0.1s;
+}
+.auto-step-header:hover .auto-step-btns .btn {
+  opacity: 1;
+}
+
+/* ── Expanded config area ── */
+.auto-step-config {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border);
+  background: rgba(0,0,0,0.15);
+}
+.auto-step-item.expanded .auto-step-config {
+  display: flex;
+}
+
 .auto-step-config label {
   font-size: 12px;
   color: var(--text-secondary);
@@ -3050,7 +3128,7 @@ textarea {
   color: var(--text-primary);
   border: 1px solid var(--border);
   border-radius: 4px;
-  padding: 4px 8px;
+  padding: 5px 8px;
   font-size: 13px;
 }
 .auto-step-textarea {
@@ -3063,6 +3141,28 @@ textarea {
   font-family: monospace;
   resize: vertical;
   width: 100%;
+}
+.auto-step-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  padding-top: 2px;
+}
+.auto-step-checkbox-label {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px !important;
+}
+
+/* ── Logic step visual distinction ── */
+.auto-logic-expr {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px dashed rgba(179,136,255,0.3);
+  border-radius: 4px;
+  background: rgba(179,136,255,0.04);
 }
 
 .auto-log-badge {

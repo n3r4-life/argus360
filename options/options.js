@@ -2121,6 +2121,13 @@ function renderAutomationList() {
     info.className = "rule-info";
     const strong = document.createElement("strong");
     strong.textContent = auto.name || "Untitled";
+    if (auto.prebuilt) {
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = "Pre-built";
+      badge.style.cssText = "margin-left:6px;font-size:10px;opacity:0.7;";
+      strong.appendChild(badge);
+    }
     const span = document.createElement("span");
     const triggers = (auto.triggers?.urlPatterns || []).length;
     const stepTypes = (auto.steps || []).map(s => s.type).join(" → ");
@@ -2219,24 +2226,82 @@ async function openAutomationEditor(auto) {
   } catch { /* ok */ }
   projSelect.value = auto?.triggers?.projectId || "";
 
+  // Populate schedule trigger fields
+  const sched = auto?.triggers?.schedule;
+  const schedCb = document.getElementById("auto-schedule-enabled");
+  const schedOpts = document.getElementById("auto-schedule-options");
+  schedCb.checked = !!sched;
+  schedOpts.classList.toggle("hidden", !sched);
+  if (sched) {
+    document.getElementById("auto-schedule-type").value = sched.type || "once";
+    document.getElementById("auto-schedule-type").dispatchEvent(new Event("change"));
+    if (sched.type === "once" && sched.datetime) {
+      document.getElementById("auto-schedule-datetime").value = sched.datetime;
+    }
+    if (sched.type === "interval") {
+      document.getElementById("auto-schedule-interval-ms").value = Math.round((sched.intervalMs || 3600000) / 60000);
+    }
+    if (sched.type === "daily") {
+      document.getElementById("auto-schedule-time").value = sched.time || "09:00";
+    }
+    if (sched.type === "weekly") {
+      document.getElementById("auto-schedule-day").value = sched.day || 1;
+      document.getElementById("auto-schedule-weekly-time").value = sched.time || "09:00";
+    }
+    if (sched.type === "cron") {
+      document.querySelectorAll(".cron-hour-cb").forEach(cb => {
+        cb.checked = (sched.hours || []).includes(Number(cb.value));
+      });
+      document.querySelectorAll(".cron-day-cb").forEach(cb => {
+        cb.checked = (sched.days || []).includes(Number(cb.value));
+      });
+    }
+    document.getElementById("auto-schedule-url").value = sched.url || "";
+  }
+
   renderEditorSteps();
   card.scrollIntoView({ behavior: "smooth" });
 }
+
+let expandedStepIndex = -1; // which step is currently expanded (-1 = none)
 
 function renderEditorSteps() {
   const list = document.getElementById("auto-steps-list");
   list.replaceChildren();
   document.getElementById("auto-step-count").textContent = editorSteps.length ? `(${editorSteps.length})` : "";
 
+  const isLogicType = t => ["condition","filter","switch","classify","gate","loop","setVar"].includes(t);
+
   editorSteps.forEach((step, i) => {
     const div = document.createElement("div");
     div.className = "auto-step-item";
+    if (isLogicType(step.type)) div.setAttribute("data-logic", "true");
+    if (i === expandedStepIndex) div.classList.add("expanded");
 
+    // ── Header row (always visible) ──
     const header = document.createElement("div");
     header.className = "auto-step-header";
-    const label = document.createElement("strong");
-    label.textContent = `${i + 1}. ${stepTypeLabel(step.type)}`;
+
+    const chevron = document.createElement("span");
+    chevron.className = "auto-step-chevron";
+    chevron.textContent = "\u25B6"; // ▶
+    header.appendChild(chevron);
+
+    const num = document.createElement("span");
+    num.className = "auto-step-number";
+    num.textContent = i + 1;
+    header.appendChild(num);
+
+    const label = document.createElement("span");
+    label.className = "auto-step-label";
+    label.textContent = stepTypeLabel(step.type);
     header.appendChild(label);
+
+    // Brief summary of config (shown when collapsed)
+    const summary = document.createElement("span");
+    summary.className = "auto-step-summary";
+    summary.textContent = getStepSummary(step);
+    header.appendChild(summary);
 
     const btns = document.createElement("div");
     btns.className = "auto-step-btns";
@@ -2245,7 +2310,7 @@ function renderEditorSteps() {
       upBtn.className = "btn btn-sm btn-secondary";
       upBtn.textContent = "\u2191";
       upBtn.title = "Move up";
-      upBtn.addEventListener("click", () => { [editorSteps[i - 1], editorSteps[i]] = [editorSteps[i], editorSteps[i - 1]]; renderEditorSteps(); });
+      upBtn.addEventListener("click", (e) => { e.stopPropagation(); [editorSteps[i - 1], editorSteps[i]] = [editorSteps[i], editorSteps[i - 1]]; if (expandedStepIndex === i) expandedStepIndex = i - 1; else if (expandedStepIndex === i - 1) expandedStepIndex = i; renderEditorSteps(); });
       btns.appendChild(upBtn);
     }
     if (i < editorSteps.length - 1) {
@@ -2253,7 +2318,7 @@ function renderEditorSteps() {
       downBtn.className = "btn btn-sm btn-secondary";
       downBtn.textContent = "\u2193";
       downBtn.title = "Move down";
-      downBtn.addEventListener("click", () => { [editorSteps[i], editorSteps[i + 1]] = [editorSteps[i + 1], editorSteps[i]]; renderEditorSteps(); });
+      downBtn.addEventListener("click", (e) => { e.stopPropagation(); [editorSteps[i], editorSteps[i + 1]] = [editorSteps[i + 1], editorSteps[i]]; if (expandedStepIndex === i) expandedStepIndex = i + 1; else if (expandedStepIndex === i + 1) expandedStepIndex = i; renderEditorSteps(); });
       btns.appendChild(downBtn);
     }
     const removeBtn = document.createElement("button");
@@ -2261,19 +2326,82 @@ function renderEditorSteps() {
     removeBtn.style.color = "var(--error)";
     removeBtn.textContent = "\u2715";
     removeBtn.title = "Remove step";
-    removeBtn.addEventListener("click", () => { editorSteps.splice(i, 1); renderEditorSteps(); });
+    removeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      editorSteps.splice(i, 1);
+      if (expandedStepIndex === i) expandedStepIndex = -1;
+      else if (expandedStepIndex > i) expandedStepIndex--;
+      renderEditorSteps();
+    });
     btns.appendChild(removeBtn);
     header.appendChild(btns);
+
+    // Toggle expand/collapse on header click
+    header.addEventListener("click", () => {
+      expandedStepIndex = (expandedStepIndex === i) ? -1 : i;
+      renderEditorSteps();
+    });
+
     div.appendChild(header);
 
-    // Step-specific config
+    // ── Config area (only built when expanded) ──
     const config = document.createElement("div");
     config.className = "auto-step-config";
-    buildStepConfig(step, config, i);
+    if (i === expandedStepIndex) {
+      buildStepConfig(step, config, i);
+    }
     div.appendChild(config);
 
     list.appendChild(div);
   });
+}
+
+// Generate a one-line summary for a collapsed step
+function getStepSummary(step) {
+  switch (step.type) {
+    case "analyze": return step.preset || "summary";
+    case "prompt": return (step.prompt || "").slice(0, 50) || "(no prompt)";
+    case "extractEntities": return "KG extraction";
+    case "runPipeline": return step.pipelineId || "auto-detect";
+    case "addToProject": return step.projectId ? "project linked" : "(no project)";
+    case "addToMonitors": return `every ${step.intervalMinutes || 60}m`;
+    case "paste": return step.provider || "default provider";
+    case "saveToCloud": return step.format || "md";
+    case "condition": {
+      const e = step.expression || {};
+      return `${e.left || "?"} ${e.op || "?"} ${e.right || "?"}`;
+    }
+    case "filter": return `${step.value || "?"} ${step.action || "block"} via list`;
+    case "switch": return `on ${step.value || "?"} (${(step.cases || []).length} cases)`;
+    case "classify": return `${(step.categories || []).length} categories`;
+    case "gate": return `${step.gateType || "confirm"}: ${(step.question || "").slice(0, 40)}`;
+    case "loop": return `over ${step.over || "?"}, max ${step.maxIterations || 50}`;
+    case "setVar": return `${step.varName || "?"} = ${step.value || "?"}`;
+    default: return "";
+  }
+}
+
+function getValueOptions(idx) {
+  const opts = [
+    ["page.text",       "Page text"],
+    ["page.title",      "Page title"],
+    ["page.url",        "Page URL"],
+    ["lastOutput",      "Last step output"],
+    ["entities.length", "Entity count"],
+  ];
+  // Scan earlier steps for setVar / classify to surface their variables
+  for (let i = 0; i < idx; i++) {
+    const s = editorSteps[i];
+    if (s.type === "setVar" && s.varName) {
+      opts.push([`vars.${s.varName}`, `Variable: ${s.varName}`]);
+    }
+    if (s.type === "classify") {
+      const name = s.varName || "classification";
+      opts.push([`vars.${name}`, `Classify result: ${name}`]);
+    }
+  }
+  opts.push(["_custom", "Custom path…"]);
+  return opts;
 }
 
 function buildStepConfig(step, container, idx) {
@@ -2711,6 +2839,522 @@ function buildStepConfig(step, container, idx) {
       container.appendChild(hint);
       break;
     }
+    // ── Logic Step Configs ──
+    case "condition": {
+      // Expression builder
+      const exprWrap = document.createElement("div");
+      exprWrap.className = "auto-logic-expr";
+
+      // Left side (what to check)
+      const leftLabel = document.createElement("label");
+      leftLabel.textContent = "Check: ";
+      const leftSel = document.createElement("select");
+      leftSel.className = "auto-step-select";
+
+      // Build value options dynamically — include variables from earlier setVar/classify steps
+      const valueOptions = getValueOptions(idx);
+      const knownValues = valueOptions.map(o => o[0]);
+
+      for (const [val, label] of valueOptions) {
+        const opt = document.createElement("option");
+        opt.value = val; opt.textContent = label;
+        leftSel.appendChild(opt);
+      }
+      leftSel.value = knownValues.includes(step.expression?.left) ? step.expression?.left : "_custom";
+      const leftCustom = document.createElement("input");
+      leftCustom.type = "text"; leftCustom.className = "auto-step-input";
+      leftCustom.placeholder = "e.g. stepResults[0].content, vars.myVar";
+      leftCustom.value = !knownValues.includes(step.expression?.left) && step.expression?.left !== "_custom" ? (step.expression?.left || "") : "";
+      leftCustom.style.display = leftSel.value === "_custom" ? "" : "none";
+      leftSel.addEventListener("change", () => {
+        leftCustom.style.display = leftSel.value === "_custom" ? "" : "none";
+        step.expression.left = leftSel.value === "_custom" ? leftCustom.value : leftSel.value;
+      });
+      leftCustom.addEventListener("input", () => { step.expression.left = leftCustom.value; });
+      leftLabel.appendChild(leftSel);
+      exprWrap.appendChild(leftLabel);
+      exprWrap.appendChild(leftCustom);
+
+      // Operator
+      const opLabel = document.createElement("label");
+      opLabel.textContent = "Operator: ";
+      const opSel = document.createElement("select");
+      opSel.className = "auto-step-select";
+      for (const [val, label] of [
+        ["contains", "contains"], ["not_contains", "does not contain"],
+        ["eq", "equals"], ["neq", "not equals"],
+        ["gt", ">"], ["gte", ">="], ["lt", "<"], ["lte", "<="],
+        ["matches", "matches regex"], ["not_matches", "does not match regex"],
+        ["in_list", "is in list"], ["not_in_list", "is not in list"],
+        ["exists", "exists (not empty)"], ["empty", "is empty"],
+      ]) {
+        const opt = document.createElement("option");
+        opt.value = val; opt.textContent = label;
+        opSel.appendChild(opt);
+      }
+      opSel.value = step.expression?.op || "contains";
+      opSel.addEventListener("change", () => {
+        step.expression.op = opSel.value;
+        rightInput.style.display = ["exists","empty"].includes(opSel.value) ? "none" : "";
+        listSel.style.display = ["in_list","not_in_list"].includes(opSel.value) ? "" : "none";
+        rightInput.style.display = ["in_list","not_in_list","exists","empty"].includes(opSel.value) ? "none" : "";
+      });
+      opLabel.appendChild(opSel);
+      exprWrap.appendChild(opLabel);
+
+      // Right side (value to compare against)
+      const rightInput = document.createElement("input");
+      rightInput.type = "text"; rightInput.className = "auto-step-input";
+      rightInput.placeholder = "Value or keyword to check";
+      rightInput.value = step.expression?.right || "";
+      rightInput.addEventListener("input", () => { step.expression.right = rightInput.value; });
+      rightInput.style.display = ["exists","empty","in_list","not_in_list"].includes(opSel.value) ? "none" : "";
+
+      // List selector (for in_list / not_in_list)
+      const listSel = document.createElement("select");
+      listSel.className = "auto-step-select";
+      listSel.style.display = ["in_list","not_in_list"].includes(opSel.value) ? "" : "none";
+      const listNone = document.createElement("option");
+      listNone.value = ""; listNone.textContent = "Select a list...";
+      listSel.appendChild(listNone);
+      // Populate lists async
+      browser.runtime.sendMessage({ action: "getLists" }).then(resp => {
+        if (!resp?.lists) return;
+        for (const l of resp.lists) {
+          const opt = document.createElement("option");
+          opt.value = l.id; opt.textContent = `${l.name} (${l.type})`;
+          listSel.appendChild(opt);
+        }
+        listSel.value = step.expression?.right || "";
+      }).catch(() => {});
+      listSel.addEventListener("change", () => { step.expression.right = listSel.value; });
+
+      const rightLabel = document.createElement("label");
+      rightLabel.textContent = "Value: ";
+      rightLabel.appendChild(rightInput);
+      rightLabel.appendChild(listSel);
+      exprWrap.appendChild(rightLabel);
+
+      container.appendChild(exprWrap);
+
+      // Then/Else branch info
+      const branchHint = document.createElement("div");
+      branchHint.className = "auto-step-hint";
+      branchHint.innerHTML = "THEN and ELSE branches run nested steps. To add sub-steps, save this automation first, then edit the JSON directly via the <em>Export/Import</em> feature, or use the Classify step for AI-powered branching.";
+      container.appendChild(branchHint);
+      break;
+    }
+    case "filter": {
+      // What value to check — dynamically includes vars from earlier steps
+      const valLabel = document.createElement("label");
+      valLabel.textContent = "Check value: ";
+      const valSel = document.createElement("select");
+      valSel.className = "auto-step-select";
+
+      const filterValOpts = getValueOptions(idx);
+      const filterKnownVals = filterValOpts.map(o => o[0]);
+      for (const [val, label] of filterValOpts) {
+        const opt = document.createElement("option");
+        opt.value = val; opt.textContent = label;
+        valSel.appendChild(opt);
+      }
+      valSel.value = filterKnownVals.includes(step.value) ? step.value : "_custom";
+      const valCustom = document.createElement("input");
+      valCustom.type = "text"; valCustom.className = "auto-step-input";
+      valCustom.placeholder = "e.g. vars.myField";
+      valCustom.value = !filterKnownVals.includes(step.value) && step.value !== "_custom" ? (step.value || "") : "";
+      valCustom.style.display = valSel.value === "_custom" ? "" : "none";
+      valSel.addEventListener("change", () => {
+        valCustom.style.display = valSel.value === "_custom" ? "" : "none";
+        step.value = valSel.value === "_custom" ? valCustom.value : valSel.value;
+      });
+      valCustom.addEventListener("input", () => { step.value = valCustom.value; });
+      valLabel.appendChild(valSel);
+      container.appendChild(valLabel);
+      container.appendChild(valCustom);
+
+      // List to check against
+      const listLabel = document.createElement("label");
+      listLabel.textContent = "Against list: ";
+      const listSel = document.createElement("select");
+      listSel.className = "auto-step-select";
+      const noneOpt = document.createElement("option");
+      noneOpt.value = ""; noneOpt.textContent = "Select a list...";
+      listSel.appendChild(noneOpt);
+      browser.runtime.sendMessage({ action: "getLists" }).then(resp => {
+        if (!resp?.lists) return;
+        for (const l of resp.lists) {
+          const opt = document.createElement("option");
+          opt.value = l.id; opt.textContent = `${l.name} (${l.type})`;
+          listSel.appendChild(opt);
+        }
+        listSel.value = step.list || "";
+      }).catch(() => {});
+      listSel.addEventListener("change", () => { step.list = listSel.value; });
+      listLabel.appendChild(listSel);
+      container.appendChild(listLabel);
+
+      // Action: block or allow
+      const actLabel = document.createElement("label");
+      actLabel.textContent = "Action: ";
+      const actSel = document.createElement("select");
+      actSel.className = "auto-step-select";
+      for (const [val, label] of [
+        ["block", "BLOCK if found in list (halt automation)"],
+        ["allow", "ALLOW only if found in list (halt if NOT found)"],
+      ]) {
+        const opt = document.createElement("option");
+        opt.value = val; opt.textContent = label;
+        actSel.appendChild(opt);
+      }
+      actSel.value = step.action || "block";
+      actSel.addEventListener("change", () => { step.action = actSel.value; });
+      actLabel.appendChild(actSel);
+      container.appendChild(actLabel);
+
+      const filterHint = document.createElement("div");
+      filterHint.className = "auto-step-hint";
+      filterHint.textContent = "Checks if a value exists in a Named List. Use for blocklists (flagged reporters, bad sources) or allowlists (approved domains, tracked tickers).";
+      container.appendChild(filterHint);
+      break;
+    }
+    case "switch": {
+      // Value to switch on
+      const valLabel = document.createElement("label");
+      valLabel.textContent = "Switch on: ";
+      const valInput = document.createElement("input");
+      valInput.type = "text"; valInput.className = "auto-step-input";
+      valInput.value = step.value || "lastOutput";
+      valInput.placeholder = "e.g. vars.classification, lastOutput, page.url";
+      valInput.addEventListener("input", () => { step.value = valInput.value; });
+      valLabel.appendChild(valInput);
+      container.appendChild(valLabel);
+
+      // Cases display
+      const casesDiv = document.createElement("div");
+      casesDiv.className = "auto-step-cases";
+      const casesLabel = document.createElement("label");
+      casesLabel.textContent = "Cases (match patterns):";
+      casesDiv.appendChild(casesLabel);
+
+      const casesList = document.createElement("div");
+      casesList.className = "auto-step-cases-list";
+
+      function renderSwitchCases() {
+        casesList.innerHTML = "";
+        (step.cases || []).forEach((c, ci) => {
+          const row = document.createElement("div");
+          row.className = "auto-step-case-row";
+          row.style.cssText = "display:flex;gap:6px;align-items:center;margin:3px 0;";
+          const matchInput = document.createElement("input");
+          matchInput.type = "text"; matchInput.className = "auto-step-input";
+          matchInput.value = Array.isArray(c.match) ? c.match.join(", ") : (c.match || "");
+          matchInput.placeholder = "Value(s) to match, comma-separated";
+          matchInput.style.flex = "1";
+          matchInput.addEventListener("input", () => {
+            c.match = matchInput.value.split(",").map(s => s.trim()).filter(Boolean);
+          });
+          row.appendChild(matchInput);
+          const rmBtn = document.createElement("button");
+          rmBtn.className = "btn btn-danger btn-sm";
+          rmBtn.textContent = "×";
+          rmBtn.style.padding = "2px 8px";
+          rmBtn.addEventListener("click", () => { step.cases.splice(ci, 1); renderSwitchCases(); });
+          row.appendChild(rmBtn);
+          casesList.appendChild(row);
+        });
+      }
+      renderSwitchCases();
+      casesDiv.appendChild(casesList);
+
+      const addCaseBtn = document.createElement("button");
+      addCaseBtn.className = "btn btn-secondary btn-sm";
+      addCaseBtn.textContent = "+ Add Case";
+      addCaseBtn.style.marginTop = "4px";
+      addCaseBtn.addEventListener("click", () => {
+        step.cases.push({ match: [], steps: [] });
+        renderSwitchCases();
+      });
+      casesDiv.appendChild(addCaseBtn);
+      container.appendChild(casesDiv);
+
+      const switchHint = document.createElement("div");
+      switchHint.className = "auto-step-hint";
+      switchHint.textContent = "Routes to different branches based on a value. Each case can have nested sub-steps. Use * for wildcard matching.";
+      container.appendChild(switchHint);
+      break;
+    }
+    case "classify": {
+      // Question / prompt
+      const qLabel = document.createElement("label");
+      qLabel.textContent = "Classification prompt:";
+      const qArea = document.createElement("textarea");
+      qArea.rows = 2; qArea.className = "auto-step-textarea";
+      qArea.value = step.question || "Classify this content:";
+      qArea.addEventListener("input", () => { step.question = qArea.value; });
+      container.appendChild(qLabel);
+      container.appendChild(qArea);
+
+      // Input mode
+      const modeLabel = document.createElement("label");
+      modeLabel.textContent = "Input: ";
+      const modeSel = document.createElement("select");
+      modeSel.className = "auto-step-select";
+      for (const [val, label] of [["page", "Page content"], ["previous", "Previous step output"]]) {
+        const opt = document.createElement("option"); opt.value = val; opt.textContent = label;
+        modeSel.appendChild(opt);
+      }
+      modeSel.value = step.inputMode || "page";
+      modeSel.addEventListener("change", () => { step.inputMode = modeSel.value; });
+      modeLabel.appendChild(modeSel);
+      container.appendChild(modeLabel);
+
+      // Categories
+      const catLabel = document.createElement("label");
+      catLabel.textContent = "Categories (AI will choose one):";
+      container.appendChild(catLabel);
+
+      const catList = document.createElement("div");
+      catList.className = "auto-step-categories";
+
+      function renderCategories() {
+        catList.innerHTML = "";
+        (step.categories || []).forEach((cat, ci) => {
+          const row = document.createElement("div");
+          row.style.cssText = "display:flex;gap:6px;align-items:center;margin:3px 0;";
+          const valIn = document.createElement("input");
+          valIn.type = "text"; valIn.className = "auto-step-input"; valIn.style.width = "100px";
+          valIn.value = cat.value || ""; valIn.placeholder = "value";
+          valIn.addEventListener("input", () => { cat.value = valIn.value; });
+          row.appendChild(valIn);
+          const descIn = document.createElement("input");
+          descIn.type = "text"; descIn.className = "auto-step-input"; descIn.style.flex = "1";
+          descIn.value = cat.description || cat.label || ""; descIn.placeholder = "Description for AI";
+          descIn.addEventListener("input", () => { cat.description = descIn.value; cat.label = descIn.value; });
+          row.appendChild(descIn);
+          const rmBtn = document.createElement("button");
+          rmBtn.className = "btn btn-danger btn-sm"; rmBtn.textContent = "×";
+          rmBtn.style.padding = "2px 8px";
+          rmBtn.addEventListener("click", () => { step.categories.splice(ci, 1); renderCategories(); });
+          row.appendChild(rmBtn);
+          catList.appendChild(row);
+        });
+      }
+      renderCategories();
+      container.appendChild(catList);
+
+      const addCatBtn = document.createElement("button");
+      addCatBtn.className = "btn btn-secondary btn-sm";
+      addCatBtn.textContent = "+ Add Category";
+      addCatBtn.style.marginTop = "4px";
+      addCatBtn.addEventListener("click", () => {
+        step.categories.push({ value: "", label: "", description: "", steps: [] });
+        renderCategories();
+      });
+      container.appendChild(addCatBtn);
+
+      const classifyHint = document.createElement("div");
+      classifyHint.className = "auto-step-hint";
+      classifyHint.textContent = "Uses AI to classify content into one of your categories, then routes to that category's sub-steps. Great for sentiment analysis, topic routing, or content scoring.";
+      container.appendChild(classifyHint);
+      break;
+    }
+    case "gate": {
+      // Gate type
+      const typeLabel = document.createElement("label");
+      typeLabel.textContent = "Gate type: ";
+      const typeSel = document.createElement("select");
+      typeSel.className = "auto-step-select";
+      for (const [val, label] of [
+        ["confirm", "Yes / No (confirm)"],
+        ["choice", "Multiple Choice"],
+        ["input", "Free Text Input"],
+      ]) {
+        const opt = document.createElement("option"); opt.value = val; opt.textContent = label;
+        typeSel.appendChild(opt);
+      }
+      typeSel.value = step.gateType || "confirm";
+      typeSel.addEventListener("change", () => {
+        step.gateType = typeSel.value;
+        choicesDiv.style.display = typeSel.value === "choice" ? "" : "none";
+        varDiv.style.display = typeSel.value === "input" ? "" : "none";
+      });
+      typeLabel.appendChild(typeSel);
+      container.appendChild(typeLabel);
+
+      // Question
+      const qLabel = document.createElement("label");
+      qLabel.textContent = "Question:";
+      const qInput = document.createElement("input");
+      qInput.type = "text"; qInput.className = "auto-step-input";
+      qInput.value = step.question || "Continue?";
+      qInput.addEventListener("input", () => { step.question = qInput.value; });
+      qLabel.appendChild(qInput);
+      container.appendChild(qLabel);
+
+      // Multiple choice options
+      const choicesDiv = document.createElement("div");
+      choicesDiv.style.display = step.gateType === "choice" ? "" : "none";
+      const choicesLabel = document.createElement("label");
+      choicesLabel.textContent = "Options:";
+      choicesDiv.appendChild(choicesLabel);
+
+      const choicesList = document.createElement("div");
+      function renderChoices() {
+        choicesList.innerHTML = "";
+        (step.options || []).forEach((opt, oi) => {
+          const row = document.createElement("div");
+          row.style.cssText = "display:flex;gap:6px;align-items:center;margin:3px 0;";
+          const labelIn = document.createElement("input");
+          labelIn.type = "text"; labelIn.className = "auto-step-input"; labelIn.style.flex = "1";
+          labelIn.value = opt.label || ""; labelIn.placeholder = "Display label";
+          labelIn.addEventListener("input", () => { opt.label = labelIn.value; });
+          row.appendChild(labelIn);
+          const valIn = document.createElement("input");
+          valIn.type = "text"; valIn.className = "auto-step-input"; valIn.style.width = "80px";
+          valIn.value = opt.value || ""; valIn.placeholder = "value";
+          valIn.addEventListener("input", () => { opt.value = valIn.value; });
+          row.appendChild(valIn);
+          const rmBtn = document.createElement("button");
+          rmBtn.className = "btn btn-danger btn-sm"; rmBtn.textContent = "×";
+          rmBtn.style.padding = "2px 8px";
+          rmBtn.addEventListener("click", () => { step.options.splice(oi, 1); renderChoices(); });
+          row.appendChild(rmBtn);
+          choicesList.appendChild(row);
+        });
+      }
+      renderChoices();
+      choicesDiv.appendChild(choicesList);
+      const addChoiceBtn = document.createElement("button");
+      addChoiceBtn.className = "btn btn-secondary btn-sm";
+      addChoiceBtn.textContent = "+ Add Option";
+      addChoiceBtn.addEventListener("click", () => {
+        step.options.push({ label: "", value: "", steps: [] });
+        renderChoices();
+      });
+      choicesDiv.appendChild(addChoiceBtn);
+      container.appendChild(choicesDiv);
+
+      // Variable name for input type
+      const varDiv = document.createElement("div");
+      varDiv.style.display = step.gateType === "input" ? "" : "none";
+      const varLabel = document.createElement("label");
+      varLabel.textContent = "Store answer as variable: ";
+      const varInput = document.createElement("input");
+      varInput.type = "text"; varInput.className = "auto-step-input";
+      varInput.value = step.varName || "gateInput";
+      varInput.addEventListener("input", () => { step.varName = varInput.value; });
+      varLabel.appendChild(varInput);
+      varDiv.appendChild(varLabel);
+      container.appendChild(varDiv);
+
+      // Timeout
+      const toLabel = document.createElement("label");
+      toLabel.textContent = "Timeout (seconds): ";
+      const toInput = document.createElement("input");
+      toInput.type = "number"; toInput.className = "auto-step-input";
+      toInput.min = 10; toInput.max = 86400;
+      toInput.value = Math.round((step.timeoutMs || 300000) / 1000);
+      toInput.addEventListener("input", () => { step.timeoutMs = (parseInt(toInput.value) || 300) * 1000; });
+      toLabel.appendChild(toInput);
+      container.appendChild(toLabel);
+
+      const gateHint = document.createElement("div");
+      gateHint.className = "auto-step-hint";
+      gateHint.textContent = "Pauses the automation and sends a notification. You answer in the Pending Decisions panel. The automation resumes based on your response.";
+      container.appendChild(gateHint);
+      break;
+    }
+    case "loop": {
+      // Collection to iterate
+      const overLabel = document.createElement("label");
+      overLabel.textContent = "Iterate over: ";
+      const overSel = document.createElement("select");
+      overSel.className = "auto-step-select";
+      for (const [val, label] of [
+        ["entities", "Extracted entities"], ["stepResults", "All step results"],
+        ["_custom", "Custom path..."]
+      ]) {
+        const opt = document.createElement("option"); opt.value = val; opt.textContent = label;
+        overSel.appendChild(opt);
+      }
+      overSel.value = step.over || "entities";
+      const overCustom = document.createElement("input");
+      overCustom.type = "text"; overCustom.className = "auto-step-input";
+      overCustom.placeholder = "e.g. vars.items";
+      overCustom.style.display = overSel.value === "_custom" ? "" : "none";
+      overSel.addEventListener("change", () => {
+        overCustom.style.display = overSel.value === "_custom" ? "" : "none";
+        step.over = overSel.value === "_custom" ? overCustom.value : overSel.value;
+      });
+      overCustom.addEventListener("input", () => { step.over = overCustom.value; });
+      overLabel.appendChild(overSel);
+      container.appendChild(overLabel);
+      container.appendChild(overCustom);
+
+      // Variable name
+      const varLabel = document.createElement("label");
+      varLabel.textContent = "Item variable name: ";
+      const varInput = document.createElement("input");
+      varInput.type = "text"; varInput.className = "auto-step-input";
+      varInput.value = step.varName || "item";
+      varInput.addEventListener("input", () => { step.varName = varInput.value; });
+      varLabel.appendChild(varInput);
+      container.appendChild(varLabel);
+
+      // Max iterations
+      const maxLabel = document.createElement("label");
+      maxLabel.textContent = "Max iterations: ";
+      const maxInput = document.createElement("input");
+      maxInput.type = "number"; maxInput.className = "auto-step-input";
+      maxInput.min = 1; maxInput.max = 500; maxInput.value = step.maxIterations || 50;
+      maxInput.addEventListener("input", () => { step.maxIterations = parseInt(maxInput.value) || 50; });
+      maxLabel.appendChild(maxInput);
+      container.appendChild(maxLabel);
+
+      // Delay between iterations
+      const delayLabel = document.createElement("label");
+      delayLabel.textContent = "Delay between items (ms): ";
+      const delayInput = document.createElement("input");
+      delayInput.type = "number"; delayInput.className = "auto-step-input";
+      delayInput.min = 0; delayInput.max = 30000; delayInput.value = step.delayMs || 1000;
+      delayInput.addEventListener("input", () => { step.delayMs = parseInt(delayInput.value) || 0; });
+      delayLabel.appendChild(delayInput);
+      container.appendChild(delayLabel);
+
+      const loopHint = document.createElement("div");
+      loopHint.className = "auto-step-hint";
+      loopHint.textContent = "Runs sub-steps for each item in a collection. Each iteration sets vars.[varName] to the current item.";
+      container.appendChild(loopHint);
+      break;
+    }
+    case "setVar": {
+      const nameLabel = document.createElement("label");
+      nameLabel.textContent = "Variable name: ";
+      const nameInput = document.createElement("input");
+      nameInput.type = "text"; nameInput.className = "auto-step-input";
+      nameInput.value = step.varName || "";
+      nameInput.placeholder = "e.g. author, sentiment, score";
+      nameInput.addEventListener("input", () => { step.varName = nameInput.value; });
+      nameLabel.appendChild(nameInput);
+      container.appendChild(nameLabel);
+
+      const valLabel = document.createElement("label");
+      valLabel.textContent = "Value (path or literal): ";
+      const valInput = document.createElement("input");
+      valInput.type = "text"; valInput.className = "auto-step-input";
+      valInput.value = step.value || "";
+      valInput.placeholder = 'e.g. page.title, lastOutput, "fixed string"';
+      valInput.addEventListener("input", () => { step.value = valInput.value; });
+      valLabel.appendChild(valInput);
+      container.appendChild(valLabel);
+
+      const setVarHint = document.createElement("div");
+      setVarHint.className = "auto-step-hint";
+      setVarHint.textContent = "Sets a variable that can be used by downstream Condition, Filter, Switch, and Classify steps. Use quoted strings for literals, or paths like page.title for dynamic values.";
+      container.appendChild(setVarHint);
+      break;
+    }
   }
 }
 
@@ -2724,6 +3368,13 @@ function stepTypeLabel(type) {
     runPipeline: "Run Pipeline",
     paste: "Paste to Service",
     saveToCloud: "Save to Cloud",
+    condition: "IF / THEN / ELSE",
+    filter: "Filter (Check List)",
+    "switch": "Switch (Multi-Branch)",
+    classify: "Classify (AI Decision)",
+    gate: "Gate (Ask User)",
+    loop: "Loop (Iterate)",
+    setVar: "Set Variable",
   };
   return labels[type] || type;
 }
@@ -2738,8 +3389,63 @@ function addEditorStep() {
   if (type === "addToMonitors") { step.intervalMinutes = 60; step.aiAnalysis = true; step.analysisPreset = ""; step.duration = 0; }
   if (type === "paste") { step.provider = ""; step.inputMode = "previous"; step.titleTemplate = ""; step.filename = "argus-export.md"; }
   if (type === "saveToCloud") { step.inputMode = "previous"; step.format = "md"; step.providers = ["default"]; }
+  // Logic step defaults
+  if (type === "condition") {
+    step.expression = { op: "contains", left: "page.text", right: "" };
+    step.thenSteps = [];
+    step.elseSteps = [];
+  }
+  if (type === "filter") {
+    step.value = "page.title";
+    step.list = "";
+    step.action = "block";
+    step.haltSteps = [];
+    step.passSteps = [];
+  }
+  if (type === "switch") {
+    step.value = "lastOutput";
+    step.cases = [{ match: [], steps: [] }];
+    step.defaultSteps = [];
+  }
+  if (type === "classify") {
+    step.question = "Classify this content:";
+    step.categories = [
+      { value: "positive", label: "Positive", description: "Positive sentiment or favorable", steps: [] },
+      { value: "negative", label: "Negative", description: "Negative sentiment or unfavorable", steps: [] },
+      { value: "neutral", label: "Neutral", description: "Neutral or factual", steps: [] },
+    ];
+    step.defaultSteps = [];
+    step.inputMode = "page";
+  }
+  if (type === "gate") {
+    step.gateType = "confirm";
+    step.question = "Continue this automation?";
+    step.options = [];
+    step.thenSteps = [];
+    step.elseSteps = [];
+    step.timeoutMs = 300000;
+    step.timeoutAction = "halt";
+  }
+  if (type === "loop") {
+    step.over = "entities";
+    step.varName = "item";
+    step.maxIterations = 50;
+    step.steps = [];
+    step.delayMs = 1000;
+  }
+  if (type === "setVar") {
+    step.varName = "";
+    step.value = "";
+  }
   editorSteps.push(step);
+  expandedStepIndex = editorSteps.length - 1; // auto-expand the new step
   renderEditorSteps();
+  // Scroll the new step into view
+  setTimeout(() => {
+    const items = document.querySelectorAll(".auto-step-item");
+    const last = items[items.length - 1];
+    if (last) last.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, 50);
 }
 
 async function saveAutomation() {
@@ -2773,6 +3479,29 @@ async function saveAutomation() {
     manual: document.getElementById("auto-manual").checked,
     projectId: document.getElementById("auto-project-trigger").value || null,
   };
+
+  // Schedule trigger
+  if (document.getElementById("auto-schedule-enabled").checked) {
+    const schedType = document.getElementById("auto-schedule-type").value;
+    const sched = { type: schedType };
+    if (schedType === "once") {
+      sched.datetime = document.getElementById("auto-schedule-datetime").value;
+    } else if (schedType === "interval") {
+      sched.intervalMs = (parseInt(document.getElementById("auto-schedule-interval-ms").value) || 60) * 60000;
+    } else if (schedType === "daily") {
+      sched.time = document.getElementById("auto-schedule-time").value || "09:00";
+    } else if (schedType === "weekly") {
+      sched.day = parseInt(document.getElementById("auto-schedule-day").value) || 1;
+      sched.time = document.getElementById("auto-schedule-weekly-time").value || "09:00";
+    } else if (schedType === "cron") {
+      sched.hours = [...document.querySelectorAll(".cron-hour-cb:checked")].map(c => Number(c.value));
+      sched.days = [...document.querySelectorAll(".cron-day-cb:checked")].map(c => Number(c.value));
+    }
+    sched.url = document.getElementById("auto-schedule-url").value.trim();
+    auto.triggers.schedule = sched;
+  } else {
+    delete auto.triggers?.schedule;
+  }
   auto.steps = editorSteps;
   auto.cooldownMs = parseInt(document.getElementById("auto-cooldown").value) || 60000;
   auto.delay = parseInt(document.getElementById("auto-delay").value) || 2000;
@@ -2854,6 +3583,224 @@ function truncateUrl(url) {
     const u = new URL(url);
     return u.hostname + (u.pathname.length > 20 ? u.pathname.slice(0, 20) + "..." : u.pathname);
   } catch { return url.slice(0, 40); }
+}
+
+// ──────────────────────────────────────────────
+// Named Lists
+// ──────────────────────────────────────────────
+
+let editingList = null;
+
+async function loadNamedLists() {
+  const resp = await browser.runtime.sendMessage({ action: "getLists" });
+  const lists = resp?.success ? resp.lists : [];
+  const container = document.getElementById("named-lists-list");
+  container.replaceChildren();
+
+  if (!lists.length) {
+    const hint = document.createElement("span");
+    hint.className = "hint";
+    hint.textContent = "No lists yet. Create watchlists, blocklists, or allowlists for automation logic.";
+    container.appendChild(hint);
+    return;
+  }
+
+  for (const list of lists) {
+    const div = document.createElement("div");
+    div.className = "rule-item";
+
+    const info = document.createElement("div");
+    info.className = "rule-info";
+    const strong = document.createElement("strong");
+    strong.textContent = list.name;
+    if (list.prebuilt) {
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = "Pre-built";
+      badge.style.cssText = "margin-left:6px;font-size:10px;opacity:0.7;";
+      strong.appendChild(badge);
+    }
+    const span = document.createElement("span");
+    const itemCount = Array.isArray(list.items) ? list.items.length : 0;
+    span.textContent = `${list.type} · ${itemCount} item${itemCount !== 1 ? "s" : ""}${list.description ? " · " + list.description : ""}`;
+    info.appendChild(strong);
+    info.appendChild(span);
+
+    const actions = document.createElement("div");
+    actions.className = "rule-actions";
+    const editBtn = document.createElement("button");
+    editBtn.className = "btn btn-secondary btn-sm";
+    editBtn.textContent = "Edit";
+    editBtn.addEventListener("click", () => openListEditor(list));
+    actions.appendChild(editBtn);
+
+    div.appendChild(info);
+    div.appendChild(actions);
+    container.appendChild(div);
+  }
+}
+
+function openListEditor(list) {
+  editingList = list;
+  const card = document.getElementById("list-editor-card");
+  card.classList.remove("hidden");
+  document.getElementById("list-editor-title").textContent = list ? `Edit List: ${list.name}` : "New List";
+  document.getElementById("list-name").value = list?.name || "";
+  document.getElementById("list-type").value = list?.type || "blocklist";
+  document.getElementById("list-description").value = list?.description || "";
+  document.getElementById("list-items").value = list?.items
+    ? list.items.map(i => typeof i === "string" ? i : (i.value || "")).join("\n")
+    : "";
+  document.getElementById("list-delete-btn").classList.toggle("hidden", !list);
+  card.scrollIntoView({ behavior: "smooth" });
+}
+
+async function saveNamedList() {
+  const name = document.getElementById("list-name").value.trim();
+  if (!name) { alert("Enter a list name."); return; }
+
+  const itemsText = document.getElementById("list-items").value;
+  const items = itemsText.split("\n").map(l => l.trim()).filter(Boolean).map(v => ({ value: v }));
+
+  const list = editingList ? { ...editingList } : {};
+  list.name = name;
+  list.type = document.getElementById("list-type").value;
+  list.description = document.getElementById("list-description").value.trim();
+  list.items = items;
+
+  await browser.runtime.sendMessage({ action: "saveList", list });
+  closeListEditor();
+  await loadNamedLists();
+}
+
+async function deleteNamedList() {
+  if (!editingList) return;
+  if (!confirm(`Delete list "${editingList.name}"?`)) return;
+  await browser.runtime.sendMessage({ action: "removeList", listId: editingList.id });
+  closeListEditor();
+  await loadNamedLists();
+}
+
+function closeListEditor() {
+  document.getElementById("list-editor-card").classList.add("hidden");
+  editingList = null;
+}
+
+// ──────────────────────────────────────────────
+// Pending Gates (Decision Points)
+// ──────────────────────────────────────────────
+
+async function loadPendingGates() {
+  const resp = await browser.runtime.sendMessage({ action: "getPendingGates" });
+  const gates = resp?.success ? resp.gates : [];
+  const container = document.getElementById("pending-gates-list");
+  const badge = document.getElementById("gates-count-badge");
+
+  if (badge) {
+    badge.textContent = gates.length;
+    badge.style.display = gates.length > 0 ? "" : "none";
+  }
+
+  container.replaceChildren();
+
+  if (!gates.length) {
+    const hint = document.createElement("span");
+    hint.className = "hint";
+    hint.textContent = "No pending decisions. Gate steps in running automations will appear here.";
+    container.appendChild(hint);
+    return;
+  }
+
+  for (const gate of gates) {
+    const div = document.createElement("div");
+    div.className = "rule-item";
+    div.style.flexDirection = "column";
+    div.style.gap = "8px";
+
+    const header = document.createElement("div");
+    header.style.cssText = "display:flex;justify-content:space-between;align-items:center;width:100%;";
+    const info = document.createElement("div");
+    info.className = "rule-info";
+    const strong = document.createElement("strong");
+    strong.textContent = gate.automationName;
+    const span = document.createElement("span");
+    span.textContent = gate.url ? truncateUrl(gate.url) : "No URL";
+    info.appendChild(strong);
+    info.appendChild(span);
+    header.appendChild(info);
+
+    const timeSpan = document.createElement("span");
+    timeSpan.className = "hint";
+    timeSpan.textContent = formatTimeAgo(new Date(gate.createdAt));
+    header.appendChild(timeSpan);
+    div.appendChild(header);
+
+    const question = document.createElement("div");
+    question.style.cssText = "font-weight:600;font-size:13px;color:#e8e8e8;";
+    question.textContent = gate.question;
+    div.appendChild(question);
+
+    const actions = document.createElement("div");
+    actions.style.cssText = "display:flex;gap:6px;";
+
+    if (gate.type === "confirm") {
+      const yesBtn = document.createElement("button");
+      yesBtn.className = "btn btn-accent btn-sm";
+      yesBtn.textContent = "Yes";
+      yesBtn.addEventListener("click", async () => {
+        await browser.runtime.sendMessage({ action: "resolveGate", gateId: gate.id, answer: "yes" });
+        loadPendingGates();
+      });
+      const noBtn = document.createElement("button");
+      noBtn.className = "btn btn-secondary btn-sm";
+      noBtn.textContent = "No";
+      noBtn.addEventListener("click", async () => {
+        await browser.runtime.sendMessage({ action: "resolveGate", gateId: gate.id, answer: "no" });
+        loadPendingGates();
+      });
+      actions.appendChild(yesBtn);
+      actions.appendChild(noBtn);
+    } else if (gate.type === "choice") {
+      for (const opt of (gate.options || [])) {
+        const btn = document.createElement("button");
+        btn.className = "btn btn-secondary btn-sm";
+        btn.textContent = opt.label || opt.value;
+        btn.addEventListener("click", async () => {
+          await browser.runtime.sendMessage({ action: "resolveGate", gateId: gate.id, answer: opt.value });
+          loadPendingGates();
+        });
+        actions.appendChild(btn);
+      }
+    } else if (gate.type === "input") {
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = "Enter your response...";
+      input.style.flex = "1";
+      actions.appendChild(input);
+      const submitBtn = document.createElement("button");
+      submitBtn.className = "btn btn-accent btn-sm";
+      submitBtn.textContent = "Submit";
+      submitBtn.addEventListener("click", async () => {
+        if (!input.value.trim()) return;
+        await browser.runtime.sendMessage({ action: "resolveGate", gateId: gate.id, answer: input.value.trim() });
+        loadPendingGates();
+      });
+      actions.appendChild(submitBtn);
+    }
+
+    const rejectBtn = document.createElement("button");
+    rejectBtn.className = "btn btn-danger btn-sm";
+    rejectBtn.textContent = "Reject";
+    rejectBtn.title = "Reject and halt automation";
+    rejectBtn.addEventListener("click", async () => {
+      await browser.runtime.sendMessage({ action: "rejectGate", gateId: gate.id });
+      loadPendingGates();
+    });
+    actions.appendChild(rejectBtn);
+
+    div.appendChild(actions);
+    container.appendChild(div);
+  }
 }
 
 function escapeHtml(s) {
@@ -3096,10 +4043,98 @@ function attachListeners() {
   // Named Automations
   loadAutomations();
   document.getElementById("new-automation-btn").addEventListener("click", () => openAutomationEditor(null));
+  document.getElementById("export-automations-btn").addEventListener("click", exportAutomationsToFile);
+  document.getElementById("import-automations-btn").addEventListener("click", () => document.getElementById("import-automations-file").click());
+  document.getElementById("import-automations-file").addEventListener("change", importAutomationsFromFile);
+  document.getElementById("seed-prebuilt-btn").addEventListener("click", seedPrebuiltAutomations);
   document.getElementById("auto-add-step-btn").addEventListener("click", addEditorStep);
   document.getElementById("auto-save-btn").addEventListener("click", saveAutomation);
   document.getElementById("auto-cancel-btn").addEventListener("click", closeAutomationEditor);
   document.getElementById("auto-delete-btn").addEventListener("click", deleteAutomation);
+
+  // Schedule trigger toggle
+  const scheduleEnabled = document.getElementById("auto-schedule-enabled");
+  const scheduleOpts = document.getElementById("auto-schedule-options");
+  if (scheduleEnabled && scheduleOpts) {
+    scheduleEnabled.addEventListener("change", () => {
+      scheduleOpts.classList.toggle("hidden", !scheduleEnabled.checked);
+    });
+    const schedType = document.getElementById("auto-schedule-type");
+    if (schedType) {
+      schedType.addEventListener("change", () => {
+        document.getElementById("auto-schedule-once").classList.toggle("hidden", schedType.value !== "once");
+        document.getElementById("auto-schedule-interval").classList.toggle("hidden", schedType.value !== "interval");
+        document.getElementById("auto-schedule-daily-opts").classList.toggle("hidden", schedType.value !== "daily");
+        document.getElementById("auto-schedule-weekly-opts").classList.toggle("hidden", schedType.value !== "weekly");
+        document.getElementById("auto-schedule-cron-opts").classList.toggle("hidden", schedType.value !== "cron");
+      });
+    }
+    // Build cron hour checkboxes
+    const cronHours = document.getElementById("auto-schedule-cron-hours");
+    if (cronHours) {
+      for (let h = 0; h < 24; h++) {
+        const lbl = document.createElement("label");
+        lbl.style.cssText = "display:flex;align-items:center;gap:2px;cursor:pointer;";
+        const cb = document.createElement("input");
+        cb.type = "checkbox"; cb.value = h; cb.className = "cron-hour-cb";
+        lbl.appendChild(cb);
+        lbl.appendChild(document.createTextNode(String(h).padStart(2, "0")));
+        cronHours.appendChild(lbl);
+      }
+    }
+    // Build cron day checkboxes
+    const cronDays = document.getElementById("auto-schedule-cron-days");
+    if (cronDays) {
+      for (const [val, label] of [[0,"Sun"],[1,"Mon"],[2,"Tue"],[3,"Wed"],[4,"Thu"],[5,"Fri"],[6,"Sat"]]) {
+        const lbl = document.createElement("label");
+        lbl.style.cssText = "display:flex;align-items:center;gap:2px;cursor:pointer;";
+        const cb = document.createElement("input");
+        cb.type = "checkbox"; cb.value = val; cb.className = "cron-day-cb";
+        lbl.appendChild(cb);
+        lbl.appendChild(document.createTextNode(label));
+        cronDays.appendChild(lbl);
+      }
+    }
+  }
+
+  // Named Lists
+  loadNamedLists();
+  document.getElementById("new-list-btn").addEventListener("click", () => openListEditor(null));
+  document.getElementById("list-save-btn").addEventListener("click", saveNamedList);
+  document.getElementById("list-cancel-btn").addEventListener("click", closeListEditor);
+  document.getElementById("list-delete-btn").addEventListener("click", deleteNamedList);
+
+  // Pending Gates
+  loadPendingGates();
+  setInterval(loadPendingGates, 15000); // refresh every 15s
+
+  // Finance Monitor
+  loadFinanceState();
+  document.getElementById("fin-add-watchlist-btn").addEventListener("click", finAddWatchlistItem);
+  document.getElementById("fin-bulk-add-btn").addEventListener("click", finBulkImport);
+  document.getElementById("fin-add-wallet-btn").addEventListener("click", finAddWallet);
+  document.getElementById("fin-add-alert-btn").addEventListener("click", finAddAlert);
+  document.getElementById("fin-add-event-btn").addEventListener("click", finAddEvent);
+  document.getElementById("fin-export-btn").addEventListener("click", finExport);
+  document.getElementById("fin-import-btn").addEventListener("click", () => document.getElementById("fin-import-file").click());
+  document.getElementById("fin-import-file").addEventListener("change", finImport);
+  document.getElementById("fin-refresh-btn").addEventListener("click", async () => {
+    const btn = document.getElementById("fin-refresh-btn");
+    btn.textContent = "Refreshing...";
+    btn.disabled = true;
+    try {
+      await browser.runtime.sendMessage({ action: "financeRefreshPrices" });
+      await loadFinanceState();
+      finUpdateLastRefreshed();
+    } catch (e) {
+      document.getElementById("fin-io-status").textContent = "Refresh error: " + e.message;
+    }
+    btn.textContent = "Refresh Prices";
+    btn.disabled = false;
+  });
+  document.getElementById("fin-open-page-btn").addEventListener("click", () => {
+    browser.tabs.create({ url: browser.runtime.getURL("finance/finance.html") });
+  });
 
   // Monitors
   populateMonitorPresetDropdown();
@@ -3381,6 +4416,565 @@ async function importSettingsFromFile(event) {
   }
 
   el.importFile.value = "";
+}
+
+// ──────────────────────────────────────────────
+// Finance Monitor Settings
+// ──────────────────────────────────────────────
+
+const FIN_STORAGE_KEY = "financeMonitor";
+let finState = { watchlist: [], wallets: [], alerts: [], events: [], pinned: [] };
+
+async function loadFinanceState() {
+  try {
+    const { [FIN_STORAGE_KEY]: saved } = await browser.storage.local.get({ [FIN_STORAGE_KEY]: null });
+    if (saved) finState = { watchlist: [], wallets: [], alerts: [], events: [], pinned: [], ...saved };
+  } catch { /* first load */ }
+  renderFinanceAll();
+}
+
+async function saveFinanceState() {
+  await browser.storage.local.set({ [FIN_STORAGE_KEY]: finState });
+}
+
+function renderFinanceAll() {
+  renderFinWatchlist();
+  renderFinWallets();
+  renderFinAlerts();
+  renderFinEvents();
+  const wb = document.getElementById("fin-watchlist-badge");
+  const walb = document.getElementById("fin-wallets-badge");
+  const ab = document.getElementById("fin-alerts-badge");
+  const navBadge = document.getElementById("badge-finance");
+  if (wb) wb.textContent = finState.watchlist.length;
+  if (walb) walb.textContent = finState.wallets.length;
+  if (ab) ab.textContent = finState.alerts.length;
+  const total = finState.watchlist.length + finState.wallets.length + finState.alerts.length;
+  if (navBadge) navBadge.textContent = total || "";
+  finUpdateLastRefreshed();
+}
+
+function finUpdateLastRefreshed() {
+  const el = document.getElementById("fin-last-refreshed");
+  if (!el) return;
+  if (finState.lastRefreshed) {
+    const d = new Date(finState.lastRefreshed);
+    const diffMin = Math.floor((Date.now() - d.getTime()) / 60000);
+    if (diffMin < 1) el.textContent = "Updated just now";
+    else if (diffMin < 60) el.textContent = `Updated ${diffMin}m ago`;
+    else el.textContent = `Updated ${d.toLocaleTimeString()}`;
+  } else {
+    el.textContent = "Not yet refreshed — click Refresh Prices";
+  }
+}
+
+function finFormatPrice(val) {
+  if (val == null) return "—";
+  const n = Number(val);
+  if (isNaN(n)) return "—";
+  if (n >= 1000) return "$" + n.toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (n >= 1) return "$" + n.toFixed(2);
+  return "$" + n.toFixed(6);
+}
+
+function finFormatChange(val) {
+  if (val == null) return "";
+  const n = Number(val);
+  if (isNaN(n)) return "";
+  const sign = n >= 0 ? "+" : "";
+  const color = n >= 0 ? "#4caf50" : "#ff5252";
+  return `<span style="color:${color};font-size:11px;font-weight:600;">${sign}${n.toFixed(2)}%</span>`;
+}
+
+function renderFinWatchlist() {
+  const list = document.getElementById("fin-watchlist-list");
+  if (!list) return;
+  list.replaceChildren();
+
+  if (!finState.watchlist.length) {
+    const hint = document.createElement("span");
+    hint.className = "hint";
+    hint.textContent = "No items in watchlist. Add stocks, crypto, and more below.";
+    list.appendChild(hint);
+    return;
+  }
+
+  for (const item of finState.watchlist) {
+    const div = document.createElement("div");
+    div.className = "rule-item";
+    const isPinned = finState.pinned.includes(item.id);
+
+    const info = document.createElement("div");
+    info.className = "rule-info";
+    const strong = document.createElement("strong");
+    const priceStr = item.price != null ? ` ${finFormatPrice(item.price)}` : "";
+    const changeStr = finFormatChange(item.changePct);
+    strong.innerHTML = `<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;text-transform:uppercase;margin-right:6px;background:rgba(100,181,246,0.12);color:#64b5f6;">${item.type}</span>${item.symbol}${priceStr} ${changeStr}`;
+    const span = document.createElement("span");
+    span.textContent = item.name || "";
+    if (isPinned) span.textContent += " (pinned)";
+    info.appendChild(strong);
+    info.appendChild(span);
+
+    const actions = document.createElement("div");
+    actions.className = "rule-actions";
+
+    const pinBtn = document.createElement("button");
+    pinBtn.className = "btn btn-sm btn-secondary";
+    pinBtn.textContent = isPinned ? "Unpin" : "Pin";
+    pinBtn.addEventListener("click", () => {
+      const idx = finState.pinned.indexOf(item.id);
+      if (idx >= 0) finState.pinned.splice(idx, 1);
+      else finState.pinned.push(item.id);
+      saveFinanceState();
+      renderFinanceAll();
+    });
+
+    const rmBtn = document.createElement("button");
+    rmBtn.className = "btn btn-sm btn-secondary";
+    rmBtn.textContent = "Remove";
+    rmBtn.style.color = "var(--error)";
+    rmBtn.addEventListener("click", () => {
+      finState.watchlist = finState.watchlist.filter(i => i.id !== item.id);
+      finState.pinned = finState.pinned.filter(p => p !== item.id);
+      saveFinanceState();
+      renderFinanceAll();
+    });
+
+    actions.appendChild(pinBtn);
+    actions.appendChild(rmBtn);
+    div.appendChild(info);
+    div.appendChild(actions);
+    list.appendChild(div);
+  }
+}
+
+function renderFinWallets() {
+  const list = document.getElementById("fin-wallets-list");
+  if (!list) return;
+  list.replaceChildren();
+
+  if (!finState.wallets.length) {
+    const hint = document.createElement("span");
+    hint.className = "hint";
+    hint.textContent = "No wallets being monitored.";
+    list.appendChild(hint);
+    return;
+  }
+
+  for (const w of finState.wallets) {
+    const div = document.createElement("div");
+    div.className = "rule-item";
+
+    const info = document.createElement("div");
+    info.className = "rule-info";
+    const strong = document.createElement("strong");
+    strong.textContent = `${w.chain.toUpperCase()} — ${w.label || "Wallet"}`;
+    const span = document.createElement("span");
+    span.textContent = w.address;
+    span.style.fontFamily = "monospace";
+    span.style.fontSize = "11px";
+    info.appendChild(strong);
+    info.appendChild(span);
+
+    const actions = document.createElement("div");
+    actions.className = "rule-actions";
+
+    const pinBtn = document.createElement("button");
+    pinBtn.className = "btn btn-sm btn-secondary";
+    const isPinned = finState.pinned.includes(w.id);
+    pinBtn.textContent = isPinned ? "Unpin" : "Pin";
+    pinBtn.addEventListener("click", () => {
+      const idx = finState.pinned.indexOf(w.id);
+      if (idx >= 0) finState.pinned.splice(idx, 1);
+      else finState.pinned.push(w.id);
+      saveFinanceState();
+      renderFinanceAll();
+    });
+
+    const rmBtn = document.createElement("button");
+    rmBtn.className = "btn btn-sm btn-secondary";
+    rmBtn.textContent = "Remove";
+    rmBtn.style.color = "var(--error)";
+    rmBtn.addEventListener("click", () => {
+      finState.wallets = finState.wallets.filter(x => x.id !== w.id);
+      finState.pinned = finState.pinned.filter(p => p !== w.id);
+      saveFinanceState();
+      renderFinanceAll();
+    });
+
+    actions.appendChild(pinBtn);
+    actions.appendChild(rmBtn);
+    div.appendChild(info);
+    div.appendChild(actions);
+    list.appendChild(div);
+  }
+}
+
+function renderFinAlerts() {
+  const list = document.getElementById("fin-alerts-list");
+  if (!list) return;
+  list.replaceChildren();
+
+  if (!finState.alerts.length) {
+    const hint = document.createElement("span");
+    hint.className = "hint";
+    hint.textContent = "No price alerts configured.";
+    list.appendChild(hint);
+    return;
+  }
+
+  for (const a of finState.alerts) {
+    const div = document.createElement("div");
+    div.className = "rule-item";
+
+    const info = document.createElement("div");
+    info.className = "rule-info";
+    const strong = document.createElement("strong");
+    const condLabel = { above: ">", below: "<", change_above: "% chg >", change_below: "% chg <" };
+    strong.textContent = `${a.symbol} ${condLabel[a.condition] || a.condition} ${a.threshold}`;
+    const span = document.createElement("span");
+    span.textContent = a.triggered ? "Triggered" : (a.enabled ? "Active" : "Paused");
+    span.style.color = a.triggered ? "var(--accent)" : (a.enabled ? "var(--success)" : "var(--text-muted)");
+    info.appendChild(strong);
+    info.appendChild(span);
+
+    const actions = document.createElement("div");
+    actions.className = "rule-actions";
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.className = "btn btn-sm btn-secondary";
+    toggleBtn.textContent = a.enabled ? "Pause" : "Enable";
+    toggleBtn.addEventListener("click", () => {
+      a.enabled = !a.enabled;
+      if (!a.enabled) a.triggered = false;
+      saveFinanceState();
+      renderFinanceAll();
+    });
+
+    const rmBtn = document.createElement("button");
+    rmBtn.className = "btn btn-sm btn-secondary";
+    rmBtn.textContent = "Remove";
+    rmBtn.style.color = "var(--error)";
+    rmBtn.addEventListener("click", () => {
+      finState.alerts = finState.alerts.filter(x => x.id !== a.id);
+      saveFinanceState();
+      renderFinanceAll();
+    });
+
+    actions.appendChild(toggleBtn);
+    actions.appendChild(rmBtn);
+    div.appendChild(info);
+    div.appendChild(actions);
+    list.appendChild(div);
+  }
+}
+
+function renderFinEvents() {
+  const list = document.getElementById("fin-events-list");
+  if (!list) return;
+  list.replaceChildren();
+
+  if (!finState.events.length) {
+    const hint = document.createElement("span");
+    hint.className = "hint";
+    hint.textContent = "No calendar events.";
+    list.appendChild(hint);
+    return;
+  }
+
+  const sorted = [...finState.events].sort((a, b) => new Date(a.date) - new Date(b.date));
+  for (const ev of sorted) {
+    const div = document.createElement("div");
+    div.className = "rule-item";
+
+    const info = document.createElement("div");
+    info.className = "rule-info";
+    const strong = document.createElement("strong");
+    const d = new Date(ev.date);
+    strong.textContent = `${d.toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" })} — ${ev.title}`;
+    const span = document.createElement("span");
+    span.textContent = ev.tag ? `Tag: ${ev.tag}` : (ev.description || "");
+    info.appendChild(strong);
+    info.appendChild(span);
+
+    const actions = document.createElement("div");
+    actions.className = "rule-actions";
+    const rmBtn = document.createElement("button");
+    rmBtn.className = "btn btn-sm btn-secondary";
+    rmBtn.textContent = "Remove";
+    rmBtn.style.color = "var(--error)";
+    rmBtn.addEventListener("click", () => {
+      finState.events = finState.events.filter(x => x.id !== ev.id);
+      saveFinanceState();
+      renderFinanceAll();
+    });
+    actions.appendChild(rmBtn);
+    div.appendChild(info);
+    div.appendChild(actions);
+    list.appendChild(div);
+  }
+}
+
+function finAddWatchlistItem() {
+  const symbol = document.getElementById("fin-add-symbol").value.trim().toUpperCase();
+  if (!symbol) { alert("Enter a symbol."); return; }
+  const type = document.getElementById("fin-add-type").value;
+  const name = document.getElementById("fin-add-name").value.trim();
+  const pinned = document.getElementById("fin-add-pinned").checked;
+  const id = `fin-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+  finState.watchlist.push({ id, type, symbol, name, price: null, change: null, changePct: null, volume: null });
+  if (pinned) finState.pinned.push(id);
+
+  saveFinanceState();
+  renderFinanceAll();
+  document.getElementById("fin-add-symbol").value = "";
+  document.getElementById("fin-add-name").value = "";
+}
+
+function finBulkImport() {
+  const input = document.getElementById("fin-bulk-input").value.trim();
+  const status = document.getElementById("fin-bulk-status");
+  if (!input) return;
+
+  const lines = input.split("\n").map(l => l.trim()).filter(Boolean);
+  let added = 0;
+  for (const line of lines) {
+    const parts = line.split(":");
+    let type = "stock", symbol, name = "";
+    if (parts.length >= 2) {
+      type = parts[0].toLowerCase();
+      symbol = parts[1].toUpperCase();
+      name = parts[2] || "";
+    } else {
+      symbol = parts[0].toUpperCase();
+    }
+    if (!symbol) continue;
+    if (!["stock", "crypto", "commodity", "forex", "index"].includes(type)) type = "stock";
+
+    const id = `fin-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    finState.watchlist.push({ id, type, symbol, name, price: null, change: null, changePct: null, volume: null });
+    finState.pinned.push(id);
+    added++;
+  }
+
+  saveFinanceState();
+  renderFinanceAll();
+  document.getElementById("fin-bulk-input").value = "";
+  status.textContent = `Added ${added} items!`;
+  status.style.color = "";
+  setTimeout(() => { status.textContent = ""; }, 3000);
+}
+
+function finAddWallet() {
+  const address = document.getElementById("fin-wallet-address").value.trim();
+  if (!address) { alert("Enter a wallet address."); return; }
+  const chain = document.getElementById("fin-wallet-chain").value;
+  const label = document.getElementById("fin-wallet-label").value.trim();
+  const id = `fin-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+  finState.wallets.push({ id, chain, address, label, balance: null, usdValue: null });
+  saveFinanceState();
+  renderFinanceAll();
+  document.getElementById("fin-wallet-address").value = "";
+  document.getElementById("fin-wallet-label").value = "";
+}
+
+function finAddAlert() {
+  const symbol = document.getElementById("fin-alert-symbol").value.trim().toUpperCase();
+  if (!symbol) { alert("Enter a symbol."); return; }
+  const condition = document.getElementById("fin-alert-condition").value;
+  const threshold = parseFloat(document.getElementById("fin-alert-threshold").value) || 0;
+  const id = `fin-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+  finState.alerts.push({ id, symbol, condition, threshold, enabled: true, triggered: false });
+  saveFinanceState();
+  renderFinanceAll();
+  document.getElementById("fin-alert-symbol").value = "";
+  document.getElementById("fin-alert-threshold").value = "";
+}
+
+function finAddEvent() {
+  const date = document.getElementById("fin-event-date").value;
+  const title = document.getElementById("fin-event-title").value.trim();
+  if (!date || !title) { alert("Enter a date and title."); return; }
+  const tag = document.getElementById("fin-event-tag").value.trim();
+  const id = `fin-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+  finState.events.push({ id, date, title, tag, description: "" });
+  saveFinanceState();
+  renderFinanceAll();
+  document.getElementById("fin-event-title").value = "";
+  document.getElementById("fin-event-tag").value = "";
+}
+
+async function finExport() {
+  const status = document.getElementById("fin-io-status");
+  const payload = {
+    _type: "argus-finance-export",
+    _version: 1,
+    exportedAt: new Date().toISOString(),
+    ...finState,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `argus-finance-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  status.textContent = "Exported!";
+  setTimeout(() => { status.textContent = ""; }, 2000);
+}
+
+async function finImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const status = document.getElementById("fin-io-status");
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (data._type !== "argus-finance-export") throw new Error("Not a valid Finance export file");
+
+    if (Array.isArray(data.watchlist)) {
+      const existingIds = new Set(finState.watchlist.map(i => i.id));
+      for (const item of data.watchlist) {
+        if (!existingIds.has(item.id)) finState.watchlist.push(item);
+      }
+    }
+    if (Array.isArray(data.wallets)) {
+      const existingIds = new Set(finState.wallets.map(i => i.id));
+      for (const item of data.wallets) {
+        if (!existingIds.has(item.id)) finState.wallets.push(item);
+      }
+    }
+    if (Array.isArray(data.alerts)) {
+      const existingIds = new Set(finState.alerts.map(i => i.id));
+      for (const item of data.alerts) {
+        if (!existingIds.has(item.id)) finState.alerts.push(item);
+      }
+    }
+    if (Array.isArray(data.events)) {
+      const existingIds = new Set(finState.events.map(i => i.id));
+      for (const item of data.events) {
+        if (!existingIds.has(item.id)) finState.events.push(item);
+      }
+    }
+    if (Array.isArray(data.pinned)) {
+      for (const p of data.pinned) {
+        if (!finState.pinned.includes(p)) finState.pinned.push(p);
+      }
+    }
+
+    await saveFinanceState();
+    renderFinanceAll();
+    status.textContent = "Imported!";
+    status.style.color = "";
+  } catch (err) {
+    status.textContent = "Import failed: " + err.message;
+    status.style.color = "var(--error)";
+  }
+  event.target.value = "";
+  setTimeout(() => { status.textContent = ""; }, 3000);
+}
+
+// ──────────────────────────────────────────────
+// Automation Export / Import
+// ──────────────────────────────────────────────
+
+async function exportAutomationsToFile() {
+  const status = document.getElementById("automations-io-status");
+  try {
+    const resp = await browser.runtime.sendMessage({ action: "exportAutomations" });
+    if (!resp?.success) { status.textContent = "Export failed"; return; }
+
+    const payload = {
+      _type: "argus-automations-export",
+      _version: 1,
+      exportedAt: new Date().toISOString(),
+      automations: resp.automations,
+      lists: resp.lists,
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `argus-automations-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    const count = (resp.automations?.length || 0) + (resp.lists?.length || 0);
+    status.textContent = `Exported ${count} items!`;
+    status.style.color = "";
+  } catch (err) {
+    status.textContent = "Export error: " + err.message;
+    status.style.color = "var(--error)";
+  }
+  setTimeout(() => { status.textContent = ""; }, 3000);
+}
+
+async function importAutomationsFromFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const status = document.getElementById("automations-io-status");
+
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+
+    if (data._type !== "argus-automations-export") {
+      throw new Error("Not a valid Argus automations export file");
+    }
+
+    const mode = document.getElementById("import-automations-mode").value;
+    if (mode === "replace") {
+      if (!confirm("This will REPLACE all existing automations and named lists. Continue?")) return;
+    }
+
+    const resp = await browser.runtime.sendMessage({
+      action: "importAutomations",
+      automations: data.automations || [],
+      lists: data.lists || [],
+      mode,
+    });
+
+    if (resp?.success) {
+      status.textContent = `Imported ${resp.imported.automations} automations, ${resp.imported.lists} lists!`;
+      status.style.color = "";
+      await loadAutomations();
+      await loadNamedLists();
+    } else {
+      status.textContent = "Import failed";
+      status.style.color = "var(--error)";
+    }
+  } catch (err) {
+    status.textContent = "Import error: " + err.message;
+    status.style.color = "var(--error)";
+  }
+
+  event.target.value = "";
+  setTimeout(() => { status.textContent = ""; }, 4000);
+}
+
+async function seedPrebuiltAutomations() {
+  const status = document.getElementById("automations-io-status");
+  try {
+    await browser.runtime.sendMessage({ action: "seedPrebuiltAutomations" });
+    status.textContent = "Pre-built templates restored!";
+    status.style.color = "";
+    await loadAutomations();
+    await loadNamedLists();
+  } catch (err) {
+    status.textContent = "Seed error: " + err.message;
+    status.style.color = "var(--error)";
+  }
+  setTimeout(() => { status.textContent = ""; }, 3000);
 }
 
 // ──────────────────────────────────────────────
@@ -5305,6 +6899,119 @@ function bmCreateFilterChip(text, onRemove) {
   return chip;
 }
 
+function bmCreateShareBar(bm) {
+  // Build shareable text from bookmark analysis
+  const parts = [];
+  if (bm.title) parts.push(`# ${bm.title}`);
+  if (bm.url) parts.push(bm.url);
+  if (bm.tldr) parts.push(`\n${bm.tldr}`);
+  else if (bm.summary) parts.push(`\n${bm.summary}`);
+  if (bm.keyFacts && bm.keyFacts.length) parts.push(`\nKey Facts:\n${bm.keyFacts.map(f => `- ${f}`).join("\n")}`);
+  if (bm.notes) parts.push(`\nNotes: ${bm.notes}`);
+  const content = parts.join("\n");
+  const title = bm.title || "Bookmark";
+
+  const bar = document.createElement("div");
+  bar.className = "argus-chat-actions";
+
+  // Copy
+  const copyBtn = document.createElement("button");
+  copyBtn.className = "argus-chat-action-btn";
+  copyBtn.title = "Copy to clipboard";
+  copyBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy`;
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      copyBtn.textContent = "Copied!";
+      setTimeout(() => { copyBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy`; }, 1500);
+    } catch { /* */ }
+  });
+  bar.appendChild(copyBtn);
+
+  // Draft
+  const draftBtn = document.createElement("button");
+  draftBtn.className = "argus-chat-action-btn";
+  draftBtn.title = "Save as draft";
+  draftBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Draft`;
+  draftBtn.addEventListener("click", async () => {
+    try {
+      const draftId = "draft-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6);
+      await browser.runtime.sendMessage({
+        action: "draftSave",
+        draft: { id: draftId, title, content, updatedAt: Date.now() }
+      });
+      draftBtn.textContent = "Saved!";
+      setTimeout(() => { draftBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Draft`; }, 1500);
+    } catch { /* */ }
+  });
+  bar.appendChild(draftBtn);
+
+  // Paste
+  const pasteBtn = document.createElement("button");
+  pasteBtn.className = "argus-chat-action-btn";
+  pasteBtn.title = "Paste to Gist or PrivateBin";
+  pasteBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg> Paste`;
+  pasteBtn.addEventListener("click", async () => {
+    // Inline paste picker
+    const existing = bar.querySelector(".argus-chat-project-picker");
+    if (existing) { existing.remove(); return; }
+    const picker = document.createElement("div");
+    picker.className = "argus-chat-project-picker";
+    for (const [key, label] of [["gist", "GitHub Gist"], ["privatebin", "PrivateBin"]]) {
+      const opt = document.createElement("button");
+      opt.className = "argus-chat-project-option";
+      opt.textContent = label;
+      opt.addEventListener("click", async () => {
+        opt.textContent = "Uploading...";
+        try {
+          await browser.runtime.sendMessage({ action: "pasteCreate", providerKey: key, title, content, files: null });
+          opt.textContent = "Done!";
+        } catch { opt.textContent = "Error"; }
+        setTimeout(() => picker.remove(), 1500);
+      });
+      picker.appendChild(opt);
+    }
+    bar.appendChild(picker);
+    const dismiss = (e) => { if (!picker.contains(e.target) && e.target !== pasteBtn) { picker.remove(); document.removeEventListener("click", dismiss); } };
+    setTimeout(() => document.addEventListener("click", dismiss), 0);
+  });
+  bar.appendChild(pasteBtn);
+
+  // X
+  const xBtn = document.createElement("button");
+  xBtn.className = "argus-chat-action-btn";
+  xBtn.title = "Share on X";
+  xBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>`;
+  xBtn.addEventListener("click", () => {
+    const snippet = content.slice(0, 250).replace(/\n/g, " ");
+    const text = `${snippet}${content.length > 250 ? "..." : ""}\n\nvia Argus`;
+    window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}`, "_blank");
+  });
+  bar.appendChild(xBtn);
+
+  // Reddit
+  const redditBtn = document.createElement("button");
+  redditBtn.className = "argus-chat-action-btn";
+  redditBtn.title = "Share on Reddit";
+  redditBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>`;
+  redditBtn.addEventListener("click", () => {
+    window.open(`https://www.reddit.com/submit?title=${encodeURIComponent(title)}&text=${encodeURIComponent(content)}`, "_blank");
+  });
+  bar.appendChild(redditBtn);
+
+  // Email
+  const emailBtn = document.createElement("button");
+  emailBtn.className = "argus-chat-action-btn";
+  emailBtn.title = "Share via email";
+  emailBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>`;
+  emailBtn.addEventListener("click", () => {
+    window.open(`mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(content)}`, "_blank");
+  });
+  bar.appendChild(emailBtn);
+
+  return bar;
+}
+
 function bmRenderBookmarks(bookmarks, total) {
   bmEl.count.textContent = `${total} bookmark${total !== 1 ? "s" : ""}`;
   bmEl.list.replaceChildren();
@@ -5501,6 +7208,12 @@ function bmRenderBookmarks(bookmarks, total) {
       meta.appendChild(ai);
     }
     card.appendChild(meta);
+
+    // Share / action buttons (when card has analysis content)
+    if (bm.tldr || bm.summary || (bm.keyFacts && bm.keyFacts.length) || bm.notes) {
+      card.appendChild(bmCreateShareBar(bm));
+    }
+
     bmEl.list.appendChild(card);
   });
 }

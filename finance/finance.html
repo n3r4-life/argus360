@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Finance Monitor</title>
+  <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="finance.css">
+</head>
+<body>
+  <script src="../shared/ribbon.js"></script>
+  <script src="../shared/panel-state.js"></script>
+
+  <!-- Ticker Tape Ribbon -->
+  <div class="fin-ticker-tape" id="tickerTape">
+    <!-- Populated by JS -->
+    <button class="fin-ticker-add" id="tickerAddBtn" title="Pin item to ticker tape">+</button>
+  </div>
+
+  <!-- Page Header -->
+  <header class="fin-header">
+    <svg class="fin-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="12" y1="1" x2="12" y2="23"/>
+      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+    </svg>
+    <span class="fin-header-title">Finance Monitor</span>
+    <span class="fin-header-spacer"></span>
+    <button class="btn-sm" id="viewWatchlist">Watchlist</button>
+    <button class="btn-sm" id="viewWallets">Wallets</button>
+    <button class="btn-sm" id="viewAlerts">Alerts</button>
+    <button class="btn-sm" id="refreshBtn" title="Refresh prices">Refresh</button>
+    <span id="lastRefreshed" style="font-size:10px;color:#6a6a80;"></span>
+    <button class="btn-sm" id="addItemBtn">+ Add</button>
+  </header>
+
+  <!-- Main Content Grid -->
+  <main class="fin-main" id="finMain">
+
+    <!-- Watchlist Card -->
+    <div class="fin-card full-width" id="watchlistCard">
+      <div class="fin-card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+        Watchlist
+        <span class="fin-card-badge" id="watchlistCount">0</span>
+      </div>
+      <div class="fin-card-body">
+        <table class="fin-watchlist" id="watchlistTable">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Symbol</th>
+              <th>Name</th>
+              <th class="col-price">Price</th>
+              <th class="col-change">Change</th>
+              <th class="col-vol">Volume</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="watchlistBody"></tbody>
+        </table>
+        <div class="fin-empty hidden" id="watchlistEmpty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+          <div>No items in your watchlist yet.</div>
+          <div style="margin-top:4px;">Click <strong>+ Add</strong> to track stocks, crypto, commodities, and more.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Wallet Monitor Card -->
+    <div class="fin-card" id="walletsCard">
+      <div class="fin-card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="1" y="4" width="22" height="16" rx="2"/>
+          <line x1="1" y1="10" x2="23" y2="10"/>
+        </svg>
+        Wallet Monitor
+        <span class="fin-card-badge" id="walletCount">0</span>
+      </div>
+      <div class="fin-card-body" id="walletsList">
+        <div class="fin-empty" id="walletsEmpty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="1" y="4" width="22" height="16" rx="2"/>
+            <line x1="1" y1="10" x2="23" y2="10"/>
+          </svg>
+          <div>No wallets being monitored.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alerts Card -->
+    <div class="fin-card" id="alertsCard">
+      <div class="fin-card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+        Alerts
+        <span class="fin-card-badge" id="alertCount">0</span>
+      </div>
+      <div class="fin-card-body" id="alertsList">
+        <div class="fin-empty" id="alertsEmpty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+          <div>No alerts configured.</div>
+          <div style="margin-top:4px;">Set price thresholds to get notified.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calendar / Events Card -->
+    <div class="fin-card" id="calendarCard">
+      <div class="fin-card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="18" rx="2"/>
+          <line x1="16" y1="2" x2="16" y2="6"/>
+          <line x1="8" y1="2" x2="8" y2="6"/>
+          <line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        Calendar
+      </div>
+      <div class="fin-card-body" id="calendarList">
+        <div class="fin-empty" id="calendarEmpty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          <div>No upcoming events.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sentiment Gauge -->
+    <div class="fin-card" id="sentimentCard">
+      <div class="fin-card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+          <line x1="9" y1="9" x2="9.01" y2="9"/>
+          <line x1="15" y1="9" x2="15.01" y2="9"/>
+        </svg>
+        Market Sentiment
+      </div>
+      <div class="fin-card-body">
+        <div class="fin-sentiment-gauge" id="sentimentGauge">
+          <div class="fin-sentiment-label" id="sentimentValue">--</div>
+          <div class="fin-sentiment-text" id="sentimentText">No data</div>
+          <div class="fin-sentiment-bar">
+            <div class="fin-sentiment-needle" id="sentimentNeedle" style="left:50%;"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;width:100%;font-size:10px;color:var(--text-muted);">
+            <span>Extreme Fear</span>
+            <span>Neutral</span>
+            <span>Extreme Greed</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Add Item Modal -->
+  <div class="fin-modal-overlay hidden" id="addModal">
+    <div class="fin-modal">
+      <div class="fin-modal-header">
+        <span id="modalTitle">Add to Watchlist</span>
+        <button class="fin-modal-close" id="modalClose">&times;</button>
+      </div>
+      <div class="fin-modal-body">
+        <div class="fin-form-group">
+          <label for="addType">Type</label>
+          <select id="addType">
+            <option value="stock">Stock Ticker</option>
+            <option value="crypto">Cryptocurrency</option>
+            <option value="commodity">Commodity</option>
+            <option value="forex">Forex Pair</option>
+            <option value="index">Index</option>
+            <option value="wallet">Crypto Wallet</option>
+            <option value="alert">Price Alert</option>
+          </select>
+        </div>
+        <!-- Dynamic fields based on type -->
+        <div id="addFields"></div>
+      </div>
+      <div class="fin-modal-footer">
+        <button class="fin-btn fin-btn-secondary" id="modalCancelBtn">Cancel</button>
+        <button class="fin-btn fin-btn-primary" id="modalSaveBtn">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="finance.js"></script>
+</body>
+</html>

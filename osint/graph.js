@@ -1260,6 +1260,239 @@
     height = container.clientHeight;
   }
 
+  /* ---- Asset Library for KG page ---- */
+  (function initAssetLibrary() {
+    const panel = document.getElementById("kgAssetsPanel");
+    const toggle = document.getElementById("kgAssetsToggle");
+    const closeBtn = document.getElementById("kgAssetsClose");
+    const search = document.getElementById("kgAssetSearch");
+    const list = document.getElementById("kgAssetsList");
+    const countEl = document.getElementById("kgAssetCount");
+    const tabs = document.querySelectorAll(".kg-asset-tab");
+    if (!panel || !toggle) return;
+
+    let allAssets = { analyses: [], bookmarks: [], monitors: [], feeds: [], techstack: [], snapshots: [], timeline: [] };
+    let activeTab = "analyses";
+    let loaded = false;
+
+    toggle.addEventListener("click", () => {
+      const open = !panel.classList.contains("hidden");
+      panel.classList.toggle("hidden", open);
+      if (!loaded) { loaded = true; loadAssets(); }
+    });
+    closeBtn.addEventListener("click", () => panel.classList.add("hidden"));
+
+    tabs.forEach(t => {
+      t.addEventListener("click", () => {
+        tabs.forEach(x => x.classList.remove("active"));
+        t.classList.add("active");
+        activeTab = t.dataset.tab;
+        renderAssets();
+      });
+    });
+    search.addEventListener("input", () => renderAssets());
+
+    function getProjectUrls() {
+      // Get URLs from the active project(s) — only assets matching these URLs are shown
+      if (!projectFilterActive) return null; // global mode = no assets
+      const urls = new Set();
+      for (const pid of visibleProjects) {
+        const proj = allProjects.find(p => p.id === pid);
+        if (proj) for (const u of proj.urls) urls.add(u);
+      }
+      return urls;
+    }
+
+    async function loadAssets() {
+      const projUrls = getProjectUrls();
+      if (!projUrls) {
+        // Global mode — no assets
+        for (const k of Object.keys(allAssets)) allAssets[k] = [];
+        countEl.textContent = "";
+        renderAssets();
+        return;
+      }
+
+      try {
+        const [histResp, bkResp, monResp, feedResp, trackerResp] = await Promise.all([
+          browser.runtime.sendMessage({ action: "getHistory", page: 0, perPage: 100 }),
+          browser.runtime.sendMessage({ action: "getBookmarks" }),
+          browser.runtime.sendMessage({ action: "getMonitors" }).catch(() => null),
+          browser.runtime.sendMessage({ action: "getFeeds" }).catch(() => null),
+          browser.runtime.sendMessage({ action: "getTrackerPages" }).catch(() => null)
+        ]);
+
+        // Analyses — filtered to project URLs
+        if (histResp?.history) {
+          allAssets.analyses = histResp.history.filter(h => h.pageUrl && projUrls.has(h.pageUrl)).map(h => {
+            let text = h.content || "";
+            text = text.replace(/```(?:json|argus[_-]?structured)?\s*\n?\{[\s\S]*?\}\s*\n?```/gi, "").trim();
+            return { id: h.id, title: h.presetLabel || h.title || h.pageUrl || "Analysis", preview: text.slice(0, 150), content: text, url: h.pageUrl, date: h.timestamp };
+          });
+        }
+
+        // Bookmarks — filtered to project URLs
+        if (bkResp?.bookmarks) {
+          const projBk = bkResp.bookmarks.filter(b => b.url && projUrls.has(b.url));
+          allAssets.bookmarks = projBk.map(b => ({
+            id: b.id, title: b.title || b.url, preview: b.url,
+            content: `[${b.title || b.url}](${b.url})${b.tldr ? "\n" + b.tldr : b.summary ? "\n" + b.summary : ""}`,
+            url: b.url, date: b.savedAt
+          }));
+
+          // TechStack — from project bookmarks only
+          allAssets.techstack = projBk.filter(b => b.techStack && Object.keys(b.techStack).length).map(b => {
+            const ts = b.techStack, techs = [];
+            if (ts.generator) techs.push("Generator: " + ts.generator);
+            if (ts.server) techs.push("Server: " + ts.server);
+            if (ts.poweredBy) techs.push("Powered By: " + ts.poweredBy);
+            if (ts.frameworks?.length) techs.push("Frameworks: " + ts.frameworks.join(", "));
+            if (ts.cdn?.length) techs.push("CDN: " + ts.cdn.join(", "));
+            if (ts.analytics?.length) techs.push("Analytics: " + ts.analytics.join(", "));
+            return { id: b.id + "-tech", title: b.title || b.url, preview: techs.slice(0, 2).join(" · "), content: "## TechStack: " + (b.title || b.url) + "\n" + techs.join("\n"), url: b.url, date: b.savedAt };
+          });
+        }
+
+        // Monitors + Snapshots — filtered to project URLs
+        if (monResp?.monitors?.length) {
+          const projMon = monResp.monitors.filter(m => m.url && projUrls.has(m.url)).slice(0, 30);
+          if (projMon.length) {
+            const [changesArr, snapArr] = await Promise.all([
+              Promise.all(projMon.map(m =>
+                browser.runtime.sendMessage({ action: "getMonitorHistory", monitorId: m.id }).then(r => ({ m, changes: r?.history || [] })).catch(() => ({ m, changes: [] }))
+              )),
+              Promise.all(projMon.map(m =>
+                browser.runtime.sendMessage({ action: "getMonitorSnapshots", monitorId: m.id }).then(r => ({ m, snaps: r?.snapshots || [] })).catch(() => ({ m, snaps: [] }))
+              ))
+            ]);
+            allAssets.monitors = [];
+            for (const { m, changes } of changesArr) {
+              allAssets.monitors.push({ id: m.id, title: m.title || m.url, preview: (m.changeCount || 0) + " changes", content: "## Monitor: " + (m.title || m.url) + "\n" + m.url + "\nChanges: " + (m.changeCount || 0), url: m.url, date: m.lastChecked });
+              for (const c of changes.slice(0, 10)) {
+                const body = c.aiSummary || c.newTextSnippet || "";
+                allAssets.monitors.push({ id: c.id, title: "Change: " + (m.title || m.url), preview: body.slice(0, 100), content: "## Change: " + (m.title || m.url) + "\n" + (c.detectedAt || "") + "\n\n" + body, url: m.url, date: c.detectedAt });
+              }
+            }
+            allAssets.snapshots = [];
+            for (const { m, snaps } of snapArr) {
+              for (const s of snaps) {
+                allAssets.snapshots.push({ id: s.id, title: (m.title || m.url) + (s.isInitial ? " (initial)" : ""), preview: new Date(s.capturedAt).toLocaleString() + " · " + (s.text || "").length + " chars", content: "## Snapshot: " + (m.title || m.url) + "\n" + s.capturedAt + "\n\n" + (s.text || "").slice(0, 3000), url: m.url, date: s.capturedAt });
+              }
+            }
+          } else {
+            allAssets.monitors = [];
+            allAssets.snapshots = [];
+          }
+        }
+
+        // Feeds — filtered to project URLs
+        if (feedResp?.feeds?.length) {
+          const projFeeds = feedResp.feeds.filter(f => f.url && projUrls.has(f.url)).slice(0, 20);
+          if (projFeeds.length) {
+            const entryArr = await Promise.all(projFeeds.map(f =>
+              browser.runtime.sendMessage({ action: "getFeedEntries", feedId: f.id, limit: 30 }).then(r => ({ f, entries: r?.entries || [] })).catch(() => ({ f, entries: [] }))
+            ));
+            allAssets.feeds = [];
+            for (const { f, entries } of entryArr) {
+              for (const e of entries) {
+                const body = e.content || e.description || "";
+                allAssets.feeds.push({ id: e.id, title: e.title || "Feed Entry", preview: (f.title || f.url) + " · " + body.slice(0, 80), content: "## " + (e.title || "Feed Entry") + "\nSource: " + (f.title || f.url) + "\n" + (e.link || "") + "\n\n" + body, url: e.link || f.url, date: e.pubDate });
+              }
+            }
+          } else {
+            allAssets.feeds = [];
+          }
+        }
+
+        // Timeline — filtered to project URLs
+        if (trackerResp?.pages?.length) {
+          allAssets.timeline = trackerResp.pages.filter(p => p.url && projUrls.has(p.url)).map(p => {
+            const actions = [...new Set((p.actions || []).map(a => a.type).filter(Boolean))];
+            return { id: p.id, title: p.title || p.url, preview: (p.visits || 1) + " visits · " + (actions.join(", ") || "visited"), content: "## " + (p.title || p.url) + "\n" + p.url + "\nVisits: " + (p.visits || 1) + "\nActions: " + (actions.join(", ") || "none"), url: p.url, date: p.lastVisit };
+          });
+        }
+
+        const total = Object.values(allAssets).reduce((s, a) => s + a.length, 0);
+        countEl.textContent = total || "";
+      } catch (e) { console.warn("[KG Assets]", e); }
+      renderAssets();
+    }
+
+    function renderAssets() {
+      list.replaceChildren();
+
+      // No project selected — show message
+      if (!projectFilterActive) {
+        const empty = document.createElement("div");
+        empty.className = "kg-assets-empty";
+        empty.textContent = "Select a project to view assets.";
+        list.appendChild(empty);
+        return;
+      }
+
+      let items = allAssets[activeTab] || [];
+      const q = (search.value || "").toLowerCase().trim();
+      if (q) items = items.filter(a => (a.title || "").toLowerCase().includes(q) || (a.preview || "").toLowerCase().includes(q));
+
+      if (!items.length) {
+        const empty = document.createElement("div");
+        empty.className = "kg-assets-empty";
+        empty.textContent = q ? "No matching assets." : "No " + activeTab + " for this project.";
+        list.appendChild(empty);
+        return;
+      }
+
+      for (const asset of items) {
+        const row = document.createElement("div");
+        row.className = "kg-asset-item";
+
+        const info = document.createElement("div");
+        info.className = "kg-asset-info";
+        const title = document.createElement("div");
+        title.className = "kg-asset-title";
+        title.textContent = asset.title;
+        const prev = document.createElement("div");
+        prev.className = "kg-asset-preview";
+        prev.textContent = asset.preview || "";
+        info.appendChild(title);
+        info.appendChild(prev);
+        if (asset.date) {
+          const meta = document.createElement("div");
+          meta.className = "kg-asset-meta";
+          meta.textContent = new Date(asset.date).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+          info.appendChild(meta);
+        }
+
+        const insertBtn = document.createElement("button");
+        insertBtn.className = "kg-asset-insert";
+        insertBtn.textContent = "Insert";
+        insertBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          // Paste into AI chat input if available
+          const chatInput = document.querySelector(".argus-chat-input");
+          if (chatInput) {
+            const before = chatInput.value;
+            chatInput.value = before + (before ? "\n\n" : "") + asset.content;
+            chatInput.focus();
+            insertBtn.textContent = "Added";
+            setTimeout(() => { insertBtn.textContent = "Insert"; }, 1200);
+          }
+        });
+
+        // Click row to copy
+        row.addEventListener("click", () => {
+          navigator.clipboard.writeText(asset.content);
+          title.textContent = "Copied!";
+          setTimeout(() => { title.textContent = asset.title; }, 1200);
+        });
+
+        row.appendChild(info);
+        row.appendChild(insertBtn);
+        list.appendChild(row);
+      }
+    }
+  })();
+
   /* ---- Init ---- */
   async function init() {
     canvas = document.getElementById('graphCanvas');

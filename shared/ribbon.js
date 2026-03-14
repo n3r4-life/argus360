@@ -176,14 +176,22 @@
     "app-reports":  { label: "Reports",  icon: [["path", { d: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" }], ["polyline", { points: "14 2 14 8 20 8" }], ["line", { x1: "16", y1: "13", x2: "8", y2: "13" }], ["line", { x1: "16", y1: "17", x2: "8", y2: "17" }]], path: "history/history.html" },
     "app-kg":       { label: "KG",       icon: [["circle", { cx: "6", cy: "6", r: "3" }], ["circle", { cx: "18", cy: "6", r: "3" }], ["circle", { cx: "6", cy: "18", r: "3" }], ["circle", { cx: "18", cy: "18", r: "3" }], ["line", { x1: "9", y1: "6", x2: "15", y2: "6" }], ["line", { x1: "6", y1: "9", x2: "6", y2: "15" }], ["line", { x1: "18", y1: "9", x2: "18", y2: "15" }], ["line", { x1: "9", y1: "18", x2: "15", y2: "18" }]], path: "osint/graph.html" },
     "app-workbench":{ label: "Workbench",icon: [["rect", { x: "2", y: "3", width: "20", height: "14", rx: "2" }], ["line", { x1: "8", y1: "21", x2: "16", y2: "21" }], ["line", { x1: "12", y1: "17", x2: "12", y2: "21" }]], path: "workbench/workbench.html" },
-    "app-draft":    { label: "Draft",    icon: [["path", { d: "M12 20h9" }], ["path", { d: "M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" }]], path: "reporting/reporting.html" },
+    "app-draft":    { label: "Publisher",    icon: [["path", { d: "M12 20h9" }], ["path", { d: "M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" }]], path: "reporting/reporting.html" },
     "app-images":   { label: "Images",   icon: [["rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" }], ["circle", { cx: "8.5", cy: "8.5", r: "1.5" }], ["polyline", { points: "21 15 16 10 5 21" }]], path: "osint/images.html" },
     "app-chat":     { label: "Chat",     icon: [["path", { d: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" }]], path: "chat/chat.html" },
     "app-terminal": { label: "Terminal", icon: [["polyline", { points: "4 17 10 11 4 5" }], ["line", { x1: "12", y1: "19", x2: "20", y2: "19" }]], path: "ssh/ssh.html" },
+    "app-finance":  { label: "Finance",  icon: [["line", { x1: "12", y1: "1", x2: "12", y2: "23" }], ["path", { d: "M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" }]], path: "finance/finance.html" },
     "app-results":  { label: "Results",  icon: [["path", { d: "M9 11l3 3L22 4" }], ["path", { d: "M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" }]], path: "results/results.html" }
   };
 
-  const DEFAULT_TAB_ORDER = ["app-projects", "app-reader", "app-reports", "app-kg", "app-workbench", "app-draft", "app-images", "app-chat", "app-terminal", "app-results"];
+  // MFT (tool) tabs — selectable in pickers, can be pinned/visible
+  const ALL_TAB_IDS = ["app-projects", "app-reader", "app-reports", "app-kg", "app-workbench", "app-draft", "app-images", "app-chat", "app-terminal", "app-finance"];
+  // MFTr (results) tabs — navigable but not selectable; transient output pages
+  const RESULT_TAB_IDS = ["app-results"];
+  const DEFAULT_TAB_ORDER = [...ALL_TAB_IDS];
+  const DEFAULT_VISIBLE_TABS = ["app-projects", "app-reader", "app-reports", "app-kg", "app-workbench", "app-chat", "app-terminal", "app-finance"];
+  const MAX_VISIBLE_TABS = 8;
+  const PINNED_TABS = ["app-projects"]; // always visible, non-negotiable
 
   // Active-state detection map (pathname fragment → tab id)
   const ACTIVE_MAP = {
@@ -196,18 +204,162 @@
     "/osint/images": "app-images",
     "/chat/": "app-chat",
     "/ssh/": "app-terminal",
+    "/finance/": "app-finance",
     "/results/": "app-results",
     "/osint/regex": "app-results"
   };
 
-  function renderAppTabs(order) {
-    appBar.innerHTML = "";
+  // ── Quick-jump button (⋯) — shows hidden/non-visible MFT tabs ──
+  const quickJumpBtn = document.createElement("button");
+  quickJumpBtn.className = "app-tab-manage-btn";
+  quickJumpBtn.title = "Jump to hidden tabs";
+  quickJumpBtn.textContent = "⋯";
+
+  const quickJumpOverlay = document.createElement("div");
+  quickJumpOverlay.className = "app-tab-picker hidden";
+
+  // ── Tab visibility config button (4-square) — manage which tabs are visible ──
+  const tabPickerBtn = document.createElement("button");
+  tabPickerBtn.className = "app-tab-manage-btn app-tab-config-btn";
+  tabPickerBtn.title = "Manage visible tabs";
+  tabPickerBtn.appendChild(makeSvg([
+    ["rect", { x: "3", y: "3", width: "7", height: "7", rx: "1" }],
+    ["rect", { x: "14", y: "3", width: "7", height: "7", rx: "1" }],
+    ["rect", { x: "3", y: "14", width: "7", height: "7", rx: "1" }],
+    ["rect", { x: "14", y: "14", width: "7", height: "7", rx: "1" }]
+  ]));
+
+  const tabPickerOverlay = document.createElement("div");
+  tabPickerOverlay.className = "app-tab-picker hidden";
+
+  let currentVisibleTabs = [...DEFAULT_VISIBLE_TABS]; // persisted defaults
+  let sessionVisibleTabs = null; // ephemeral swap state (null = use defaults)
+
+  function getEffectiveVisible() {
+    return sessionVisibleTabs || currentVisibleTabs;
+  }
+
+  function renderAppTabs(order, visible) {
+    // Remove all tab buttons but keep the manage buttons
+    appBar.querySelectorAll(".app-tab-btn").forEach(b => b.remove());
+    const visibleSet = new Set(visible);
     for (const id of order) {
+      if (!visibleSet.has(id)) continue;
       const def = APP_TAB_DEFS[id];
       if (!def) continue;
-      appBar.appendChild(makeAppTab(id, def.label, def.icon));
+      appBar.insertBefore(makeAppTab(id, def.label, def.icon), quickJumpBtn);
     }
   }
+
+  function renderTabPicker() {
+    const visibleSet = new Set(currentVisibleTabs);
+    let html = '<div class="app-tab-picker-title">Visible Tabs</div>';
+    html += '<div class="app-tab-picker-hint">Max ' + MAX_VISIBLE_TABS + ' tabs. Drag MFTs to reorder.</div>';
+    for (const id of ALL_TAB_IDS) {
+      const def = APP_TAB_DEFS[id];
+      if (!def) continue;
+      const isPinned = PINNED_TABS.includes(id);
+      const isVisible = visibleSet.has(id);
+      const pinnedCls = isPinned ? " app-tab-picker-pinned" : "";
+      const activeCls = isVisible ? " app-tab-picker-active" : "";
+      const svg = makeSvg(def.icon).outerHTML;
+      html += `<button class="app-tab-picker-item${activeCls}${pinnedCls}" data-pick-id="${id}" ${isPinned ? 'disabled' : ''}>`;
+      html += `${svg} <span>${def.label}</span>`;
+      if (isPinned) html += '<span class="app-tab-picker-pin" title="Always visible">&#128274;</span>';
+      else if (isVisible) html += '<span class="app-tab-picker-toggle">✕</span>';
+      else html += '<span class="app-tab-picker-toggle">+</span>';
+      html += '</button>';
+    }
+    tabPickerOverlay.innerHTML = html;
+
+    tabPickerOverlay.querySelectorAll(".app-tab-picker-item:not([disabled])").forEach(item => {
+      item.addEventListener("click", async () => {
+        const id = item.dataset.pickId;
+        const idx = currentVisibleTabs.indexOf(id);
+        if (idx >= 0) {
+          // Remove
+          currentVisibleTabs.splice(idx, 1);
+        } else if (currentVisibleTabs.length < MAX_VISIBLE_TABS) {
+          // Add
+          currentVisibleTabs.push(id);
+        } else {
+          return; // at max
+        }
+        await browser.storage.local.set({ appVisibleTabs: currentVisibleTabs });
+        sessionVisibleTabs = null; // reset session swaps when defaults change
+        renderAppTabs(currentTabOrder, currentVisibleTabs);
+        highlightActiveTab();
+        renderTabPicker();
+      });
+    });
+  }
+
+  // ── Quick-jump: render hidden tabs + swap-in on click ──
+  function renderQuickJump() {
+    const effective = getEffectiveVisible();
+    const visibleSet = new Set(effective);
+    const hiddenTabs = currentTabOrder.filter(id => !visibleSet.has(id) && APP_TAB_DEFS[id]);
+    if (hiddenTabs.length === 0) {
+      quickJumpOverlay.innerHTML = '<div class="app-tab-picker-title">All tabs visible</div>';
+      return;
+    }
+    let html = '<div class="app-tab-picker-title">Jump to</div>';
+    for (const id of hiddenTabs) {
+      const def = APP_TAB_DEFS[id];
+      const svg = makeSvg(def.icon).outerHTML;
+      html += `<button class="app-tab-picker-item" data-jump-id="${id}">${svg} <span>${def.label}</span></button>`;
+    }
+    quickJumpOverlay.innerHTML = html;
+
+    quickJumpOverlay.querySelectorAll("[data-jump-id]").forEach(item => {
+      item.addEventListener("click", () => {
+        const id = item.dataset.jumpId;
+        const def = APP_TAB_DEFS[id];
+        if (!def) return;
+        quickJumpOverlay.classList.add("hidden");
+
+        // Swap: bump leftmost non-pinned tab, add this one at the end
+        const swapped = [...effective];
+        const bumpIdx = swapped.findIndex(t => !PINNED_TABS.includes(t));
+        if (bumpIdx >= 0) {
+          swapped.splice(bumpIdx, 1); // remove leftmost non-pinned
+          swapped.push(id);           // add new tab at end
+          sessionVisibleTabs = swapped;
+          renderAppTabs(currentTabOrder, sessionVisibleTabs);
+          highlightActiveTab();
+        }
+
+        // Navigate
+        if (def.hash) nav(def.hash);
+        else navigateTo(def.path);
+      });
+    });
+  }
+
+  quickJumpBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    tabPickerOverlay.classList.add("hidden"); // close the other overlay
+    const isHidden = quickJumpOverlay.classList.contains("hidden");
+    quickJumpOverlay.classList.toggle("hidden");
+    if (isHidden) renderQuickJump();
+  });
+
+  tabPickerBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    quickJumpOverlay.classList.add("hidden"); // close the other overlay
+    const isHidden = tabPickerOverlay.classList.contains("hidden");
+    tabPickerOverlay.classList.toggle("hidden");
+    if (isHidden) renderTabPicker();
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!tabPickerOverlay.contains(e.target) && e.target !== tabPickerBtn && !tabPickerBtn.contains(e.target)) {
+      tabPickerOverlay.classList.add("hidden");
+    }
+    if (!quickJumpOverlay.contains(e.target) && e.target !== quickJumpBtn) {
+      quickJumpOverlay.classList.add("hidden");
+    }
+  });
 
   // Console tab → label mapping for dynamic entry point
   const CONSOLE_TAB_LABELS = {
@@ -218,16 +370,26 @@
     resources: "Resources", settings: "Settings"
   };
 
-  // Load saved order or use default, merging any new tabs
+  let currentTabOrder = DEFAULT_TAB_ORDER;
+
+  // Load saved order + visibility, or use defaults
   async function initAppTabs() {
     let order = DEFAULT_TAB_ORDER;
+    let visible = DEFAULT_VISIBLE_TABS;
     try {
-      const stored = await browser.storage.local.get(["appTabOrder", "consoleEntryTab"]);
+      const stored = await browser.storage.local.get(["appTabOrder", "appVisibleTabs", "consoleEntryTab"]);
       if (Array.isArray(stored.appTabOrder) && stored.appTabOrder.length > 0) {
-        // Keep only valid IDs, then append any new tabs not in saved order
         const valid = stored.appTabOrder.filter(id => APP_TAB_DEFS[id]);
-        const missing = DEFAULT_TAB_ORDER.filter(id => !valid.includes(id));
+        const missing = ALL_TAB_IDS.filter(id => !valid.includes(id));
         if (valid.length > 0) order = [...valid, ...missing];
+      }
+      if (Array.isArray(stored.appVisibleTabs) && stored.appVisibleTabs.length > 0) {
+        // Ensure pinned tabs are always included
+        visible = stored.appVisibleTabs.filter(id => APP_TAB_DEFS[id]);
+        for (const pin of PINNED_TABS) {
+          if (!visible.includes(pin)) visible.unshift(pin);
+        }
+        if (visible.length > MAX_VISIBLE_TABS) visible = visible.slice(0, MAX_VISIBLE_TABS);
       }
       // Apply dynamic console entry tab
       const entryTab = stored.consoleEntryTab || "projects";
@@ -235,8 +397,18 @@
         APP_TAB_DEFS["app-projects"].label = CONSOLE_TAB_LABELS[entryTab];
         APP_TAB_DEFS["app-projects"].hash = entryTab;
       }
-    } catch (e) { /* use default */ }
-    renderAppTabs(order);
+    } catch (e) { /* use defaults */ }
+
+    currentTabOrder = order;
+    currentVisibleTabs = visible;
+
+    // Append quick-jump (⋯) + config (4-square) buttons + overlays to appBar
+    appBar.appendChild(quickJumpBtn);
+    appBar.appendChild(quickJumpOverlay);
+    appBar.appendChild(tabPickerBtn);
+    appBar.appendChild(tabPickerOverlay);
+
+    renderAppTabs(order, visible);
     highlightActiveTab();
     setupTabDragReorder();
 
@@ -306,7 +478,11 @@
           } else {
             target.insertAdjacentElement("beforebegin", tab);
           }
-          const newOrder = [...appBar.querySelectorAll(".app-tab-btn")].map(t => t.dataset.tabId);
+          // Rebuild full order: visible tabs in new order, then hidden tabs
+          const visibleOrder = [...appBar.querySelectorAll(".app-tab-btn")].map(t => t.dataset.tabId);
+          const hiddenTabs = currentTabOrder.filter(id => !visibleOrder.includes(id));
+          const newOrder = [...visibleOrder, ...hiddenTabs];
+          currentTabOrder = newOrder;
           browser.storage.local.set({ appTabOrder: newOrder });
         }
         tab.classList.remove("dragging");
@@ -480,9 +656,10 @@
     if (msg.type === "argusDataChanged") updateRibbonBadges();
   });
 
-  // Sync swappable tab label when storage changes (e.g. from another page/tab)
+  // Sync tab state when storage changes (e.g. from another page/tab)
   browser.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes.consoleEntryTab) {
+    if (area !== "local") return;
+    if (changes.consoleEntryTab) {
       const tabId = changes.consoleEntryTab.newValue || "projects";
       if (CONSOLE_TAB_LABELS[tabId]) {
         APP_TAB_DEFS["app-projects"].label = CONSOLE_TAB_LABELS[tabId];
@@ -492,6 +669,23 @@
           const span = btn.querySelector("span");
           if (span) span.textContent = CONSOLE_TAB_LABELS[tabId];
         }
+      }
+    }
+    if (changes.appVisibleTabs) {
+      const vis = changes.appVisibleTabs.newValue;
+      if (Array.isArray(vis)) {
+        currentVisibleTabs = vis;
+        sessionVisibleTabs = null; // reset session swaps
+        renderAppTabs(currentTabOrder, getEffectiveVisible());
+        highlightActiveTab();
+      }
+    }
+    if (changes.appTabOrder) {
+      const ord = changes.appTabOrder.newValue;
+      if (Array.isArray(ord)) {
+        currentTabOrder = ord;
+        renderAppTabs(currentTabOrder, getEffectiveVisible());
+        highlightActiveTab();
       }
     }
   });

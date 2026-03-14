@@ -676,48 +676,125 @@ function attachEventListeners() {
     await navigateArgusTab(fullUrl);
   }
 
-  document.getElementById("open-projects").addEventListener("click", () => focusOrCreateConsole("projects"));
-  document.getElementById("open-feeds").addEventListener("click", () => focusOrCreatePage("feeds/feeds.html"));
-  document.getElementById("open-chat").addEventListener("click", () => focusOrCreatePage("chat/chat.html"));
-  document.getElementById("open-workbench").addEventListener("click", () => focusOrCreatePage("workbench/workbench.html"));
-  document.getElementById("open-draft").addEventListener("click", () => focusOrCreatePage("reporting/reporting.html"));
-  document.getElementById("open-images").addEventListener("click", () => focusOrCreatePage("osint/images.html"));
-  document.getElementById("open-terminal").addEventListener("click", () => focusOrCreatePage("ssh/ssh.html"));
+  // ── App page navigation map ──
+  const APP_NAV = {
+    // MFT pages
+    "app-projects": { type: "console", hash: "projects" },
+    "app-reader":   { type: "page", path: "feeds/feeds.html" },
+    "app-reports":  { type: "page", path: "history/history.html" },
+    "app-kg":       { type: "page", path: "osint/graph.html?mode=global" },
+    "app-workbench":{ type: "page", path: "workbench/workbench.html" },
+    "app-draft":    { type: "page", path: "reporting/reporting.html" },
+    "app-images":   { type: "page", path: "osint/images.html" },
+    "app-chat":     { type: "page", path: "chat/chat.html" },
+    "app-terminal": { type: "page", path: "ssh/ssh.html" },
+    "app-finance":  { type: "page", path: "finance/finance.html" },
+    "app-results":  { type: "page", path: "results/results.html" },
+    // Console tabs
+    "con-bookmarks":  { type: "console", hash: "bookmarks" },
+    "con-monitors":   { type: "console", hash: "monitors" },
+    "con-feeds":      { type: "console", hash: "feeds" },
+    "con-osint":      { type: "console", hash: "osint" },
+    "con-automate":   { type: "console", hash: "automation" },
+    "con-redirects":  { type: "console", hash: "archive" },
+    "con-tracker":    { type: "console", hash: "tracker" },
+    "con-sources":    { type: "console", hash: "sources" },
+    "con-prompts":    { type: "console", hash: "prompts" },
+    "con-providers":  { type: "console", hash: "providers" },
+    "con-resources":  { type: "console", hash: "resources" },
+    "con-settings":   { type: "console", hash: "settings" }
+  };
 
-  // ── Popup app icons: show only 4 user-chosen, ordered by appTabOrder ──
+  // Unified data map for popup QJI picker — all choosable items with labels + SVG
+  const POPUP_APP_DEFS = {
+    // MFT pages
+    "app-projects":  { label: "Projects",  svg: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>' },
+    "app-reader":    { label: "Reader",    svg: '<path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>' },
+    "app-reports":   { label: "Reports",   svg: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>' },
+    "app-kg":        { label: "KG",        svg: '<circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><line x1="9" y1="6" x2="15" y2="6"/><line x1="6" y1="9" x2="6" y2="15"/><line x1="18" y1="9" x2="18" y2="15"/><line x1="9" y1="18" x2="15" y2="18"/>' },
+    "app-workbench": { label: "Workbench", svg: '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>' },
+    "app-draft":     { label: "Publisher", svg: '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>' },
+    "app-images":    { label: "Images",    svg: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>' },
+    "app-chat":      { label: "Chat",      svg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>' },
+    "app-terminal":  { label: "Terminal",  svg: '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>' },
+    "app-finance":   { label: "Finance",   svg: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
+    // Console tabs
+    "con-bookmarks": { label: "Bookmarks", svg: '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>' },
+    "con-monitors":  { label: "Monitors",  svg: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>' },
+    "con-feeds":     { label: "Feeds",     svg: '<path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/>' },
+    "con-osint":     { label: "OSINT",     svg: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>' },
+    "con-automate":  { label: "Automate",  svg: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>' },
+    "con-redirects": { label: "Redirects", svg: '<polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>' },
+    "con-tracker":   { label: "Tracker",   svg: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>' },
+    "con-sources":   { label: "Sources",   svg: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>' },
+    "con-prompts":   { label: "Prompts",   svg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>' },
+    "con-providers": { label: "Providers", svg: '<path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>' },
+    "con-resources": { label: "Resources", svg: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>' },
+    "con-settings":  { label: "Settings",  svg: '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>' }
+  };
+
+  // Canonical order for picker display: MFTs first, then console tabs
+  const POPUP_ALL_IDS = [
+    "app-projects", "app-reader", "app-reports", "app-kg", "app-workbench",
+    "app-draft", "app-images", "app-chat", "app-terminal", "app-finance",
+    "con-bookmarks", "con-monitors", "con-feeds", "con-osint", "con-automate",
+    "con-redirects", "con-tracker", "con-sources", "con-prompts", "con-providers",
+    "con-resources", "con-settings"
+  ];
+
+  // Wire up all app icon buttons via delegation on the container
+  const popupAppContainer = document.getElementById("popup-app-icons");
+  popupAppContainer.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-app-tab]");
+    if (!btn) return;
+    const id = btn.dataset.appTab;
+    const nav = APP_NAV[id];
+    if (!nav) return;
+    if (nav.type === "console") focusOrCreateConsole(nav.hash);
+    else focusOrCreatePage(nav.path);
+  });
+
+  // ── Popup QJIs: show 4 user-chosen from ANY page (MFT + console tabs) ──
   const POPUP_DEFAULT_VISIBLE = ["app-projects", "app-reader", "app-reports", "app-chat"];
   const POPUP_MAX_VISIBLE = 4;
 
-  const popupAppContainer = document.getElementById("popup-app-icons");
+  // Seed appBtnMap from existing HTML buttons
   const allAppBtns = [...popupAppContainer.querySelectorAll("[data-app-tab]")];
   const appBtnMap = {};
   for (const btn of allAppBtns) appBtnMap[btn.dataset.appTab] = btn;
 
+  // Create a button element for an app ID (used for console tabs not in HTML)
+  function ensureAppBtn(id) {
+    if (appBtnMap[id]) return appBtnMap[id];
+    const def = POPUP_APP_DEFS[id];
+    if (!def) return null;
+    const btn = document.createElement("button");
+    btn.className = "icon-btn";
+    btn.dataset.appTab = id;
+    btn.title = def.label;
+    btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${def.svg}</svg>`;
+    btn.style.display = "none";
+    popupAppContainer.appendChild(btn);
+    appBtnMap[id] = btn;
+    return btn;
+  }
+
   async function applyPopupAppVisibility() {
-    const stored = await browser.storage.local.get(["popupVisibleApps", "appTabOrder"]);
+    const stored = await browser.storage.local.get(["popupVisibleApps"]);
     const visible = Array.isArray(stored.popupVisibleApps) && stored.popupVisibleApps.length > 0
       ? stored.popupVisibleApps : POPUP_DEFAULT_VISIBLE;
-    const order = Array.isArray(stored.appTabOrder) && stored.appTabOrder.length > 0
-      ? stored.appTabOrder : null;
 
-    // Build ordered list: visible apps sorted by appTabOrder position
-    const visibleSet = new Set(visible);
-    let ordered;
-    if (order) {
-      ordered = order.filter(id => visibleSet.has(id) && appBtnMap[id]);
-      // Append any visible apps not in saved order
-      for (const id of visible) {
-        if (!ordered.includes(id) && appBtnMap[id]) ordered.push(id);
-      }
-    } else {
-      ordered = visible.filter(id => appBtnMap[id]);
-    }
+    // Ensure buttons exist for all visible items (including console tabs)
+    for (const id of visible) ensureAppBtn(id);
 
     // Hide all, then show + reorder the chosen ones
-    for (const btn of allAppBtns) btn.style.display = "none";
-    for (const id of ordered) {
-      appBtnMap[id].style.display = "";
-      popupAppContainer.appendChild(appBtnMap[id]);
+    for (const btn of Object.values(appBtnMap)) btn.style.display = "none";
+    for (const id of visible) {
+      const btn = appBtnMap[id];
+      if (btn) {
+        btn.style.display = "";
+        popupAppContainer.appendChild(btn);
+      }
     }
   }
 
@@ -739,24 +816,17 @@ function attachEventListeners() {
     }, 1000);
   });
   consoleHomeBtn.addEventListener("mouseup", () => {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      longPressTimer = null;
-    }
+    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
   });
   consoleHomeBtn.addEventListener("mouseleave", () => {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      longPressTimer = null;
-    }
+    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
   });
   consoleHomeBtn.addEventListener("click", () => {
-    if (longPressFired) { longPressFired = false; return; } // swallow click after long-press
+    if (longPressFired) { longPressFired = false; return; }
     focusOrCreateConsole("home");
   });
 
-  // ── App icon picker ──
-  // State: null = browsing, "removing" = user deselected one and can now pick a replacement
+  // ── App icon picker (long-press console-home to open) ──
   let pickerMode = null;
   let pickerCurrentVisible = [];
 
@@ -774,57 +844,49 @@ function attachEventListeners() {
   }
 
   async function renderIconPicker() {
-    const stored = await browser.storage.local.get(["popupVisibleApps", "appTabOrder"]);
+    const stored = await browser.storage.local.get(["popupVisibleApps"]);
     pickerCurrentVisible = Array.isArray(stored.popupVisibleApps) && stored.popupVisibleApps.length > 0
       ? [...stored.popupVisibleApps] : [...POPUP_DEFAULT_VISIBLE];
-    const order = Array.isArray(stored.appTabOrder) && stored.appTabOrder.length > 0
-      ? stored.appTabOrder : null;
-
-    const allIds = order
-      ? [...order.filter(id => appBtnMap[id]), ...allAppBtns.map(b => b.dataset.appTab).filter(id => !order.includes(id))]
-      : allAppBtns.map(b => b.dataset.appTab);
 
     const visibleSet = new Set(pickerCurrentVisible);
     const isFull = pickerCurrentVisible.length >= POPUP_MAX_VISIBLE;
+
+    // Build picker from POPUP_ALL_IDS, grouped by section
+    const mftIds = POPUP_ALL_IDS.filter(id => id.startsWith("app-"));
+    const conIds = POPUP_ALL_IDS.filter(id => id.startsWith("con-"));
+
+    function renderItems(ids) {
+      return ids.map(id => {
+        const def = POPUP_APP_DEFS[id];
+        if (!def) return "";
+        const isActive = visibleSet.has(id);
+        const svg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${def.svg}</svg>`;
+
+        let cls = "popup-icon-picker-item";
+        if (isActive) cls += " picker-active";
+        else if (pickerMode === "removing") cls += " picker-available";
+        else if (isFull) cls += " picker-disabled";
+        else cls += " picker-available";
+        return `<button class="${cls}" data-pick-id="${id}">${svg} ${def.label}</button>`;
+      }).join("");
+    }
 
     pickerOverlay.innerHTML = `
       <div class="popup-icon-picker-title">
         ${pickerMode === "removing" ? "Pick replacement" : "Choose shortcuts"}
         <span>${pickerCurrentVisible.length}/${POPUP_MAX_VISIBLE}</span>
       </div>
-      <div class="popup-icon-picker-grid">
-        ${allIds.map(id => {
-          const btn = appBtnMap[id];
-          if (!btn) return "";
-          const isActive = visibleSet.has(id);
-          const svg = btn.querySelector("svg").outerHTML;
-          const label = btn.title || id.replace("app-", "");
+      <div class="popup-icon-picker-section">Pages</div>
+      <div class="popup-icon-picker-grid">${renderItems(mftIds)}</div>
+      <div class="popup-icon-picker-section">Console</div>
+      <div class="popup-icon-picker-grid">${renderItems(conIds)}</div>`;
 
-          let cls = "popup-icon-picker-item";
-          if (isActive) {
-            cls += " picker-active";
-          } else if (pickerMode === "removing") {
-            cls += " picker-available";
-          } else if (isFull) {
-            cls += " picker-disabled";
-          } else {
-            cls += " picker-available";
-          }
-          return `<button class="${cls}" data-pick-id="${id}">${svg} ${label}</button>`;
-        }).join("")}
-      </div>`;
-
-    attachPickerHandlers();
-  }
-
-  function attachPickerHandlers() {
     pickerOverlay.querySelectorAll(".popup-icon-picker-item").forEach(item => {
       item.addEventListener("click", async () => {
         const pickId = item.dataset.pickId;
         const isActive = item.classList.contains("picker-active");
 
         if (isActive) {
-          // Deselect — grey it out, enter "removing" mode so user can pick replacement
           if (pickerCurrentVisible.length <= 1) return;
           pickerCurrentVisible = pickerCurrentVisible.filter(id => id !== pickId);
           pickerMode = "removing";
@@ -832,9 +894,8 @@ function attachEventListeners() {
           applyPopupAppVisibility();
           renderIconPicker();
         } else if (item.classList.contains("picker-disabled")) {
-          return; // full, can't add
+          return;
         } else {
-          // Select — add it, close picker
           if (pickerCurrentVisible.length >= POPUP_MAX_VISIBLE) return;
           pickerCurrentVisible.push(pickId);
           await browser.storage.local.set({ popupVisibleApps: pickerCurrentVisible });
@@ -845,7 +906,7 @@ function attachEventListeners() {
     });
   }
 
-  // Close picker on click outside
+  // Close picker on click outside / Escape
   document.addEventListener("click", (e) => {
     if (!pickerOverlay.classList.contains("hidden") &&
         !pickerOverlay.contains(e.target) &&
@@ -895,9 +956,6 @@ function attachEventListeners() {
       showToast(newState ? "Archive redirect ON" : "Archive redirect OFF");
     });
   })();
-
-  document.getElementById("open-kg").addEventListener("click", () => focusOrCreatePage("osint/graph.html?mode=global"));
-  document.getElementById("open-history").addEventListener("click", () => focusOrCreatePage("history/history.html"));
 
   elements.toggleKeyVis.addEventListener("click", () => {
     elements.apiKey.type = elements.apiKey.type === "password" ? "text" : "password";

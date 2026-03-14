@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Argus Console</title>
   <link rel="stylesheet" href="options.css">
+  <link rel="stylesheet" href="../lib/argus-chat.css">
   <link rel="stylesheet" href="../lib/email-share.css">
 </head>
 <body>
@@ -38,6 +39,10 @@
         <button class="nav-tab nav-icon" data-tab="automation" title="Automate">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           <span class="nav-badge" id="badge-automation"></span>
+        </button>
+        <button class="nav-tab nav-icon" data-tab="finance" title="Finance">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          <span class="nav-badge" id="badge-finance"></span>
         </button>
         <button class="nav-tab nav-icon" data-tab="archive" title="Redirects">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
@@ -905,7 +910,19 @@
 
           <div id="automations-list" class="rules-list"></div>
 
-          <button id="new-automation-btn" class="btn btn-secondary btn-sm" style="margin-top:8px;">+ New Automation</button>
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button id="new-automation-btn" class="btn btn-secondary btn-sm">+ New Automation</button>
+            <button id="seed-prebuilt-btn" class="btn btn-secondary btn-sm" title="Restore pre-built templates">Restore Pre-built</button>
+            <span style="flex:1;"></span>
+            <button id="export-automations-btn" class="btn btn-secondary btn-sm">Export All</button>
+            <button id="import-automations-btn" class="btn btn-secondary btn-sm">Import</button>
+            <input type="file" id="import-automations-file" accept=".json" style="display:none;">
+            <select id="import-automations-mode" style="padding:4px 8px;font-size:12px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-color);" title="Import mode">
+              <option value="merge">Merge</option>
+              <option value="replace">Replace All</option>
+            </select>
+            <span id="automations-io-status" class="prompt-status" style="font-size:12px;"></span>
+          </div>
         </div>
       </section>
 
@@ -937,6 +954,76 @@
                 </select>
               </div>
             </div>
+            <!-- Schedule Trigger -->
+            <div class="form-group" style="margin-top:8px;">
+              <label class="checkbox-label">
+                <input type="checkbox" id="auto-schedule-enabled"> Scheduled run
+              </label>
+            </div>
+            <div id="auto-schedule-options" class="hidden" style="margin-top:4px;padding-left:12px;">
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="auto-schedule-type">Schedule Type</label>
+                  <select id="auto-schedule-type">
+                    <option value="once">One-time (specific date/time)</option>
+                    <option value="interval">Interval (every N minutes)</option>
+                    <option value="daily">Daily (at specific time)</option>
+                    <option value="weekly">Weekly (day + time)</option>
+                    <option value="cron">Custom (hours + days)</option>
+                  </select>
+                </div>
+              </div>
+              <div id="auto-schedule-once" class="form-row">
+                <div class="form-group flex-1">
+                  <label for="auto-schedule-datetime">Date &amp; Time</label>
+                  <input type="datetime-local" id="auto-schedule-datetime">
+                </div>
+              </div>
+              <div id="auto-schedule-interval" class="form-row hidden">
+                <div class="form-group flex-1">
+                  <label for="auto-schedule-interval-ms">Every (minutes)</label>
+                  <input type="number" id="auto-schedule-interval-ms" value="60" min="1" max="10080">
+                </div>
+              </div>
+              <div id="auto-schedule-daily-opts" class="form-row hidden">
+                <div class="form-group flex-1">
+                  <label for="auto-schedule-time">Time</label>
+                  <input type="time" id="auto-schedule-time" value="09:00">
+                </div>
+              </div>
+              <div id="auto-schedule-weekly-opts" class="form-row hidden">
+                <div class="form-group flex-1">
+                  <label for="auto-schedule-day">Day</label>
+                  <select id="auto-schedule-day">
+                    <option value="0">Sunday</option>
+                    <option value="1" selected>Monday</option>
+                    <option value="2">Tuesday</option>
+                    <option value="3">Wednesday</option>
+                    <option value="4">Thursday</option>
+                    <option value="5">Friday</option>
+                    <option value="6">Saturday</option>
+                  </select>
+                </div>
+                <div class="form-group flex-1">
+                  <label for="auto-schedule-weekly-time">Time</label>
+                  <input type="time" id="auto-schedule-weekly-time" value="09:00">
+                </div>
+              </div>
+              <div id="auto-schedule-cron-opts" class="form-row hidden">
+                <div class="form-group flex-1">
+                  <label>Hours <span class="hint">(check which hours to run)</span></label>
+                  <div class="cron-hours-grid" id="auto-schedule-cron-hours" style="display:grid;grid-template-columns:repeat(8,1fr);gap:2px;font-size:11px;"></div>
+                </div>
+                <div class="form-group flex-1">
+                  <label>Days <span class="hint">(check which days)</span></label>
+                  <div id="auto-schedule-cron-days" style="display:flex;flex-wrap:wrap;gap:4px;font-size:11px;"></div>
+                </div>
+              </div>
+              <div class="form-group" style="margin-top:4px;">
+                <label for="auto-schedule-url">URL for scheduled runs <span class="hint">(optional &mdash; if blank, runs without page)</span></label>
+                <input type="text" id="auto-schedule-url" placeholder="https://example.com/page-to-check">
+              </div>
+            </div>
           </fieldset>
 
           <!-- Steps -->
@@ -945,14 +1032,25 @@
             <div id="auto-steps-list" class="auto-steps-list"></div>
             <div class="form-row" style="margin-top:8px;gap:8px;">
               <select id="auto-add-step-type">
-                <option value="analyze">Analyze (Preset)</option>
-                <option value="prompt">Custom Prompt</option>
-                <option value="extractEntities">Extract Entities</option>
-                <option value="runPipeline">Run Pipeline</option>
-                <option value="addToProject">Add to Project</option>
-                <option value="addToMonitors">Add to Monitors</option>
-                <option value="paste">Paste to Service</option>
-                <option value="saveToCloud">Save to Cloud</option>
+                <optgroup label="Actions">
+                  <option value="analyze">Analyze (Preset)</option>
+                  <option value="prompt">Custom Prompt</option>
+                  <option value="extractEntities">Extract Entities</option>
+                  <option value="runPipeline">Run Pipeline</option>
+                  <option value="addToProject">Add to Project</option>
+                  <option value="addToMonitors">Add to Monitors</option>
+                  <option value="paste">Paste to Service</option>
+                  <option value="saveToCloud">Save to Cloud</option>
+                </optgroup>
+                <optgroup label="Logic">
+                  <option value="condition">IF / THEN / ELSE</option>
+                  <option value="filter">Filter (Check List)</option>
+                  <option value="switch">Switch (Multi-Branch)</option>
+                  <option value="classify">Classify (AI Decision)</option>
+                  <option value="gate">Gate (Ask User)</option>
+                  <option value="loop">Loop (Iterate)</option>
+                  <option value="setVar">Set Variable</option>
+                </optgroup>
               </select>
               <button id="auto-add-step-btn" class="btn btn-secondary btn-sm">+ Add Step</button>
             </div>
@@ -986,6 +1084,70 @@
             <button id="auto-save-btn" class="btn btn-accent btn-sm">Save Automation</button>
             <button id="auto-cancel-btn" class="btn btn-secondary btn-sm">Cancel</button>
             <button id="auto-delete-btn" class="btn btn-danger btn-sm hidden">Delete</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Named Lists (Watchlists, Blocklists, Allowlists) -->
+      <section class="card" id="named-lists-card">
+        <h2 class="card-title">Named Lists
+          <span class="badge">Logic</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Create reusable lists for automation logic. Use them in Condition, Filter, and Switch steps to check if a value (author, source, ticker, entity, domain) is in a list.</p>
+
+          <div id="named-lists-list" class="rules-list">
+            <span class="hint">No lists yet.</span>
+          </div>
+
+          <button id="new-list-btn" class="btn btn-secondary btn-sm" style="margin-top:8px;">+ New List</button>
+        </div>
+      </section>
+
+      <!-- List Editor (inline, hidden until editing) -->
+      <section class="card hidden" id="list-editor-card">
+        <h2 class="card-title" id="list-editor-title">New List</h2>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group flex-2">
+              <label for="list-name">List Name</label>
+              <input type="text" id="list-name" placeholder="e.g. Flagged Reporters">
+            </div>
+            <div class="form-group flex-1">
+              <label for="list-type">Type</label>
+              <select id="list-type">
+                <option value="blocklist">Blocklist</option>
+                <option value="watchlist">Watchlist</option>
+                <option value="allowlist">Allowlist</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="list-description">Description <span class="hint">(optional)</span></label>
+            <input type="text" id="list-description" placeholder="What this list is used for">
+          </div>
+          <div class="form-group">
+            <label for="list-items">Items <span class="hint">(one per line &mdash; supports * wildcards)</span></label>
+            <textarea id="list-items" rows="8" placeholder="John Smith&#10;*.reuters.com&#10;suspicious-author@email.com&#10;AAPL&#10;0x1234...abcd"></textarea>
+          </div>
+          <div class="form-row" style="margin-top:8px;gap:8px;">
+            <button id="list-save-btn" class="btn btn-accent btn-sm">Save List</button>
+            <button id="list-cancel-btn" class="btn btn-secondary btn-sm">Cancel</button>
+            <button id="list-delete-btn" class="btn btn-danger btn-sm hidden">Delete</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pending Gates (decision points waiting for user input) -->
+      <section class="card" id="pending-gates-card">
+        <h2 class="card-title">Pending Decisions
+          <span class="badge" id="gates-count-badge" style="display:none;">0</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Automations paused at decision gates, waiting for your input.</p>
+          <div id="pending-gates-list" class="rules-list">
+            <span class="hint">No pending decisions.</span>
           </div>
         </div>
       </section>
@@ -1041,6 +1203,139 @@
         <div class="card-body">
           <div id="automation-log-list" class="rules-list">
             <span class="hint">No runs yet.</span>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- TAB: Finance Monitor                          -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="finance">
+
+      <!-- Watchlist Management -->
+      <section class="card" id="fin-watchlist-card">
+        <h2 class="card-title">Watchlist
+          <span class="badge" id="fin-watchlist-badge">0</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Track stocks, crypto, commodities, forex pairs, and indices. These appear on the Finance Monitor page and can be pinned to the ticker tape.</p>
+
+          <div id="fin-watchlist-list" class="rules-list"></div>
+
+          <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <select id="fin-add-type" style="padding:5px 8px;font-size:12px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-color);">
+              <option value="stock">Stock</option>
+              <option value="crypto">Crypto</option>
+              <option value="commodity">Commodity</option>
+              <option value="forex">Forex</option>
+              <option value="index">Index</option>
+            </select>
+            <input type="text" id="fin-add-symbol" placeholder="Symbol (e.g. AAPL)" style="width:120px;padding:5px 8px;font-size:12px;">
+            <input type="text" id="fin-add-name" placeholder="Name (optional)" style="width:160px;padding:5px 8px;font-size:12px;">
+            <label class="checkbox-label" style="font-size:12px;">
+              <input type="checkbox" id="fin-add-pinned" checked> Pin to tape
+            </label>
+            <button id="fin-add-watchlist-btn" class="btn btn-secondary btn-sm">+ Add</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Quick Add: Bulk Import -->
+      <section class="card" id="fin-bulk-card">
+        <h2 class="card-title">Bulk Import</h2>
+        <div class="card-body">
+          <p class="info-text">Paste a list of symbols to add many at once. One per line, format: <code>TYPE:SYMBOL:Name</code> (e.g. <code>stock:AAPL:Apple Inc.</code> or just <code>TSLA</code>).</p>
+          <textarea id="fin-bulk-input" rows="4" placeholder="stock:AAPL:Apple Inc.&#10;crypto:BTC:Bitcoin&#10;MSFT&#10;ETH"></textarea>
+          <div style="margin-top:6px;display:flex;gap:8px;align-items:center;">
+            <button id="fin-bulk-add-btn" class="btn btn-secondary btn-sm">Import All</button>
+            <span id="fin-bulk-status" class="prompt-status" style="font-size:12px;"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Wallet Monitor -->
+      <section class="card" id="fin-wallets-card">
+        <h2 class="card-title">Wallet Monitor
+          <span class="badge" id="fin-wallets-badge">0</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Monitor crypto wallet addresses. Track balances and activity without connecting a wallet.</p>
+
+          <div id="fin-wallets-list" class="rules-list"></div>
+
+          <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <select id="fin-wallet-chain" style="padding:5px 8px;font-size:12px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-color);">
+              <option value="eth">Ethereum</option>
+              <option value="btc">Bitcoin</option>
+              <option value="sol">Solana</option>
+              <option value="bnb">BNB Chain</option>
+              <option value="matic">Polygon</option>
+              <option value="arb">Arbitrum</option>
+              <option value="avax">Avalanche</option>
+              <option value="base">Base</option>
+            </select>
+            <input type="text" id="fin-wallet-address" placeholder="Wallet address (0x...)" style="flex:1;min-width:200px;padding:5px 8px;font-size:12px;">
+            <input type="text" id="fin-wallet-label" placeholder="Label (optional)" style="width:140px;padding:5px 8px;font-size:12px;">
+            <button id="fin-add-wallet-btn" class="btn btn-secondary btn-sm">+ Add</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Price Alerts -->
+      <section class="card" id="fin-alerts-card">
+        <h2 class="card-title">Price Alerts
+          <span class="badge" id="fin-alerts-badge">0</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Set price thresholds to get notified. Alerts show on the Finance Monitor page with active/triggered status.</p>
+
+          <div id="fin-alerts-list" class="rules-list"></div>
+
+          <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input type="text" id="fin-alert-symbol" placeholder="Symbol (e.g. BTC)" style="width:100px;padding:5px 8px;font-size:12px;">
+            <select id="fin-alert-condition" style="padding:5px 8px;font-size:12px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-color);">
+              <option value="above">Price above</option>
+              <option value="below">Price below</option>
+              <option value="change_above">% Change above</option>
+              <option value="change_below">% Change below</option>
+            </select>
+            <input type="number" id="fin-alert-threshold" placeholder="Threshold" step="0.01" style="width:110px;padding:5px 8px;font-size:12px;">
+            <button id="fin-add-alert-btn" class="btn btn-secondary btn-sm">+ Add</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Calendar Events -->
+      <section class="card" id="fin-events-card">
+        <h2 class="card-title">Calendar Events</h2>
+        <div class="card-body">
+          <p class="info-text">Track earnings dates, product launches, Fed meetings, token unlocks, and other market-moving events.</p>
+
+          <div id="fin-events-list" class="rules-list"></div>
+
+          <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input type="date" id="fin-event-date" style="padding:5px 8px;font-size:12px;">
+            <input type="text" id="fin-event-title" placeholder="Event title" style="flex:1;min-width:150px;padding:5px 8px;font-size:12px;">
+            <input type="text" id="fin-event-tag" placeholder="Tag (optional)" style="width:100px;padding:5px 8px;font-size:12px;">
+            <button id="fin-add-event-btn" class="btn btn-secondary btn-sm">+ Add</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Export/Import -->
+      <section class="card">
+        <h2 class="card-title">Finance Data</h2>
+        <div class="card-body">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button id="fin-export-btn" class="btn btn-secondary btn-sm">Export All</button>
+            <button id="fin-import-btn" class="btn btn-secondary btn-sm">Import</button>
+            <input type="file" id="fin-import-file" accept=".json" style="display:none;">
+            <button id="fin-refresh-btn" class="btn btn-secondary btn-sm">Refresh Prices</button>
+            <button id="fin-open-page-btn" class="btn btn-accent btn-sm">Open Finance Monitor</button>
+            <span id="fin-last-refreshed" style="font-size:11px;color:var(--text-muted);"></span>
+            <span id="fin-io-status" class="prompt-status" style="font-size:12px;"></span>
           </div>
         </div>
       </section>

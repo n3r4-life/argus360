@@ -1688,6 +1688,22 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "getAutomationStatus") return Promise.resolve(AutomationEngine.getRunStatus());
   if (message.action === "cancelAutomation") return Promise.resolve(AutomationEngine.cancel());
   if (message.action === "getAutomationLog") return AutomationEngine.getLog(message.automationId).then(l => ({ success: true, logs: l }));
+  // ── Named Lists ──
+  if (message.action === "getLists") return AutomationEngine.getLists().then(l => ({ success: true, lists: l }));
+  if (message.action === "getListById") return AutomationEngine.getListById(message.listId).then(l => ({ success: true, list: l }));
+  if (message.action === "saveList") return AutomationEngine.saveList(message.list);
+  if (message.action === "removeList") return AutomationEngine.removeList(message.listId);
+  // ── Export / Import ──
+  if (message.action === "exportAutomations") return AutomationEngine.exportAll().then(d => ({ success: true, ...d }));
+  if (message.action === "importAutomations") return AutomationEngine.importAll({ automations: message.automations, lists: message.lists }, message.mode);
+  if (message.action === "seedPrebuiltAutomations") return AutomationEngine.seedPrebuilt().then(() => ({ success: true }));
+  // ── Finance Data ──
+  if (message.action === "financeRefreshPrices") return financeRefreshPrices();
+  if (message.action === "financeGetState") return browser.storage.local.get({ financeMonitor: null }).then(d => ({ success: true, state: d.financeMonitor }));
+  // ── Decision Gates ──
+  if (message.action === "getPendingGates") return Promise.resolve({ success: true, gates: AutomationEngine.getPendingGates() });
+  if (message.action === "resolveGate") return Promise.resolve(AutomationEngine.resolveGate(message.gateId, message.answer));
+  if (message.action === "rejectGate") return Promise.resolve(AutomationEngine.rejectGate(message.gateId));
   // ── Chat ──
   if (message.action === "chatGetSessions") return handleChatGetSessions();
   if (message.action === "chatGetSession") return handleChatGetSession(message.sessionId);
@@ -1699,6 +1715,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "draftSave") return handleDraftSave(message.draft);
   if (message.action === "draftDelete") return handleDraftDelete(message.draftId);
   if (message.action === "draftSummarize") return handleDraftSummarize(message);
+  if (message.action === "draftAiTool") return handleDraftAiTool(message);
   // ── Workbench ──
   if (message.action === "workbenchGetData") return handleWorkbenchGetData(message.projectId);
   if (message.action === "workbenchAnalyze") return handleWorkbenchAnalyze(message);
@@ -1973,6 +1990,91 @@ async function handleDraftSummarize(message) {
     return { success: true, summary, provider: settings.provider, model: result.model };
   } catch (err) {
     return { success: false, error: err.message || "Summarize failed." };
+  }
+}
+
+const DRAFT_AI_TOOLS = {
+  spellcheck: {
+    system: "You are a meticulous proofreader. Fix all spelling, grammar, and punctuation errors in the text. Preserve the original tone, style, and markdown formatting exactly. Output ONLY the corrected text — no commentary, no explanations, no preamble.",
+    maxTokens: 4000
+  },
+  grammar: {
+    system: "You are an expert copy editor. Fix grammar, syntax, punctuation, and awkward phrasing. Improve sentence structure where needed but preserve the author's voice and markdown formatting. Output ONLY the improved text — no commentary.",
+    maxTokens: 4000
+  },
+  rewrite: {
+    system: "You are a skilled editor. Rewrite the text to be clearer, more concise, and more professional while preserving the core meaning and all factual content. Maintain markdown formatting. Output ONLY the rewritten text — no commentary.",
+    maxTokens: 4000
+  },
+  simplify: {
+    system: "You are a plain-language expert. Rewrite the text at an 8th-grade reading level. Use short sentences, common words, and active voice. Preserve all factual content and markdown formatting. Output ONLY the simplified text — no commentary.",
+    maxTokens: 4000
+  },
+  expand: {
+    system: "You are a thorough writer. Expand the text with additional detail, examples, and context where appropriate. Fill in gaps, elaborate on key points, and make the writing more comprehensive. Preserve markdown formatting. Output ONLY the expanded text — no commentary.",
+    maxTokens: 6000
+  },
+  tone_formal: {
+    system: "You are a professional editor. Rewrite the text in a formal, professional tone suitable for business or academic use. Remove colloquialisms, slang, and casual language. Preserve all factual content and markdown formatting. Output ONLY the rewritten text.",
+    maxTokens: 4000
+  },
+  tone_casual: {
+    system: "You are a friendly writer. Rewrite the text in a casual, conversational tone. Use contractions, shorter sentences, and a warm voice. Preserve all factual content and markdown formatting. Output ONLY the rewritten text.",
+    maxTokens: 4000
+  },
+  verify: {
+    system: "You are a fact-checker and research analyst. Review the text and identify any claims, statistics, names, dates, or facts that appear incorrect, unsupported, or suspicious. For each issue found, explain what seems wrong and suggest a correction if possible. If everything checks out, say so briefly. Format your response as a numbered list of findings in markdown.",
+    maxTokens: 3000
+  },
+  lint: {
+    system: "You are a writing quality analyst. Review the text for: 1) Structural issues (poor flow, missing transitions, weak intro/conclusion), 2) Clarity problems (ambiguous statements, jargon without definition, passive voice overuse), 3) Redundancy (repeated ideas, filler words, unnecessary qualifiers), 4) Consistency issues (tone shifts, tense changes, formatting inconsistencies). Provide a concise numbered list of issues with specific suggestions. Be direct and actionable.",
+    maxTokens: 3000
+  },
+  headlines: {
+    system: "You are a headline writer and SEO specialist. Generate 5 alternative titles/headlines for the given content. Each should take a different angle: one factual, one provocative, one question-based, one SEO-optimized, one creative. Format as a numbered markdown list with a brief note on the approach for each.",
+    maxTokens: 1000
+  },
+  tldr: {
+    system: "You are a summarization expert. Produce a TL;DR of the text in 2-3 sentences that captures the essential points. Then provide 3-5 bullet points of key takeaways. Use markdown formatting. Output ONLY the summary — no preamble.",
+    maxTokens: 1000
+  },
+  translate: {
+    system: "You are a professional translator. Translate the text into the target language specified by the user. Preserve meaning, tone, and markdown formatting. If no target language is specified, translate to English. Output ONLY the translation — no commentary.",
+    maxTokens: 4000
+  },
+  citations: {
+    system: "You are a research assistant. Review the text and identify every claim, statistic, or factual assertion that should have a citation. For each, suggest what type of source would be appropriate (academic paper, news article, official report, etc.) and provide a suggested search query to find it. Format as a numbered markdown list.",
+    maxTokens: 2000
+  },
+  outline: {
+    system: "You are a structural editor. Analyze the text and produce a clean markdown outline showing the logical structure. Identify sections, subsections, key arguments, and supporting points. Suggest any structural improvements (reordering, missing sections, better grouping). Output the outline in markdown heading/bullet format.",
+    maxTokens: 2000
+  }
+};
+
+async function handleDraftAiTool(message) {
+  try {
+    const { tool, content, extra, provider: providerOverride } = message;
+    if (!content?.trim()) return { success: false, error: "No content provided." };
+
+    const toolDef = DRAFT_AI_TOOLS[tool];
+    if (!toolDef) return { success: false, error: `Unknown tool: ${tool}` };
+
+    const settings = await getProviderSettings(providerOverride || "");
+    let systemPrompt = toolDef.system;
+    // Allow extra context (e.g. target language for translate)
+    const userContent = extra ? `${extra}\n\n---\n\n${content.slice(0, 8000)}` : content.slice(0, 8000);
+    const messages = [{ role: "system", content: systemPrompt }, { role: "user", content: userContent }];
+
+    const langInst = await getLanguageInstruction();
+    if (langInst && tool !== "translate") {
+      messages[0].content += "\n\n" + langInst;
+    }
+
+    const result = await callProvider(settings.provider, settings.apiKey, settings.model, messages, { maxTokens: toolDef.maxTokens || 4000 });
+    return { success: true, result: (result.content || "").trim(), provider: settings.provider, model: result.model, tool };
+  } catch (err) {
+    return { success: false, error: err.message || "AI tool failed." };
   }
 }
 
@@ -6225,6 +6327,170 @@ browser.alarms.onAlarm.addListener(async (alarm) => {
   } catch (e) { console.warn("[Agent] Scheduled digest error:", e); }
 });
 
+// ──────────────────────────────────────────────
+// Finance Price Fetcher
+// ──────────────────────────────────────────────
+
+// Yahoo Finance symbol mapping
+const YAHOO_TYPE_MAP = {
+  stock: (s) => s,                         // AAPL → AAPL
+  index: (s) => s.startsWith("^") ? s : `^${s}`, // SPX → ^SPX
+  forex: (s) => s.replace("/", "") + "=X", // EUR/USD → EURUSD=X
+  commodity: (s) => {
+    const map = { GOLD: "GC=F", SILVER: "SI=F", OIL: "CL=F", "CRUDE OIL": "CL=F", "BRENT": "BZ=F",
+      PLATINUM: "PL=F", PALLADIUM: "PA=F", COPPER: "HG=F", "NATURAL GAS": "NG=F", WHEAT: "ZW=F", CORN: "ZC=F" };
+    return map[s.toUpperCase()] || s + "=F";
+  },
+};
+
+// CoinGecko ID mapping for common cryptos
+const COINGECKO_IDS = {
+  BTC: "bitcoin", ETH: "ethereum", SOL: "solana", ADA: "cardano", DOT: "polkadot",
+  DOGE: "dogecoin", SHIB: "shiba-inu", AVAX: "avalanche-2", MATIC: "matic-network",
+  LINK: "chainlink", UNI: "uniswap", ATOM: "cosmos", XRP: "ripple", LTC: "litecoin",
+  BNB: "binancecoin", NEAR: "near", APT: "aptos", ARB: "arbitrum", OP: "optimism",
+  FIL: "filecoin", AAVE: "aave", MKR: "maker", CRV: "curve-dao-token", LDO: "lido-dao",
+  RENDER: "render-token", FET: "fetch-ai", INJ: "injective-protocol", TIA: "celestia",
+  SEI: "sei-network", SUI: "sui", PEPE: "pepe", WIF: "dogwifcoin", BONK: "bonk",
+  RUNE: "thorchain", ALGO: "algorand", XLM: "stellar", VET: "vechain", HBAR: "hedera-hashgraph",
+  ICP: "internet-computer", SAND: "the-sandbox", MANA: "decentraland", AXS: "axie-infinity",
+};
+
+async function financeRefreshPrices() {
+  const FIN_KEY = "financeMonitor";
+  const { [FIN_KEY]: state } = await browser.storage.local.get({ [FIN_KEY]: null });
+  if (!state || !state.watchlist?.length) return { success: true, updated: 0 };
+
+  let updated = 0;
+
+  // Split items by type
+  const cryptoItems = state.watchlist.filter(i => i.type === "crypto");
+  const yahooItems = state.watchlist.filter(i => i.type !== "crypto");
+
+  // ── Fetch crypto from CoinGecko ──
+  if (cryptoItems.length) {
+    try {
+      const ids = cryptoItems.map(i => {
+        const mapped = COINGECKO_IDS[i.symbol.toUpperCase()];
+        return mapped || i.symbol.toLowerCase();
+      }).filter(Boolean);
+
+      if (ids.length) {
+        const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(",")}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true`;
+        const resp = await fetch(url);
+        if (resp.ok) {
+          const data = await resp.json();
+          for (const item of cryptoItems) {
+            const cgId = COINGECKO_IDS[item.symbol.toUpperCase()] || item.symbol.toLowerCase();
+            const quote = data[cgId];
+            if (quote) {
+              item.price = quote.usd;
+              item.changePct = quote.usd_24h_change != null ? parseFloat(quote.usd_24h_change.toFixed(2)) : null;
+              item.volume = quote.usd_24h_vol || null;
+              item.lastUpdated = new Date().toISOString();
+              updated++;
+            }
+          }
+        }
+      }
+    } catch (e) { console.warn("[Finance] CoinGecko fetch error:", e.message); }
+  }
+
+  // ── Fetch stocks/indices/forex/commodities from Yahoo Finance ──
+  if (yahooItems.length) {
+    // Batch into groups of 10
+    const batches = [];
+    for (let i = 0; i < yahooItems.length; i += 10) {
+      batches.push(yahooItems.slice(i, i + 10));
+    }
+
+    for (const batch of batches) {
+      try {
+        const symbols = batch.map(item => {
+          const mapper = YAHOO_TYPE_MAP[item.type];
+          return mapper ? mapper(item.symbol) : item.symbol;
+        });
+
+        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(","))}`;
+        const resp = await fetch(url, {
+          headers: { "User-Agent": "Mozilla/5.0" },
+        });
+
+        if (resp.ok) {
+          const data = await resp.json();
+          const quotes = data?.quoteResponse?.result || [];
+
+          for (let j = 0; j < batch.length; j++) {
+            const item = batch[j];
+            const sym = symbols[j];
+            const quote = quotes.find(q =>
+              q.symbol === sym ||
+              q.symbol === item.symbol ||
+              q.symbol.toUpperCase() === sym.toUpperCase()
+            );
+            if (quote) {
+              item.price = quote.regularMarketPrice || null;
+              item.change = quote.regularMarketChange != null ? parseFloat(quote.regularMarketChange.toFixed(2)) : null;
+              item.changePct = quote.regularMarketChangePercent != null ? parseFloat(quote.regularMarketChangePercent.toFixed(2)) : null;
+              item.volume = quote.regularMarketVolume || null;
+              if (!item.name && quote.shortName) item.name = quote.shortName;
+              item.lastUpdated = new Date().toISOString();
+              updated++;
+            }
+          }
+        }
+      } catch (e) { console.warn("[Finance] Yahoo fetch error:", e.message); }
+    }
+  }
+
+  // ── Check price alerts ──
+  if (state.alerts?.length) {
+    for (const alert of state.alerts) {
+      if (!alert.enabled || alert.triggered) continue;
+      const item = state.watchlist.find(i => i.symbol.toUpperCase() === alert.symbol.toUpperCase());
+      if (!item || item.price == null) continue;
+
+      let triggered = false;
+      switch (alert.condition) {
+        case "above": triggered = item.price >= alert.threshold; break;
+        case "below": triggered = item.price <= alert.threshold; break;
+        case "change_above": triggered = Math.abs(item.changePct || 0) >= alert.threshold; break;
+        case "change_below": triggered = Math.abs(item.changePct || 0) <= alert.threshold; break;
+      }
+      if (triggered) {
+        alert.triggered = true;
+        alert.triggeredAt = new Date().toISOString();
+        // Send browser notification if available
+        try {
+          const has = await browser.permissions.contains({ permissions: ["notifications"] });
+          if (has) {
+            browser.notifications.create(`fin-alert-${alert.id}`, {
+              type: "basic",
+              iconUrl: "icons/icon-96.png",
+              title: `Price Alert: ${alert.symbol}`,
+              message: `${alert.symbol} ${alert.condition === "above" ? "reached" : "dropped to"} $${item.price} (threshold: ${alert.threshold})`,
+            });
+          }
+        } catch { /* notifications optional */ }
+      }
+    }
+  }
+
+  // Save updated state
+  state.lastRefreshed = new Date().toISOString();
+  await browser.storage.local.set({ [FIN_KEY]: state });
+  console.log(`[Finance] Refreshed ${updated} prices`);
+  return { success: true, updated };
+}
+
+// Finance alarm handler
+browser.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== "finance-price-refresh") return;
+  try {
+    await financeRefreshPrices();
+  } catch (e) { console.warn("[Finance] Price refresh error:", e.message); }
+});
+
 // Restore RSS alarms on startup
 (async () => {
   const rssFeeds = await ArgusDB.Feeds.getAll();
@@ -6819,4 +7085,7 @@ function handleCancelBatch() {
     browser.alarms.create("argus-cloud-backup", { delayInMinutes: cloudBackupIntervalHours * 60, periodInMinutes: cloudBackupIntervalHours * 60 });
     console.log(`[Backup] Scheduled backup alarm set: every ${cloudBackupIntervalHours}h`);
   }
+
+  // Finance price refresh alarm (every 5 min)
+  browser.alarms.create("finance-price-refresh", { delayInMinutes: 1, periodInMinutes: 5 });
 })();

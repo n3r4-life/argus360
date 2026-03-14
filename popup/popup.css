@@ -1493,5 +1493,14 @@ textarea {
   width: 13px;
   height: 13px;
 }
+.popup-icon-picker-section {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  margin: 6px 0 3px;
+}
 
 .hidden { display: none !important; }

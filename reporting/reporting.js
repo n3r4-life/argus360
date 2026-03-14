@@ -49,8 +49,8 @@
   // ── State ──
   let currentDraftId = null;
   let drafts = [];
-  let allSnippets = { analyses: [], entities: [], bookmarks: [], notes: [] };
-  let snippets = { analyses: [], entities: [], bookmarks: [], notes: [] };
+  let allSnippets = { analyses: [], entities: [], bookmarks: [], monitors: [], feeds: [], techstack: [], snapshots: [], timeline: [] };
+  let snippets = { analyses: [], entities: [], bookmarks: [], monitors: [], feeds: [], techstack: [], snapshots: [], timeline: [] };
   let projects = [];
   let activeSnipTab = "analyses";
   let previewMode = false; // false=editor, true=split
@@ -113,37 +113,63 @@
   // ── Assets ──
   async function loadSnippets() {
     try {
-      const [histResp, kgResp, bkResp] = await Promise.all([
+      const [histResp, kgResp, bkResp, monResp, feedResp] = await Promise.all([
         browser.runtime.sendMessage({ action: "getHistory", page: 0, perPage: 100 }),
         browser.runtime.sendMessage({ action: "getKGStats" }).catch(() => null),
-        browser.runtime.sendMessage({ action: "getBookmarks" })
+        browser.runtime.sendMessage({ action: "getBookmarks" }),
+        browser.runtime.sendMessage({ action: "getMonitors" }).catch(() => null),
+        browser.runtime.sendMessage({ action: "getFeeds" }).catch(() => null)
       ]);
 
-      // Analysis outputs
+      // Analysis outputs — strip any leftover JSON blocks from content
       if (histResp?.history) {
-        allSnippets.analyses = histResp.history.map(h => ({
-          id: h.id,
-          title: h.title || h.pageUrl || "Analysis",
-          preview: (h.content || "").slice(0, 200),
-          content: h.content || "",
-          url: h.pageUrl,
-          date: h.timestamp,
-          preset: h.preset
-        }));
+        allSnippets.analyses = histResp.history.map(h => {
+          let text = h.content || "";
+          // Strip embedded JSON/structured blocks that weren't cleaned at save time
+          text = text.replace(/```(?:json|argus[_-]?structured)?\s*\n?\{[\s\S]*?\}\s*\n?```/gi, "").trim();
+          return {
+            id: h.id,
+            title: h.presetLabel || h.title || h.pageUrl || "Analysis",
+            preview: text.slice(0, 200),
+            content: text,
+            url: h.pageUrl,
+            date: h.timestamp,
+            preset: h.preset
+          };
+        });
       }
 
-      // KG entities
+      // KG entities — rich content with aliases, sources, attributes
       if (kgResp && kgResp.nodeCount > 0) {
         const graphResp = await browser.runtime.sendMessage({ action: "getKGGraph" }).catch(() => null);
         if (graphResp?.nodes) {
-          allSnippets.entities = graphResp.nodes.slice(0, 200).map(n => ({
-            id: n.id,
-            title: n.label || n.id,
-            preview: `${n.type || "entity"} — ${n.mentions || 0} mentions`,
-            content: `**${n.label}** (${n.type || "entity"})`,
-            type: n.type,
-            sourceUrl: n.sourceUrl || ""
-          }));
+          allSnippets.entities = graphResp.nodes.slice(0, 200).map(n => {
+            const lines = [`**${n.displayName || n.label || n.id}** (${n.type || "entity"})`];
+            if (n.aliases && n.aliases.length > 1) {
+              lines.push(`Aliases: ${n.aliases.filter(a => a !== n.displayName).join(", ")}`);
+            }
+            lines.push(`Mentions: ${n.mentionCount || 1}`);
+            if (n.firstSeen) lines.push(`First seen: ${new Date(n.firstSeen).toLocaleDateString()}`);
+            if (n.attributes && Object.keys(n.attributes).length) {
+              for (const [k, v] of Object.entries(n.attributes)) {
+                if (v) lines.push(`${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`);
+              }
+            }
+            if (n.sourcePages && n.sourcePages.length) {
+              lines.push("", "Sources:");
+              for (const sp of n.sourcePages.slice(0, 5)) {
+                lines.push(`- [${sp.title || sp.url}](${sp.url})`);
+              }
+            }
+            return {
+              id: n.id,
+              title: n.displayName || n.label || n.id,
+              preview: `${n.type || "entity"} — ${n.mentionCount || 1} mentions`,
+              content: lines.join("\n"),
+              type: n.type,
+              sourceUrl: (n.sourcePages && n.sourcePages[0]?.url) || ""
+            };
+          });
         }
       }
 
@@ -157,6 +183,146 @@
           url: b.url,
           date: b.date
         }));
+
+        // TechStack — extracted from bookmarks that have techStack data
+        allSnippets.techstack = bkResp.bookmarks
+          .filter(b => b.techStack && Object.keys(b.techStack).length)
+          .map(b => {
+            const techs = [];
+            const ts = b.techStack;
+            if (ts.generator) techs.push(`Generator: ${ts.generator}`);
+            if (ts.server) techs.push(`Server: ${ts.server}`);
+            if (ts.poweredBy) techs.push(`Powered By: ${ts.poweredBy}`);
+            if (ts.frameworks?.length) techs.push(`Frameworks: ${ts.frameworks.join(", ")}`);
+            if (ts.cdn?.length) techs.push(`CDN: ${ts.cdn.join(", ")}`);
+            if (ts.analytics?.length) techs.push(`Analytics: ${ts.analytics.join(", ")}`);
+            if (ts.payments) techs.push(`Payments: ${ts.payments}`);
+            const report = techs.join("\n");
+            return {
+              id: b.id + "-tech",
+              title: b.title || b.url,
+              preview: techs.slice(0, 2).join(" · "),
+              content: `## TechStack: ${b.title || b.url}\n${b.url}\n\n${report}`,
+              url: b.url,
+              date: b.savedAt
+            };
+          });
+      }
+
+      // Monitors — load changes for each active monitor
+      if (monResp?.monitors?.length) {
+        const changesArr = await Promise.all(
+          monResp.monitors.slice(0, 50).map(m =>
+            browser.runtime.sendMessage({ action: "getMonitorHistory", monitorId: m.id })
+              .then(r => ({ monitor: m, changes: r?.history || [] }))
+              .catch(() => ({ monitor: m, changes: [] }))
+          )
+        );
+        allSnippets.monitors = [];
+        for (const { monitor, changes } of changesArr) {
+          // The monitor itself as an asset
+          allSnippets.monitors.push({
+            id: monitor.id,
+            title: monitor.title || monitor.url,
+            preview: `${monitor.changeCount || 0} changes · every ${monitor.intervalMinutes || 60}m`,
+            content: `## Monitor: ${monitor.title || monitor.url}\n${monitor.url}\nChanges detected: ${monitor.changeCount || 0}\nLast checked: ${monitor.lastChecked || "never"}\n${monitor.lastChangeSummary ? "\nLast change: " + monitor.lastChangeSummary : ""}`,
+            url: monitor.url,
+            date: monitor.lastChecked
+          });
+          // Individual change entries
+          for (const c of changes.slice(0, 10)) {
+            const body = c.aiSummary || c.newTextSnippet || "";
+            allSnippets.monitors.push({
+              id: c.id,
+              title: `Change: ${monitor.title || monitor.url}`,
+              preview: body.slice(0, 120),
+              content: `## Monitor Change: ${monitor.title || monitor.url}\n${monitor.url}\nDetected: ${c.detectedAt || ""}\n\n${c.aiSummary ? "### AI Summary\n" + c.aiSummary + "\n" : ""}${c.newTextSnippet ? "### Content\n" + c.newTextSnippet : ""}`,
+              url: monitor.url,
+              date: c.detectedAt
+            });
+          }
+        }
+
+        // Snapshots — raw HTML timeline from monitors
+        const snapArr = await Promise.all(
+          monResp.monitors.slice(0, 50).map(m =>
+            browser.runtime.sendMessage({ action: "getMonitorSnapshots", monitorId: m.id })
+              .then(r => ({ monitor: m, snapshots: r?.snapshots || [] }))
+              .catch(() => ({ monitor: m, snapshots: [] }))
+          )
+        );
+        allSnippets.snapshots = [];
+        for (const { monitor, snapshots } of snapArr) {
+          for (const s of snapshots) {
+            const isInitial = s.isInitial ? " (initial)" : "";
+            allSnippets.snapshots.push({
+              id: s.id,
+              title: `${monitor.title || monitor.url}${isInitial}`,
+              preview: `Captured ${new Date(s.capturedAt).toLocaleString()} · ${(s.text || "").length} chars`,
+              content: `## Snapshot: ${monitor.title || monitor.url}\n${monitor.url}\nCaptured: ${s.capturedAt}${isInitial}\n\n${(s.text || "").slice(0, 5000)}`,
+              url: monitor.url,
+              date: s.capturedAt
+            });
+          }
+        }
+      }
+
+      // Feed entries
+      if (feedResp?.feeds?.length) {
+        const entryArr = await Promise.all(
+          feedResp.feeds.slice(0, 30).map(f =>
+            browser.runtime.sendMessage({ action: "getFeedEntries", feedId: f.id, limit: 50 })
+              .then(r => ({ feed: f, entries: r?.entries || [] }))
+              .catch(() => ({ feed: f, entries: [] }))
+          )
+        );
+        allSnippets.feeds = [];
+        for (const { feed, entries } of entryArr) {
+          for (const e of entries) {
+            const body = e.content || e.description || "";
+            allSnippets.feeds.push({
+              id: e.id,
+              title: e.title || "Feed Entry",
+              preview: `${feed.title || feed.url} · ${(body).slice(0, 100)}`,
+              content: `## ${e.title || "Feed Entry"}\nSource: ${feed.title || feed.url}\nLink: ${e.link || ""}\nPublished: ${e.pubDate || ""}\n${e.author ? "Author: " + e.author + "\n" : ""}\n${body}`,
+              url: e.link || feed.url,
+              date: e.pubDate
+            });
+          }
+        }
+      }
+
+      // Page Tracker timeline
+      const trackerResp = await browser.runtime.sendMessage({ action: "getTrackerPages" }).catch(() => null);
+      if (trackerResp?.pages?.length) {
+        allSnippets.timeline = trackerResp.pages.map(p => {
+          const actionTags = (p.actions || []).map(a => a.type).filter(Boolean);
+          const uniqueActions = [...new Set(actionTags)];
+          const actionSummary = uniqueActions.length ? uniqueActions.join(", ") : "visited";
+          const lines = [`## ${p.title || p.url}`, p.url];
+          lines.push(`Visits: ${p.visits || 1}`);
+          lines.push(`First visit: ${p.firstVisit ? new Date(p.firstVisit).toLocaleString() : "unknown"}`);
+          lines.push(`Last visit: ${p.lastVisit ? new Date(p.lastVisit).toLocaleString() : "unknown"}`);
+          if (uniqueActions.length) lines.push(`Actions: ${uniqueActions.join(", ")}`);
+          // Include recent action details
+          const recent = (p.actions || []).slice(-5).reverse();
+          if (recent.length) {
+            lines.push("", "### Recent Activity");
+            for (const a of recent) {
+              const when = a.timestamp ? new Date(a.timestamp).toLocaleString() : "";
+              const detail = a.detail ? ` — ${typeof a.detail === "string" ? a.detail : JSON.stringify(a.detail)}` : "";
+              lines.push(`- **${a.type}** ${when}${detail}`);
+            }
+          }
+          return {
+            id: p.id,
+            title: p.title || p.url,
+            preview: `${p.visits || 1} visits · ${actionSummary}`,
+            content: lines.join("\n"),
+            url: p.url,
+            date: p.lastVisit
+          };
+        });
       }
     } catch (e) {
       console.warn("[DraftPad] Failed to load assets:", e);
@@ -168,27 +334,27 @@
 
   function filterSnippetsByProject() {
     const projId = assetProjectSelect.value;
+    const cats = ["analyses", "entities", "bookmarks", "monitors", "feeds", "techstack", "snapshots", "timeline"];
     if (!projId) {
       // No project selected — show all assets
-      snippets = { analyses: [...allSnippets.analyses], entities: [...allSnippets.entities], bookmarks: [...allSnippets.bookmarks], notes: [] };
+      for (const c of cats) snippets[c] = [...(allSnippets[c] || [])];
     } else {
       // Get URLs from the selected project's items
       const proj = projects.find(p => p.id === projId);
       const projUrls = new Set((proj?.items || []).map(i => i.url).filter(Boolean));
 
-      // Filter analyses: match by pageUrl
+      // Filter all categories by url match
       snippets.analyses = allSnippets.analyses.filter(a => a.url && projUrls.has(a.url));
-
-      // Filter bookmarks: match by url
       snippets.bookmarks = allSnippets.bookmarks.filter(b => b.url && projUrls.has(b.url));
-
-      // Filter entities: match by sourceUrl
       snippets.entities = allSnippets.entities.filter(e => e.sourceUrl && projUrls.has(e.sourceUrl));
-
-      snippets.notes = [];
+      snippets.monitors = allSnippets.monitors.filter(m => m.url && projUrls.has(m.url));
+      snippets.feeds = allSnippets.feeds.filter(f => f.url && projUrls.has(f.url));
+      snippets.techstack = allSnippets.techstack.filter(t => t.url && projUrls.has(t.url));
+      snippets.snapshots = allSnippets.snapshots.filter(s => s.url && projUrls.has(s.url));
+      snippets.timeline = allSnippets.timeline.filter(t => t.url && projUrls.has(t.url));
     }
 
-    const total = snippets.analyses.length + snippets.entities.length + snippets.bookmarks.length;
+    const total = cats.reduce((sum, c) => sum + (snippets[c]?.length || 0), 0);
     snippetCount.textContent = total || "";
   }
 
@@ -572,6 +738,165 @@
   document.getElementById("rp-insert-citation").addEventListener("click", () => {
     const num = (editor.value.match(/\[\d+\]/g) || []).length + 1;
     insertAtCursor(`[${num}]`);
+  });
+
+  // ── AI Writing Tools ──
+  const aiResultPanel = document.getElementById("rpAiResult");
+  const aiResultTitle = document.getElementById("rpAiResultTitle");
+  const aiResultMeta = document.getElementById("rpAiResultMeta");
+  const aiResultBody = document.getElementById("rpAiResultBody");
+  const aiApplyBtn = document.getElementById("rpAiApply");
+  const aiInsertBtn = document.getElementById("rpAiInsert");
+  const aiCopyBtn = document.getElementById("rpAiCopy");
+  const aiCloseBtn = document.getElementById("rpAiClose");
+  const aiHint = document.getElementById("rpAiHint");
+
+  // Tool labels for the result header
+  const AI_TOOL_LABELS = {
+    spellcheck: "Spellcheck", grammar: "Grammar Fix", rewrite: "Clarity Rewrite",
+    simplify: "Simplified", expand: "Expanded", tone_formal: "Formal Tone",
+    tone_casual: "Casual Tone", verify: "Fact Check", lint: "Writing Lint",
+    citations: "Citation Suggestions", tldr: "TL;DR", headlines: "Headlines",
+    outline: "Outline", translate: "Translation"
+  };
+
+  // Tools whose output replaces the source text (vs. informational/analysis tools)
+  const AI_REPLACE_TOOLS = new Set(["spellcheck", "grammar", "rewrite", "simplify", "expand", "tone_formal", "tone_casual", "translate"]);
+
+  let aiLastResult = null;    // { tool, result, selStart, selEnd }
+  let aiRunning = false;
+
+  // Update hint based on selection
+  editor.addEventListener("select", updateAiHint);
+  editor.addEventListener("click", updateAiHint);
+  editor.addEventListener("keyup", updateAiHint);
+  function updateAiHint() {
+    if (aiRunning) return;
+    const sel = editor.value.slice(editor.selectionStart, editor.selectionEnd);
+    if (sel.length > 0) {
+      const words = sel.trim().split(/\s+/).length;
+      aiHint.textContent = `${words} word${words !== 1 ? "s" : ""} selected`;
+    } else {
+      aiHint.textContent = "Select text or run on full draft";
+    }
+  }
+
+  // Wire up all AI tool buttons
+  document.querySelectorAll(".rp-ai-tool").forEach(btn => {
+    btn.addEventListener("click", () => runAiTool(btn.dataset.tool, btn));
+  });
+
+  async function runAiTool(tool, btn) {
+    if (aiRunning) return;
+
+    const selStart = editor.selectionStart;
+    const selEnd = editor.selectionEnd;
+    const selection = editor.value.slice(selStart, selEnd);
+    const content = selection.length > 0 ? selection : editor.value;
+
+    if (!content.trim()) {
+      flash("Nothing to analyze — write something first.");
+      return;
+    }
+
+    // For translate, ask for target language
+    let extra = null;
+    if (tool === "translate") {
+      extra = prompt("Translate to which language?");
+      if (!extra) return;
+      extra = "Target language: " + extra;
+    }
+
+    // Show loading state
+    aiRunning = true;
+    document.querySelectorAll(".rp-ai-tool").forEach(b => b.disabled = true);
+    btn.classList.add("active");
+    aiHint.textContent = "Running...";
+
+    // Show result panel with spinner
+    aiResultPanel.classList.remove("hidden");
+    aiResultTitle.textContent = AI_TOOL_LABELS[tool] || tool;
+    aiResultMeta.textContent = "";
+    aiResultBody.innerHTML = `<div class="rp-ai-loading"><div class="rp-ai-spinner"></div>Analyzing${selection.length > 0 ? " selection" : " full draft"}...</div>`;
+
+    // Hide Apply for analysis-only tools, show for replacement tools
+    const isReplace = AI_REPLACE_TOOLS.has(tool);
+    aiApplyBtn.style.display = isReplace ? "" : "none";
+
+    try {
+      const resp = await browser.runtime.sendMessage({
+        action: "draftAiTool",
+        tool,
+        content,
+        extra
+      });
+
+      if (!resp || !resp.success) {
+        aiResultBody.innerHTML = `<div style="color:var(--error);">${resp?.error || "AI tool failed."}</div>`;
+        return;
+      }
+
+      aiLastResult = { tool, result: resp.result, selStart, selEnd, hadSelection: selection.length > 0 };
+      aiResultMeta.textContent = `${resp.provider} / ${resp.model}`;
+
+      // Render result as markdown
+      if (typeof marked !== "undefined") {
+        aiResultBody.innerHTML = DOMPurify.sanitize(marked.parse(resp.result));
+      } else {
+        aiResultBody.textContent = resp.result;
+      }
+    } catch (err) {
+      aiResultBody.innerHTML = `<div style="color:var(--error);">Error: ${err.message}</div>`;
+    } finally {
+      aiRunning = false;
+      document.querySelectorAll(".rp-ai-tool").forEach(b => b.disabled = false);
+      btn.classList.remove("active");
+      updateAiHint();
+    }
+  }
+
+  // Apply — replace editor content (or selection) with AI result
+  aiApplyBtn.addEventListener("click", () => {
+    if (!aiLastResult) return;
+    const { result, selStart, selEnd, hadSelection } = aiLastResult;
+    if (hadSelection) {
+      // Replace just the selection
+      editor.value = editor.value.slice(0, selStart) + result + editor.value.slice(selEnd);
+      editor.selectionStart = selStart;
+      editor.selectionEnd = selStart + result.length;
+    } else {
+      // Replace entire content
+      editor.value = result;
+      editor.selectionStart = editor.selectionEnd = 0;
+    }
+    editor.focus();
+    updatePreview();
+    updateWordCount();
+    scheduleAutoSave();
+    aiResultPanel.classList.add("hidden");
+    flash("Applied");
+  });
+
+  // Insert — insert at current cursor without replacing
+  aiInsertBtn.addEventListener("click", () => {
+    if (!aiLastResult) return;
+    insertAtCursor("\n\n" + aiLastResult.result + "\n");
+    aiResultPanel.classList.add("hidden");
+    flash("Inserted");
+  });
+
+  // Copy
+  aiCopyBtn.addEventListener("click", () => {
+    if (!aiLastResult) return;
+    navigator.clipboard.writeText(aiLastResult.result);
+    aiCopyBtn.textContent = "Copied!";
+    setTimeout(() => { aiCopyBtn.textContent = "Copy"; }, 1500);
+  });
+
+  // Close
+  aiCloseBtn.addEventListener("click", () => {
+    aiResultPanel.classList.add("hidden");
+    aiLastResult = null;
   });
 
   // Preview toggle
