@@ -42,6 +42,7 @@
   gap: 2px;
   flex: 1;
   justify-content: flex-end;
+  position: relative;
 }
 
 .argus-ribbon .ribbon-icon {
@@ -151,4 +152,71 @@
 .app-tab-btn.drag-over {
   border-color: #e94560;
   background: rgba(233, 69, 96, 0.1);
+}
+
+/* ── Deferred panel reveal (prevents position-jump flash on load) ── */
+.panel-deferred {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+.panel-deferred.panel-revealed {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  transition: opacity 1s ease !important;
+}
+
+/* ── Entry Tab Picker Overlay ── */
+.ribbon-entry-picker {
+  position: absolute;
+  top: 100%;
+  right: 40px;
+  z-index: 1000;
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  min-width: 260px;
+}
+.ribbon-entry-picker.hidden {
+  display: none;
+}
+.ribbon-entry-picker-title {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: #6a6a8a;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 4px 8px 6px;
+  text-align: center;
+}
+.ribbon-entry-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: #a0a0b0;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+.ribbon-entry-item:hover {
+  background: #2a2a4a;
+  color: #e0e0e8;
+}
+.ribbon-entry-item.ribbon-entry-active {
+  color: #fff;
+  border-color: #e94560;
+  background: rgba(233, 69, 96, 0.15);
+}
+.ribbon-entry-item svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }

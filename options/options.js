@@ -4172,16 +4172,93 @@ function initMainTabs() {
         focusOrCreatePage(path);
       });
     } else {
-      // Projects tab — switch to projects panel on this page
-      btn.addEventListener("click", (e) => {
+      // Console entry tab — switch to whichever section is the entry point
+      btn.addEventListener("click", async (e) => {
         e.stopPropagation();
+        const { consoleEntryTab } = await browser.storage.local.get({ consoleEntryTab: "projects" });
         const navTabs = document.querySelectorAll(".nav-tab[data-tab]");
         const navPanels = document.querySelectorAll(".tab-panel[data-panel]");
-        switchMainTab("projects", navTabs, navPanels);
-        window.location.hash = "projects";
+        switchMainTab(consoleEntryTab, navTabs, navPanels);
+        window.location.hash = consoleEntryTab;
       });
     }
   }
+
+  // Console tab label mapping (same as ribbon.js)
+  const CONSOLE_ENTRY_LABELS = {
+    bookmarks: "Bookmarks", projects: "Projects", monitors: "Monitors",
+    feeds: "Feeds", osint: "OSINT", automation: "Automate",
+    archive: "Redirects", prompts: "Prompts", providers: "Providers",
+    resources: "Resources", settings: "Settings"
+  };
+
+  // Update the console entry tab button label from storage
+  (async function updateConsoleEntryLabel() {
+    try {
+      const { consoleEntryTab } = await browser.storage.local.get({ consoleEntryTab: "projects" });
+      if (consoleEntryTab && CONSOLE_ENTRY_LABELS[consoleEntryTab]) {
+        const btn = document.getElementById("open-projects-nav");
+        if (btn) {
+          const span = btn.querySelector("span");
+          if (span) span.textContent = CONSOLE_ENTRY_LABELS[consoleEntryTab];
+          btn.title = CONSOLE_ENTRY_LABELS[consoleEntryTab];
+        }
+      }
+    } catch (e) { /* use default */ }
+  })();
+
+  // Listen for live entry tab changes (from ribbon picker)
+  window.addEventListener("consoleEntryChanged", (e) => {
+    const tabId = e.detail?.tabId;
+    if (tabId && CONSOLE_ENTRY_LABELS[tabId]) {
+      const btn = document.getElementById("open-projects-nav");
+      if (btn) {
+        const span = btn.querySelector("span");
+        if (span) span.textContent = CONSOLE_ENTRY_LABELS[tabId];
+        btn.title = CONSOLE_ENTRY_LABELS[tabId];
+      }
+    }
+  });
+
+  // ── Console Entry Tab Picker ──
+  const entryPickerBtn = document.getElementById("nav-entry-picker");
+  const entryPickerOverlay = document.getElementById("entry-picker-overlay");
+
+  async function renderEntryPicker() {
+    const { consoleEntryTab } = await browser.storage.local.get({ consoleEntryTab: "projects" });
+    const navBtns = document.querySelectorAll("#main-nav .nav-tab[data-tab]");
+    let html = '<div class="entry-picker-title">Swappable tab</div>';
+    for (const [id, label] of Object.entries(CONSOLE_ENTRY_LABELS)) {
+      const navBtn = [...navBtns].find(b => b.dataset.tab === id);
+      const svg = navBtn ? navBtn.querySelector("svg")?.outerHTML || "" : "";
+      const active = id === consoleEntryTab ? " entry-active" : "";
+      html += `<button class="entry-picker-item${active}" data-entry-id="${id}">${svg} ${label}</button>`;
+    }
+    entryPickerOverlay.innerHTML = html;
+
+    entryPickerOverlay.querySelectorAll(".entry-picker-item").forEach(item => {
+      item.addEventListener("click", async () => {
+        const id = item.dataset.entryId;
+        await browser.storage.local.set({ consoleEntryTab: id });
+        entryPickerOverlay.classList.add("hidden");
+        // Update console entry button label
+        window.dispatchEvent(new CustomEvent("consoleEntryChanged", { detail: { tabId: id } }));
+      });
+    });
+  }
+
+  entryPickerBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isHidden = entryPickerOverlay.classList.contains("hidden");
+    entryPickerOverlay.classList.toggle("hidden");
+    if (isHidden) renderEntryPicker();
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!entryPickerOverlay.contains(e.target) && e.target !== entryPickerBtn) {
+      entryPickerOverlay.classList.add("hidden");
+    }
+  });
 
   // ── Console app-nav drag-to-reorder + saved order ──
   const consoleAppNav = document.getElementById("console-app-nav");

@@ -58,6 +58,10 @@ async function navigateArgusTab(fullUrl) {
 }
 
 async function focusOrCreateConsole(hash) {
+  if (!hash) {
+    const { consoleEntryTab } = await browser.storage.local.get({ consoleEntryTab: "projects" });
+    hash = consoleEntryTab;
+  }
   const consoleUrl = browser.runtime.getURL("options/options.html");
   await navigateArgusTab(consoleUrl + (hash ? "#" + hash : ""));
 }

@@ -109,6 +109,24 @@
     ["line", { x1: "12", y1: "17", x2: "12.01", y2: "17" }]
   ]));
 
+  // 4-square entry tab picker
+  const entryPickerBtn = document.createElement("button");
+  entryPickerBtn.className = "ribbon-icon";
+  entryPickerBtn.id = "ribbon-entry-picker";
+  entryPickerBtn.title = "Swappable tab";
+  entryPickerBtn.appendChild(makeSvg([
+    ["rect", { x: "3", y: "3", width: "7", height: "7", rx: "1" }],
+    ["rect", { x: "14", y: "3", width: "7", height: "7", rx: "1" }],
+    ["rect", { x: "3", y: "14", width: "7", height: "7", rx: "1" }],
+    ["rect", { x: "14", y: "14", width: "7", height: "7", rx: "1" }]
+  ]));
+  icons.appendChild(entryPickerBtn);
+
+  const entryPickerOverlay = document.createElement("div");
+  entryPickerOverlay.id = "ribbon-entry-picker-overlay";
+  entryPickerOverlay.className = "ribbon-entry-picker hidden";
+  icons.appendChild(entryPickerOverlay);
+
   const sep2 = document.createElement("span");
   sep2.className = "ribbon-icon-sep";
   icons.appendChild(sep2);
@@ -182,21 +200,49 @@
     }
   }
 
+  // Console tab → label mapping for dynamic entry point
+  const CONSOLE_TAB_LABELS = {
+    bookmarks: "Bookmarks", projects: "Projects", monitors: "Monitors",
+    feeds: "Feeds", osint: "OSINT", automation: "Automate",
+    archive: "Redirects", prompts: "Prompts", providers: "Providers",
+    resources: "Resources", settings: "Settings"
+  };
+
   // Load saved order or use default, merging any new tabs
   async function initAppTabs() {
     let order = DEFAULT_TAB_ORDER;
     try {
-      const stored = await browser.storage.local.get("appTabOrder");
+      const stored = await browser.storage.local.get(["appTabOrder", "consoleEntryTab"]);
       if (Array.isArray(stored.appTabOrder) && stored.appTabOrder.length > 0) {
         // Keep only valid IDs, then append any new tabs not in saved order
         const valid = stored.appTabOrder.filter(id => APP_TAB_DEFS[id]);
         const missing = DEFAULT_TAB_ORDER.filter(id => !valid.includes(id));
         if (valid.length > 0) order = [...valid, ...missing];
       }
+      // Apply dynamic console entry tab
+      const entryTab = stored.consoleEntryTab || "projects";
+      if (CONSOLE_TAB_LABELS[entryTab]) {
+        APP_TAB_DEFS["app-projects"].label = CONSOLE_TAB_LABELS[entryTab];
+        APP_TAB_DEFS["app-projects"].hash = entryTab;
+      }
     } catch (e) { /* use default */ }
     renderAppTabs(order);
     highlightActiveTab();
     setupTabDragReorder();
+
+    // Listen for entry tab changes from the console picker
+    window.addEventListener("consoleEntryChanged", (e) => {
+      const tabId = e.detail?.tabId;
+      if (tabId && CONSOLE_TAB_LABELS[tabId]) {
+        APP_TAB_DEFS["app-projects"].label = CONSOLE_TAB_LABELS[tabId];
+        APP_TAB_DEFS["app-projects"].hash = tabId;
+        const btn = document.getElementById("app-projects");
+        if (btn) {
+          const span = btn.querySelector("span");
+          if (span) span.textContent = CONSOLE_TAB_LABELS[tabId];
+        }
+      }
+    });
   }
 
   function highlightActiveTab() {
@@ -310,6 +356,66 @@
     window.location.reload();
   });
 
+  // ── Entry tab picker (4-square button) ──
+  const ENTRY_PICKER_TABS = [
+    { id: "bookmarks", label: "Bookmarks", ribbonId: "ribbon-bookmarks" },
+    { id: "projects", label: "Projects", ribbonId: "ribbon-projects" },
+    { id: "monitors", label: "Monitors", ribbonId: "ribbon-monitors" },
+    { id: "feeds", label: "Feeds", ribbonId: "ribbon-feeds" },
+    { id: "osint", label: "OSINT", ribbonId: "ribbon-osint" },
+    { id: "automation", label: "Automate", ribbonId: "ribbon-automate" },
+    { id: "archive", label: "Redirects", ribbonId: "ribbon-redirects" },
+    { id: "prompts", label: "Prompts", ribbonId: "ribbon-prompts" },
+    { id: "providers", label: "Providers", ribbonId: "ribbon-providers" },
+    { id: "resources", label: "Resources", ribbonId: "ribbon-resources" },
+    { id: "settings", label: "Settings", ribbonId: "ribbon-settings" }
+  ];
+
+  async function renderEntryPicker() {
+    const { consoleEntryTab } = await browser.storage.local.get({ consoleEntryTab: "projects" });
+    let html = '<div class="ribbon-entry-picker-title">Swappable tab</div>';
+    for (const opt of ENTRY_PICKER_TABS) {
+      const ribbonBtn = document.getElementById(opt.ribbonId);
+      const svg = ribbonBtn?.querySelector("svg")?.outerHTML || "";
+      const active = opt.id === consoleEntryTab ? " ribbon-entry-active" : "";
+      html += `<button class="ribbon-entry-item${active}" data-entry-id="${opt.id}">${svg} ${opt.label}</button>`;
+    }
+    entryPickerOverlay.innerHTML = html;
+
+    entryPickerOverlay.querySelectorAll(".ribbon-entry-item").forEach(item => {
+      item.addEventListener("click", async () => {
+        const id = item.dataset.entryId;
+        await browser.storage.local.set({ consoleEntryTab: id });
+        entryPickerOverlay.classList.add("hidden");
+        // Update the ribbon tab label + hash live
+        if (CONSOLE_TAB_LABELS[id]) {
+          APP_TAB_DEFS["app-projects"].label = CONSOLE_TAB_LABELS[id];
+          APP_TAB_DEFS["app-projects"].hash = id;
+          const btn = document.getElementById("app-projects");
+          if (btn) {
+            const span = btn.querySelector("span");
+            if (span) span.textContent = CONSOLE_TAB_LABELS[id];
+          }
+        }
+        // Also fire event for console page if we're on it
+        window.dispatchEvent(new CustomEvent("consoleEntryChanged", { detail: { tabId: id } }));
+      });
+    });
+  }
+
+  entryPickerBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isHidden = entryPickerOverlay.classList.contains("hidden");
+    entryPickerOverlay.classList.toggle("hidden");
+    if (isHidden) renderEntryPicker();
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!entryPickerOverlay.contains(e.target) && e.target !== entryPickerBtn && !entryPickerBtn.contains(e.target)) {
+      entryPickerOverlay.classList.add("hidden");
+    }
+  });
+
   // App tab navigation — event delegation (tabs are rendered async)
   appBar.addEventListener("click", (e) => {
     const btn = e.target.closest(".app-tab-btn");
@@ -357,6 +463,22 @@
   // Refresh on data changes
   browser.runtime.onMessage.addListener((msg) => {
     if (msg.type === "argusDataChanged") updateRibbonBadges();
+  });
+
+  // Sync swappable tab label when storage changes (e.g. from another page/tab)
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes.consoleEntryTab) {
+      const tabId = changes.consoleEntryTab.newValue || "projects";
+      if (CONSOLE_TAB_LABELS[tabId]) {
+        APP_TAB_DEFS["app-projects"].label = CONSOLE_TAB_LABELS[tabId];
+        APP_TAB_DEFS["app-projects"].hash = tabId;
+        const btn = document.getElementById("app-projects");
+        if (btn) {
+          const span = btn.querySelector("span");
+          if (span) span.textContent = CONSOLE_TAB_LABELS[tabId];
+        }
+      }
+    }
   });
 
   // ── Vault Lock Screen ──

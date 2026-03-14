@@ -46,8 +46,19 @@ const PanelState = (() => {
    * Returns the loaded state or null.
    */
   async function apply(panel, pageId, panelId, opts) {
+    // Immediately hide to prevent position-jump flash
+    panel.classList.add("panel-deferred");
+
     const state = await load(pageId, panelId);
-    if (!state) return null;
+    if (!state) {
+      // No saved state — still do a deferred reveal if panel is visible
+      if (!panel.classList.contains("hidden")) {
+        scheduleReveal(panel);
+      } else {
+        panel.classList.remove("panel-deferred");
+      }
+      return null;
+    }
 
     if (typeof state.left === "number") {
       const maxLeft = window.innerWidth - 60;
@@ -71,6 +82,13 @@ const PanelState = (() => {
       panel.classList.toggle("hidden", !state.visible);
     }
 
+    // Schedule deferred fade-in for visible panels; clean up hidden ones
+    if (!panel.classList.contains("hidden")) {
+      scheduleReveal(panel);
+    } else {
+      panel.classList.remove("panel-deferred");
+    }
+
     return state;
   }
 
@@ -84,6 +102,19 @@ const PanelState = (() => {
       const keysToRemove = Object.keys(all).filter(k => k.startsWith(prefix));
       if (keysToRemove.length) await browser.storage.local.remove(keysToRemove);
     } catch (e) { /* silent */ }
+  }
+
+  /**
+   * Schedule a deferred fade-in for a panel.
+   * Waits for page to settle, then fades opacity 0→1 over 1s.
+   */
+  function scheduleReveal(panel) {
+    setTimeout(() => {
+      panel.classList.add("panel-revealed");
+      panel.addEventListener("transitionend", () => {
+        panel.classList.remove("panel-deferred", "panel-revealed");
+      }, { once: true });
+    }, 1500);
   }
 
   return { save, load, apply, clear };

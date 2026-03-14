@@ -118,6 +118,7 @@ a:hover {
   gap: 2px;
   flex: 1;
   justify-content: flex-end;
+  position: relative;
 }
 
 .nav-icon {
@@ -177,6 +178,59 @@ a:hover {
 .nav-icon-danger svg {
   width: 16px;
   height: 16px;
+}
+
+/* Entry picker overlay */
+.entry-picker-overlay {
+  position: absolute;
+  top: 100%;
+  right: 40px;
+  z-index: 999;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  min-width: 260px;
+}
+.entry-picker-overlay .entry-picker-title {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 4px 8px 6px;
+  text-align: center;
+}
+.entry-picker-overlay .entry-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+.entry-picker-item:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+.entry-picker-item.entry-active {
+  color: #fff;
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.entry-picker-item svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 /* Tab badges — positioned as dots on icon buttons */
