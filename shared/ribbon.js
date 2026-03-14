@@ -85,6 +85,12 @@
   icons.appendChild(makeIcon("ribbon-tracker", "Page Tracker", [
     ["polyline", { points: "22 12 18 12 15 21 9 3 6 12 2 12" }]
   ]));
+  icons.appendChild(makeIcon("ribbon-sources", "Sources", [
+    ["path", { d: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" }],
+    ["circle", { cx: "9", cy: "7", r: "4" }],
+    ["path", { d: "M23 21v-2a4 4 0 0 0-3-3.87" }],
+    ["path", { d: "M16 3.13a4 4 0 0 1 0 7.75" }]
+  ]));
 
   const sep1 = document.createElement("span");
   sep1.className = "ribbon-icon-sep";
@@ -207,7 +213,8 @@
   const CONSOLE_TAB_LABELS = {
     bookmarks: "Bookmarks", projects: "Projects", monitors: "Monitors",
     feeds: "Feeds", osint: "OSINT", automation: "Automate",
-    archive: "Redirects", tracker: "Tracker", prompts: "Prompts", providers: "Providers",
+    archive: "Redirects", tracker: "Tracker", sources: "Sources",
+    prompts: "Prompts", providers: "Providers",
     resources: "Resources", settings: "Settings"
   };
 
@@ -343,6 +350,7 @@
   document.getElementById("ribbon-automate").addEventListener("click", () => nav("automation"));
   document.getElementById("ribbon-redirects").addEventListener("click", () => nav("archive"));
   document.getElementById("ribbon-tracker").addEventListener("click", () => nav("tracker"));
+  document.getElementById("ribbon-sources").addEventListener("click", () => nav("sources"));
   document.getElementById("ribbon-prompts").addEventListener("click", () => nav("prompts"));
   document.getElementById("ribbon-providers").addEventListener("click", () => nav("providers"));
   document.getElementById("ribbon-resources").addEventListener("click", () => nav("resources"));
@@ -370,6 +378,7 @@
     { id: "automation", label: "Automate", ribbonId: "ribbon-automate" },
     { id: "archive", label: "Redirects", ribbonId: "ribbon-redirects" },
     { id: "tracker", label: "Page Tracker", ribbonId: "ribbon-tracker" },
+    { id: "sources", label: "Sources", ribbonId: "ribbon-sources" },
     { id: "prompts", label: "Prompts", ribbonId: "ribbon-prompts" },
     { id: "providers", label: "Providers", ribbonId: "ribbon-providers" },
     { id: "resources", label: "Resources", ribbonId: "ribbon-resources" },
@@ -439,7 +448,8 @@
     "ribbon-monitors":  () => browser.runtime.sendMessage({ action: "getMonitors" }).then(r => Array.isArray(r?.monitors) ? r.monitors.length : 0),
     "ribbon-feeds":     () => browser.runtime.sendMessage({ action: "getFeeds" }).then(r => Array.isArray(r?.feeds) ? r.feeds.length : 0),
     "ribbon-osint":     () => browser.runtime.sendMessage({ action: "getKGStats" }).then(r => typeof r?.nodeCount === "number" ? r.nodeCount : 0).catch(() => 0),
-    "ribbon-automate":  () => browser.runtime.sendMessage({ action: "getAutomations" }).then(r => Array.isArray(r?.automations) ? r.automations.length : 0).catch(() => 0)
+    "ribbon-automate":  () => browser.runtime.sendMessage({ action: "getAutomations" }).then(r => Array.isArray(r?.automations) ? r.automations.length : 0).catch(() => 0),
+    "ribbon-sources":   () => browser.runtime.sendMessage({ action: "getSources" }).then(r => Array.isArray(r?.sources) ? r.sources.length : 0).catch(() => 0)
   };
 
   async function updateRibbonBadges() {

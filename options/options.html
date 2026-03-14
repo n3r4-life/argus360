@@ -46,6 +46,10 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           <span class="nav-badge" id="badge-tracker"></span>
         </button>
+        <button class="nav-tab nav-icon" data-tab="sources" title="Sources">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span class="nav-badge" id="badge-sources"></span>
+        </button>
         <span class="nav-icon-sep"></span>
         <button class="nav-tab nav-icon" data-tab="prompts" title="Prompts">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
@@ -123,25 +127,44 @@
     <!-- ═══════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="home">
       <div class="home-landing">
-        <div class="home-brand">
-          <img src="../icons/icon-128.png" alt="Argus" class="home-logo">
-          <h2 class="home-title">Argus</h2>
-        </div>
         <!-- Search bar -->
         <div class="home-search-bar">
+          <div class="search-category-row">
+            <button class="search-cat-chip active" data-cat="general" title="General web search engines">General</button>
+            <button class="search-cat-chip" data-cat="research" title="Academic papers, journals, preprints">Research</button>
+            <button class="search-cat-chip" data-cat="medical" title="Biomedical and life science literature">Medical</button>
+            <button class="search-cat-chip" data-cat="custom" title="Your custom search engines">Custom</button>
+            <button class="search-cat-chip" data-cat="all" title="Show all engines">All</button>
+            <button class="search-cat-add-btn" id="home-search-cat-add" title="Add custom search engine">+</button>
+          </div>
+          <div id="home-search-custom-form" class="search-custom-form hidden">
+            <input type="text" id="home-search-custom-name" class="search-custom-input" placeholder="Name (e.g. Shodan)">
+            <input type="text" id="home-search-custom-url" class="search-custom-input search-custom-input-wide" placeholder="URL with {q} for query (e.g. https://shodan.io/search?query={q})">
+            <button id="home-search-custom-save" class="btn btn-secondary btn-sm">Add</button>
+            <label class="search-custom-source-label" title="Also save as a Source (webservice)">
+              <input type="checkbox" id="home-search-custom-as-source" checked> Source
+            </label>
+            <button id="home-search-custom-cancel" class="btn btn-secondary btn-sm" style="color:var(--text-muted);">Cancel</button>
+          </div>
           <div class="home-search-row">
             <select id="home-search-engine" class="search-engine-select" title="Search engine">
-              <option value="duckduckgo">DuckDuckGo</option>
-              <option value="startpage">Startpage</option>
-              <option value="brave">Brave</option>
-              <option value="searx">SearX</option>
-              <option value="mojeek">Mojeek</option>
-              <option value="google">Google</option>
-              <option value="dogpile">Dogpile</option>
-              <option value="yandex">Yandex</option>
-              <option value="bing">Bing</option>
+              <option value="duckduckgo" data-cat="general">DuckDuckGo</option>
+              <option value="startpage" data-cat="general">Startpage</option>
+              <option value="brave" data-cat="general">Brave</option>
+              <option value="searx" data-cat="general">SearX</option>
+              <option value="mojeek" data-cat="general">Mojeek</option>
+              <option value="google" data-cat="general">Google</option>
+              <option value="dogpile" data-cat="general">Dogpile</option>
+              <option value="yandex" data-cat="general">Yandex</option>
+              <option value="bing" data-cat="general">Bing</option>
+              <option value="scholar" data-cat="research">Google Scholar</option>
+              <option value="semantic" data-cat="research">Semantic Scholar</option>
+              <option value="jstor" data-cat="research">JSTOR</option>
+              <option value="arxiv" data-cat="research">arXiv</option>
+              <option value="pubmed" data-cat="medical">PubMed</option>
+              <option value="core" data-cat="research">CORE</option>
             </select>
-            <input type="text" id="home-search-query" class="home-search-input" placeholder="Search the web...">
+            <input type="text" id="home-search-query" class="home-search-input" placeholder="Search the web... then analyze it">
             <button id="home-search-go" class="btn-search-go" title="Search">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -163,16 +186,21 @@
             </select>
           </div>
           <div id="home-multi-engine-row" class="multi-engine-row hidden">
-            <span class="multi-engine-label">Engines:</span>
-            <label class="me-chip"><input type="checkbox" value="duckduckgo" checked>DDG</label>
-            <label class="me-chip"><input type="checkbox" value="startpage">Start</label>
-            <label class="me-chip"><input type="checkbox" value="brave">Brave</label>
-            <label class="me-chip"><input type="checkbox" value="searx">SearX</label>
-            <label class="me-chip"><input type="checkbox" value="mojeek">Mojeek</label>
-            <label class="me-chip"><input type="checkbox" value="google">Google</label>
-            <label class="me-chip"><input type="checkbox" value="dogpile">Dogpile</label>
-            <label class="me-chip"><input type="checkbox" value="yandex">Yandex</label>
-            <label class="me-chip"><input type="checkbox" value="bing">Bing</label>
+            <label class="me-chip" data-cat="general"><input type="checkbox" value="duckduckgo" checked>DDG</label>
+            <label class="me-chip" data-cat="general"><input type="checkbox" value="startpage">Start</label>
+            <label class="me-chip" data-cat="general"><input type="checkbox" value="brave">Brave</label>
+            <label class="me-chip" data-cat="general"><input type="checkbox" value="searx">SearX</label>
+            <label class="me-chip" data-cat="general"><input type="checkbox" value="mojeek">Mojeek</label>
+            <label class="me-chip" data-cat="general"><input type="checkbox" value="google">Google</label>
+            <label class="me-chip" data-cat="general"><input type="checkbox" value="dogpile">Dogpile</label>
+            <label class="me-chip" data-cat="general"><input type="checkbox" value="yandex">Yandex</label>
+            <label class="me-chip" data-cat="general"><input type="checkbox" value="bing">Bing</label>
+            <label class="me-chip" data-cat="research"><input type="checkbox" value="scholar">Scholar</label>
+            <label class="me-chip" data-cat="research"><input type="checkbox" value="semantic">Semantic</label>
+            <label class="me-chip" data-cat="research"><input type="checkbox" value="jstor">JSTOR</label>
+            <label class="me-chip" data-cat="research"><input type="checkbox" value="arxiv">arXiv</label>
+            <label class="me-chip" data-cat="medical"><input type="checkbox" value="pubmed">PubMed</label>
+            <label class="me-chip" data-cat="research"><input type="checkbox" value="core">CORE</label>
           </div>
         </div>
 
@@ -217,54 +245,68 @@
         </div>
 
         <div class="home-section">
-          <h3>Quick Navigation</h3>
-          <p>Use the icons in the upper-right to jump between console sections:</p>
+          <div class="home-nav-cat-row">
+            <button class="search-cat-chip" data-nav-cat="all">All</button>
+            <button class="search-cat-chip active" data-nav-cat="research">Research</button>
+            <button class="search-cat-chip" data-nav-cat="monitoring">Monitoring</button>
+            <button class="search-cat-chip" data-nav-cat="config">Config</button>
+          </div>
           <div class="home-icon-guide">
-            <div class="home-icon-item" data-goto="bookmarks">
+            <div class="home-icon-item" data-goto="bookmarks" data-nav-cat="research">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
               <div><strong>Bookmarks</strong><span>Save and organize pages with smart tags</span></div>
             </div>
-            <div class="home-icon-item" data-goto="projects">
+            <div class="home-icon-item" data-goto="projects" data-nav-cat="research">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
               <div><strong>Projects</strong><span>Group related pages into investigations</span></div>
             </div>
-            <div class="home-icon-item" data-goto="monitors">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              <div><strong>Monitors</strong><span>Watch pages for changes automatically</span></div>
-            </div>
-            <div class="home-icon-item" data-goto="feeds">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
-              <div><strong>Feeds</strong><span>Subscribe to RSS feeds and route articles</span></div>
-            </div>
-            <div class="home-icon-item" data-goto="osint">
+            <div class="home-icon-item" data-goto="osint" data-nav-cat="research">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <div><strong>OSINT</strong><span>Open-source intelligence tools and entity extraction</span></div>
             </div>
-            <div class="home-icon-item" data-goto="automation">
+            <div class="home-icon-item" data-goto="resources" data-nav-cat="research">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              <div><strong>Resources</strong><span>Curated tools, references, and custom links</span></div>
+            </div>
+            <div class="home-icon-item" data-goto="monitors" data-nav-cat="monitoring" style="display:none">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <div><strong>Monitors</strong><span>Watch pages for changes automatically</span></div>
+            </div>
+            <div class="home-icon-item" data-goto="feeds" data-nav-cat="monitoring" style="display:none">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+              <div><strong>Feeds</strong><span>Subscribe to RSS feeds and route articles</span></div>
+            </div>
+            <div class="home-icon-item" data-goto="automation" data-nav-cat="monitoring" style="display:none">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
               <div><strong>Automate</strong><span>Create rules for automatic page processing</span></div>
             </div>
-            <div class="home-icon-item" data-goto="providers">
+            <div class="home-icon-item" data-goto="providers" data-nav-cat="config" style="display:none">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
               <div><strong>Providers</strong><span>Configure AI models and API keys</span></div>
             </div>
-            <div class="home-icon-item" data-goto="settings">
+            <div class="home-icon-item" data-goto="sources" data-nav-cat="config" style="display:none">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <div><strong>Sources</strong><span>Your directory of handles, feeds, emails, IPs, and addresses</span></div>
+            </div>
+            <div class="home-icon-item" data-goto="settings" data-nav-cat="config" style="display:none">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
               <div><strong>Settings</strong><span>Preferences, export, and data management</span></div>
             </div>
           </div>
         </div>
 
-        <div class="home-quick-links">
-          <button class="home-link-btn" id="home-help-ext">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            Help &amp; Documentation
-          </button>
-          <button class="home-link-btn" data-goto="resources">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-            Resources &amp; Tools
-          </button>
+        <div class="home-storage-widget" id="home-storage-widget">
+          <div class="home-storage-header">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+            <span>Storage Usage</span>
+            <span id="home-storage-total" class="home-storage-total">...</span>
+          </div>
+          <div id="home-storage-bar" class="home-storage-bar">
+            <div id="home-storage-fill" class="home-storage-fill"></div>
+          </div>
+          <div id="home-storage-breakdown" class="home-storage-breakdown"></div>
         </div>
+
       </div>
     </div>
 
@@ -1336,7 +1378,13 @@
             <div class="form-row">
               <div class="form-group flex-2">
                 <label for="feed-url">Feed or Page URL</label>
-                <input type="text" id="feed-url" placeholder="https://example.com or https://example.com/feed.xml">
+                <div style="display:flex;gap:6px;align-items:center;">
+                  <input type="text" id="feed-url" placeholder="https://example.com or https://example.com/feed.xml" style="flex:1;">
+                  <div class="src-picker-wrap" style="position:relative;">
+                    <button type="button" id="feed-from-sources" class="btn btn-secondary btn-sm" title="Pick from Sources">Sources</button>
+                    <div id="feed-sources-dropdown" class="src-picker-dropdown hidden"></div>
+                  </div>
+                </div>
               </div>
               <div class="form-group flex-1">
                 <label for="feed-interval">Check Interval</label>
@@ -1662,6 +1710,132 @@
     </div>
 
     <!-- ═══════════════════════════════════════════ -->
+    <!-- TAB: Sources                                 -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="sources">
+
+      <!-- Toolbar -->
+      <div class="src-toolbar">
+        <div class="src-search-row">
+          <input type="text" id="src-search" class="src-search-input" placeholder="Search sources by name, handle, tag, email, address...">
+          <select id="src-filter-type" class="src-filter-select">
+            <option value="">All Types</option>
+            <option value="person">People</option>
+            <option value="organization">Organizations</option>
+            <option value="group">Groups</option>
+            <option value="handle">Handles</option>
+            <option value="journalist">Journalists</option>
+            <option value="informant">Informants</option>
+            <option value="target">Targets</option>
+            <option value="adversary">Adversaries</option>
+            <option value="scammer">Scammers</option>
+            <option value="asset">Assets</option>
+            <option value="service">Services</option>
+            <option value="webservice">Web Services</option>
+            <option value="device">Devices</option>
+            <option value="academic">Academic</option>
+            <option value="medical">Medical</option>
+            <option value="legal">Legal</option>
+            <option value="lead">Leads</option>
+            <option value="alias">Aliases</option>
+            <option value="entity">Other</option>
+          </select>
+          <select id="src-filter-tag" class="src-filter-select">
+            <option value="">All Tags</option>
+          </select>
+        </div>
+        <div class="src-actions-row">
+          <button id="src-add-new" class="btn btn-secondary btn-sm">+ New Source</button>
+          <button id="src-import" class="btn btn-secondary btn-sm">Import</button>
+          <button id="src-export" class="btn btn-secondary btn-sm">Export</button>
+          <input type="file" id="src-import-file" accept=".json" style="display:none;">
+          <span id="src-count" style="margin-left:auto;font-size:11px;color:var(--text-muted);"></span>
+        </div>
+      </div>
+
+      <!-- Add/Edit form (hidden by default) -->
+      <div id="src-editor" class="src-editor hidden">
+        <section class="card">
+          <h2 class="card-title" id="src-editor-title">New Source</h2>
+          <div class="card-body">
+            <div class="form-row">
+              <div class="form-group flex-2">
+                <label for="src-name">Name</label>
+                <input type="text" id="src-name" placeholder="Display name or label">
+              </div>
+              <div class="form-group flex-1">
+                <label for="src-type">Type</label>
+                <select id="src-type">
+                  <option value="person">Person</option>
+                  <option value="organization">Organization</option>
+                  <option value="group">Group</option>
+                  <option value="handle">Handle</option>
+                  <option value="journalist">Journalist</option>
+                  <option value="informant">Informant</option>
+                  <option value="target">Target</option>
+                  <option value="adversary">Adversary</option>
+                  <option value="scammer">Scammer</option>
+                  <option value="asset">Asset</option>
+                  <option value="service">Service</option>
+                  <option value="webservice">Web Service</option>
+                  <option value="device">Device</option>
+                  <option value="academic">Academic</option>
+                  <option value="medical">Medical</option>
+                  <option value="legal">Legal</option>
+                  <option value="lead">Lead</option>
+                  <option value="alias">Alias</option>
+                  <option value="entity">Other</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="src-aliases">Aliases <span class="hint" style="display:inline;">(comma-separated)</span></label>
+                <input type="text" id="src-aliases" placeholder="alt name, nickname, ...">
+              </div>
+            </div>
+            <!-- Addresses: the universal list of anything reachable -->
+            <div class="form-group">
+              <label>Addresses <button type="button" id="src-add-addr" class="btn btn-secondary btn-sm" style="margin-left:8px;">+ Add</button></label>
+              <span class="hint">Any reachable address: social handle, email, phone, URL, RSS feed, IP, Google Doc, pastebin, anything.</span>
+              <div id="src-addr-list" class="src-addr-list"></div>
+            </div>
+            <!-- Location + Tags -->
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="src-location">Location</label>
+                <input type="text" id="src-location" placeholder="City, State, Country — e.g. Washington, DC, US">
+                <span class="hint">Matches with KG entity locations for cross-referencing</span>
+              </div>
+              <div class="form-group flex-1">
+                <label for="src-tags">Tags <span class="hint" style="display:inline;">(comma-separated)</span></label>
+                <input type="text" id="src-tags" placeholder="journalist, priority, tech, ...">
+              </div>
+            </div>
+            <!-- Notes -->
+            <div class="form-group">
+              <label for="src-notes">Notes</label>
+              <textarea id="src-notes" rows="3" placeholder="Notes about this source..."></textarea>
+            </div>
+            <!-- Save / Cancel -->
+            <div class="form-row" style="justify-content:flex-end;gap:8px;">
+              <button id="src-cancel" class="btn btn-secondary btn-sm">Cancel</button>
+              <button id="src-save" class="btn btn-secondary btn-sm" style="color:var(--success);">Save Source</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Source cards grid -->
+      <div id="src-grid" class="src-grid">
+        <div class="src-empty">
+          <p>No sources yet. Click <strong>+ New Source</strong> to add people, handles, feeds, IPs, emails — anything you want to watch or reach.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════ -->
     <!-- TAB: Resources                               -->
     <!-- ═══════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="resources">
@@ -1681,10 +1855,10 @@
         </div>
       </div>
 
-      <!-- Custom sources display (top, hidden if empty) -->
+      <!-- Custom links display (top, hidden if empty) -->
       <div id="res-custom-top" class="res-custom-top" style="display:none;">
         <div class="res-custom-top-header">
-          <h3 class="res-custom-top-title">Your Sources</h3>
+          <h3 class="res-custom-top-title">My Links</h3>
           <a href="#res-custom-add-section" id="res-custom-add-link" class="res-custom-add-link">+ Add more</a>
         </div>
         <div id="res-custom-top-links" class="resource-links"></div>
@@ -1695,9 +1869,9 @@
         <div class="loading-text">Loading resources...</div>
       </div>
 
-      <!-- Custom Sources management (bottom) -->
+      <!-- Custom links management (bottom) -->
       <section id="res-custom-add-section" class="card" style="margin-top:16px;">
-        <h2 class="card-title">Manage Custom Sources</h2>
+        <h2 class="card-title">Manage My Links</h2>
         <div class="card-body">
           <div id="res-custom-sources" style="margin-bottom:12px;"></div>
           <div class="form-row" style="gap:8px;align-items:flex-end;">
@@ -1752,8 +1926,10 @@
     <!-- ═══════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="settings">
 
+      <div class="settings-grid">
+
       <!-- General Settings -->
-      <section class="card">
+      <section class="card settings-wide">
         <h2 class="card-title">General Settings</h2>
         <div class="card-body">
           <div class="form-row">
@@ -1832,7 +2008,7 @@
       </section>
 
       <!-- Forced Private / Incognito Sites -->
-      <section class="card">
+      <section class="card settings-half">
         <h2 class="card-title">Forced Private Sites
           <span class="badge">Privacy</span>
         </h2>
@@ -1861,7 +2037,7 @@
       </section>
 
       <!-- Extended Thinking -->
-      <section class="card">
+      <section class="card settings-half">
         <h2 class="card-title">Extended Thinking
           <span class="badge">Claude + OpenAI + Grok</span>
         </h2>
@@ -1884,7 +2060,7 @@
       </section>
 
       <!-- OpenAI Reasoning -->
-      <section class="card" id="openai-reasoning-card">
+      <section class="card settings-half" id="openai-reasoning-card">
         <h2 class="card-title">OpenAI Reasoning
           <span class="badge">o-series</span>
         </h2>
@@ -1904,7 +2080,7 @@
       </section>
 
       <!-- Security / Vault -->
-      <section class="card">
+      <section class="card settings-half">
         <h2 class="card-title">Security</h2>
         <div class="card-body">
           <p class="info-text">Protect your data with a passcode or password. When enabled, Argus locks on browser restart and encrypts sensitive data (API keys, SSH sessions, cloud credentials) at rest.</p>
@@ -1966,7 +2142,7 @@
       </section>
 
       <!-- Import / Export -->
-      <section class="card">
+      <section class="card settings-half">
         <h2 class="card-title">Import / Export</h2>
         <div class="card-body">
           <p class="info-text">Export your settings, API keys, custom presets, and auto-analyze rules as a JSON file. Import to restore.</p>
@@ -1984,7 +2160,7 @@
       </section>
 
       <!-- Startup / Homepage -->
-      <section class="card">
+      <section class="card settings-half">
         <h2 class="card-title">Startup</h2>
         <div class="card-body">
           <p class="info-text">Set Argus as your browser homepage. Opens all Argus pages as tabs when Firefox starts — Console, KG, Chat, Workbench, Reports, Draft Pad, and Reader.</p>
@@ -1999,7 +2175,7 @@
       </section>
 
       <!-- Reports Settings -->
-      <section class="card">
+      <section class="card settings-half">
         <h2 class="card-title">Reports</h2>
         <div class="card-body">
           <div class="form-row">
@@ -2018,7 +2194,7 @@
       </section>
 
       <!-- Cloud Backup -->
-      <section class="card">
+      <section class="card settings-wide">
         <h2 class="card-title">Backup &amp; Restore</h2>
         <div class="card-body">
           <p class="info-text">Back up all Argus data to connected cloud providers or download locally. Configure providers on the <a href="#" id="cloud-goto-providers" style="color:var(--accent);">Providers tab</a>.</p>
@@ -2101,7 +2277,7 @@
       </section>
 
       <!-- Storage Management -->
-      <section class="card" id="storage-management">
+      <section class="card settings-wide" id="storage-management">
         <h2 class="card-title">Storage Management</h2>
         <div class="card-body">
           <p class="info-text">Manage browser storage used by Argus. Purge old data to free up space.</p>
@@ -2179,7 +2355,7 @@
       </section>
 
       <!-- Keyboard Shortcuts -->
-      <section class="card">
+      <section class="card settings-half">
         <h2 class="card-title">Keyboard Shortcuts</h2>
         <div class="card-body">
           <p class="info-text">These shortcuts are configurable via Firefox's extension shortcut settings.</p>
@@ -2203,7 +2379,7 @@
 
 
       <!-- About -->
-      <section class="card">
+      <section class="card settings-half">
         <h2 class="card-title">About</h2>
         <div class="card-body">
           <p class="info-text">
@@ -2214,6 +2390,8 @@
           </div>
         </div>
       </section>
+
+      </div><!-- /.settings-grid -->
 
     </div>
 

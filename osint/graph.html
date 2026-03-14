@@ -55,6 +55,7 @@
         <button id="zoomReset" title="Reset zoom">Reset</button>
         <button id="zoomOut" title="Zoom out">&minus;</button>
       </div>
+      <button id="overlaySourcesBtn" class="btn-export" title="Cross-reference Sources with KG entities">Sources</button>
       <button id="exportPng" class="btn-export">Export PNG</button>
     </div>
   </header>
@@ -89,6 +90,10 @@
       <button id="sidebarClose" class="sidebar-close">&times;</button>
     </div>
     <div class="sidebar-body">
+      <div class="detail-section hidden" id="detailSourceSection">
+        <h3>Matched Source</h3>
+        <div id="detailSourceInfo" class="source-match-info"></div>
+      </div>
       <div class="detail-row">
         <span class="detail-label">Type</span>
         <span class="detail-value" id="detailType">-</span>

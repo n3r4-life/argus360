@@ -524,4 +524,133 @@ body {
   color: var(--text-primary);
 }
 
+/* ── Sources overlay ── */
+.btn-export.active {
+  background: #00e5ff;
+  color: #111;
+}
+.btn-export.flash {
+  animation: flashBtn 0.8s ease;
+}
+@keyframes flashBtn {
+  0%, 100% { background: var(--accent); }
+  50% { background: #ff5252; }
+}
+
+/* Source match info in sidebar */
+.source-match-info {
+  font-size: 12px;
+  padding: 4px 0;
+}
+/* Source vcard in sidebar */
+.src-vcard {
+  padding: 8px 0;
+}
+.src-vcard-border {
+  border-bottom: 1px solid var(--border, #333);
+  margin-bottom: 6px;
+}
+.src-vcard-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+.src-match-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #00e5ff;
+}
+.src-match-reason {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(0,229,255,0.12);
+  color: #00e5ff;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.src-match-type {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+.src-match-loc {
+  font-size: 11px;
+  color: var(--success);
+  margin-bottom: 4px;
+}
+.src-match-aliases {
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-bottom: 4px;
+}
+.src-match-addrs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-bottom: 4px;
+}
+.src-match-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.src-match-chip-link:hover {
+  background: rgba(0,229,255,0.15);
+  color: #00e5ff;
+}
+.src-chip-type {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: #00e5ff;
+  opacity: 0.7;
+}
+.src-match-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-bottom: 4px;
+}
+.src-match-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(0,229,255,0.15);
+  color: #00e5ff;
+}
+.src-match-notes {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-bottom: 6px;
+  max-height: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.src-match-open {
+  font-size: 11px;
+  padding: 4px 10px;
+  background: #00e5ff;
+  color: #111;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-weight: 600;
+  margin-top: 4px;
+}
+.src-match-open:hover { opacity: 0.85; }
+
 .hidden { display: none !important; }

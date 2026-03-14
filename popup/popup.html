@@ -10,12 +10,18 @@
   <header class="header">
     <button id="settings-toggle" class="header-title-btn" title="Quick Settings">Argus</button>
     <div style="display:flex;gap:3px;align-items:center;">
-      <button id="osint-subscribe" class="feed-subscribe-btn hidden" title="RSS feed detected — click to subscribe!">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5"/>
-        </svg>
-        <span>RSS</span>
-      </button>
+      <div class="feed-btn-wrap" style="position:relative;">
+        <button id="osint-subscribe" class="feed-subscribe-btn hidden" title="RSS feed detected">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5"/>
+          </svg>
+          <span>RSS</span>
+        </button>
+        <div id="feed-action-menu" class="feed-action-menu hidden">
+          <button id="feed-action-subscribe" class="feed-action-item">Subscribe as Feed</button>
+          <button id="feed-action-source" class="feed-action-item">Add as Source</button>
+        </div>
+      </div>
       <button id="toggle-redirect" class="icon-btn" title="Archive Redirect">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
@@ -398,19 +404,42 @@
 
     <!-- Quick Search bar -->
     <div class="quick-search-bar">
+      <div class="search-category-row">
+        <button class="search-cat-chip active" data-cat="general" title="General web search engines">General</button>
+        <button class="search-cat-chip" data-cat="research" title="Academic papers, journals, preprints">Research</button>
+        <button class="search-cat-chip" data-cat="medical" title="Biomedical and life science literature">Medical</button>
+        <button class="search-cat-chip" data-cat="custom" title="Your custom search engines">Custom</button>
+        <button class="search-cat-chip" data-cat="all" title="Show all engines">All</button>
+        <button class="search-cat-add-btn" id="search-cat-add" title="Add custom search engine">+</button>
+      </div>
+      <div id="search-custom-form" class="search-custom-form hidden">
+        <input type="text" id="search-custom-name" class="search-custom-input" placeholder="Name (e.g. Shodan)">
+        <input type="text" id="search-custom-url" class="search-custom-input search-custom-input-wide" placeholder="URL with {q} for query (e.g. https://shodan.io/search?query={q})">
+        <button id="search-custom-save" class="btn btn-secondary btn-sm">Add</button>
+        <label class="search-custom-source-label" title="Also save as a Source (webservice)">
+          <input type="checkbox" id="search-custom-as-source" checked> Source
+        </label>
+        <button id="search-custom-cancel" class="btn btn-secondary btn-sm" style="color:var(--text-muted);">Cancel</button>
+      </div>
       <div class="quick-search-row">
         <select id="search-engine" class="search-engine-select" title="Search engine">
-          <option value="duckduckgo">DuckDuckGo</option>
-          <option value="startpage">Startpage</option>
-          <option value="brave">Brave</option>
-          <option value="searx">SearX</option>
-          <option value="mojeek">Mojeek</option>
-          <option value="google">Google</option>
-          <option value="dogpile">Dogpile</option>
-          <option value="yandex">Yandex</option>
-          <option value="bing">Bing</option>
+          <option value="duckduckgo" data-cat="general">DuckDuckGo</option>
+          <option value="startpage" data-cat="general">Startpage</option>
+          <option value="brave" data-cat="general">Brave</option>
+          <option value="searx" data-cat="general">SearX</option>
+          <option value="mojeek" data-cat="general">Mojeek</option>
+          <option value="google" data-cat="general">Google</option>
+          <option value="dogpile" data-cat="general">Dogpile</option>
+          <option value="yandex" data-cat="general">Yandex</option>
+          <option value="bing" data-cat="general">Bing</option>
+          <option value="scholar" data-cat="research">Google Scholar</option>
+          <option value="semantic" data-cat="research">Semantic Scholar</option>
+          <option value="jstor" data-cat="research">JSTOR</option>
+          <option value="arxiv" data-cat="research">arXiv</option>
+          <option value="pubmed" data-cat="medical">PubMed</option>
+          <option value="core" data-cat="research">CORE</option>
         </select>
-        <input type="text" id="search-query" class="search-query-input" placeholder="Search...">
+        <input type="text" id="search-query" class="search-query-input" placeholder="Search... then analyze">
         <button id="search-go" class="btn-search-go" title="Search">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -432,16 +461,21 @@
         </select>
       </div>
       <div id="multi-engine-row" class="multi-engine-row hidden">
-        <span class="multi-engine-label">Engines:</span>
-        <label class="me-chip"><input type="checkbox" value="duckduckgo" checked>DDG</label>
-        <label class="me-chip"><input type="checkbox" value="startpage">Start</label>
-        <label class="me-chip"><input type="checkbox" value="brave">Brave</label>
-        <label class="me-chip"><input type="checkbox" value="searx">SearX</label>
-        <label class="me-chip"><input type="checkbox" value="mojeek">Mojeek</label>
-        <label class="me-chip"><input type="checkbox" value="google">Google</label>
-        <label class="me-chip"><input type="checkbox" value="dogpile">Dogpile</label>
-        <label class="me-chip"><input type="checkbox" value="yandex">Yandex</label>
-        <label class="me-chip"><input type="checkbox" value="bing">Bing</label>
+        <label class="me-chip" data-cat="general"><input type="checkbox" value="duckduckgo" checked>DDG</label>
+        <label class="me-chip" data-cat="general"><input type="checkbox" value="startpage">Start</label>
+        <label class="me-chip" data-cat="general"><input type="checkbox" value="brave">Brave</label>
+        <label class="me-chip" data-cat="general"><input type="checkbox" value="searx">SearX</label>
+        <label class="me-chip" data-cat="general"><input type="checkbox" value="mojeek">Mojeek</label>
+        <label class="me-chip" data-cat="general"><input type="checkbox" value="google">Google</label>
+        <label class="me-chip" data-cat="general"><input type="checkbox" value="dogpile">Dogpile</label>
+        <label class="me-chip" data-cat="general"><input type="checkbox" value="yandex">Yandex</label>
+        <label class="me-chip" data-cat="general"><input type="checkbox" value="bing">Bing</label>
+        <label class="me-chip" data-cat="research"><input type="checkbox" value="scholar">Scholar</label>
+        <label class="me-chip" data-cat="research"><input type="checkbox" value="semantic">Semantic</label>
+        <label class="me-chip" data-cat="research"><input type="checkbox" value="jstor">JSTOR</label>
+        <label class="me-chip" data-cat="research"><input type="checkbox" value="arxiv">arXiv</label>
+        <label class="me-chip" data-cat="medical"><input type="checkbox" value="pubmed">PubMed</label>
+        <label class="me-chip" data-cat="research"><input type="checkbox" value="core">CORE</label>
       </div>
       <div class="search-prompts-row">
         <button class="search-prompt-chip" data-prompt="" title="Plain search">plain</button>

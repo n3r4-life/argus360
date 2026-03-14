@@ -97,6 +97,19 @@
 
   let graphMode = 'project'; // 'project' or 'global'
 
+  // Sources overlay — cross-reference Sources data with KG entities
+  let sourcesOverlayActive = false;
+  let sourceMatches = new Map();  // nodeId → [{source, reason}]
+  const SOURCE_MATCH_COLOR = '#00e5ff'; // cyan ring for matched nodes
+  const SOURCE_TYPE_COLORS = {
+    person: '#e94560', organization: '#64b5f6', group: '#ab47bc',
+    handle: '#26c6da', journalist: '#ffa726', informant: '#66bb6a',
+    target: '#ef5350', adversary: '#f44336', scammer: '#ff5722', asset: '#42a5f5',
+    service: '#78909c', webservice: '#7e57c2', device: '#8d6e63',
+    academic: '#5c6bc0', medical: '#26a69a', legal: '#8d6e63',
+    lead: '#ffca28', alias: '#bdbdbd', entity: '#90a4ae',
+  };
+
   /* ---- Data loading ---- */
   function loadData() {
     const params = new URLSearchParams(window.location.search);
@@ -348,7 +361,10 @@
     runSimulation();
 
     // Build comprehensive graph context for AI chat
-    // Group nodes by type for structured context
+    buildAndInitChat(data);
+  }
+
+  function buildGraphSummary() {
     const byType = {};
     for (const n of nodes) {
       const t = n.type || "entity";
@@ -357,22 +373,95 @@
     }
     let nodeSummary = "";
     for (const [type, items] of Object.entries(byType)) {
-      // Sort by mention count descending within each type
       items.sort((a, b) => (b.count || 1) - (a.count || 1));
       nodeSummary += `\n### ${type} (${items.length})\n`;
-      nodeSummary += items.map(n =>
-        `- ${n.label || n.name} (${n.count || 1} mentions)`
-      ).join("\n");
+      nodeSummary += items.map(n => `- ${n.label || n.name} (${n.count || 1} mentions)`).join("\n");
     }
-    // Include top connections sorted by weight
     const sortedEdges = [...edges].sort((a, b) => (b.weight || 1) - (a.weight || 1));
     const edgeSummary = sortedEdges.slice(0, 200).map(e =>
       `- ${e.sourceNode?.label || e.source} ↔ ${e.targetNode?.label || e.target} (weight: ${e.weight || 1})`
     ).join("\n");
+    return { nodeSummary, edgeSummary };
+  }
+
+  function buildSourceContext() {
+    if (sourceMatches.size === 0) return "";
+    let srcCtx = "\n\n## Matched Sources from User's Source Directory\n";
+    srcCtx += "The following entities in the graph match entries in the user's personal sources/contacts database. Use this information to enrich your analysis — note locations, aliases, tags, and relationships the user has recorded:\n";
+    for (const [nodeId, matches] of sourceMatches) {
+      const node = nodes.find(n => n.id === nodeId);
+      if (!node) continue;
+      for (const m of matches) {
+        const s = m.source;
+        srcCtx += `\n### ${node.label} → Source: "${s.name}" (type: ${s.type}, match: ${m.reason})`;
+        if (s.location) srcCtx += `\n  Location: ${s.location}`;
+        if (s.aliases && s.aliases.length) srcCtx += `\n  Aliases: ${s.aliases.join(", ")}`;
+        if (s.tags && s.tags.length) srcCtx += `\n  Tags: ${s.tags.join(", ")}`;
+        if (s.addresses && s.addresses.length) {
+          srcCtx += `\n  Addresses: ${s.addresses.map(a => `${a.type || ""}:${a.value}`).join(", ")}`;
+        }
+        if (s.notes) srcCtx += `\n  Notes: ${s.notes}`;
+      }
+    }
+    return srcCtx;
+  }
+
+  async function buildAndInitChat(data) {
+    // Eagerly load sources and match against graph nodes
+    try {
+      const resp = await browser.runtime.sendMessage({ action: 'getSources' });
+      const sources = resp?.sources || [];
+      if (sources.length) {
+        const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const sourceNameMap = new Map();
+        for (const src of sources) {
+          const keys = [norm(src.name), ...(src.aliases || []).map(norm)];
+          for (const a of (src.addresses || [])) { if (a.value) keys.push(norm(a.value)); }
+          for (const k of keys) { if (k.length > 1) sourceNameMap.set(k, src); }
+        }
+        const sourceLocationMap = new Map();
+        for (const src of sources) {
+          if (src.location) {
+            const parts = src.location.split(/[,;]+/).map(p => norm(p)).filter(p => p.length > 2);
+            for (const p of parts) sourceLocationMap.set(p, src);
+            sourceLocationMap.set(norm(src.location), src);
+          }
+        }
+        function addMatchEager(nodeId, source, reason) {
+          if (!sourceMatches.has(nodeId)) sourceMatches.set(nodeId, []);
+          const arr = sourceMatches.get(nodeId);
+          if (!arr.some(m => m.source.id === source.id)) arr.push({ source, reason });
+        }
+        for (const node of nodes) {
+          const nodeNorm = norm(node.label);
+          if (sourceNameMap.has(nodeNorm)) {
+            const src = sourceNameMap.get(nodeNorm);
+            const isAddr = (src.addresses || []).some(a => norm(a.value) === nodeNorm);
+            addMatchEager(node.id, src, isAddr ? 'address' : 'name');
+          }
+          for (const alias of (node.aliases || []).map(norm)) {
+            if (sourceNameMap.has(alias)) addMatchEager(node.id, sourceNameMap.get(alias), 'alias');
+          }
+          for (const src of sources) {
+            for (const sa of (src.aliases || [])) { if (norm(sa) === nodeNorm) addMatchEager(node.id, src, 'alias'); }
+            for (const a of (src.addresses || [])) { if (norm(a.value) === nodeNorm) addMatchEager(node.id, src, 'address'); }
+          }
+          if (node.type === 'location') {
+            if (sourceLocationMap.has(nodeNorm)) addMatchEager(node.id, sourceLocationMap.get(nodeNorm), 'location');
+            for (const [locKey, src] of sourceLocationMap) {
+              if (nodeNorm.includes(locKey) || locKey.includes(nodeNorm)) addMatchEager(node.id, src, 'location');
+            }
+          }
+        }
+      }
+    } catch { /* sources unavailable */ }
+
+    const { nodeSummary, edgeSummary } = buildGraphSummary();
+    const srcCtx = buildSourceContext();
     ArgusChat.init({
       container: document.getElementById("argus-chat-container"),
       contextType: "Connection Graph",
-      contextData: `Complete entity graph for "${data.projectName || "Unknown"}" — ${nodes.length} entities, ${edges.length} connections.\n\n## All Entities${nodeSummary}\n\n## Top Connections (by weight)\n${edgeSummary}`,
+      contextData: `Complete entity graph for "${data.projectName || "Unknown"}" — ${nodes.length} entities, ${edges.length} connections.\n\n## All Entities${nodeSummary}\n\n## Top Connections (by weight)\n${edgeSummary}${srcCtx}`,
       pageTitle: data.projectName
     });
   }
@@ -501,11 +590,28 @@
       ctx.fillStyle = dimmed ? color + '44' : color;
       ctx.fill();
 
+      // Source match outer ring (drawn before selection ring so it's behind)
+      if (sourcesOverlayActive && sourceMatches.has(n.id)) {
+        ctx.strokeStyle = SOURCE_MATCH_COLOR;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        // Second arc for glow effect
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r + 4, 0, Math.PI * 2);
+        ctx.strokeStyle = SOURCE_MATCH_COLOR + '55';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
       if (isSelected) {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
         ctx.strokeStyle = '#fff';
         ctx.lineWidth = 2.5;
         ctx.stroke();
       } else if (isHovered) {
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(255,255,255,0.5)';
         ctx.lineWidth = 1.5;
         ctx.stroke();
@@ -620,8 +726,70 @@
       edgeList.appendChild(li);
     });
 
+    // Source match info — show all matched sources as vcards
+    const srcSection = document.getElementById('detailSourceSection');
+    const srcInfo = document.getElementById('detailSourceInfo');
+    if (sourcesOverlayActive && sourceMatches.has(node.id)) {
+      const matches = sourceMatches.get(node.id);
+      srcSection.classList.remove('hidden');
+      const heading = srcSection.querySelector('h3');
+      if (heading) heading.textContent = matches.length === 1 ? 'Matched Source' : `Matched Sources (${matches.length})`;
+
+      let html = '';
+      matches.forEach((m, idx) => {
+        const src = m.source;
+        const reason = m.reason;
+        const reasonLabels = { name: 'Name match', alias: 'Alias match', address: 'Address match', location: 'Location match' };
+        const tColor = SOURCE_TYPE_COLORS[src.type] || SOURCE_TYPE_COLORS.entity;
+        html += `<div class="src-vcard${matches.length > 1 && idx < matches.length - 1 ? ' src-vcard-border' : ''}" style="border-left:3px solid ${tColor};padding-left:8px;">`;
+        html += `<div class="src-vcard-header">`;
+        html += `<div class="src-match-name" style="color:${tColor};">${escHtml(src.name)}</div>`;
+        html += `<span class="src-match-reason">${reasonLabels[reason] || reason}</span>`;
+        html += `</div>`;
+        if (src.type) html += `<div class="src-match-type" style="color:${tColor};">${escHtml(src.type)}</div>`;
+        if (src.location) html += `<div class="src-match-loc">${escHtml(src.location)}</div>`;
+        if (src.aliases?.length) html += `<div class="src-match-aliases">aka ${escHtml(src.aliases.join(', '))}</div>`;
+        if (src.addresses?.length) {
+          html += '<div class="src-match-addrs">';
+          for (const a of src.addresses) {
+            const typeLabel = a.type ? a.type.toUpperCase() : '';
+            const isUrl = /^https?:\/\//.test(a.value);
+            if (isUrl) {
+              html += `<a class="src-match-chip src-match-chip-link" href="${escHtml(a.value)}" target="_blank" rel="noopener" title="${escHtml(a.value)}">`;
+            } else {
+              html += `<span class="src-match-chip" title="${escHtml(a.value)}">`;
+            }
+            if (typeLabel) html += `<span class="src-chip-type">${escHtml(typeLabel)}</span>`;
+            html += escHtml(a.label || a.value);
+            html += isUrl ? '</a>' : '</span>';
+          }
+          html += '</div>';
+        }
+        if (src.tags?.length) {
+          html += '<div class="src-match-tags">';
+          for (const t of src.tags) html += `<span class="src-match-tag">${escHtml(t)}</span>`;
+          html += '</div>';
+        }
+        if (src.notes) html += `<div class="src-match-notes">${escHtml(src.notes)}</div>`;
+        html += `<button class="src-match-open" data-src-id="${escHtml(src.id)}">Open in Sources</button>`;
+        html += '</div>';
+      });
+      srcInfo.innerHTML = html;
+      srcInfo.querySelectorAll('.src-match-open').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const srcId = btn.dataset.srcId;
+          const base = browser.runtime.getURL('options/options.html');
+          window.location.href = srcId ? `${base}?highlight=${encodeURIComponent(srcId)}#sources` : `${base}#sources`;
+        });
+      });
+    } else {
+      srcSection.classList.add('hidden');
+    }
+
     sidebar.classList.add('open');
   }
+
+  function escHtml(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
   function hideSidebar() {
     document.getElementById('sidebar').classList.remove('open');
@@ -665,6 +833,7 @@
       camera = { x: 0, y: 0, zoom: 1 };
     });
     document.getElementById('exportPng').addEventListener('click', exportPng);
+    document.getElementById('overlaySourcesBtn').addEventListener('click', toggleSourcesOverlay);
 
     // Filter checkboxes
     document.querySelectorAll('.filter-checkbox input').forEach(cb => {
@@ -936,6 +1105,143 @@
     link.download = 'connection-graph.png';
     link.href = canvas.toDataURL('image/png');
     link.click();
+  }
+
+  /* ---- Sources cross-reference overlay ---- */
+  async function toggleSourcesOverlay() {
+    const btn = document.getElementById('overlaySourcesBtn');
+    if (sourcesOverlayActive) {
+      // Turn off
+      sourcesOverlayActive = false;
+      sourceMatches.clear();
+      btn.classList.remove('active');
+      btn.title = 'Cross-reference Sources with KG entities';
+      return;
+    }
+
+    // Fetch sources
+    let sources = [];
+    try {
+      const resp = await browser.runtime.sendMessage({ action: 'getSources' });
+      sources = resp?.sources || [];
+    } catch { /* no sources */ }
+
+    if (!sources.length) {
+      btn.title = 'No sources found — add some on the Sources tab';
+      btn.classList.add('flash');
+      setTimeout(() => btn.classList.remove('flash'), 800);
+      return;
+    }
+
+    // Build lookup structures from sources
+    sourceMatches.clear();
+
+    // Normalize for matching
+    const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // Build sets of source names, aliases, and address values for fast lookup
+    const sourceNameMap = new Map(); // normalized name/alias → source
+    for (const src of sources) {
+      const keys = [norm(src.name), ...(src.aliases || []).map(norm)];
+      // Also include address handles as potential name matches
+      for (const a of (src.addresses || [])) {
+        if (a.value) keys.push(norm(a.value));
+      }
+      for (const k of keys) {
+        if (k.length > 1) sourceNameMap.set(k, src);
+      }
+    }
+
+    // Build location lookup
+    const sourceLocationMap = new Map(); // normalized location → source
+    for (const src of sources) {
+      if (src.location) {
+        // Split location into parts for partial matching (e.g. "Washington" matches "Washington, DC, US")
+        const parts = src.location.split(/[,;]+/).map(p => norm(p)).filter(p => p.length > 2);
+        for (const p of parts) sourceLocationMap.set(p, src);
+        sourceLocationMap.set(norm(src.location), src);
+      }
+    }
+
+    // Helper: add a match entry (supports multiple sources per node)
+    function addMatch(nodeId, source, reason) {
+      if (!sourceMatches.has(nodeId)) sourceMatches.set(nodeId, []);
+      const arr = sourceMatches.get(nodeId);
+      // Avoid duplicate source entries for the same node
+      if (!arr.some(m => m.source.id === source.id)) {
+        arr.push({ source, reason });
+      }
+    }
+
+    // Match against KG nodes
+    for (const node of nodes) {
+      const nodeNorm = norm(node.label);
+      const nodeAliases = (node.aliases || []).map(norm);
+
+      // 1. Name match
+      if (sourceNameMap.has(nodeNorm)) {
+        const src = sourceNameMap.get(nodeNorm);
+        const isAddr = (src.addresses || []).some(a => norm(a.value) === nodeNorm);
+        addMatch(node.id, src, isAddr ? 'address' : 'name');
+      }
+
+      // 2. Node alias matches
+      for (const alias of nodeAliases) {
+        if (sourceNameMap.has(alias)) {
+          addMatch(node.id, sourceNameMap.get(alias), 'alias');
+        }
+      }
+
+      // 3. Check all sources for additional name/alias matches against this node
+      for (const src of sources) {
+        // Source aliases matching node label
+        for (const sa of (src.aliases || [])) {
+          if (norm(sa) === nodeNorm) addMatch(node.id, src, 'alias');
+        }
+        // Source addresses matching node label
+        for (const a of (src.addresses || [])) {
+          if (norm(a.value) === nodeNorm) addMatch(node.id, src, 'address');
+        }
+      }
+
+      // 4. Location match (only for location-type nodes)
+      if (node.type === 'location') {
+        if (sourceLocationMap.has(nodeNorm)) {
+          addMatch(node.id, sourceLocationMap.get(nodeNorm), 'location');
+        }
+        for (const [locKey, src] of sourceLocationMap) {
+          if (nodeNorm.includes(locKey) || locKey.includes(nodeNorm)) {
+            addMatch(node.id, src, 'location');
+          }
+        }
+      }
+    }
+
+    sourcesOverlayActive = true;
+    btn.classList.add('active');
+    // Count unique sources matched
+    const uniqueSources = new Set();
+    for (const matches of sourceMatches.values()) {
+      for (const m of matches) uniqueSources.add(m.source.id);
+    }
+    btn.title = `${sourceMatches.size} node${sourceMatches.size !== 1 ? 's' : ''} matched across ${uniqueSources.size} source${uniqueSources.size !== 1 ? 's' : ''} — click to turn off`;
+
+    // Re-init chat with enriched source context
+    if (sourceMatches.size > 0) {
+      const { nodeSummary, edgeSummary } = buildGraphSummary();
+      const srcCtx = buildSourceContext();
+      ArgusChat.init({
+        container: document.getElementById("argus-chat-container"),
+        contextType: "Connection Graph",
+        contextData: `Complete entity graph for "${data.projectName || "Unknown"}" — ${nodes.length} entities, ${edges.length} connections.\n\n## All Entities${nodeSummary}\n\n## Top Connections (by weight)\n${edgeSummary}${srcCtx}`,
+        pageTitle: data.projectName
+      });
+    }
+
+    // Update sidebar if a matched node is currently selected
+    if (selectedNode && sourceMatches.has(selectedNode.id)) {
+      showSidebar(selectedNode);
+    }
   }
 
   /* ---- Canvas setup ---- */

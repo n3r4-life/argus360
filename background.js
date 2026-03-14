@@ -1565,6 +1565,12 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "feedRouteRescan") return handleFeedRouteRescan();
   if (message.action === "analyzeBookmarks") return handleAnalyzeBookmarks(message);
   // Page Tracker
+  // Sources
+  if (message.action === "getSources") return ArgusDB.Sources.getAll().then(sources => ({ success: true, sources }));
+  if (message.action === "saveSource") return ArgusDB.Sources.save(message.source).then(source => ({ success: true, source }));
+  if (message.action === "deleteSource") return ArgusDB.Sources.remove(message.sourceId).then(() => ({ success: true }));
+  if (message.action === "importSources") return ArgusDB.Sources.saveMany(message.sources).then(() => ({ success: true }));
+  if (message.action === "exportSources") return ArgusDB.Sources.getAll().then(sources => ({ success: true, sources }));
   if (message.action === "getTrackerPages") return ArgusDB.PageTracker.getAll().then(pages => ({ success: true, pages }));
   if (message.action === "searchTrackerPages") return ArgusDB.PageTracker.search(message.query).then(pages => ({ success: true, pages }));
   if (message.action === "deleteTrackerPage") return ArgusDB.PageTracker.remove(message.id).then(() => ({ success: true }));

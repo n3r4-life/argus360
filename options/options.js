@@ -625,16 +625,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 // ── Tab Badges ──
 async function updateTabBadges() {
   const badges = {
-    bookmarks: 0, projects: 0, monitors: 0, feeds: 0, osint: 0, automation: 0
+    bookmarks: 0, projects: 0, monitors: 0, feeds: 0, osint: 0, automation: 0, sources: 0
   };
   try {
-    const [bkResp, prResp, moResp, fdResp, kgStats, auResp] = await Promise.all([
+    const [bkResp, prResp, moResp, fdResp, kgStats, auResp, srcResp] = await Promise.all([
       browser.runtime.sendMessage({ action: "getBookmarks" }),
       browser.runtime.sendMessage({ action: "getProjects" }),
       browser.runtime.sendMessage({ action: "getMonitors" }),
       browser.runtime.sendMessage({ action: "getFeeds" }),
       browser.runtime.sendMessage({ action: "getKGStats" }).catch(() => null),
-      browser.runtime.sendMessage({ action: "getAutomations" }).catch(() => null)
+      browser.runtime.sendMessage({ action: "getAutomations" }).catch(() => null),
+      browser.runtime.sendMessage({ action: "getSources" }).catch(() => null)
     ]);
     if (bkResp && bkResp.total != null) badges.bookmarks = bkResp.total;
     if (prResp && Array.isArray(prResp.projects)) badges.projects = prResp.projects.length;
@@ -642,6 +643,7 @@ async function updateTabBadges() {
     if (fdResp && Array.isArray(fdResp.feeds)) badges.feeds = fdResp.feeds.length;
     if (kgStats && typeof kgStats.nodeCount === "number") badges.osint = kgStats.nodeCount;
     if (auResp && Array.isArray(auResp.automations)) badges.automation = auResp.automations.length;
+    if (srcResp && Array.isArray(srcResp.sources)) badges.sources = srcResp.sources.length;
   } catch (e) { console.warn("[Badges] Failed to fetch counts:", e); }
 
   for (const [tab, count] of Object.entries(badges)) {
@@ -734,8 +736,21 @@ function initResourcesTab() {
     }
   }
 
+  // ── Per-card custom links storage ──
+  let cardLinksCache = {}; // { categoryId: [{url, label, desc}] }
+
+  async function loadCardLinks() {
+    const { resourceCardLinks } = await browser.storage.local.get({ resourceCardLinks: {} });
+    cardLinksCache = resourceCardLinks || {};
+  }
+
+  async function saveCardLinks() {
+    await browser.storage.local.set({ resourceCardLinks: cardLinksCache });
+  }
+
   // ── Render the dashboard grid ──
-  function renderGrid(data) {
+  async function renderGrid(data) {
+    await loadCardLinks();
     grid.textContent = "";
     if (!data.categories || !data.categories.length) {
       const empty = document.createElement("p");
@@ -745,7 +760,14 @@ function initResourcesTab() {
       return;
     }
 
+    // Store data ref so we can re-render after card link changes
+    renderGrid._data = data;
+
     for (const cat of data.categories) {
+      const catId = cat.id || cat.title.toLowerCase().replace(/\W+/g, "-");
+      const userLinks = cardLinksCache[catId] || [];
+      const totalLinks = cat.links.length + userLinks.length;
+
       const card = document.createElement("div");
       card.className = "res-card";
 
@@ -770,8 +792,8 @@ function initResourcesTab() {
       header.appendChild(titleWrap);
       const count = document.createElement("span");
       count.className = "res-card-count";
-      count.textContent = cat.links.length;
-      count.title = cat.links.length + " links";
+      count.textContent = totalLinks;
+      count.title = totalLinks + " links" + (userLinks.length ? ` (${userLinks.length} yours)` : "");
       header.appendChild(count);
       card.appendChild(header);
 
@@ -803,7 +825,121 @@ function initResourcesTab() {
         }
         list.appendChild(item);
       }
+
+      // Per-card user links
+      const userLinkEls = [];
+      for (let i = 0; i < userLinks.length; i++) {
+        const ulink = userLinks[i];
+        const item = document.createElement("a");
+        item.href = ulink.url;
+        item.target = "_blank";
+        item.className = "res-link-item res-link-user";
+        item.dataset.userIdx = i;
+        const name = document.createElement("span");
+        name.className = "res-link-name";
+        name.textContent = ulink.label || ulink.url;
+        item.appendChild(name);
+        if (ulink.desc) {
+          const desc = document.createElement("span");
+          desc.className = "res-link-desc";
+          desc.textContent = ulink.desc;
+          item.appendChild(desc);
+        }
+        // Checkbox for edit mode (hidden by default)
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.className = "res-link-edit-cb hidden";
+        cb.addEventListener("click", (e) => e.stopPropagation());
+        item.prepend(cb);
+        userLinkEls.push(item);
+        list.appendChild(item);
+      }
       card.appendChild(list);
+
+      let editingIdx = -1; // track which link is being edited
+      function enterSelectMode() {
+        card.classList.add("res-card-editing");
+        userLinkEls.forEach(el => {
+          el.classList.add("res-link-edit-active");
+          const cb = el.querySelector(".res-link-edit-cb");
+          cb.classList.remove("hidden");
+          cb.checked = false;
+          el.addEventListener("click", preventNav);
+        });
+        addBtn.classList.add("hidden");
+        removeBtn.classList.add("hidden");
+        editBtn.classList.add("hidden");
+        addForm.classList.add("hidden");
+        doneBtn.classList.remove("hidden");
+        editCheckedBtn.classList.remove("hidden");
+        cancelEditBtn.classList.remove("hidden");
+        editSaveBtn.classList.add("hidden");
+      }
+      function exitSelectMode(action) {
+        if (action === "remove") {
+          const toRemove = [];
+          userLinkEls.forEach(el => {
+            if (el.querySelector(".res-link-edit-cb").checked) {
+              toRemove.push(parseInt(el.dataset.userIdx));
+            }
+          });
+          if (toRemove.length) {
+            toRemove.sort((a, b) => b - a);
+            for (const idx of toRemove) {
+              cardLinksCache[catId].splice(idx, 1);
+            }
+            if (!cardLinksCache[catId].length) delete cardLinksCache[catId];
+            saveCardLinks();
+            renderGrid(renderGrid._data);
+            return;
+          }
+        } else if (action === "edit") {
+          // Find the single checked item to edit
+          const checked = [];
+          userLinkEls.forEach(el => {
+            if (el.querySelector(".res-link-edit-cb").checked) {
+              checked.push(parseInt(el.dataset.userIdx));
+            }
+          });
+          if (checked.length === 1) {
+            editingIdx = checked[0];
+            const link = cardLinksCache[catId][editingIdx];
+            addForm.querySelector("[data-field='url']").value = link.url;
+            addForm.querySelector("[data-field='label']").value = link.label || "";
+            addForm.querySelector("[data-field='desc']").value = link.desc || "";
+            // Exit select mode visuals, then show edit form
+            resetSelectVisuals();
+            addBtn.classList.add("hidden");
+            editBtn.classList.add("hidden");
+            removeBtn.classList.add("hidden");
+            addForm.classList.remove("hidden");
+            editSaveBtn.classList.remove("hidden");
+            addForm.querySelector(".res-card-add-save").classList.add("hidden");
+            addForm.querySelector("[data-field='url']").focus();
+            return;
+          }
+        }
+        resetSelectVisuals();
+      }
+      function resetSelectVisuals() {
+        card.classList.remove("res-card-editing");
+        userLinkEls.forEach(el => {
+          el.classList.remove("res-link-edit-active");
+          const cb = el.querySelector(".res-link-edit-cb");
+          cb.classList.add("hidden");
+          cb.checked = false;
+          el.removeEventListener("click", preventNav);
+        });
+        doneBtn.classList.add("hidden");
+        editCheckedBtn.classList.add("hidden");
+        cancelEditBtn.classList.add("hidden");
+        editSaveBtn.classList.add("hidden");
+        addBtn.classList.remove("hidden");
+        addForm.querySelector(".res-card-add-save").classList.remove("hidden");
+        if (userLinks.length) { removeBtn.classList.remove("hidden"); editBtn.classList.remove("hidden"); }
+        editingIdx = -1;
+      }
+      function preventNav(e) { e.preventDefault(); e.stopPropagation(); }
 
       // Master list link (e.g. state portals CSV)
       if (cat.masterList) {
@@ -814,6 +950,109 @@ function initResourcesTab() {
         ml.textContent = "View master data list (CSV)";
         card.appendChild(ml);
       }
+
+      // Per-card add link footer
+      const footer = document.createElement("div");
+      footer.className = "res-card-add-footer";
+      const addBtn = document.createElement("button");
+      addBtn.className = "res-card-add-btn";
+      addBtn.textContent = "+ Add";
+      const editBtn = document.createElement("button");
+      editBtn.className = "res-card-remove-btn" + (userLinks.length ? "" : " hidden");
+      editBtn.textContent = "Edit";
+      editBtn.addEventListener("click", () => enterSelectMode());
+      const removeBtn = document.createElement("button");
+      removeBtn.className = "res-card-remove-btn" + (userLinks.length ? "" : " hidden");
+      removeBtn.textContent = "Remove";
+      removeBtn.addEventListener("click", () => enterSelectMode());
+      const doneBtn = document.createElement("button");
+      doneBtn.className = "res-card-done-btn hidden";
+      doneBtn.textContent = "Remove checked";
+      doneBtn.addEventListener("click", () => exitSelectMode("remove"));
+      const editCheckedBtn = document.createElement("button");
+      editCheckedBtn.className = "res-card-cancel-edit-btn hidden";
+      editCheckedBtn.textContent = "Edit checked";
+      editCheckedBtn.addEventListener("click", () => exitSelectMode("edit"));
+      const editSaveBtn = document.createElement("button");
+      editSaveBtn.className = "res-card-done-btn hidden";
+      editSaveBtn.textContent = "Save edit";
+      editSaveBtn.style.color = "var(--accent)";
+      editSaveBtn.style.borderColor = "rgba(233,69,96,0.3)";
+      const cancelEditBtn = document.createElement("button");
+      cancelEditBtn.className = "res-card-cancel-edit-btn hidden";
+      cancelEditBtn.textContent = "Cancel";
+      cancelEditBtn.addEventListener("click", () => exitSelectMode("cancel"));
+      const addForm = document.createElement("div");
+      addForm.className = "res-card-add-form hidden";
+      addForm.innerHTML = `
+        <input type="text" class="res-card-add-input" placeholder="URL" data-field="url">
+        <input type="text" class="res-card-add-input" placeholder="Label" data-field="label">
+        <input type="text" class="res-card-add-input res-card-add-input-wide" placeholder="Description (optional)" data-field="desc">
+        <button class="btn btn-secondary btn-sm res-card-add-save">Add</button>
+        <button class="btn btn-secondary btn-sm res-card-add-cancel">Cancel</button>
+      `;
+      addBtn.addEventListener("click", () => {
+        editingIdx = -1;
+        addForm.classList.remove("hidden");
+        addForm.querySelector(".res-card-add-save").classList.remove("hidden");
+        editSaveBtn.classList.add("hidden");
+        addBtn.classList.add("hidden");
+        removeBtn.classList.add("hidden");
+        editBtn.classList.add("hidden");
+        addForm.querySelector("[data-field='url']").focus();
+      });
+      addForm.querySelector(".res-card-add-cancel").addEventListener("click", () => {
+        addForm.classList.add("hidden");
+        addForm.querySelectorAll("input").forEach(inp => { inp.value = ""; });
+        resetSelectVisuals();
+      });
+      addForm.querySelector(".res-card-add-save").addEventListener("click", async () => {
+        let url = addForm.querySelector("[data-field='url']").value.trim();
+        const label = addForm.querySelector("[data-field='label']").value.trim();
+        const desc = addForm.querySelector("[data-field='desc']").value.trim();
+        if (!url) return;
+        if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+        const displayLabel = label || new URL(url).hostname;
+        if (!cardLinksCache[catId]) cardLinksCache[catId] = [];
+        cardLinksCache[catId].push({ url, label: displayLabel, desc });
+        await saveCardLinks();
+        // Also save as a Source (webservice)
+        try {
+          await browser.runtime.sendMessage({
+            action: "saveSource",
+            source: {
+              name: displayLabel,
+              type: "webservice",
+              aliases: [],
+              addresses: [{ type: "website", value: url, label: cat.title + " resource" }],
+              tags: ["resource", cat.id || cat.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")],
+              location: "",
+              notes: desc ? `${cat.title}: ${desc}` : `Added from ${cat.title} resource card`
+            }
+          });
+        } catch { /* source save is best-effort */ }
+        renderGrid(renderGrid._data);
+      });
+      editSaveBtn.addEventListener("click", async () => {
+        if (editingIdx < 0 || !cardLinksCache[catId]) return;
+        let url = addForm.querySelector("[data-field='url']").value.trim();
+        const label = addForm.querySelector("[data-field='label']").value.trim();
+        const desc = addForm.querySelector("[data-field='desc']").value.trim();
+        if (!url) return;
+        if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+        cardLinksCache[catId][editingIdx] = { url, label: label || new URL(url).hostname, desc };
+        await saveCardLinks();
+        renderGrid(renderGrid._data);
+      });
+      footer.appendChild(addBtn);
+      footer.appendChild(editBtn);
+      footer.appendChild(removeBtn);
+      footer.appendChild(doneBtn);
+      footer.appendChild(editCheckedBtn);
+      footer.appendChild(cancelEditBtn);
+      footer.appendChild(editSaveBtn);
+      footer.appendChild(addForm);
+      card.appendChild(footer);
 
       grid.appendChild(card);
     }
@@ -2871,6 +3110,10 @@ function attachListeners() {
   renderFeeds();
   checkDetectedFeeds();
   el.addFeed.addEventListener("click", addFeedHandler);
+  initSourcePicker("feed-from-sources", "feed-sources-dropdown", ["rss", "website", "substack", "custom"], (addr) => {
+    el.feedUrl.value = addr.value;
+    el.feedUrl.focus();
+  });
   el.openFeedReader.addEventListener("click", () => {
     focusOrCreatePage("feeds/feeds.html");
   });
@@ -4222,7 +4465,8 @@ function initMainTabs() {
   const CONSOLE_ENTRY_LABELS = {
     bookmarks: "Bookmarks", projects: "Projects", monitors: "Monitors",
     feeds: "Feeds", osint: "OSINT", automation: "Automate",
-    archive: "Redirects", prompts: "Prompts", providers: "Providers",
+    archive: "Redirects", tracker: "Tracker", sources: "Sources",
+    prompts: "Prompts", providers: "Providers",
     resources: "Resources", settings: "Settings"
   };
 
@@ -4409,8 +4653,21 @@ function initMainTabs() {
     });
   });
 
+  // ── Home nav category filter ──
+  document.querySelectorAll("[data-nav-cat].search-cat-chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("[data-nav-cat].search-cat-chip").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      const cat = btn.dataset.navCat;
+      document.querySelectorAll(".home-icon-item[data-nav-cat]").forEach(item => {
+        item.style.display = (cat === "all" || item.dataset.navCat === cat) ? "" : "none";
+      });
+    });
+  });
+
   // ── Home search bar ──
   const SEARCH_ENGINES = {
+    // Web search
     duckduckgo: "https://duckduckgo.com/?q=",
     startpage:  "https://www.startpage.com/do/dsearch?query=",
     brave:      "https://search.brave.com/search?q=",
@@ -4420,6 +4677,13 @@ function initMainTabs() {
     dogpile:    "https://www.dogpile.com/serp?q=",
     yandex:     "https://yandex.com/search/?text=",
     bing:       "https://www.bing.com/search?q=",
+    // Academic / Research
+    scholar:    "https://scholar.google.com/scholar?q=",
+    semantic:   "https://www.semanticscholar.org/search?q=",
+    jstor:      "https://www.jstor.org/action/doBasicSearch?Query=",
+    arxiv:      "https://arxiv.org/search/?query=",
+    pubmed:     "https://pubmed.ncbi.nlm.nih.gov/?term=",
+    core:       "https://core.ac.uk/search?q=",
   };
 
   const homeSearchGo = document.getElementById("home-search-go");
@@ -4429,15 +4693,124 @@ function initMainTabs() {
   const homeDeepPages = document.getElementById("home-deep-dive-pages");
 
   const homeMultiEngineRow = document.getElementById("home-multi-engine-row");
+
+  // ── Custom search engines (console) ──
+  async function loadHomeCustomSearchEngines() {
+    const { customSearchEngines: engines } = await browser.storage.local.get({ customSearchEngines: [] });
+    homeSearchEngine.querySelectorAll("option[data-cat='custom']").forEach(o => o.remove());
+    homeMultiEngineRow.querySelectorAll(".me-chip[data-cat='custom']").forEach(c => c.remove());
+    for (const eng of (engines || [])) {
+      SEARCH_ENGINES[eng.id] = eng.url;
+      const opt = document.createElement("option");
+      opt.value = eng.id;
+      opt.textContent = eng.name;
+      opt.dataset.cat = "custom";
+      homeSearchEngine.appendChild(opt);
+      const lbl = document.createElement("label");
+      lbl.className = "me-chip";
+      lbl.dataset.cat = "custom";
+      lbl.innerHTML = `<input type="checkbox" value="${eng.id}"> ${eng.name}`;
+      lbl.addEventListener("contextmenu", async (e) => {
+        e.preventDefault();
+        if (confirm(`Remove "${eng.name}" from custom engines?`)) {
+          const { customSearchEngines: curr } = await browser.storage.local.get({ customSearchEngines: [] });
+          await browser.storage.local.set({ customSearchEngines: (curr || []).filter(x => x.id !== eng.id) });
+          delete SEARCH_ENGINES[eng.id];
+          loadHomeCustomSearchEngines();
+        }
+      });
+      homeMultiEngineRow.appendChild(lbl);
+    }
+  }
+
+  const homeCustomAddBtn = document.getElementById("home-search-cat-add");
+  const homeCustomForm = document.getElementById("home-search-custom-form");
+  if (homeCustomAddBtn && homeCustomForm) {
+    homeCustomAddBtn.addEventListener("click", () => {
+      homeCustomForm.classList.toggle("hidden");
+      if (!homeCustomForm.classList.contains("hidden")) document.getElementById("home-search-custom-name").focus();
+    });
+    document.getElementById("home-search-custom-cancel").addEventListener("click", () => homeCustomForm.classList.add("hidden"));
+    document.getElementById("home-search-custom-save").addEventListener("click", async () => {
+      const name = document.getElementById("home-search-custom-name").value.trim();
+      let url = document.getElementById("home-search-custom-url").value.trim();
+      if (!name || !url) return;
+      if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+      if (!url.includes("{q}")) {
+        if (/[=\/]$/.test(url)) url += "{q}";
+        else url += (url.includes("?") ? "&q={q}" : "?q={q}");
+      }
+      const id = "custom_" + name.toLowerCase().replace(/[^a-z0-9]/g, "_");
+      const { customSearchEngines: curr } = await browser.storage.local.get({ customSearchEngines: [] });
+      const engines = curr || [];
+      if (engines.some(e => e.id === id)) { alert("Engine with this name already exists"); return; }
+      engines.push({ id, name, url });
+      await browser.storage.local.set({ customSearchEngines: engines });
+      if (document.getElementById("home-search-custom-as-source").checked) {
+        const baseUrl = url.replace(/\{q\}.*$/, "").replace(/[?&]$/, "");
+        await browser.runtime.sendMessage({
+          action: "saveSource",
+          source: {
+            id: `src-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            name,
+            type: "webservice",
+            aliases: [],
+            addresses: [{ type: "website", value: baseUrl, label: name + " (search)" }],
+            tags: ["search-engine"],
+            location: "",
+            notes: `Custom search engine. Query pattern: ${url}`,
+          }
+        });
+      }
+      document.getElementById("home-search-custom-name").value = "";
+      document.getElementById("home-search-custom-url").value = "";
+      homeCustomForm.classList.add("hidden");
+      await loadHomeCustomSearchEngines();
+      applyHomeSearchCategory("custom");
+    });
+  }
+
+  loadHomeCustomSearchEngines();
+
+  let homeActiveSearchCat = "general";
+
+  function applyHomeSearchCategory(cat) {
+    homeActiveSearchCat = cat;
+    document.querySelectorAll(".home-search-bar .search-cat-chip").forEach(c => {
+      c.classList.toggle("active", c.dataset.cat === cat);
+    });
+    const opts = homeSearchEngine.querySelectorAll("option");
+    let firstVisible = null;
+    opts.forEach(opt => {
+      const show = cat === "all" || opt.dataset.cat === cat;
+      opt.hidden = !show;
+      if (show && !firstVisible) firstVisible = opt;
+    });
+    const current = homeSearchEngine.querySelector(`option[value="${homeSearchEngine.value}"]`);
+    if (current && current.hidden && firstVisible) {
+      homeSearchEngine.value = firstVisible.value;
+    }
+    homeMultiEngineRow.querySelectorAll(".me-chip").forEach(chip => {
+      const show = cat === "all" || chip.dataset.cat === cat;
+      chip.style.display = show ? "" : "none";
+    });
+    const placeholders = { general: "Search the web... then analyze it", research: "Search papers...", medical: "Search biomedical literature...", custom: "Search...", all: "Search..." };
+    homeSearchQuery.placeholder = placeholders[cat] || "Search...";
+  }
+
+  document.querySelectorAll(".home-search-bar .search-cat-chip").forEach(chip => {
+    chip.addEventListener("click", () => applyHomeSearchCategory(chip.dataset.cat));
+  });
+
   if (homeDeepDive) {
     homeDeepDive.addEventListener("change", () => {
       const on = homeDeepDive.checked;
       homeDeepPages.classList.toggle("hidden", !on);
       homeMultiEngineRow.classList.toggle("hidden", !on);
       if (on) {
-        const primary = homeSearchEngine.value;
-        homeMultiEngineRow.querySelectorAll("input[type=checkbox]").forEach(cb => {
-          cb.checked = cb.value === primary;
+        homeMultiEngineRow.querySelectorAll(".me-chip").forEach(chip => {
+          const show = homeActiveSearchCat === "all" || chip.dataset.cat === homeActiveSearchCat;
+          chip.style.display = show ? "" : "none";
         });
       }
     });
@@ -4458,7 +4831,8 @@ function initMainTabs() {
     const q = homeSearchQuery.value.trim();
     if (!q) return;
     const engine = homeSearchEngine.value;
-    const baseUrl = SEARCH_ENGINES[engine] || SEARCH_ENGINES.duckduckgo;
+    const urlPattern = SEARCH_ENGINES[engine] || SEARCH_ENGINES.duckduckgo;
+    const buildSearchUrl = (pattern, query) => pattern.includes("{q}") ? pattern.replace("{q}", encodeURIComponent(query)) : pattern + encodeURIComponent(query);
 
     if (homeDeepDive && homeDeepDive.checked) {
       const resultId = `deepdive-${Date.now()}`;
@@ -4472,7 +4846,7 @@ function initMainTabs() {
           deepDive: true,
           presetLabel: diveLabel,
           pageTitle: `${diveLabel}: ${q}`,
-          pageUrl: baseUrl + encodeURIComponent(q),
+          pageUrl: buildSearchUrl(urlPattern, q),
           progress: { phase: "starting", statusText: "Initializing deep dive search..." }
         }
       });
@@ -4490,7 +4864,7 @@ function initMainTabs() {
       return;
     }
 
-    browser.tabs.create({ url: baseUrl + encodeURIComponent(q) });
+    browser.tabs.create({ url: buildSearchUrl(urlPattern, q) });
   }
 
   if (homeSearchGo) homeSearchGo.addEventListener("click", executeHomeSearch);
@@ -4571,6 +4945,9 @@ function switchMainTab(tabName, tabs, panels) {
   }
   if (tabName === "tracker") {
     loadTracker();
+  }
+  if (tabName === "sources" && !srcState.initialized) {
+    initSources();
   }
 }
 
@@ -7366,6 +7743,30 @@ async function updateStorageUsage() {
     // Sort by size descending
     breakdown.innerHTML = rows.join("<br>");
     breakdown.style.display = rows.length ? "block" : "none";
+
+    // Update home page storage widget
+    const homeTotal = document.getElementById("home-storage-total");
+    const homeFill = document.getElementById("home-storage-fill");
+    const homeBreakdown = document.getElementById("home-storage-breakdown");
+    if (homeTotal) {
+      homeTotal.textContent = fmtBytes(totalBytes);
+      if (totalBytes > 8 * 1048576) {
+        homeTotal.style.color = "var(--error)";
+        homeFill.style.background = "var(--error)";
+      } else if (totalBytes > 5 * 1048576) {
+        homeTotal.style.color = "var(--warning, #ffb74d)";
+        homeFill.style.background = "var(--warning, #ffb74d)";
+      } else {
+        homeTotal.style.color = "var(--text-primary)";
+        homeFill.style.background = "var(--accent)";
+      }
+      // Bar fill — assume 10MB as soft max for visual
+      const pct = Math.min(100, (totalBytes / (10 * 1048576)) * 100);
+      homeFill.style.width = pct + "%";
+      // Top 5 breakdown items for compact view
+      homeBreakdown.innerHTML = rows.slice(0, 5).join("<br>");
+      homeBreakdown.style.display = rows.length ? "block" : "none";
+    }
   } catch {
     display.textContent = "Unable to calculate";
   }
@@ -7822,4 +8223,544 @@ async function removeIncognitoSite(domain) {
   const updated = incognitoSites.filter(d => d !== domain);
   await browser.storage.local.set({ incognitoSites: updated });
   renderIncognitoSites(updated);
+}
+
+// ──────────────────────────────────────────────
+// Sources Tab
+// ──────────────────────────────────────────────
+
+const SOURCE_ADDR_TYPES = {
+  x:         { label: "X / Twitter",  icon: "𝕏",  prefix: "https://x.com/",              example: "@elonmusk" },
+  bluesky:   { label: "Bluesky",      icon: "🦋", prefix: "https://bsky.app/profile/",    example: "alice.bsky.social" },
+  mastodon:  { label: "Mastodon",     icon: "🐘", prefix: null,                            example: "@user@infosec.exchange" },
+  youtube:   { label: "YouTube",      icon: "▶",  prefix: "https://youtube.com/@",         example: "@ChannelName" },
+  rumble:    { label: "Rumble",       icon: "🟢", prefix: "https://rumble.com/c/",          example: "ChannelName" },
+  facebook:  { label: "Facebook",     icon: "f",  prefix: "https://facebook.com/",         example: "john.doe or page-name" },
+  linkedin:  { label: "LinkedIn",     icon: "in", prefix: "https://linkedin.com/in/",      example: "jane-doe-12345" },
+  telegram:  { label: "Telegram",     icon: "✈",  prefix: "https://t.me/",                 example: "@username or channel" },
+  reddit:    { label: "Reddit",       icon: "🔴", prefix: "https://reddit.com/u/",         example: "u/spez" },
+  github:    { label: "GitHub",       icon: "⌨",  prefix: "https://github.com/",           example: "octocat" },
+  threads:   { label: "Threads",      icon: "@",  prefix: "https://threads.net/@",         example: "@username" },
+  tiktok:    { label: "TikTok",       icon: "♪",  prefix: "https://tiktok.com/@",          example: "@username" },
+  substack:  { label: "Substack",     icon: "📰", prefix: null,                            example: "https://name.substack.com" },
+  email:     { label: "Email",        icon: "✉",  prefix: "mailto:",                       example: "user@example.com" },
+  phone:     { label: "Phone",        icon: "📞", prefix: "tel:",                           example: "+1 555 867 5309 (with country code)" },
+  signal:    { label: "Signal",       icon: "🔒", prefix: null,                            example: "+1 555 867 5309 (phone number)" },
+  discord:   { label: "Discord",      icon: "🎮", prefix: null,                            example: "username or invite.gg/server" },
+  whatsapp:  { label: "WhatsApp",     icon: "💬", prefix: "https://wa.me/",                example: "+15558675309 (no dashes)" },
+  rss:       { label: "RSS Feed",     icon: "📡", prefix: null,                            example: "https://example.com/feed.xml" },
+  ip:        { label: "IP Address",   icon: "🌐", prefix: null,                            example: "192.168.1.1 or 2001:db8::1" },
+  website:   { label: "Website",      icon: "🔗", prefix: null,                            example: "https://example.com" },
+  pastebin:  { label: "Pastebin",     icon: "📋", prefix: null,                            example: "https://pastebin.com/u/username" },
+  gdoc:      { label: "Google Doc",   icon: "📄", prefix: null,                            example: "https://docs.google.com/d/..." },
+  custom:    { label: "Other",        icon: "📌", prefix: null,                            example: "Any URL, handle, or address" },
+};
+
+const srcState = { initialized: false, sources: [], editingId: null };
+
+function initSources() {
+  if (srcState.initialized) return;
+  srcState.initialized = true;
+
+  document.getElementById("src-add-new").addEventListener("click", () => showSourceEditor());
+  document.getElementById("src-add-addr").addEventListener("click", () => addAddrRow());
+  document.getElementById("src-cancel").addEventListener("click", hideSourceEditor);
+  document.getElementById("src-save").addEventListener("click", saveSource);
+  document.getElementById("src-search").addEventListener("input", debounce(filterSources, 300));
+  document.getElementById("src-filter-type").addEventListener("change", filterSources);
+  document.getElementById("src-filter-tag").addEventListener("change", filterSources);
+
+  // Import / Export
+  document.getElementById("src-import").addEventListener("click", () => document.getElementById("src-import-file").click());
+  document.getElementById("src-import-file").addEventListener("change", importSources);
+  document.getElementById("src-export").addEventListener("click", exportSources);
+
+  loadSources();
+}
+
+async function loadSources() {
+  try {
+    const resp = await browser.runtime.sendMessage({ action: "getSources" });
+    srcState.sources = resp?.sources || [];
+  } catch { srcState.sources = []; }
+  populateTagFilter();
+  filterSources();
+  const countEl = document.getElementById("src-count");
+  if (countEl) countEl.textContent = `${srcState.sources.length} source${srcState.sources.length !== 1 ? "s" : ""}`;
+
+  // Highlight a specific source if navigated from KG graph
+  const params = new URLSearchParams(window.location.search);
+  const highlightId = params.get("highlight");
+  if (highlightId) {
+    // Auto-filter to the source's type so it's immediately visible
+    const targetSrc = srcState.sources.find(s => s.id === highlightId);
+    if (targetSrc?.type) {
+      const typeFilter = document.getElementById("src-filter-type");
+      if (typeFilter) {
+        typeFilter.value = targetSrc.type;
+        filterSources();
+      }
+    }
+    requestAnimationFrame(() => {
+      const card = document.querySelector(`.src-card[data-src-id="${CSS.escape(highlightId)}"]`);
+      if (card) {
+        card.scrollIntoView({ behavior: "smooth", block: "center" });
+        card.classList.add("src-card-highlight");
+        setTimeout(() => card.classList.remove("src-card-highlight"), 3000);
+      }
+    });
+    // Clean up URL so refreshing doesn't re-highlight
+    const cleanUrl = window.location.pathname + window.location.hash;
+    window.history.replaceState(null, "", cleanUrl);
+  }
+}
+
+function populateTagFilter() {
+  const sel = document.getElementById("src-filter-tag");
+  const current = sel.value;
+  const tags = new Set();
+  for (const s of srcState.sources) {
+    for (const t of (s.tags || [])) tags.add(t);
+  }
+  sel.innerHTML = '<option value="">All Tags</option>';
+  for (const t of [...tags].sort()) {
+    sel.innerHTML += `<option value="${t}">${t}</option>`;
+  }
+  sel.value = current;
+}
+
+function filterSources() {
+  const q = (document.getElementById("src-search")?.value || "").toLowerCase();
+  const typeFilter = document.getElementById("src-filter-type")?.value || "";
+  const tagFilter = document.getElementById("src-filter-tag")?.value || "";
+
+  let filtered = srcState.sources;
+  if (typeFilter) filtered = filtered.filter(s => s.type === typeFilter);
+  if (tagFilter) filtered = filtered.filter(s => (s.tags || []).includes(tagFilter));
+  if (q) {
+    filtered = filtered.filter(s =>
+      (s.name || "").toLowerCase().includes(q) ||
+      (s.aliases || []).some(a => a.toLowerCase().includes(q)) ||
+      (s.tags || []).some(t => t.toLowerCase().includes(q)) ||
+      (s.location || "").toLowerCase().includes(q) ||
+      (s.notes || "").toLowerCase().includes(q) ||
+      (s.addresses || []).some(a =>
+        (a.label || "").toLowerCase().includes(q) ||
+        (a.value || "").toLowerCase().includes(q)
+      )
+    );
+  }
+  renderSourcesGrid(filtered);
+}
+
+const SOURCE_TYPE_COLORS = {
+  person:       '#e94560',
+  organization: '#64b5f6',
+  group:        '#ab47bc',
+  handle:       '#26c6da',
+  journalist:   '#ffa726',
+  informant:    '#66bb6a',
+  target:       '#ef5350',
+  adversary:    '#f44336',
+  scammer:      '#ff5722',
+  asset:        '#42a5f5',
+  service:      '#78909c',
+  webservice:   '#7e57c2',
+  device:       '#8d6e63',
+  academic:     '#5c6bc0',
+  medical:      '#26a69a',
+  legal:        '#8d6e63',
+  lead:         '#ffca28',
+  alias:        '#bdbdbd',
+  entity:       '#90a4ae',
+};
+
+async function renderSourcesGrid(sources) {
+  const grid = document.getElementById("src-grid");
+  if (!sources.length) {
+    grid.innerHTML = '<div class="src-empty"><p>No sources match your filter.</p></div>';
+    return;
+  }
+
+  // Fetch active feeds and monitors to cross-reference with source addresses
+  let activeFeedUrls = new Set();
+  let monitoredUrls = new Set();
+  try {
+    const [feedResp, monResp] = await Promise.all([
+      browser.runtime.sendMessage({ action: "getFeeds" }).catch(() => null),
+      browser.runtime.sendMessage({ action: "getMonitors" }).catch(() => null),
+    ]);
+    if (feedResp?.feeds) {
+      for (const f of feedResp.feeds) {
+        if (f.url) activeFeedUrls.add(f.url);
+      }
+    }
+    if (monResp?.monitors) {
+      for (const m of monResp.monitors) {
+        if (m.url) monitoredUrls.add(m.url);
+      }
+    }
+  } catch { /* unavailable */ }
+
+  grid.innerHTML = "";
+  for (const src of sources) {
+    const card = document.createElement("div");
+    card.className = "src-card";
+    card.dataset.srcId = src.id;
+
+    const typeColor = SOURCE_TYPE_COLORS[src.type] || SOURCE_TYPE_COLORS.entity;
+
+    // Header
+    const initials = (src.name || "?").slice(0, 2).toUpperCase();
+    const header = document.createElement("div");
+    header.className = "src-card-header";
+    header.style.background = typeColor + '18';
+    header.style.borderBottom = `2px solid ${typeColor}55`;
+    header.innerHTML = `
+      <div class="src-card-avatar" style="background:${typeColor}22;color:${typeColor};">${initials}</div>
+      <div class="src-card-info">
+        <div class="src-card-name">${escapeHtml(src.name || "Unnamed")}</div>
+        <div class="src-card-type" style="color:${typeColor};">${escapeHtml(src.type || "entity")}</div>
+        ${src.aliases?.length ? `<div class="src-card-aliases">aka ${escapeHtml(src.aliases.join(", "))}</div>` : ""}
+      </div>
+    `;
+    card.appendChild(header);
+
+    // Addresses
+    if (src.addresses?.length) {
+      const addrs = document.createElement("div");
+      addrs.className = "src-card-addresses";
+      let hasActiveFeed = false;
+      let hasMonitoredPage = false;
+      for (const addr of src.addresses) {
+        const def = SOURCE_ADDR_TYPES[addr.type] || SOURCE_ADDR_TYPES.custom;
+        const chip = document.createElement("a");
+        chip.className = "src-addr-chip";
+        const isFeed = addr.type === "rss" && activeFeedUrls.has(addr.value);
+        const isPageMonitor = !isFeed && monitoredUrls.has(addr.value);
+        if (isFeed || isPageMonitor) {
+          chip.classList.add("src-addr-monitored");
+          if (isFeed) hasActiveFeed = true;
+          if (isPageMonitor) hasMonitoredPage = true;
+        }
+        const liveLabel = isFeed ? " (subscribed feed)" : isPageMonitor ? " (monitored page)" : "";
+        chip.title = `${def.label}: ${addr.value}${liveLabel}`;
+        const url = getAddrUrl(addr);
+        if (url) { chip.href = url; chip.target = "_blank"; }
+        const liveTag = isFeed ? '<span class="src-chip-live">FEED</span>' : isPageMonitor ? '<span class="src-chip-live">MON</span>' : "";
+        chip.innerHTML = `<span class="src-chip-icon">${def.icon}</span><span class="src-chip-label">${escapeHtml(addr.label || addr.value)}</span>${liveTag}`;
+
+        // Right-click to copy value
+        chip.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          navigator.clipboard.writeText(addr.value);
+        });
+        addrs.appendChild(chip);
+      }
+      if (hasActiveFeed || hasMonitoredPage) {
+        const badge = document.createElement("div");
+        badge.className = "src-card-feed-badge";
+        const parts = [];
+        if (hasActiveFeed) parts.push("Subscribed Feed");
+        if (hasMonitoredPage) parts.push("Monitored Page");
+        badge.textContent = parts.join(" · ");
+        addrs.appendChild(badge);
+      }
+      card.appendChild(addrs);
+    }
+
+    // Location + Tags
+    if (src.location || src.tags?.length) {
+      const meta = document.createElement("div");
+      meta.className = "src-card-tags";
+      if (src.location) {
+        meta.innerHTML += `<span class="src-tag" style="background:var(--bg-secondary);color:var(--text-secondary);">📍 ${escapeHtml(src.location)}</span>`;
+      }
+      for (const t of (src.tags || [])) {
+        meta.innerHTML += `<span class="src-tag">${escapeHtml(t)}</span>`;
+      }
+      card.appendChild(meta);
+    }
+
+    // Notes preview
+    if (src.notes) {
+      const notes = document.createElement("div");
+      notes.className = "src-card-notes";
+      notes.textContent = src.notes;
+      card.appendChild(notes);
+    }
+
+    // Actions
+    const actions = document.createElement("div");
+    actions.className = "src-card-actions";
+
+    const editBtn = document.createElement("button");
+    editBtn.className = "btn btn-secondary";
+    editBtn.textContent = "Edit";
+    editBtn.addEventListener("click", () => showSourceEditor(src));
+    actions.appendChild(editBtn);
+
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "btn btn-secondary";
+    copyBtn.textContent = "Copy All";
+    copyBtn.addEventListener("click", () => {
+      const handles = (src.addresses || []).map(a => a.value).join("\n");
+      navigator.clipboard.writeText(handles);
+      copyBtn.textContent = "Copied!";
+      setTimeout(() => { copyBtn.textContent = "Copy All"; }, 1500);
+    });
+    actions.appendChild(copyBtn);
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "btn btn-secondary";
+    delBtn.textContent = "Delete";
+    delBtn.style.color = "var(--error)";
+    delBtn.addEventListener("click", async () => {
+      if (!confirm(`Delete source "${src.name}"?`)) return;
+      await browser.runtime.sendMessage({ action: "deleteSource", sourceId: src.id });
+      loadSources();
+    });
+    actions.appendChild(delBtn);
+
+    card.appendChild(actions);
+    grid.appendChild(card);
+  }
+}
+
+function getAddrUrl(addr) {
+  const def = SOURCE_ADDR_TYPES[addr.type] || SOURCE_ADDR_TYPES.custom;
+  const val = (addr.value || "").trim();
+  if (!val) return null;
+  // If value is already a full URL, use it directly
+  if (/^https?:\/\//i.test(val)) return val;
+  if (addr.type === "email") return `mailto:${val}`;
+  if (addr.type === "phone") return `tel:${val}`;
+  if (def.prefix) return def.prefix + val.replace(/^@/, "");
+  return null;
+}
+
+function showSourceEditor(source) {
+  srcState.editingId = source?.id || null;
+  const editor = document.getElementById("src-editor");
+  document.getElementById("src-editor-title").textContent = source ? "Edit Source" : "New Source";
+  document.getElementById("src-name").value = source?.name || "";
+  document.getElementById("src-type").value = source?.type || "person";
+  document.getElementById("src-aliases").value = (source?.aliases || []).join(", ");
+  document.getElementById("src-location").value = source?.location || "";
+  document.getElementById("src-tags").value = (source?.tags || []).join(", ");
+  document.getElementById("src-notes").value = source?.notes || "";
+
+  // Populate address rows
+  const list = document.getElementById("src-addr-list");
+  list.innerHTML = "";
+  if (source?.addresses?.length) {
+    for (const addr of source.addresses) {
+      addAddrRow(addr.type, addr.value, addr.label);
+    }
+  } else {
+    addAddrRow(); // Start with one empty row
+  }
+
+  editor.classList.remove("hidden");
+  editor.scrollIntoView({ behavior: "smooth", block: "start" });
+  document.getElementById("src-name").focus();
+}
+
+function hideSourceEditor() {
+  document.getElementById("src-editor").classList.add("hidden");
+  srcState.editingId = null;
+}
+
+function addAddrRow(type, value, label) {
+  const list = document.getElementById("src-addr-list");
+  const row = document.createElement("div");
+  row.className = "src-addr-row";
+
+  const sel = document.createElement("select");
+  for (const [key, def] of Object.entries(SOURCE_ADDR_TYPES)) {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = `${def.icon} ${def.label}`;
+    sel.appendChild(opt);
+  }
+  sel.value = type || "website";
+
+  const valInput = document.createElement("input");
+  valInput.type = "text";
+  const selectedType = SOURCE_ADDR_TYPES[sel.value] || SOURCE_ADDR_TYPES.custom;
+  valInput.placeholder = selectedType.example || "Handle, URL, email, IP, number...";
+  valInput.value = value || "";
+
+  // Update placeholder when type changes
+  sel.addEventListener("change", () => {
+    const def = SOURCE_ADDR_TYPES[sel.value] || SOURCE_ADDR_TYPES.custom;
+    valInput.placeholder = def.example || "Handle, URL, email, IP, number...";
+  });
+
+  const labelInput = document.createElement("input");
+  labelInput.type = "text";
+  labelInput.placeholder = "Label (optional)";
+  labelInput.value = label || "";
+  labelInput.style.maxWidth = "120px";
+
+  const removeBtn = document.createElement("button");
+  removeBtn.className = "btn btn-secondary";
+  removeBtn.textContent = "×";
+  removeBtn.style.color = "var(--error)";
+  removeBtn.addEventListener("click", () => row.remove());
+
+  row.appendChild(sel);
+  row.appendChild(valInput);
+  row.appendChild(labelInput);
+  row.appendChild(removeBtn);
+  list.appendChild(row);
+}
+
+async function saveSource() {
+  const name = document.getElementById("src-name").value.trim();
+  if (!name) { document.getElementById("src-name").focus(); return; }
+
+  const aliases = document.getElementById("src-aliases").value.split(",").map(s => s.trim()).filter(Boolean);
+  const tags = document.getElementById("src-tags").value.split(",").map(s => s.trim()).filter(Boolean);
+
+  // Collect addresses
+  const addresses = [];
+  for (const row of document.querySelectorAll("#src-addr-list .src-addr-row")) {
+    const type = row.querySelector("select").value;
+    const value = row.querySelectorAll("input")[0].value.trim();
+    const label = row.querySelectorAll("input")[1].value.trim();
+    if (value) addresses.push({ type, value, label: label || "" });
+  }
+
+  const source = {
+    id: srcState.editingId || `src-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name,
+    type: document.getElementById("src-type").value,
+    aliases,
+    addresses,
+    tags,
+    location: document.getElementById("src-location").value.trim(),
+    notes: document.getElementById("src-notes").value.trim(),
+  };
+
+  // Preserve timestamps if editing
+  if (srcState.editingId) {
+    const existing = srcState.sources.find(s => s.id === srcState.editingId);
+    if (existing) source.createdAt = existing.createdAt;
+  }
+
+  await browser.runtime.sendMessage({ action: "saveSource", source });
+  hideSourceEditor();
+  loadSources();
+}
+
+async function importSources(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    const sources = Array.isArray(data) ? data : (data.sources || []);
+    if (!sources.length) { alert("No sources found in file."); return; }
+    // Ensure all have IDs
+    for (const s of sources) {
+      if (!s.id) s.id = `src-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+    await browser.runtime.sendMessage({ action: "importSources", sources });
+    loadSources();
+  } catch (err) {
+    alert("Import failed: " + err.message);
+  }
+  e.target.value = "";
+}
+
+async function exportSources() {
+  const resp = await browser.runtime.sendMessage({ action: "exportSources" });
+  const sources = resp?.sources || [];
+  if (!sources.length) { alert("No sources to export."); return; }
+  const blob = new Blob([JSON.stringify(sources, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `argus-sources-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Source picker — reusable dropdown for other tabs ──
+// btnId:       ID of the trigger button
+// dropdownId:  ID of the dropdown container
+// addrTypes:   array of SOURCE_ADDR_TYPES keys to filter by (e.g. ["rss","website"])
+// onSelect:    callback(addr, source) when user picks an address
+function initSourcePicker(btnId, dropdownId, addrTypes, onSelect) {
+  const btn = document.getElementById(btnId);
+  const dropdown = document.getElementById(dropdownId);
+  if (!btn || !dropdown) return;
+
+  btn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const wasHidden = dropdown.classList.contains("hidden");
+    // Close all other open pickers first
+    document.querySelectorAll(".src-picker-dropdown").forEach(d => d.classList.add("hidden"));
+    if (!wasHidden) return;
+
+    dropdown.classList.remove("hidden");
+    dropdown.innerHTML = '<div class="src-picker-empty">Loading...</div>';
+
+    let sources;
+    try {
+      const resp = await browser.runtime.sendMessage({ action: "getSources" });
+      sources = resp?.sources || [];
+    } catch { sources = []; }
+
+    // Collect matching addresses across all sources
+    const items = [];
+    for (const src of sources) {
+      for (const addr of (src.addresses || [])) {
+        if (addrTypes.includes(addr.type)) {
+          items.push({ source: src, addr });
+        }
+        // Also include website/custom addresses that look like URLs
+        if (!addrTypes.includes(addr.type) && addrTypes.includes("website") && /^https?:\/\//i.test(addr.value)) {
+          items.push({ source: src, addr });
+        }
+      }
+    }
+
+    // Deduplicate by value
+    const seen = new Set();
+    const unique = items.filter(i => {
+      if (seen.has(i.addr.value)) return false;
+      seen.add(i.addr.value);
+      return true;
+    });
+
+    if (!unique.length) {
+      dropdown.innerHTML = '<div class="src-picker-empty">No matching addresses in your sources.<br>Add RSS or website addresses on the Sources tab.</div>';
+      return;
+    }
+
+    dropdown.innerHTML = "";
+    for (const { source, addr } of unique) {
+      const def = SOURCE_ADDR_TYPES[addr.type] || SOURCE_ADDR_TYPES.custom;
+      const item = document.createElement("div");
+      item.className = "src-picker-item";
+      item.innerHTML = `
+        <span class="src-picker-item-name">${def.icon} ${escapeHtml(source.name)}${addr.label ? " — " + escapeHtml(addr.label) : ""}</span>
+        <span class="src-picker-item-addr">${escapeHtml(addr.value)}</span>
+      `;
+      item.addEventListener("click", () => {
+        onSelect(addr, source);
+        dropdown.classList.add("hidden");
+      });
+      dropdown.appendChild(item);
+    }
+  });
+
+  // Close on outside click
+  document.addEventListener("click", (e) => {
+    if (!dropdown.contains(e.target) && e.target !== btn) {
+      dropdown.classList.add("hidden");
+    }
+  });
 }

@@ -193,3 +193,68 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* Action bar on each AI answer */
+.argus-chat-actions {
+  display: flex;
+  gap: 4px;
+  padding: 4px 12px 8px;
+  flex-wrap: wrap;
+  position: relative;
+}
+.argus-chat-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--text-secondary, #aaa);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.argus-chat-action-btn:hover {
+  color: var(--text-primary, #eee);
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.15);
+}
+.argus-chat-action-btn svg {
+  flex-shrink: 0;
+}
+
+/* Project picker dropdown */
+.argus-chat-project-picker {
+  position: absolute;
+  z-index: 100;
+  margin-top: 4px;
+  padding: 4px;
+  background: var(--bg-secondary, #1a1a2e);
+  border: 1px solid var(--border, #2a2a4a);
+  border-radius: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.argus-chat-project-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-primary, #eee);
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.argus-chat-project-option:hover {
+  background: rgba(255,255,255,0.08);
+}

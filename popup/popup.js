@@ -449,6 +449,7 @@ async function checkFeedAvailability() {
       if (osintFeedBtn) {
         osintFeedBtn.classList.remove("hidden");
         osintFeedBtn._feedUrl = feeds[0].url;
+        osintFeedBtn._feedTitle = feeds[0].title || "";
       }
     } else {
       // Multiple feeds — show count + link to Feeds tab with picker
@@ -1201,6 +1202,7 @@ function attachEventListeners() {
 
   // ── Quick Search bar ──────────────────────────────
   const SEARCH_ENGINES = {
+    // Web search
     duckduckgo: "https://duckduckgo.com/?q=",
     startpage:  "https://www.startpage.com/do/dsearch?query=",
     brave:      "https://search.brave.com/search?q=",
@@ -1210,6 +1212,13 @@ function attachEventListeners() {
     dogpile:    "https://www.dogpile.com/serp?q=",
     yandex:     "https://yandex.com/search/?text=",
     bing:       "https://www.bing.com/search?q=",
+    // Academic / Research
+    scholar:    "https://scholar.google.com/scholar?q=",
+    semantic:   "https://www.semanticscholar.org/search?q=",
+    jstor:      "https://www.jstor.org/action/doBasicSearch?Query=",
+    arxiv:      "https://arxiv.org/search/?query=",
+    pubmed:     "https://pubmed.ncbi.nlm.nih.gov/?term=",
+    core:       "https://core.ac.uk/search?q=",
   };
 
   let searchPromptPrefix = "";
@@ -1235,19 +1244,148 @@ function attachEventListeners() {
     }
   });
 
+  // ── Custom search engines ──
+  const searchEngineSelect = document.getElementById("search-engine");
+  const multiEngineRow = document.getElementById("multi-engine-row");
+
+  async function loadCustomSearchEngines() {
+    const { customSearchEngines: engines } = await browser.storage.local.get({ customSearchEngines: [] });
+    // Remove old custom options/chips
+    searchEngineSelect.querySelectorAll("option[data-cat='custom']").forEach(o => o.remove());
+    multiEngineRow.querySelectorAll(".me-chip[data-cat='custom']").forEach(c => c.remove());
+    for (const eng of (engines || [])) {
+      SEARCH_ENGINES[eng.id] = eng.url;
+      // Dropdown option
+      const opt = document.createElement("option");
+      opt.value = eng.id;
+      opt.textContent = eng.name;
+      opt.dataset.cat = "custom";
+      searchEngineSelect.appendChild(opt);
+      // Deep dive chip
+      const lbl = document.createElement("label");
+      lbl.className = "me-chip";
+      lbl.dataset.cat = "custom";
+      lbl.innerHTML = `<input type="checkbox" value="${eng.id}"> ${eng.name}`;
+      // Right-click to remove
+      lbl.addEventListener("contextmenu", async (e) => {
+        e.preventDefault();
+        if (confirm(`Remove "${eng.name}" from custom engines?`)) {
+          const { customSearchEngines: curr } = await browser.storage.local.get({ customSearchEngines: [] });
+          await browser.storage.local.set({ customSearchEngines: (curr || []).filter(e => e.id !== eng.id) });
+          delete SEARCH_ENGINES[eng.id];
+          loadCustomSearchEngines();
+        }
+      });
+      multiEngineRow.appendChild(lbl);
+    }
+  }
+
+  // Custom engine add form
+  const customAddBtn = document.getElementById("search-cat-add");
+  const customForm = document.getElementById("search-custom-form");
+  if (customAddBtn && customForm) {
+    customAddBtn.addEventListener("click", () => {
+      customForm.classList.toggle("hidden");
+      if (!customForm.classList.contains("hidden")) {
+        document.getElementById("search-custom-name").focus();
+      }
+    });
+    document.getElementById("search-custom-cancel").addEventListener("click", () => {
+      customForm.classList.add("hidden");
+    });
+    document.getElementById("search-custom-save").addEventListener("click", async () => {
+      const name = document.getElementById("search-custom-name").value.trim();
+      let url = document.getElementById("search-custom-url").value.trim();
+      if (!name || !url) return;
+      if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+      // Auto-detect query placeholder — if no {q}, append it
+      if (!url.includes("{q}")) {
+        // If URL ends with = or similar, append {q}
+        if (/[=\/]$/.test(url)) url += "{q}";
+        else url += (url.includes("?") ? "&q={q}" : "?q={q}");
+      }
+      const id = "custom_" + name.toLowerCase().replace(/[^a-z0-9]/g, "_");
+      const { customSearchEngines: curr } = await browser.storage.local.get({ customSearchEngines: [] });
+      const engines = curr || [];
+      if (engines.some(e => e.id === id)) { alert("Engine with this name already exists"); return; }
+      engines.push({ id, name, url });
+      await browser.storage.local.set({ customSearchEngines: engines });
+      // Optionally save as source
+      if (document.getElementById("search-custom-as-source").checked) {
+        const baseUrl = url.replace(/\{q\}.*$/, "").replace(/[?&]$/, "");
+        await browser.runtime.sendMessage({
+          action: "saveSource",
+          source: {
+            id: `src-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            name,
+            type: "webservice",
+            aliases: [],
+            addresses: [{ type: "website", value: baseUrl, label: name + " (search)" }],
+            tags: ["search-engine"],
+            location: "",
+            notes: `Custom search engine. Query pattern: ${url}`,
+          }
+        });
+      }
+      // Reset form
+      document.getElementById("search-custom-name").value = "";
+      document.getElementById("search-custom-url").value = "";
+      customForm.classList.add("hidden");
+      await loadCustomSearchEngines();
+      applySearchCategory("custom");
+    });
+  }
+
+  loadCustomSearchEngines();
+
+  // ── Search category filter ──
+  let activeSearchCat = "general";
+
+  function applySearchCategory(cat) {
+    activeSearchCat = cat;
+    // Update category chips
+    document.querySelectorAll(".quick-search-bar .search-cat-chip").forEach(c => {
+      c.classList.toggle("active", c.dataset.cat === cat);
+    });
+    // Filter dropdown options
+    const opts = searchEngineSelect.querySelectorAll("option");
+    let firstVisible = null;
+    opts.forEach(opt => {
+      const show = cat === "all" || opt.dataset.cat === cat;
+      opt.hidden = !show;
+      if (show && !firstVisible) firstVisible = opt;
+    });
+    // If current selection is hidden, switch to first visible
+    const current = searchEngineSelect.querySelector(`option[value="${searchEngineSelect.value}"]`);
+    if (current && current.hidden && firstVisible) {
+      searchEngineSelect.value = firstVisible.value;
+    }
+    // Deep dive chips — only toggle visibility, preserve check state
+    multiEngineRow.querySelectorAll(".me-chip").forEach(chip => {
+      const show = cat === "all" || chip.dataset.cat === cat;
+      chip.style.display = show ? "" : "none";
+    });
+    // Update placeholder
+    const placeholders = { general: "Search... then analyze", research: "Search papers...", medical: "Search biomedical literature...", custom: "Search...", all: "Search..." };
+    document.getElementById("search-query").placeholder = placeholders[cat] || "Search...";
+  }
+
+  document.querySelectorAll(".quick-search-bar .search-cat-chip").forEach(chip => {
+    chip.addEventListener("click", () => applySearchCategory(chip.dataset.cat));
+  });
+
   // Deep Dive toggle — show/hide page count selector
   const deepDiveToggle = document.getElementById("deep-dive-toggle");
   const deepDivePages = document.getElementById("deep-dive-pages");
-  const multiEngineRow = document.getElementById("multi-engine-row");
   deepDiveToggle.addEventListener("change", () => {
     const on = deepDiveToggle.checked;
     deepDivePages.classList.toggle("hidden", !on);
     multiEngineRow.classList.toggle("hidden", !on);
-    // Sync the main dropdown selection to the multi-engine checkboxes
     if (on) {
-      const primary = document.getElementById("search-engine").value;
-      multiEngineRow.querySelectorAll("input[type=checkbox]").forEach(cb => {
-        cb.checked = cb.value === primary;
+      // Show engines for current category, preserve any existing check state
+      multiEngineRow.querySelectorAll(".me-chip").forEach(chip => {
+        const show = activeSearchCat === "all" || chip.dataset.cat === activeSearchCat;
+        chip.style.display = show ? "" : "none";
       });
     }
   });
@@ -1270,8 +1408,9 @@ function attachEventListeners() {
     const q = document.getElementById("search-query").value.trim();
     if (!q) return;
     const engine = document.getElementById("search-engine").value;
-    const baseUrl = SEARCH_ENGINES[engine] || SEARCH_ENGINES.duckduckgo;
+    const urlPattern = SEARCH_ENGINES[engine] || SEARCH_ENGINES.duckduckgo;
     const fullQuery = searchPromptPrefix + q;
+    const buildSearchUrl = (pattern, query) => pattern.includes("{q}") ? pattern.replace("{q}", encodeURIComponent(query)) : pattern + encodeURIComponent(query);
 
     if (deepDiveToggle.checked) {
       // Deep Dive mode — open results page and run AI-powered search synthesis
@@ -1286,7 +1425,7 @@ function attachEventListeners() {
           deepDive: true,
           presetLabel: diveLabel,
           pageTitle: `${diveLabel}: ${q}`,
-          pageUrl: baseUrl + encodeURIComponent(fullQuery),
+          pageUrl: buildSearchUrl(urlPattern, fullQuery),
           progress: { phase: "starting", statusText: "Initializing deep dive search..." }
         }
       });
@@ -1305,7 +1444,7 @@ function attachEventListeners() {
       return;
     }
 
-    browser.tabs.create({ url: baseUrl + encodeURIComponent(fullQuery) });
+    browser.tabs.create({ url: buildSearchUrl(urlPattern, fullQuery) });
     window.close();
   }
 
@@ -1314,30 +1453,95 @@ function attachEventListeners() {
     if (e.key === "Enter") executeSearch();
   });
 
-  // Quick subscribe button (shown when feed detected)
-  document.getElementById("osint-subscribe").addEventListener("click", async () => {
-    const btn = document.getElementById("osint-subscribe");
-    if (btn.classList.contains("feed-subscribed")) return;
-    // Multi-feed mode — store feeds and open picker
-    if (btn._multiFeeds) {
-      browser.storage.local.set({ _detectedFeeds: btn._multiFeeds }).then(() => {
-        focusOrCreateConsole("feeds");
-      });
+  // Quick subscribe button — shows menu: Subscribe as Feed OR Add as Source
+  const feedBtn = document.getElementById("osint-subscribe");
+  const feedMenu = document.getElementById("feed-action-menu");
+
+  feedBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (feedBtn.classList.contains("feed-subscribed") || feedBtn.classList.contains("feed-source-saved")) return;
+    feedMenu.classList.toggle("hidden");
+  });
+
+  // Close menu on outside click
+  document.addEventListener("click", () => feedMenu.classList.add("hidden"));
+  feedMenu.addEventListener("click", (e) => e.stopPropagation());
+
+  // Option 1: Subscribe as Feed
+  document.getElementById("feed-action-subscribe").addEventListener("click", async () => {
+    feedMenu.classList.add("hidden");
+    // Multi-feed — open console picker
+    if (feedBtn._multiFeeds) {
+      await browser.storage.local.set({ _detectedFeeds: feedBtn._multiFeeds });
+      focusOrCreateConsole("feeds");
       return;
     }
-    const feedUrl = btn._feedUrl;
+    const feedUrl = feedBtn._feedUrl;
     if (!feedUrl) return;
-    btn.querySelector("span").textContent = "...";
+    feedBtn.querySelector("span").textContent = "...";
     const resp = await browser.runtime.sendMessage({ action: "addFeed", url: feedUrl, intervalMinutes: 60 });
     if (resp?.success) {
-      btn.querySelector("span").textContent = "✓";
-      btn.classList.add("feed-subscribed");
-      btn.title = "Already subscribed to this feed";
+      feedBtn.querySelector("span").textContent = "✓";
+      feedBtn.classList.add("feed-subscribed");
+      feedBtn.title = "Subscribed to this feed";
     } else {
-      btn.querySelector("span").textContent = resp?.error?.includes("already") ? "✓" : "✗";
-      if (resp?.error?.includes("already")) btn.classList.add("feed-subscribed");
-      else btn.style.color = "#f44336";
-      btn.style.animation = "none";
+      feedBtn.querySelector("span").textContent = resp?.error?.includes("already") ? "✓" : "✗";
+      if (resp?.error?.includes("already")) feedBtn.classList.add("feed-subscribed");
+      else feedBtn.style.color = "#f44336";
+      feedBtn.style.animation = "none";
+    }
+  });
+
+  // Option 2: Add as Source
+  document.getElementById("feed-action-source").addEventListener("click", async () => {
+    feedMenu.classList.add("hidden");
+    const feeds = feedBtn._multiFeeds || [];
+    // Single feed
+    if (!feeds.length && feedBtn._feedUrl) {
+      feeds.push({ url: feedBtn._feedUrl, title: feedBtn._feedTitle || "" });
+    }
+    if (!feeds.length) return;
+    feedBtn.querySelector("span").textContent = "...";
+    // Check existing sources to avoid duplicates
+    const existingResp = await browser.runtime.sendMessage({ action: "getSources" });
+    const existingUrls = new Set();
+    if (existingResp?.success && existingResp.sources) {
+      for (const s of existingResp.sources) {
+        for (const a of (s.addresses || [])) existingUrls.add(a.value);
+      }
+    }
+    const newFeeds = feeds.filter(f => !existingUrls.has(f.url));
+    if (!newFeeds.length) {
+      feedBtn.querySelector("span").textContent = "✓";
+      feedBtn.classList.add("feed-source-saved");
+      feedBtn.title = "Already in sources";
+      return;
+    }
+    const sources = newFeeds.map(f => {
+      let hostname = "";
+      try { hostname = new URL(f.url).hostname; } catch { /* skip */ }
+      return {
+        id: `src-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name: f.title || hostname || "RSS Source",
+        type: "service",
+        aliases: [],
+        addresses: [{ type: "rss", value: f.url, label: f.title || "" }],
+        tags: [],
+        location: "",
+        notes: "",
+      };
+    });
+    const resp = sources.length === 1
+      ? await browser.runtime.sendMessage({ action: "saveSource", source: sources[0] })
+      : await browser.runtime.sendMessage({ action: "importSources", sources });
+    if (resp?.success) {
+      feedBtn.querySelector("span").textContent = "✓";
+      feedBtn.classList.add("feed-source-saved");
+      feedBtn.title = sources.length === 1 ? "Saved as source" : `${sources.length} feeds saved as sources`;
+    } else {
+      feedBtn.querySelector("span").textContent = "✗";
+      feedBtn.style.color = "#f44336";
+      feedBtn.style.animation = "none";
     }
   });
 }
