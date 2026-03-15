@@ -971,6 +971,17 @@
     });
   });
 
+  // Text It (SMS via XMPP)
+  const textItBtn = document.getElementById("rp-textit");
+  if (textItBtn) {
+    TextIt.isConfigured().then(ok => { if (ok) textItBtn.classList.remove("hidden"); });
+    textItBtn.addEventListener("click", () => {
+      const content = editor.value.trim();
+      if (!content) return;
+      TextIt.open(content);
+    });
+  }
+
   // Paste (Gist / Pastebin / PrivateBin)
   document.getElementById("rp-paste").addEventListener("click", async () => {
     const content = editor.value;

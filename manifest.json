@@ -54,6 +54,8 @@
       "lib/cloud-providers.js",
       "lib/cloud-backup.js",
       "lib/argus-vault.js",
+      "lib/xmpp-client.js",
+      "lib/xmpp-sms.js",
       "background-permissions.js",
       "lib/argus-structured.js",
       "background-presets.js",

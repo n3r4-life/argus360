@@ -95,13 +95,28 @@ async function isTrawlScheduleAllowed() {
   return hour >= start || hour <= end;
 }
 
+// ── Trawl duration guard ──
+// trawlExpireAt: timestamp ms — when the current timed session ends
+async function isTrawlDurationAllowed() {
+  const { trawlExpireAt } = await browser.storage.local.get({ trawlExpireAt: null });
+  if (!trawlExpireAt) return true; // no timer active = always allowed
+  if (Date.now() > trawlExpireAt) {
+    // Timer expired — auto-disable trawl and clear expiry
+    await browser.storage.local.set({ trawlEnabled: false, trawlExpireAt: null });
+    return false;
+  }
+  return true;
+}
+
 async function trawlCollect(tabId, url) {
   try {
     if (!url || TRAWL_SKIP_RE.test(url)) return;
     const { trawlEnabled } = await browser.storage.local.get({ trawlEnabled: false });
     if (!trawlEnabled) return;
-    // Phase 3: respect schedule window
+    // Respect schedule window
     if (!(await isTrawlScheduleAllowed())) return;
+    // Respect duration timer — auto-disables when expired
+    if (!(await isTrawlDurationAllowed())) return;
     // Check domain exclusion (forced-private list)
     const { incognitoForceEnabled, incognitoSites } = await browser.storage.local.get({ incognitoForceEnabled: false, incognitoSites: [] });
     if (incognitoForceEnabled && incognitoSites.length) {
@@ -1978,6 +1993,18 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "syncBookmarksToGitHub") return CloudBackup.syncBookmarksToGitHub().catch(e => ({ success: false, error: e.message }));
   if (message.action === "syncBookmarkSnapshot") return CloudBackup.syncBookmarkSnapshot(message.bookmarkId).catch(e => ({ success: false, error: e.message }));
   if (message.action === "syncBookmarksToCloud") return CloudBackup.syncBookmarksToCloud().catch(e => ({ success: false, error: e.message }));
+  // XMPP / Text It
+  if (message.action === "xmppGetStatus") return handleXmppGetStatus();
+  if (message.action === "xmppGetConfig") return handleXmppGetConfig();
+  if (message.action === "xmppTestConnection") return handleXmppTestConnection();
+  if (message.action === "xmppSend") return handleXmppSend(message);
+  if (message.action === "xmppDisconnect") return handleXmppDisconnect();
+  if (message.action === "xmppChatConnect") return handleXmppChatConnect();
+  if (message.action === "xmppChatSend") return handleXmppChatSend(message);
+  if (message.action === "xmppChatPoll") return handleXmppChatPoll();
+  if (message.action === "xmppGetRoster") return handleXmppGetRoster();
+  if (message.action === "sourcesGetSmsContacts") return handleSourcesGetSmsContacts();
+  if (message.action === "sourcesSaveContact") return handleSourcesSaveContact(message);
   // Paste providers
   if (message.action === "pasteCreate") return handlePasteCreate(message);
   if (message.action === "pasteList") return CloudProviders[message.providerKey]?.list().catch(e => ({ success: false, error: e.message })) || Promise.resolve([]);
@@ -2696,6 +2723,316 @@ async function handleCloudConnect(message) {
   } catch (e) {
     console.error(`[Cloud] Connect failed:`, e);
     return { success: false, error: e.message };
+  }
+}
+
+// ──────────────────────────────────────────────
+// XMPP / Text It handlers
+// ──────────────────────────────────────────────
+let _xmppWs = null;
+let _xmppAuth = false;
+
+async function getXmppConfig() {
+  const { dataProviders } = await browser.storage.local.get({ dataProviders: {} });
+  const xmpp = dataProviders.xmpp || {};
+  let password = null;
+  try {
+    const resp = await ArgusVault.readSensitive("xmpp-password");
+    password = resp || null;
+  } catch { /* vault locked or not set */ }
+  return {
+    server: xmpp.server || "",
+    jid: xmpp.jid || "",
+    password,
+    gateway: xmpp.gateway || "",
+    country: xmpp.country || "US",
+    configured: !!(xmpp.server && xmpp.jid && xmpp.gateway)
+  };
+}
+
+async function handleXmppGetStatus() {
+  const cfg = await getXmppConfig();
+  return {
+    configured: cfg.configured,
+    connected: !!(_xmppWs && _xmppWs.readyState === WebSocket.OPEN && _xmppAuth)
+  };
+}
+
+async function handleXmppTestConnection() {
+  try {
+    // Disconnect any existing connection
+    handleXmppDisconnect();
+    const cfg = await getXmppConfig();
+    if (!cfg.server || !cfg.jid) return { success: false, error: "XMPP server and JID are required" };
+    if (!cfg.password) return { success: false, error: "XMPP password not set (check Vault)" };
+    _xmppWs = await XmppClient.connect(cfg.server, cfg.jid, cfg.password);
+    _xmppAuth = true;
+    // Attach reconnect/cleanup listeners
+    _xmppWs.onclose = () => { _xmppAuth = false; _xmppWs = null; };
+    _xmppWs.onerror = () => { _xmppAuth = false; };
+    return { success: true, message: "Connected and authenticated to " + cfg.jid.split("@")[1] };
+  } catch (e) {
+    _xmppAuth = false;
+    _xmppWs = null;
+    return { success: false, error: e.message };
+  }
+}
+
+async function handleXmppSend(message) {
+  const { to, body } = message;
+  if (!to || !body) return { success: false, error: "Missing recipient or body" };
+  try {
+    const cfg = await getXmppConfig();
+    if (!cfg.configured) return { success: false, error: "XMPP not configured — set up in Settings → Data Providers" };
+    if (!cfg.password) return { success: false, error: "XMPP password not available — check Vault" };
+
+    // Prefer Phase 2 persistent connection if available
+    if (_xmppConn && _xmppConn.isConnected()) {
+      // Use managed connection — fall through to send below
+    } else if (!_xmppWs || (typeof _xmppWs.isConnected === "function" ? !_xmppWs.isConnected() : _xmppWs.readyState !== WebSocket.OPEN) || !_xmppAuth) {
+      _xmppWs = await XmppClient.connect(cfg.server, cfg.jid, cfg.password);
+      _xmppAuth = true;
+      if (_xmppWs.onclose !== undefined && typeof _xmppWs.isConnected !== "function") {
+        _xmppWs.onclose = () => { _xmppAuth = false; _xmppWs = null; };
+        _xmppWs.onerror = () => { _xmppAuth = false; };
+      }
+    }
+
+    // Format JID and prepare message
+    const jid = XmppSms.formatJid(to, cfg.gateway, cfg.country);
+    const prepared = XmppSms.prepareMessage(body);
+
+    // If message needs paste-and-link, try to paste first
+    let finalBody = prepared.body;
+    if (XmppSms.needsPasteLink(body)) {
+      try {
+        const pasteResp = await handlePasteCreate({
+          providerKey: "privatebin",
+          title: "Argus SMS Content",
+          content: body
+        });
+        if (pasteResp?.success && pasteResp?.url) {
+          const withLink = XmppSms.prepareMessage(body, pasteResp.url);
+          finalBody = withLink.body;
+        }
+      } catch { /* fallback to truncated */ }
+    }
+
+    // Send — use Phase 2 connection if available, else legacy
+    const conn = (_xmppConn && _xmppConn.isConnected()) ? _xmppConn : _xmppWs;
+    await XmppClient.sendMessage(conn, cfg.jid, jid, finalBody);
+
+    // Update Sources lastUsed
+    try { await _updateSourceLastUsed(to); } catch { /* non-critical */ }
+
+    console.log(`[XMPP] Sent SMS to ${jid} (${finalBody.length} chars)`);
+    return { success: true, to: jid, chars: finalBody.length };
+  } catch (e) {
+    console.error("[XMPP] Send failed:", e);
+    return { success: false, error: e.message };
+  }
+}
+
+function handleXmppDisconnect() {
+  if (_xmppWs) {
+    XmppClient.disconnect(_xmppWs);
+    _xmppWs = null;
+    _xmppAuth = false;
+  }
+  return Promise.resolve({ success: true });
+}
+
+async function handleSourcesGetSmsContacts() {
+  try {
+    const all = await ArgusDB.Sources.getAll();
+    const contacts = all.filter(s =>
+      (s.tags || []).some(t => t.toLowerCase() === "sms") ||
+      (s.addresses || []).some(a => {
+        const label = (a.label || "").toLowerCase();
+        return label === "phone" || label === "sms" || label === "mobile" || label === "tel";
+      })
+    );
+    return { success: true, contacts };
+  } catch (e) {
+    return { success: false, contacts: [], error: e.message };
+  }
+}
+
+async function handleSourcesSaveContact(message) {
+  try {
+    const { name, phone, tags } = message;
+    const source = {
+      id: "src-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      name: name || phone,
+      aliases: [],
+      tags: tags || ["sms"],
+      location: "",
+      notes: "Added via Text It",
+      addresses: [{ label: "Phone", value: phone, lastUsed: Date.now() }]
+    };
+    await ArgusDB.Sources.save(source);
+    return { success: true, id: source.id };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+async function _updateSourceLastUsed(phone) {
+  const cleaned = phone.replace(/[^\d+]/g, "");
+  const all = await ArgusDB.Sources.getAll();
+  for (const s of all) {
+    if (!s.addresses) continue;
+    let updated = false;
+    for (const a of s.addresses) {
+      if (a.value && a.value.replace(/[^\d+]/g, "") === cleaned) {
+        a.lastUsed = Date.now();
+        updated = true;
+      }
+    }
+    if (updated) await ArgusDB.Sources.save(s);
+  }
+}
+
+// ── Phase 2: XMPP Chat (bidirectional) ──
+let _xmppConn = null;            // XmppClient.createConnection() instance
+let _xmppInbox = [];             // buffered inbound messages for polling
+let _xmppPresenceUpdates = [];   // buffered presence updates
+let _xmppLastStatus = null;      // last connection status change
+
+async function handleXmppGetConfig() {
+  const cfg = await getXmppConfig();
+  return { server: cfg.server, jid: cfg.jid, gateway: cfg.gateway, country: cfg.country, configured: cfg.configured };
+}
+
+async function handleXmppChatConnect() {
+  try {
+    // Disconnect existing connection
+    if (_xmppConn) {
+      _xmppConn.disconnect();
+      _xmppConn = null;
+    }
+    // Also clean up Phase 1 connection
+    if (_xmppWs) {
+      XmppClient.disconnect(_xmppWs);
+      _xmppWs = null;
+      _xmppAuth = false;
+    }
+
+    const cfg = await getXmppConfig();
+    if (!cfg.server || !cfg.jid) return { success: false, error: "XMPP server and JID are required" };
+    if (!cfg.password) return { success: false, error: "XMPP password not set (check Vault)" };
+
+    _xmppConn = XmppClient.createConnection({
+      wsUrl: cfg.server,
+      jid: cfg.jid,
+      password: cfg.password,
+      autoReconnect: true,
+
+      onMessage: (msg) => {
+        console.log("[XMPP] Inbound:", msg.from, msg.body?.slice(0, 50));
+        _xmppInbox.push(msg);
+
+        // Fire automation triggers for inbound messages
+        _fireXmppAutomationTrigger(msg);
+      },
+
+      onPresence: (pres) => {
+        _xmppPresenceUpdates.push(pres);
+      },
+
+      onStatus: (status, detail) => {
+        console.log("[XMPP] Status:", status, detail || "");
+        _xmppLastStatus = status;
+        // Keep Phase 1 state in sync
+        if (status === "connected") {
+          _xmppAuth = true;
+          _xmppWs = _xmppConn; // allow Phase 1 callers to use Phase 2 connection
+        } else if (status === "disconnected" || status === "error") {
+          _xmppAuth = false;
+        }
+      }
+    });
+
+    const result = await _xmppConn.connect();
+    return { success: true, jid: result.jid };
+  } catch (e) {
+    console.error("[XMPP] Chat connect failed:", e);
+    return { success: false, error: e.message };
+  }
+}
+
+async function handleXmppChatSend(message) {
+  const { to, body } = message;
+  if (!to || !body) return { success: false, error: "Missing recipient or body" };
+  if (!_xmppConn || !_xmppConn.isConnected()) {
+    return { success: false, error: "XMPP not connected — click Connect first" };
+  }
+  try {
+    const result = await _xmppConn.sendMessage(to, body);
+    // Update Sources lastUsed
+    try { await _updateSourceLastUsed(to); } catch { /* non-critical */ }
+    return { success: true, ...result };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function handleXmppChatPoll() {
+  // Drain buffered messages and presence updates
+  const messages = _xmppInbox.splice(0);
+  const presenceUpdates = _xmppPresenceUpdates.splice(0);
+  const statusUpdate = _xmppLastStatus;
+  _xmppLastStatus = null; // consumed
+
+  return Promise.resolve({
+    messages,
+    presenceUpdates,
+    statusUpdate
+  });
+}
+
+async function handleXmppGetRoster() {
+  if (!_xmppConn || !_xmppConn.isConnected()) {
+    return { success: false, items: [], error: "Not connected" };
+  }
+  try {
+    const items = await _xmppConn.requestRoster();
+    return { success: true, items };
+  } catch (e) {
+    return { success: false, items: [], error: e.message };
+  }
+}
+
+async function _fireXmppAutomationTrigger(msg) {
+  // Check for automations with xmpp-message trigger
+  if (typeof AutomationEngine === "undefined") return;
+  try {
+    const automations = await AutomationEngine.getAll();
+    for (const a of automations) {
+      if (!a.enabled) continue;
+      if (!a.triggers?.xmppMessage) continue;
+
+      // Check filter: match specific JID pattern or "*" for all
+      const filter = a.triggers.xmppMessage;
+      if (filter !== "*" && !msg.from.includes(filter)) continue;
+
+      console.log(`[XMPP] Firing automation "${a.name}" for message from ${msg.from}`);
+      AutomationEngine.run(a.id, {
+        vars: {
+          triggerSource: "xmpp-message",
+          xmppFrom: msg.from,
+          xmppBody: msg.body,
+          xmppTimestamp: msg.timestamp
+        },
+        page: {
+          url: "",
+          title: `XMPP message from ${msg.from}`,
+          text: msg.body
+        }
+      }).catch(e => console.warn("[XMPP] Automation run error:", e));
+    }
+  } catch (e) {
+    console.warn("[XMPP] Automation trigger error:", e);
   }
 }
 

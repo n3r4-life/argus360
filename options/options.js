@@ -1409,14 +1409,15 @@ function updateProviderTabIndicators() {
 // ──────────────────────────────────────────────
 // Data Provider tabs
 // ──────────────────────────────────────────────
-const DATA_PROVIDER_KEYS = ["gdrive", "dropbox", "webdav", "s3", "github"];
+const DATA_PROVIDER_KEYS = ["gdrive", "dropbox", "webdav", "s3", "github", "xmpp"];
 
 const DEFAULT_DATA_PROVIDERS = {
   gdrive:  { clientId: "", accessToken: "", refreshToken: "", expiresAt: 0, userEmail: "", connected: false },
   dropbox: { appKey: "", accessToken: "", refreshToken: "", expiresAt: 0, userName: "", connected: false },
   webdav:  { serverUrl: "", username: "", password: "", connected: false },
   s3:      { endpoint: "", bucket: "", accessKey: "", secretKey: "", region: "", connected: false },
-  github:  { pat: "", repo: "", branch: "main", connected: false }
+  github:  { pat: "", repo: "", branch: "main", connected: false },
+  xmpp:    { server: "", jid: "", gateway: "", country: "US", connected: false }
 };
 
 function selectDataProviderTab(key) {
@@ -1469,6 +1470,17 @@ function loadDataProviderFields() {
   document.getElementById("dp-github-branch").value = gh.branch || "main";
   updateDpConnectState("github", gh);
 
+  const xmpp = dataProviders.xmpp || {};
+  document.getElementById("dp-xmpp-server").value = xmpp.server || "";
+  document.getElementById("dp-xmpp-jid").value = xmpp.jid || "";
+  document.getElementById("dp-xmpp-gateway").value = xmpp.gateway || "";
+  document.getElementById("dp-xmpp-country").value = xmpp.country || "US";
+  // Load XMPP password from Vault
+  browser.runtime.sendMessage({ action: "vaultReadSensitive", key: "xmpp-password" }).then(resp => {
+    if (resp?.value) document.getElementById("dp-xmpp-password").value = "••••••••";
+  }).catch(() => {});
+  updateDpConnectState("xmpp", xmpp);
+
   updateDataProviderTabIndicators();
 }
 
@@ -1494,6 +1506,7 @@ function updateDpConnectState(key, cfg) {
       if (key === "webdav") statusEl.textContent = `Connected (${cfg.serverUrl || "WebDAV"})`;
       else if (key === "s3") statusEl.textContent = `Connected (${cfg.bucket || "S3"})`;
       else if (key === "github") statusEl.textContent = `Connected (${cfg.repo || "GitHub"})`;
+      else if (key === "xmpp") statusEl.textContent = `Connected (${cfg.jid || "XMPP"})`;
     } else {
       statusEl.className = "dp-status";
       statusEl.textContent = "";
@@ -1528,6 +1541,13 @@ function saveDataProviderField(key) {
       dp.repo = document.getElementById("dp-github-repo").value.trim();
       dp.branch = document.getElementById("dp-github-branch").value.trim() || "main";
       break;
+    case "xmpp":
+      dp.server = document.getElementById("dp-xmpp-server").value.trim();
+      dp.jid = document.getElementById("dp-xmpp-jid").value.trim();
+      dp.gateway = document.getElementById("dp-xmpp-gateway").value.trim();
+      dp.country = document.getElementById("dp-xmpp-country").value;
+      // Password is saved separately to Vault (not in dataProviders)
+      break;
   }
   updateDataProviderTabIndicators();
   scheduleSave();
@@ -1548,6 +1568,7 @@ function updateDataProviderTabIndicators() {
         case "webdav": configured = !!(cfg?.serverUrl && cfg?.username); break;
         case "s3": configured = !!(cfg?.endpoint && cfg?.bucket && cfg?.accessKey); break;
         case "github": configured = !!(cfg?.pat && cfg?.repo); break;
+        case "xmpp": configured = !!(cfg?.server && cfg?.jid && cfg?.gateway); break;
       }
     }
     btn.classList.toggle("configured", configured);
@@ -3853,7 +3874,8 @@ function attachListeners() {
   // Data provider field inputs — auto-save on change
   for (const id of ["dp-gdrive-client-id", "dp-dropbox-app-key", "dp-webdav-url", "dp-webdav-user", "dp-webdav-pass",
     "dp-s3-endpoint", "dp-s3-bucket", "dp-s3-access-key", "dp-s3-secret-key", "dp-s3-region",
-    "dp-github-pat", "dp-github-repo", "dp-github-branch"]) {
+    "dp-github-pat", "dp-github-repo", "dp-github-branch",
+    "dp-xmpp-server", "dp-xmpp-jid", "dp-xmpp-gateway", "dp-xmpp-country"]) {
     const input = document.getElementById(id);
     if (input) {
       const key = id.split("-")[1]; // gdrive, dropbox, webdav, s3, github
@@ -3869,6 +3891,43 @@ function attachListeners() {
   document.getElementById("dp-webdav-test").addEventListener("click", () => testDataProviderConnection("webdav"));
   document.getElementById("dp-s3-test").addEventListener("click", () => testDataProviderConnection("s3"));
   document.getElementById("dp-github-test").addEventListener("click", () => testDataProviderConnection("github"));
+  // XMPP test + password save
+  document.getElementById("dp-xmpp-test").addEventListener("click", async () => {
+    const statusEl = document.getElementById("dp-xmpp-status");
+    statusEl.className = "dp-status";
+    statusEl.textContent = "Testing...";
+    saveDataProviderField("xmpp");
+    // Save password to Vault if changed
+    const pwField = document.getElementById("dp-xmpp-password");
+    if (pwField.value && pwField.value !== "••••••••") {
+      await browser.runtime.sendMessage({ action: "vaultWriteSensitive", key: "xmpp-password", value: pwField.value });
+      pwField.value = "••••••••";
+    }
+    try {
+      const resp = await browser.runtime.sendMessage({ action: "xmppTestConnection" });
+      if (resp?.success) {
+        statusEl.className = "dp-status connected";
+        statusEl.textContent = resp.message || "Connected!";
+        dataProviders.xmpp = dataProviders.xmpp || {};
+        dataProviders.xmpp.connected = true;
+        updateDataProviderTabIndicators();
+        scheduleSave();
+      } else {
+        statusEl.className = "dp-status error";
+        statusEl.textContent = resp?.error || "Connection failed";
+      }
+    } catch (e) {
+      statusEl.className = "dp-status error";
+      statusEl.textContent = e.message;
+    }
+  });
+  document.getElementById("dp-xmpp-password").addEventListener("change", async () => {
+    const pwField = document.getElementById("dp-xmpp-password");
+    if (pwField.value && pwField.value !== "••••••••") {
+      await browser.runtime.sendMessage({ action: "vaultWriteSensitive", key: "xmpp-password", value: pwField.value });
+      pwField.value = "••••••••";
+    }
+  });
   // Paste provider tabs
   document.getElementById("paste-provider-tab-list").querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => selectPasteProviderTab(btn.dataset.pprovider));

@@ -7,6 +7,8 @@
   <link rel="stylesheet" href="graph.css">
   <link rel="stylesheet" href="../lib/argus-chat.css">
   <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../shared/text-it.css">
+  <link rel="stylesheet" href="../shared/xmpp-chat.css">
 </head>
 <body>
   <script src="../shared/ribbon.js"></script>
@@ -181,7 +183,15 @@
 
   <script src="../lib/purify.min.js"></script>
   <script src="../lib/marked.min.js"></script>
+  <script src="../shared/text-it.js"></script>
+  <script src="../shared/xmpp-chat.js"></script>
   <script src="../lib/argus-chat.js"></script>
   <script src="graph.js"></script>
+  <div id="xmpp-chat-container"></div>
+  <script>
+    if (typeof XmppChat !== "undefined") {
+      XmppChat.init({ container: document.getElementById("xmpp-chat-container"), pageId: "graph" });
+    }
+  </script>
 </body>
 </html>

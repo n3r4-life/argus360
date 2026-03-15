@@ -168,6 +168,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  // Text It (SMS via XMPP)
+  const textItBtn = document.getElementById("share-textit");
+  if (textItBtn) {
+    TextIt.isConfigured().then(ok => { if (ok) textItBtn.classList.remove("hidden"); });
+    textItBtn.addEventListener("click", () => {
+      TextIt.open(rawMarkdown || getShareSnippet());
+    });
+  }
+
   // Send to Draft Pad
   document.getElementById("send-to-draft").addEventListener("click", async () => {
     if (!rawMarkdown) return;

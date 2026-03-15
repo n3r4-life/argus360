@@ -406,6 +406,7 @@
               <button class="tab-btn" data-dprovider="webdav">WebDAV</button>
               <button class="tab-btn" data-dprovider="s3">S3</button>
               <button class="tab-btn" data-dprovider="github">GitHub</button>
+              <button class="tab-btn" data-dprovider="xmpp">XMPP / SMS</button>
             </div>
           </div>
 
@@ -567,6 +568,88 @@
               <div class="dp-action-row">
                 <button id="dp-github-test" class="btn btn-sm btn-primary">Test Connection</button>
                 <span id="dp-github-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- XMPP / SMS fields -->
+            <div id="dp-xmpp-fields" class="hidden">
+              <div class="form-group">
+                <label for="dp-xmpp-server">WebSocket Server URL</label>
+                <input type="text" id="dp-xmpp-server" placeholder="e.g. wss://xmpp.example.com:5281/ws">
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="dp-xmpp-jid">JID (Jabber ID)</label>
+                  <input type="text" id="dp-xmpp-jid" placeholder="user@jabber.example.com">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="dp-xmpp-password">Password</label>
+                  <input type="password" id="dp-xmpp-password" placeholder="XMPP password (stored in Vault)">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="dp-xmpp-gateway">SMS Gateway Domain</label>
+                  <input type="text" id="dp-xmpp-gateway" placeholder="e.g. cheogram.com">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="dp-xmpp-country">Default Country Code</label>
+                  <select id="dp-xmpp-country" class="select-compact">
+                    <option value="US">US (+1)</option>
+                    <option value="CA">CA (+1)</option>
+                    <option value="GB">GB (+44)</option>
+                    <option value="AU">AU (+61)</option>
+                    <option value="DE">DE (+49)</option>
+                    <option value="FR">FR (+33)</option>
+                    <option value="IN">IN (+91)</option>
+                    <option value="JP">JP (+81)</option>
+                    <option value="BR">BR (+55)</option>
+                    <option value="MX">MX (+52)</option>
+                    <option value="IT">IT (+39)</option>
+                    <option value="ES">ES (+34)</option>
+                    <option value="NL">NL (+31)</option>
+                    <option value="SE">SE (+46)</option>
+                    <option value="NO">NO (+47)</option>
+                    <option value="DK">DK (+45)</option>
+                    <option value="FI">FI (+358)</option>
+                    <option value="PL">PL (+48)</option>
+                    <option value="CH">CH (+41)</option>
+                    <option value="AT">AT (+43)</option>
+                    <option value="BE">BE (+32)</option>
+                    <option value="IE">IE (+353)</option>
+                    <option value="NZ">NZ (+64)</option>
+                    <option value="ZA">ZA (+27)</option>
+                    <option value="KR">KR (+82)</option>
+                    <option value="SG">SG (+65)</option>
+                    <option value="IL">IL (+972)</option>
+                    <option value="AE">AE (+971)</option>
+                    <option value="RU">RU (+7)</option>
+                    <option value="CN">CN (+86)</option>
+                  </select>
+                </div>
+              </div>
+              <details class="dp-setup-guide">
+                <summary>Setup Guide</summary>
+                <ol class="dp-guide-steps">
+                  <li><strong>XMPP Server:</strong> Enter the WebSocket URL of your XMPP server (Prosody, ejabberd, Openfire). Usually <code>wss://server:5281/ws</code> or <code>wss://server/xmpp-websocket</code></li>
+                  <li><strong>JID:</strong> Your Jabber ID, e.g. <code>nick@jabber.example.com</code></li>
+                  <li><strong>Password:</strong> Your XMPP account password (encrypted via Vault)</li>
+                  <li><strong>SMS Gateway:</strong> The domain of your SMS-over-XMPP gateway provider:
+                    <ul style="margin-top:4px;">
+                      <li><strong>JMP.chat / Cheogram:</strong> <code>cheogram.com</code> — hosted service (~$4.99/mo, sign up at <a href="https://jmp.chat" target="_blank">jmp.chat</a>)</li>
+                      <li><strong>sms-over-xmpp:</strong> Self-hosted Go binary with GSM modem or Twilio backend</li>
+                      <li><strong>SMStoXMPP:</strong> Self-hosted PHP gateway using Android phone as SMS bridge</li>
+                    </ul>
+                  </li>
+                  <li>Click <strong>Test Connection</strong> to verify your credentials and gateway reachability</li>
+                </ol>
+                <div style="margin-top:8px;font-size:11px;color:var(--text-muted);line-height:1.5;">
+                  <strong>How it works:</strong> Argus connects directly to your XMPP server via WebSocket. Messages to phone numbers are routed as XMPP stanzas to <code>+number@gateway</code>, where the gateway delivers them as SMS. No Argus servers involved.
+                </div>
+              </details>
+              <div class="dp-action-row">
+                <button id="dp-xmpp-test" class="btn btn-sm btn-primary">Test Connection</button>
+                <span id="dp-xmpp-status" class="dp-status"></span>
               </div>
             </div>
           </div>

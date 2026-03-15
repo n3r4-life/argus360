@@ -7,6 +7,8 @@
   <link rel="stylesheet" href="reporting.css">
   <link rel="stylesheet" href="../shared/ribbon.css">
   <link rel="stylesheet" href="../lib/email-share.css">
+  <link rel="stylesheet" href="../shared/text-it.css">
+  <link rel="stylesheet" href="../shared/xmpp-chat.css">
 </head>
 <body>
   <script src="../shared/ribbon.js"></script>
@@ -35,6 +37,7 @@
     <button id="rp-x" class="rp-btn-sm rp-btn-share" title="Post to X">X</button>
     <button id="rp-linkedin" class="rp-btn-sm rp-btn-share" title="Share on LinkedIn">LinkedIn</button>
     <button id="rp-blogger" class="rp-btn-sm rp-btn-share" title="Post to Blogger">Blogger</button>
+    <button id="rp-textit" class="rp-btn-sm rp-btn-share hidden" title="Send as SMS">Text It</button>
     <span class="rp-header-sep"></span>
     <button id="rp-quick-post" class="rp-btn-sm rp-btn-ai" title="AI-summarize draft for social posting">Quick Post</button>
     <button id="rp-run-script" class="rp-btn-sm rp-btn-ai" title="Run automation on draft">Run Script</button>
@@ -206,6 +209,14 @@
   <script src="../lib/marked.min.js"></script>
   <script src="../lib/export-utils.js"></script>
   <script src="../lib/email-share.js"></script>
+  <script src="../shared/text-it.js"></script>
+  <script src="../shared/xmpp-chat.js"></script>
   <script src="reporting.js"></script>
+  <div id="xmpp-chat-container"></div>
+  <script>
+    if (typeof XmppChat !== "undefined") {
+      XmppChat.init({ container: document.getElementById("xmpp-chat-container"), pageId: "reporting" });
+    }
+  </script>
 </body>
 </html>

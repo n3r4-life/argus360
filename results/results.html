@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="../lib/argus-chat.css">
   <link rel="stylesheet" href="../lib/email-share.css">
   <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../shared/text-it.css">
+  <link rel="stylesheet" href="../shared/xmpp-chat.css">
 </head>
 <body>
   <script src="../shared/ribbon.js"></script>
@@ -59,6 +61,7 @@
         <button id="share-email" class="btn btn-secondary btn-small" title="Share via Email">Email</button>
         <button id="email-compose" class="btn btn-secondary btn-small" title="Email with contacts" style="color:var(--accent);">Email+</button>
         <button id="send-to-draft" class="btn btn-secondary btn-small" title="Send to Draft Pad" style="color:var(--accent);">Draft</button>
+        <button id="share-textit" class="btn btn-secondary btn-small hidden" title="Send as SMS via XMPP">Text It</button>
       </div>
     </div>
 
@@ -127,6 +130,15 @@
   <script src="../lib/intelligence-viewer.js"></script>
   <script src="../lib/argus-chat.js"></script>
   <script src="../lib/email-share.js"></script>
+  <script src="../shared/text-it.js"></script>
+  <script src="../shared/panel-state.js"></script>
+  <script src="../shared/xmpp-chat.js"></script>
   <script src="results.js"></script>
+  <div id="xmpp-chat-container"></div>
+  <script>
+    if (typeof XmppChat !== "undefined") {
+      XmppChat.init({ container: document.getElementById("xmpp-chat-container"), pageId: "results" });
+    }
+  </script>
 </body>
 </html>
