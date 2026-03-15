@@ -150,6 +150,8 @@
   border-radius: 6px;
   font-family: inherit;
   cursor: pointer;
+  max-width: 90px;
+  flex-shrink: 0;
 }
 
 .argus-chat-input {

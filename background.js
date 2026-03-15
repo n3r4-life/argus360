@@ -3362,15 +3362,87 @@ ${content}
   return { success: true };
 }
 
+// ──────────────────────────────────────────────
+// Build multimodal user content (text + images) for vision-capable providers
+// ──────────────────────────────────────────────
+async function buildMultimodalUserContent(question, imageUrls, provider) {
+  if (!imageUrls || !imageUrls.length) return question;
+
+  const prov = (provider || "").toLowerCase();
+
+  // Custom providers — text-only fallback
+  if (prov === "custom") {
+    const urlList = imageUrls.map((u, i) => `[Image ${i + 1}]: ${u}`).join("\n");
+    return `${question}\n\n${urlList}`;
+  }
+
+  // Helper: fetch image as base64
+  async function fetchImageBase64(url) {
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const buf = await blob.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    return { b64: btoa(binary), mime: blob.type || "image/jpeg" };
+  }
+
+  // Anthropic needs base64 with {type: "image", source: {type: "base64"}}
+  if (prov === "anthropic") {
+    const parts = [{ type: "text", text: question }];
+    for (const url of imageUrls.slice(0, 5)) {
+      try {
+        const { b64, mime } = await fetchImageBase64(url);
+        parts.push({
+          type: "image",
+          source: { type: "base64", media_type: mime, data: b64 }
+        });
+      } catch (e) {
+        parts.push({ type: "text", text: `[Image failed to load: ${url}]` });
+      }
+    }
+    return parts;
+  }
+
+  // Gemini needs base64 with inline_data format
+  if (prov === "gemini") {
+    const parts = [{ type: "text", text: question }];
+    for (const url of imageUrls.slice(0, 5)) {
+      try {
+        const { b64, mime } = await fetchImageBase64(url);
+        parts.push({
+          type: "inline_data",
+          inline_data: { mime_type: mime, data: b64 }
+        });
+      } catch (e) {
+        parts.push({ type: "text", text: `[Image failed to load: ${url}]` });
+      }
+    }
+    return parts;
+  }
+
+  // OpenAI, Grok — image_url format (natively supported)
+  const parts = [{ type: "text", text: question }];
+  for (const url of imageUrls.slice(0, 5)) {
+    parts.push({
+      type: "image_url",
+      image_url: { url, detail: "low" }
+    });
+  }
+  return parts;
+}
+
 async function handleFollowUp(message) {
   try {
-    const { resultId, question, provider: providerOverride } = message;
+    const { resultId, question, imageUrls, provider: providerOverride } = message;
     const history = conversationHistory.get(resultId);
     if (!history) throw new Error("No conversation history found. The analysis session may have expired.");
 
     const effectiveProvider = providerOverride || history.provider;
     const settings = await getProviderSettings(effectiveProvider);
-    history.messages.push({ role: "user", content: question });
+
+    const userContent = await buildMultimodalUserContent(question, imageUrls, settings.provider);
+    history.messages.push({ role: "user", content: userContent });
 
     const followupResultId = `${resultId}-followup-${Date.now()}`;
 
@@ -3421,7 +3493,7 @@ async function handleFollowUp(message) {
 // ──────────────────────────────────────────────
 async function handleStartConversation(message) {
   try {
-    const { contextType, contextData, pageUrl, pageTitle, question, provider: providerOverride } = message;
+    const { contextType, contextData, pageUrl, pageTitle, question, imageUrls, provider: providerOverride } = message;
     const settings = await getProviderSettings(providerOverride || null);
 
     const conversationId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -3433,9 +3505,12 @@ async function handleStartConversation(message) {
 ${contextData}
 --- End Data ---`;
 
+    // Build user message — multimodal if images are attached
+    const userContent = await buildMultimodalUserContent(question, imageUrls, settings.provider);
+
     const messages = [
       { role: "system", content: systemPrompt },
-      { role: "user", content: question }
+      { role: "user", content: userContent }
     ];
 
     const followupResultId = `${conversationId}-followup-${Date.now()}`;

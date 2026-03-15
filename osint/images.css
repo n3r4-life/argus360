@@ -423,6 +423,7 @@ body {
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 12px;
   padding: 20px;
+  padding-bottom: 80px; /* space for fixed chat bar */
 }
 
 .image-grid.list-view {

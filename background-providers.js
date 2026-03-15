@@ -503,10 +503,25 @@ async function callGeminiStream(apiKey, model, messages, opts, onChunk, onThinki
   const systemMsg = messages.find(m => m.role === "system");
   const nonSystem = messages.filter(m => m.role !== "system");
 
-  const contents = nonSystem.map(m => ({
-    role: m.role === "assistant" ? "model" : "user",
-    parts: [{ text: m.content }]
-  }));
+  const contents = nonSystem.map(m => {
+    let parts;
+    if (Array.isArray(m.content)) {
+      // Multimodal content — convert to Gemini parts format
+      parts = m.content.map(block => {
+        if (block.type === "text") return { text: block.text };
+        if (block.type === "inline_data" && block.inline_data) {
+          return { inline_data: block.inline_data };
+        }
+        if (block.type === "image_url" && block.image_url?.url) {
+          return { text: `[Image: ${block.image_url.url}]` };
+        }
+        return { text: typeof block === "string" ? block : JSON.stringify(block) };
+      });
+    } else {
+      parts = [{ text: m.content }];
+    }
+    return { role: m.role === "assistant" ? "model" : "user", parts };
+  });
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
   const body = { contents, generationConfig: { temperature, maxOutputTokens: maxTokens } };

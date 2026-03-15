@@ -466,31 +466,6 @@
     if (otherTab) otherTab.classList.add("tab-zero");
   }
 
-  // Discuss with AI — standard ArgusChat component (same as Connection Graph)
-  {
-    const typeSummary = Object.entries(typeCounts).map(([t, c]) => `${t.toUpperCase()}: ${c}`).join(", ");
-    const contextLines = [
-      `Page: ${pageTitle || pageUrl || "Unknown"}`,
-      `Total images: ${images.length}`,
-      `Types: ${typeSummary}`,
-      `Sources: IMG=${stats?.bySource?.img || 0}, CSS-BG=${stats?.bySource?.["css-bg"] || 0}, Meta=${stats?.bySource?.meta || 0}, Favicon=${stats?.bySource?.favicon || 0}`,
-    ];
-    if (images.length <= 200) {
-      contextLines.push("\nImage list:");
-      images.forEach((img, i) => {
-        const name = img.filename || img.src?.split("/").pop()?.split("?")[0] || "unknown";
-        contextLines.push(`${i + 1}. ${name} (${img.typeNorm || "?"}, ${img.width || "?"}x${img.height || "?"}, src: ${img.source || "?"})`);
-      });
-    }
-
-    ArgusChat.init({
-      container: document.getElementById("argus-chat-container"),
-      contextType: "Image Grabber",
-      contextData: contextLines.join("\n"),
-      pageTitle: pageTitle || ""
-    });
-  }
-
   // ── Button icon SVGs (preserved during dynamic text updates) ──
   const ICONS = {
     download: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
@@ -516,6 +491,54 @@
   let currentColorFilter = "all"; // color search filter (not display overlay)
   // multi-tab filter uses enabledTabs Set (defined in setup below)
   const imageColors = new Map(); // src → Set of dominant color names
+
+  // Discuss with AI — standard ArgusChat component
+  {
+    const typeSummary = Object.entries(typeCounts).map(([t, c]) => `${t.toUpperCase()}: ${c}`).join(", ");
+
+    function buildChatContext() {
+      const lines = [
+        `Page: ${pageTitle || pageUrl || "Unknown"}`,
+        `Total images: ${images.length}`,
+        `Types: ${typeSummary}`,
+        `Sources: IMG=${stats?.bySource?.img || 0}, CSS-BG=${stats?.bySource?.["css-bg"] || 0}, Meta=${stats?.bySource?.meta || 0}, Favicon=${stats?.bySource?.favicon || 0}`,
+      ];
+      if (selected.size > 0) {
+        lines.push(`\nSelected images (${selected.size}):`);
+        images.forEach((img) => {
+          if (!selected.has(img.src)) return;
+          const name = img.filename || img.src?.split("/").pop()?.split("?")[0] || "unknown";
+          lines.push(`  - ${name} (${img.typeNorm || "?"}, ${img.width || "?"}x${img.height || "?"}, src: ${img.source || "?"}, url: ${img.src})`);
+        });
+        lines.push("");
+      }
+      if (images.length <= 200) {
+        lines.push("All images:");
+        images.forEach((img, i) => {
+          const name = img.filename || img.src?.split("/").pop()?.split("?")[0] || "unknown";
+          lines.push(`${i + 1}. ${name} (${img.typeNorm || "?"}, ${img.width || "?"}x${img.height || "?"}, src: ${img.source || "?"})`);
+        });
+      }
+      return lines.join("\n");
+    }
+
+    ArgusChat.init({
+      container: document.getElementById("argus-chat-container"),
+      contextType: "Image Grabber",
+      contextData: buildChatContext(),
+      pageTitle: pageTitle || "",
+      getImageUrls: () => {
+        // Return URLs of selected images (skip SVGs and ICOs — not useful for vision)
+        const skipTypes = new Set(["svg", "ico"]);
+        return images
+          .filter(img => selected.has(img.src) && !skipTypes.has(img.typeNorm))
+          .slice(0, 5)
+          .map(img => img.src);
+      }
+    });
+
+    window._refreshChatContext = () => ArgusChat.updateContext(buildChatContext());
+  }
 
   // ── Session Persistence ──
   const CACHE_DB_NAME = "ArgusImageCache";
@@ -1074,6 +1097,8 @@
     if (cmpBtn) cmpBtn.disabled = selected.size < 2;
     const apc = document.getElementById("actionsPanelCount");
     if (apc) apc.textContent = selected.size ? selected.size + " sel" : "";
+    // Update AI chat context with current selection
+    if (window._refreshChatContext) window._refreshChatContext();
   }
 
   // ── Preview Modal ──
