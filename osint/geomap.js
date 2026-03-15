@@ -5,7 +5,8 @@
   const TYPE_COLORS = {
     location:     '#4caf50',
     organization: '#64b5f6',
-    ip:           '#ffb74d'
+    ip:           '#ffb74d',
+    address:      '#26a69a'
   };
 
   const MIN_RADIUS = 6;
@@ -25,6 +26,42 @@
   }
 
   function loadData() {
+    const params = new URLSearchParams(window.location.search);
+    const source = params.get('source');
+
+    // Phase 3: Trawl Net as data source
+    if (source === 'trawl') {
+      showLoading('Loading trawl location data...');
+      const msg = { action: 'buildGeomapFromTrawl' };
+      if (params.get('from')) msg.from = params.get('from');
+      if (params.get('to')) msg.to = params.get('to');
+      if (typeof browser !== 'undefined' && browser.runtime) {
+        browser.runtime.sendMessage(msg)
+          .then(resp => {
+            if (resp?.success) {
+              // Normalize trawl locations to geomap format
+              resp.locations = (resp.locations || []).map(loc => ({
+                name: loc.name,
+                type: loc.type || 'location',
+                mentions: loc.mentions || 1,
+                lat: loc.lat,
+                lng: loc.lng,
+                sources: loc.sources || [],
+                needsGeocode: loc.needsGeocode || false,
+              }));
+              document.getElementById('projectName').textContent = 'Trawl Net Locations';
+            }
+            handleResponse(resp);
+          })
+          .catch(err => {
+            console.error('Geomap trawl load error:', err);
+            showEmpty('Failed to load trawl location data: ' + err.message);
+            hideLoading();
+          });
+        return;
+      }
+    }
+
     const projectId = getProjectId();
     if (!projectId) {
       showEmpty('No project specified. Open this page from a project.');

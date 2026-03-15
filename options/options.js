@@ -467,6 +467,11 @@ const el = {
   showBadge: document.getElementById("show-badge"),
   trackMyPages: document.getElementById("track-my-pages"),
   trawlEnabled: document.getElementById("trawl-enabled"),
+  trawlScheduleEnabled: document.getElementById("trawl-schedule-enabled"),
+  trawlScheduleConfig: document.getElementById("trawl-schedule-config"),
+  trawlStartHour: document.getElementById("trawl-start-hour"),
+  trawlEndHour: document.getElementById("trawl-end-hour"),
+  trawlDayChecks: document.getElementById("trawl-day-checks"),
   incognitoForceEnabled: document.getElementById("incognito-force-enabled"),
   incognitoAddDomain: document.getElementById("incognito-add-domain"),
   incognitoAddBtn: document.getElementById("incognito-add-btn"),
@@ -1312,6 +1317,8 @@ async function loadAllSettings() {
   el.showBadge.checked = settings.showBadge !== false;
   el.trackMyPages.checked = settings.trackMyPages === true;
   el.trawlEnabled.checked = settings.trawlEnabled === true;
+  // Trawl schedule
+  loadTrawlScheduleUI();
   el.incognitoForceEnabled.checked = settings.incognitoForceEnabled === true;
   renderIncognitoSites(settings.incognitoSites || []);
   el.responseLanguage.value = settings.responseLanguage ?? "auto";
@@ -3931,6 +3938,8 @@ function attachListeners() {
     }
     scheduleSave();
   });
+  // Trawl Schedule
+  initTrawlScheduleControls();
   el.incognitoForceEnabled.addEventListener("change", async () => {
     if (el.incognitoForceEnabled.checked) {
       // Request webNavigation permission if needed
@@ -11135,4 +11144,64 @@ function initSourcePicker(btnId, dropdownId, addrTypes, onSelect) {
       dropdown.classList.add("hidden");
     }
   });
+}
+
+// ══════════════════════════════════════════════════════════════
+// Trawl Schedule — Phase 3
+// ══════════════════════════════════════════════════════════════
+
+function initTrawlScheduleControls() {
+  // Populate hour selects
+  for (let h = 0; h < 24; h++) {
+    const label = `${String(h).padStart(2, "0")}:00`;
+    const optS = document.createElement("option");
+    optS.value = h; optS.textContent = label;
+    el.trawlStartHour.appendChild(optS);
+    const optE = document.createElement("option");
+    optE.value = h; optE.textContent = label;
+    el.trawlEndHour.appendChild(optE);
+  }
+  el.trawlEndHour.value = "23";
+
+  el.trawlScheduleEnabled.addEventListener("change", () => {
+    el.trawlScheduleConfig.style.display = el.trawlScheduleEnabled.checked ? "block" : "none";
+    saveTrawlSchedule();
+  });
+
+  el.trawlStartHour.addEventListener("change", saveTrawlSchedule);
+  el.trawlEndHour.addEventListener("change", saveTrawlSchedule);
+  el.trawlDayChecks.querySelectorAll("input[data-day]").forEach(cb => {
+    cb.addEventListener("change", saveTrawlSchedule);
+  });
+}
+
+async function loadTrawlScheduleUI() {
+  try {
+    const resp = await browser.runtime.sendMessage({ action: "getTrawlSchedule" });
+    const sched = resp?.schedule;
+    if (!sched) return;
+    el.trawlScheduleEnabled.checked = sched.enabled === true;
+    el.trawlScheduleConfig.style.display = sched.enabled ? "block" : "none";
+    if (sched.startHour !== undefined) el.trawlStartHour.value = sched.startHour;
+    if (sched.endHour !== undefined) el.trawlEndHour.value = sched.endHour;
+    if (sched.days) {
+      el.trawlDayChecks.querySelectorAll("input[data-day]").forEach(cb => {
+        cb.checked = sched.days.includes(parseInt(cb.dataset.day, 10));
+      });
+    }
+  } catch {}
+}
+
+function saveTrawlSchedule() {
+  const days = [];
+  el.trawlDayChecks.querySelectorAll("input[data-day]:checked").forEach(cb => {
+    days.push(parseInt(cb.dataset.day, 10));
+  });
+  const schedule = {
+    enabled: el.trawlScheduleEnabled.checked,
+    startHour: parseInt(el.trawlStartHour.value, 10),
+    endHour: parseInt(el.trawlEndHour.value, 10),
+    days: days.length ? days : [0, 1, 2, 3, 4, 5, 6], // default: all days if none checked
+  };
+  browser.runtime.sendMessage({ action: "setTrawlSchedule", schedule }).catch(() => {});
 }

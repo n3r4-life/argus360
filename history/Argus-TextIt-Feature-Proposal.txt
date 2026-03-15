@@ -1,0 +1,191 @@
+﻿
+ARGUS
+FEATURE PROPOSAL
+
+"Text It" — SMS & XMPP Messaging Integration
+Send analysis results, intelligence briefs, and reports directly to any phone number via XMPP-to-SMS gateway
+Date: 2026-03-15
+Author: n3r4-life
+Repository: github.com/n3r4-life/argus360
+Status: Proposal
+1. Executive Summary
+This proposal introduces a "Text It" button to Argus — a one-click SMS/messaging capability that leverages the XMPP protocol and SMS gateway infrastructure to send analysis results, intelligence briefs, Draft Pad reports, and any other Argus output directly to a phone number as a text message.
+The feature requires zero new infrastructure from the developer. It uses the same privacy-first, user-configured provider model that Argus applies to every external service: the user provides their own XMPP credentials and gateway, Argus handles the connection and formatting.
+XMPP (Jabber) was selected because it is federated, supports end-to-end encryption (OMEMO/OTR), has native WebSocket transport (no relay bridge required), and has a mature ecosystem of SMS gateway providers that map phone numbers to XMPP JIDs.
+
+2. Problem Statement
+Argus currently supports sharing content via X (Twitter), Reddit, LinkedIn, Email, GitHub Gist, Pastebin, and PrivateBin. These cover web-based and developer-oriented distribution channels. However, the most universal and immediate communication channel — SMS text messaging — is absent.
+Many operational scenarios require pushing intelligence or alerts to individuals who are not at a computer, do not use social media, or need immediate notification on their phone. SMS reaches every phone on earth with no app install required.
+Without this capability, users must manually copy content from Argus, switch to a separate messaging application, paste, and send. This breaks the workflow and introduces friction in time-sensitive situations.
+
+3. Proposed Solution
+3.1 Architecture Overview
+The solution adds an XMPP messaging provider to Argus and a "Text It" share button across all content surfaces. The architecture follows the existing Argus provider pattern:
+    • Settings UI: New provider tab under Data Providers for XMPP configuration (server, JID, password, gateway domain). Identical layout to existing provider tabs.
+    • Connection Layer: WebSocket connection from the browser directly to the XMPP server. No relay, no companion, no external infrastructure operated by the developer.
+    • Gateway Routing: Messages addressed to phone numbers are formatted as XMPP JIDs using the configured gateway domain (e.g., +15551234567@cheogram.com).
+    • Share Button: "Text It" button added to the existing share toolbar on Results, Draft Pad, Chat, History, and Workbench surfaces.
+    • Credential Storage: XMPP credentials stored in browser.storage.local, encrypted with AES-256-GCM when Vault is enabled.
+
+3.2 Data Flow
+    1. User clicks "Text It" on any content surface (analysis result, draft, chat response, etc.).
+    2. Argus prompts for a recipient phone number (or selects from a contact list if configured).
+    3. Content is formatted for SMS: stripped to plain text, truncated if needed, with a link to the full content via configured paste service if the message exceeds SMS length limits.
+    4. Argus opens a WebSocket connection to the user’s configured XMPP server (or reuses an existing connection).
+    5. Message is sent as an XMPP stanza to +{number}@{gateway-domain}.
+    6. The gateway provider (JMP/Cheogram, self-hosted, or commercial) delivers the message as SMS to the recipient’s phone.
+    7. Delivery confirmation (if supported by the gateway) is displayed in Argus.
+
+3.3 XMPP Connection Details
+XMPP supports WebSocket transport natively via XEP-0206 (BOSH) and RFC 7395 (XMPP over WebSocket). Most modern XMPP servers (Prosody, ejabberd, Openfire) expose a WebSocket endpoint. This means the browser extension can connect directly — no TCP bridge, no relay server, no companion binary.
+Component	Implementation	Notes
+Transport	WebSocket (wss://)	Native browser API, no extension permissions beyond existing
+Authentication	SASL PLAIN over TLS	Standard XMPP auth, encrypted in transit
+Message Format	XMPP stanza (XML)	Lightweight, well-defined, extensible
+SMS Gateway	JID mapping	+number@gateway.domain routes to phone network
+Encryption	OMEMO (optional)	End-to-end for XMPP-to-XMPP; SMS leg is unencrypted by nature
+Credential Storage	browser.storage.local	Encrypted with Vault AES-256-GCM if enabled
+
+4. SMS Gateway Providers
+The user chooses their own gateway provider. Argus ships with configuration templates for known providers but does not mandate or default to any specific service.
+Provider	Type	Cost	Setup
+JMP.chat (Cheogram)	Hosted service	~$4.99/month	Sign up, get number, configure JID in Argus
+sms-over-xmpp	Self-hosted	Free (+ SIM/modem)	Go binary with GSM modem or Twilio backend
+SMStoXMPP	Self-hosted	Free (+ Android)	PHP gateway using Android phone as SMS bridge
+Twilio + XMPP bridge	Commercial API	Pay-per-message	Twilio account + custom bridge script
+Vonage (Nexmo)	Commercial API	Pay-per-message	Vonage account + XMPP component
+
+For the self-hosted options, users can leverage the Argus Terminal or Argus+ companion to manage the gateway process on their own infrastructure, keeping the entire message pipeline under their control.
+
+5. User Interface
+5.1 Settings: XMPP Provider Tab
+A new tab is added to the Data Providers section in Settings, following the exact same pattern as the existing Google Drive, Dropbox, WebDAV, S3, and GitHub tabs:
+Field	Type	Description
+XMPP Server	URL input	WebSocket endpoint (e.g., wss://xmpp.example.com:5281/ws)
+JID (Jabber ID)	Text input	User’s XMPP address (e.g., nick@jabber.example.com)
+Password	Password input	XMPP account password (stored encrypted with Vault)
+SMS Gateway Domain	Text input	Gateway JID domain (e.g., cheogram.com)
+Default Country Code	Select	For formatting bare phone numbers (e.g., +1 for US)
+Test Connection	Button	Validates XMPP auth and gateway reachability
+
+A setup guide is embedded in the tab (collapsible, same as existing provider guides) with step-by-step instructions for JMP.chat and self-hosted options.
+
+5.2 Share Button Integration
+The "Text It" button appears in every share toolbar where existing share buttons live:
+Surface	Location	Content Sent
+Analysis Results	Toolbar row (next to Copy, Export, Share)	AI analysis output (plain text, truncated)
+Draft Pad	Share row (next to Email, X, Reddit)	Current draft content
+Chat	Pill chip bar on each response	Chat response text
+History	Action buttons on history items	Stored analysis result
+Workbench	Export section	Selected work surface items
+OSINT Dashboard	Report actions	Generated report section
+
+5.3 Send Flow
+When the user clicks "Text It":
+    8. A compact modal appears (same style as the paste picker) with a phone number input and recent recipients dropdown.
+    9. The user enters or selects a number. Argus formats it with the configured country code.
+    10. A preview shows the message that will be sent, including truncation notice if applicable.
+    11. User confirms. Argus sends the message and displays a success/failure toast notification.
+    12. If the message exceeds 1600 characters (10 SMS segments), Argus offers to auto-paste the full content to the configured paste service and send a short message with the link instead.
+
+6. Contacts (Optional Enhancement)
+A lightweight contact list stored locally to avoid retyping phone numbers. This is not a full address book — it is a convenience list of frequently-used recipients.
+Field	Storage	Notes
+Name	browser.storage.local	Display label only
+Phone Number	browser.storage.local	E.164 format (+1234567890)
+JID (optional)	browser.storage.local	For direct XMPP messaging without SMS gateway
+Last Used	browser.storage.local	For sorting recent recipients
+
+Contacts are encrypted with Vault if enabled. They are included in cloud backups. No contacts are pre-populated or synced from any external source.
+
+7. XMPP Chat Panel (Phase 2)
+The "Text It" button is Phase 1 — outbound messaging. Phase 2 introduces a dedicated XMPP Chat Panel for bidirectional communication.
+    • Inbound messages: Received XMPP messages (including SMS replies via gateway) appear in a chat panel within Argus.
+    • Contact presence: Online/offline status for XMPP contacts.
+    • Group chat: MUC (Multi-User Chat) support for XMPP rooms.
+    • Automation triggers: Incoming messages can trigger automations (keyword watchlist, entity extraction, auto-analysis of received URLs).
+    • AI integration: The same natural language AI layer available in Chat can assist in composing and interpreting messages.
+    • OMEMO encryption: End-to-end encryption for XMPP-to-XMPP conversations (SMS leg remains unencrypted by nature of the phone network).
+
+8. Privacy & Security Compliance
+This feature adheres to Argus’s core privacy architecture and Mozilla AMO policies:
+Principle	Implementation
+No developer-operated servers	User provides their own XMPP server and gateway. Argus connects directly.
+User-initiated only	Messages sent only when user explicitly clicks "Text It" and confirms.
+Credential security	XMPP password stored in browser.storage.local, encrypted with AES-256-GCM via Vault.
+Data minimalism	No message history stored by default. Opt-in message log for chat panel (Phase 2).
+Transparency	XMPP connection status visible in UI. All transmissions user-initiated and user-visible.
+AMO compliance	No new required permissions. XMPP WebSocket uses existing <all_urls> permission.
+Private browsing	XMPP features disabled in private/incognito mode. No data leaks across sessions.
+Wipe Everything	XMPP credentials, contacts, and message logs cleared with existing wipe function.
+
+9. Implementation Plan
+9.1 New Files
+File	Purpose
+lib/xmpp-client.js	XMPP WebSocket client: connect, auth (SASL), send/receive stanzas, presence, error handling
+lib/xmpp-sms.js	SMS logic: phone number formatting, message truncation, paste-and-link fallback, gateway JID construction
+options/ (additions)	XMPP provider tab UI, setup guide, test connection handler
+shared/text-it.js	Shared "Text It" button component: modal, number input, send confirmation, toast feedback
+shared/text-it.css	Styling for the Text It modal and button, using existing Argus CSS variables
+
+9.2 Modified Files
+File	Changes
+results/results.html + .js	Add Text It button to share toolbar, wire handler
+reporting/reporting.html + .js	Add Text It button to Draft Pad share row, wire handler
+lib/argus-chat.js	Add Text It pill chip to chat response action bar
+options/options.html + .js	Add XMPP tab to Data Providers, config save/load, test connection
+background.js	Message handlers for XMPP connect, send, disconnect
+manifest.json	No changes required (existing permissions sufficient)
+PRIVACY.md	Add XMPP / SMS gateway section to external services
+
+9.3 Dependencies
+The XMPP client will be implemented with minimal external dependencies, consistent with Argus’s vanilla JS, no-build-system architecture:
+Option	Size	Notes
+Custom minimal client	~3-5 KB	Hand-rolled WebSocket + SASL + XML stanza builder. Smallest footprint, full control.
+stanza.js (subset)	~15 KB gzipped	Well-maintained XMPP library with WebSocket transport. Would need partial import.
+xmpp.js	~20 KB gzipped	Modular XMPP library. Can import only @xmpp/client + @xmpp/websocket.
+
+Recommendation: Start with a custom minimal client for Phase 1 (send-only). The XMPP stanza for sending a message is straightforward XML. A full library becomes justified in Phase 2 when bidirectional chat, presence, and OMEMO are needed.
+
+9.4 Timeline
+Phase	Scope	Estimate
+Phase 1a	XMPP provider settings tab + test connection	1–2 sessions
+Phase 1b	XMPP WebSocket client (connect, auth, send)	2–3 sessions
+Phase 1c	Text It button + modal on all surfaces	1–2 sessions
+Phase 1d	Contacts list + recent recipients	1 session
+Phase 1e	Testing, edge cases, Vault integration	1–2 sessions
+Phase 2	Bidirectional chat panel, OMEMO, automation triggers	TBD
+
+10. Broader Communications Roadmap
+The "Text It" feature is the first step in a larger communications layer for Argus. The XMPP infrastructure established here serves as the foundation for additional protocols:
+Protocol	Transport	UI	Use Case
+SMS (via XMPP)	WebSocket (native)	Text It button + Chat Panel	Universal reach to any phone
+XMPP Direct	WebSocket (native)	Chat Panel	Encrypted messaging between XMPP users
+IRC	WebSocket (native or relay)	Chat Panel	Community channels, real-time intel monitoring
+Telnet/BBS	WebSocket relay	Terminal (xterm.js)	Legacy bulletin board access, retro networks
+FTP	WebSocket relay	Terminal or File Panel	Remote file management
+
+All protocols follow the same privacy model: user-configured connections, user-provided credentials, no developer-operated infrastructure, Vault encryption for stored credentials, full audit trail for AI-initiated actions.
+
+11. Risks & Mitigations
+Risk	Likelihood	Impact	Mitigation
+SMS gateway costs surprise users	Medium	Low	Clear documentation of per-message costs. Free self-hosted options featured.
+XMPP server compatibility issues	Medium	Medium	Test against Prosody, ejabberd, Openfire. Provide troubleshooting guide.
+Users store sensitive intel in SMS	Medium	High	Warn SMS is unencrypted. Recommend XMPP direct for sensitive content.
+AMO review questions	Low	Low	No new permissions. User-initiated. Privacy doc updated.
+Message delivery failures	Medium	Low	Clear errors. Retry option. Clipboard fallback if XMPP fails.
+
+12. Success Criteria
+    • User can configure an XMPP provider in Settings and successfully test the connection.
+    • User can send a text message from any content surface with three clicks or fewer (Text It → enter number → confirm).
+    • Messages arrive on the recipient’s phone within 30 seconds under normal conditions.
+    • Long messages automatically fall back to paste-and-link with no user intervention beyond confirmation.
+    • Credentials are encrypted at rest when Vault is enabled.
+    • Feature degrades gracefully: if XMPP is not configured, the Text It button is hidden (not broken).
+    • No new permissions required in manifest.json.
+    • PRIVACY.md accurately documents all data flows.
+
+13. Conclusion
+The "Text It" feature extends Argus’s reach from the browser to the most universal communication channel on earth. It does so without compromising the project’s core privacy principles, without requiring developer-operated infrastructure, and without adding unnecessary complexity to the codebase.
+By building on XMPP, this feature establishes the foundation for a broader communications layer that will eventually encompass encrypted messaging, IRC, and integration with the terminal-based protocols (BBS, FTP) already under development. Each addition follows the same pattern: user-configured, user-controlled, privacy-first.
+Argus doesn’t just analyze intelligence — it delivers it.

@@ -995,6 +995,13 @@ const KnowledgeGraph = (() => {
     return { fixed, pruned };
   }
 
+  // ── Find best matching node by name and type (public helper for cross-module use) ──
+  async function findBestMatch(name, type) {
+    const sameType = await ArgusDB.KGNodes.getByType(type);
+    const result = fuzzyMatch(name, type, sameType);
+    return (result.match && result.confidence >= 0.8) ? result.match : null;
+  }
+
   // ── Public API ──
   return {
     ENTITY_TYPES,
@@ -1004,6 +1011,7 @@ const KnowledgeGraph = (() => {
     upsertEdge,
     mergeNodes,
     fuzzyMatch,
+    findBestMatch,
     extractEntitiesRegex,
     parseEntitiesPresetOutput,
     runInferenceRules,

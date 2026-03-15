@@ -2376,6 +2376,33 @@
               <span class="hint">Passively extract contact data, business info, and metadata from every page you visit. Emails, phones, addresses, JSON-LD business data, and social links are collected silently and stored on Page Tracker entries. Requires Track My Pages. Respects your forced-private domain list.</span>
             </div>
           </div>
+          <!-- Trawl Schedule -->
+          <div class="form-row" style="margin-top:8px;" id="trawl-schedule-row">
+            <div class="form-group flex-1">
+              <label class="toggle-label">
+                <input type="checkbox" id="trawl-schedule-enabled">
+                <span>Schedule Trawling</span>
+              </label>
+              <span class="hint">Only trawl during specific hours and days. When disabled, trawl runs whenever enabled.</span>
+              <div id="trawl-schedule-config" style="display:none;margin-top:8px;">
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+                  <label style="font-size:11px;color:var(--text-secondary);">From</label>
+                  <select id="trawl-start-hour" class="select-compact" style="width:70px;"></select>
+                  <label style="font-size:11px;color:var(--text-secondary);">to</label>
+                  <select id="trawl-end-hour" class="select-compact" style="width:70px;"></select>
+                </div>
+                <div style="display:flex;gap:4px;flex-wrap:wrap;" id="trawl-day-checks">
+                  <label class="toggle-label" style="font-size:11px;"><input type="checkbox" data-day="0"><span>Sun</span></label>
+                  <label class="toggle-label" style="font-size:11px;"><input type="checkbox" data-day="1"><span>Mon</span></label>
+                  <label class="toggle-label" style="font-size:11px;"><input type="checkbox" data-day="2"><span>Tue</span></label>
+                  <label class="toggle-label" style="font-size:11px;"><input type="checkbox" data-day="3"><span>Wed</span></label>
+                  <label class="toggle-label" style="font-size:11px;"><input type="checkbox" data-day="4"><span>Thu</span></label>
+                  <label class="toggle-label" style="font-size:11px;"><input type="checkbox" data-day="5"><span>Fri</span></label>
+                  <label class="toggle-label" style="font-size:11px;"><input type="checkbox" data-day="6"><span>Sat</span></label>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 

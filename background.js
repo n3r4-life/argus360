@@ -79,11 +79,29 @@ async function trackPageAction(url, actionType, detail) {
 // ──────────────────────────────────────────────
 const TRAWL_SKIP_RE = /^(about:|moz-extension:|chrome:|chrome-extension:|file:)/;
 
+// ── Trawl schedule guard ──
+// trawlSchedule: { enabled:bool, days:[0-6], startHour:0-23, endHour:0-23 }
+async function isTrawlScheduleAllowed() {
+  const { trawlSchedule } = await browser.storage.local.get({ trawlSchedule: null });
+  if (!trawlSchedule || !trawlSchedule.enabled) return true; // no schedule = always allowed
+  const now = new Date();
+  const day = now.getDay(); // 0=Sun
+  const hour = now.getHours();
+  if (!trawlSchedule.days.includes(day)) return false;
+  const start = trawlSchedule.startHour ?? 0;
+  const end = trawlSchedule.endHour ?? 23;
+  if (start <= end) return hour >= start && hour <= end;
+  // Overnight range (e.g. 22–6)
+  return hour >= start || hour <= end;
+}
+
 async function trawlCollect(tabId, url) {
   try {
     if (!url || TRAWL_SKIP_RE.test(url)) return;
     const { trawlEnabled } = await browser.storage.local.get({ trawlEnabled: false });
     if (!trawlEnabled) return;
+    // Phase 3: respect schedule window
+    if (!(await isTrawlScheduleAllowed())) return;
     // Check domain exclusion (forced-private list)
     const { incognitoForceEnabled, incognitoSites } = await browser.storage.local.get({ incognitoForceEnabled: false, incognitoSites: [] });
     if (incognitoForceEnabled && incognitoSites.length) {
@@ -161,29 +179,151 @@ async function trawlCollect(tabId, url) {
     if (!data) return;
     const hasData = data.emails.length || data.phones.length || data.addresses.length || data.businessName || data.contacts.length || data.socialLinks.length;
     if (!hasData) return;
+    // Fetch existing entry to detect new data for automation triggers
+    const prevEntry = await ArgusDB.PageTracker.getByUrl(url);
+    const prevTD = prevEntry?.trawlData || {};
     await ArgusDB.PageTracker.setTrawlData(url, data);
     console.log(`[Trawl] collected from ${new URL(url).hostname}: ${data.emails.length}e ${data.phones.length}p ${data.addresses.length}a`);
+
+    // ── Phase 3: KG entity feed ──
+    trawlFeedKG(url, prevEntry?.title || "", data).catch(() => {});
+
+    // ── Phase 3: Automation triggers ──
+    trawlFireAutomationTriggers(url, data, prevTD).catch(() => {});
   } catch (e) {
     // Content script injection may fail on restricted pages — silent
   }
 }
 
+// ── Phase 3: Feed trawl-extracted entities into KnowledgeGraph ──
+async function trawlFeedKG(url, title, trawlData) {
+  if (typeof KnowledgeGraph === "undefined") return;
+  const src = url;
+  const srcTitle = title || url;
+
+  // Business / Organization
+  if (trawlData.businessName) {
+    await KnowledgeGraph.upsertEntity(
+      { name: trawlData.businessName, type: "organization" },
+      src, srcTitle
+    );
+  }
+
+  // Contacts as Person nodes + affiliated-with edges to business
+  for (const c of (trawlData.contacts || [])) {
+    if (!c.name) continue;
+    const personNode = await KnowledgeGraph.upsertEntity(
+      { name: c.name, type: "person", role: c.role || "" },
+      src, srcTitle
+    );
+    // Link person → business
+    if (personNode && trawlData.businessName) {
+      const bizNode = await KnowledgeGraph.findBestMatch(trawlData.businessName, "organization");
+      if (bizNode) {
+        await KnowledgeGraph.upsertEdge(personNode.id, bizNode.id, "affiliated-with", src, srcTitle);
+      }
+    }
+  }
+
+  // Addresses as Location nodes + located-in edges to business
+  for (const addr of (trawlData.addresses || [])) {
+    const locNode = await KnowledgeGraph.upsertEntity(
+      { name: addr, type: "location" },
+      src, srcTitle
+    );
+    if (locNode && trawlData.businessName) {
+      const bizNode = await KnowledgeGraph.findBestMatch(trawlData.businessName, "organization");
+      if (bizNode) {
+        await KnowledgeGraph.upsertEdge(bizNode.id, locNode.id, "located-in", src, srcTitle);
+      }
+    }
+  }
+}
+
+// ── Phase 3: Fire automation triggers on new trawl data ──
+async function trawlFireAutomationTriggers(url, newData, prevData) {
+  if (typeof AutomationEngine === "undefined") return;
+  const newEmails = (newData.emails || []).filter(e => !(prevData.emails || []).includes(e));
+  const newPhones = (newData.phones || []).filter(p => !(prevData.phones || []).includes(p));
+  const newBiz = newData.businessName && newData.businessName !== prevData.businessName;
+
+  if (!newEmails.length && !newPhones.length && !newBiz) return;
+
+  const triggerData = {
+    url,
+    hostname: (() => { try { return new URL(url).hostname; } catch { return url; } })(),
+    newEmails,
+    newPhones,
+    newBusinessName: newBiz ? newData.businessName : null,
+    allEmails: newData.emails || [],
+    allPhones: newData.phones || [],
+    businessName: newData.businessName || "",
+  };
+
+  // Fire a synthetic "trawl-data" trigger that automations can match
+  try {
+    const automations = await AutomationEngine.getAll();
+    for (const auto of automations) {
+      if (!auto.enabled) continue;
+      if (auto.trigger !== "trawl-data") continue;
+      // URL pattern filter (if automation specifies one)
+      if (auto.urlPattern) {
+        try {
+          const re = new RegExp(auto.urlPattern, "i");
+          if (!re.test(url)) continue;
+        } catch { continue; }
+      }
+      await AutomationEngine.run(auto.id, { url, vars: { triggerSource: "trawl", ...triggerData } });
+    }
+  } catch (e) {
+    console.warn("[Trawl] automation trigger error:", e);
+  }
+}
+
 // ── Tab dwell-time tracking for Trawl engagement scoring ──
+// Tracks actual foreground time per tab. Pauses when browser loses focus
+// or user switches to an internal/extension page.
 let _trawlActiveTab = { tabId: null, url: null, at: null };
 
-browser.tabs.onActivated.addListener(({ tabId }) => {
-  // Record dwell time for previous tab
+function _trawlFlushDwell() {
   if (_trawlActiveTab.tabId && _trawlActiveTab.at && _trawlActiveTab.url) {
     const ms = Date.now() - _trawlActiveTab.at;
     if (ms > 2000) { // ignore <2s flickers
       ArgusDB.PageTracker.addDwellTime(_trawlActiveTab.url, ms).catch(() => {});
     }
+    _trawlActiveTab.at = null; // paused — don't double-count
   }
-  // Start tracking new tab
+}
+
+function _trawlStartTracking(tabId) {
   browser.tabs.get(tabId).then(tab => {
-    _trawlActiveTab = { tabId, url: tab?.url || null, at: Date.now() };
+    const url = tab?.url || null;
+    // Don't track dwell on internal/extension pages
+    if (url && TRAWL_SKIP_RE.test(url)) {
+      _trawlActiveTab = { tabId, url: null, at: null };
+    } else {
+      _trawlActiveTab = { tabId, url, at: Date.now() };
+    }
   }).catch(() => { _trawlActiveTab = { tabId: null, url: null, at: null }; });
+}
+
+browser.tabs.onActivated.addListener(({ tabId }) => {
+  _trawlFlushDwell();
+  _trawlStartTracking(tabId);
   updateBrowserActionForTab(tabId);
+});
+
+// Pause dwell when browser window loses focus (user switches to another app)
+browser.windows.onFocusChanged.addListener((windowId) => {
+  if (windowId === browser.windows.WINDOW_ID_NONE) {
+    // Browser lost focus — flush & pause
+    _trawlFlushDwell();
+  } else {
+    // Browser regained focus — resume tracking the active tab
+    browser.tabs.query({ active: true, windowId }).then(tabs => {
+      if (tabs?.[0]) _trawlStartTracking(tabs[0].id);
+    }).catch(() => {});
+  }
 });
 
 function updateBrowserActionForTab(tabId) {
@@ -1736,6 +1876,13 @@ browser.runtime.onMessage.addListener((message, sender) => {
   // Trawl Net
   if (message.action === "getTrawlStatus") return browser.storage.local.get({ trawlEnabled: false }).then(s => ({ success: true, enabled: s.trawlEnabled }));
   if (message.action === "setTrawlEnabled") return browser.storage.local.set({ trawlEnabled: message.enabled }).then(() => ({ success: true }));
+  // Trawl Schedule
+  if (message.action === "getTrawlSchedule") return browser.storage.local.get({ trawlSchedule: null }).then(s => ({ success: true, schedule: s.trawlSchedule }));
+  if (message.action === "setTrawlSchedule") return browser.storage.local.set({ trawlSchedule: message.schedule }).then(() => ({ success: true }));
+  // Trawl → GeoMap
+  if (message.action === "buildGeomapFromTrawl") return handleBuildGeomapFromTrawl(message);
+  // Trawl → Save session as project
+  if (message.action === "saveTrawlAsProject") return handleSaveTrawlAsProject(message);
   // Projects
   if (message.action === "getProjects") return handleGetProjects(message);
   if (message.action === "getDefaultProject") return browser.storage.local.get({ defaultProjectId: null }).then(s => ({ defaultProjectId: s.defaultProjectId }));
@@ -7372,6 +7519,129 @@ function handleCancelBatch() {
     return { success: true };
   }
   return { success: false, error: "No batch running." };
+}
+
+// ══════════════════════════════════════════════════════════════
+// Trawl Phase 3 — GeoMap from Trawl & Save Session as Project
+// ══════════════════════════════════════════════════════════════
+
+async function handleBuildGeomapFromTrawl(message) {
+  try {
+    const pages = await ArgusDB.PageTracker.getAll();
+    const trawled = pages.filter(p => p.trawlData);
+
+    // Apply optional date range filter
+    let filtered = trawled;
+    if (message.from || message.to) {
+      const from = message.from ? new Date(message.from).getTime() : 0;
+      const to = message.to ? new Date(message.to + "T23:59:59").getTime() : Infinity;
+      filtered = trawled.filter(p => {
+        const t = p.lastVisit || p.firstVisit || 0;
+        return t >= from && t <= to;
+      });
+    }
+
+    const locations = [];
+    for (const p of filtered) {
+      const td = p.trawlData;
+      const host = (() => { try { return new URL(p.url).hostname.replace(/^www\./, ""); } catch { return p.url; } })();
+
+      // Direct geo coordinates from Schema.org
+      if (td.geo?.lat && td.geo?.lng) {
+        locations.push({
+          name: td.businessName || host,
+          lat: td.geo.lat,
+          lng: td.geo.lng,
+          type: "organization",
+          mentions: 1,
+          sources: [{ title: p.title || host, url: p.url }],
+        });
+      }
+
+      // Addresses (will need geocoding on the frontend/geomap side)
+      for (const addr of (td.addresses || [])) {
+        locations.push({
+          name: addr,
+          lat: null,
+          lng: null,
+          type: "address",
+          mentions: 1,
+          sources: [{ title: p.title || host, url: p.url }],
+          needsGeocode: true,
+        });
+      }
+    }
+
+    // Deduplicate by name
+    const deduped = new Map();
+    for (const loc of locations) {
+      const key = loc.name.toLowerCase().trim();
+      if (deduped.has(key)) {
+        const existing = deduped.get(key);
+        existing.mentions += loc.mentions;
+        existing.sources.push(...loc.sources);
+        if (loc.lat && !existing.lat) { existing.lat = loc.lat; existing.lng = loc.lng; }
+      } else {
+        deduped.set(key, loc);
+      }
+    }
+
+    return { success: true, locations: [...deduped.values()] };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+async function handleSaveTrawlAsProject(message) {
+  try {
+    const pages = await ArgusDB.PageTracker.getAll();
+    let trawled = pages.filter(p => p.trawlData);
+
+    // Apply optional date range
+    if (message.from || message.to) {
+      const from = message.from ? new Date(message.from).getTime() : 0;
+      const to = message.to ? new Date(message.to + "T23:59:59").getTime() : Infinity;
+      trawled = trawled.filter(p => {
+        const t = p.lastVisit || p.firstVisit || 0;
+        return t >= from && t <= to;
+      });
+    }
+
+    if (!trawled.length) return { success: false, error: "No trawl data to save" };
+
+    const projectName = message.name || `Trawl Session — ${new Date().toLocaleDateString()}`;
+    const project = {
+      id: genId("proj"),
+      name: projectName,
+      description: message.description || `Auto-created from Trawl Net session. ${trawled.length} pages with extracted data.`,
+      starred: false,
+      color: "#26a69a",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      items: trawled.map(p => {
+        const td = p.trawlData;
+        return {
+          id: genId("item"),
+          url: p.url,
+          title: p.title || p.url,
+          addedAt: new Date().toISOString(),
+          notes: [
+            td.businessName ? `Business: ${td.businessName}` : "",
+            td.emails?.length ? `Emails: ${td.emails.join(", ")}` : "",
+            td.phones?.length ? `Phones: ${td.phones.join(", ")}` : "",
+            td.addresses?.length ? `Addresses: ${td.addresses.join("; ")}` : "",
+          ].filter(Boolean).join("\n"),
+        };
+      }),
+    };
+
+    await ArgusDB.Projects.save(project);
+    createContextMenus();
+    notifyDataChanged("projects");
+    return { success: true, project: { id: project.id, name: project.name, itemCount: project.items.length } };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 }
 
 // ──────────────────────────────────────────────

@@ -487,6 +487,10 @@
     $("copy-emails").addEventListener("click", copyAllEmails);
     $("copy-phones").addEventListener("click", copyAllPhones);
 
+    // Phase 3: GeoMap + Save as Project
+    $("open-geomap").addEventListener("click", openGeoMap);
+    $("save-as-project").addEventListener("click", saveAsProject);
+
     // Click-to-copy on chips
     document.addEventListener("click", (ev) => {
       const chip = ev.target.closest("[data-copy]");
@@ -562,6 +566,55 @@
       ctx += "\n";
     }
     return ctx.slice(0, 4000);
+  }
+
+  // ──────────────────────────────────────────────
+  // Phase 3: GeoMap from Trawl
+  // ──────────────────────────────────────────────
+  function openGeoMap() {
+    // Count addresses + geo entries to give feedback
+    let addrCount = 0;
+    for (const e of filtered) {
+      if (e.trawlData.geo) addrCount++;
+      addrCount += (e.trawlData.addresses || []).length;
+    }
+    if (!addrCount) return showToast("No addresses or coordinates found in current results", "error");
+
+    // Open geomap with trawl source flag — geomap.js will detect and pull trawl data
+    const params = new URLSearchParams({ source: "trawl" });
+    if (dateFrom.value) params.set("from", dateFrom.value);
+    if (dateTo.value) params.set("to", dateTo.value);
+    browser.tabs.create({ url: `../osint/geomap.html?${params}` });
+    showToast(`Opening map with ${addrCount} locations`);
+  }
+
+  // ──────────────────────────────────────────────
+  // Phase 3: Save Session as Project
+  // ──────────────────────────────────────────────
+  async function saveAsProject() {
+    if (!filtered.length) return showToast("No trawl data to save", "error");
+
+    const name = prompt("Project name:", `Trawl Session — ${new Date().toLocaleDateString()}`);
+    if (!name) return;
+
+    try {
+      const msg = {
+        action: "saveTrawlAsProject",
+        name,
+        from: dateFrom.value || undefined,
+        to: dateTo.value || undefined,
+      };
+      const resp = await browser.runtime.sendMessage(msg);
+      if (resp?.success) {
+        showToast(`Saved as "${resp.project.name}" (${resp.project.itemCount} items)`);
+        // Refresh project selector
+        initProjectSelector();
+      } else {
+        showToast(resp?.error || "Failed to save", "error");
+      }
+    } catch (e) {
+      showToast("Error saving project: " + e.message, "error");
+    }
   }
 
   // ──────────────────────────────────────────────
