@@ -4,19 +4,30 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Argus - Image Grabber</title>
+  <link rel="stylesheet" href="../shared/argus-std.css">
   <link rel="stylesheet" href="images.css">
+  <link rel="stylesheet" href="../lib/argus-chat.css">
   <link rel="stylesheet" href="../shared/ribbon.css">
 </head>
 <body>
   <script src="../shared/ribbon.js"></script>
+  <script src="../shared/panel-state.js"></script>
   <header class="header">
     <div class="header-left">
       <img src="../icons/icon-32.png" alt="" class="header-icon">
       <h1 class="header-title">Image Grabber</h1>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      <!-- Data IO / cross-data actions (tool-chips with icons) -->
+      <button id="download-selected" class="tool-chip" disabled title="Download selected images"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download</button>
+      <button id="export-urls" class="tool-chip" title="Export image URLs"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg> URLs</button>
+      <button id="save-to-cloud" class="tool-chip" disabled title="Save selected to cloud"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg> + Cloud</button>
+      <button id="insert-to-draft" class="tool-chip" disabled title="Insert image links into Draft Pad"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> + Draft</button>
+      <button id="add-to-project" class="tool-chip" disabled title="Add selected images to a project"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg> + Project</button>
+      <button id="compare-selected" class="tool-chip" disabled title="Compare selected side-by-side"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg> Compare</button>
       <a id="page-url" class="page-url" href="#" target="_blank" title="Open source page"></a>
-      <button id="clear-gallery" class="btn btn-secondary" style="font-size:11px;padding:4px 10px;" title="Clear gallery and start fresh">Clear</button>
+      <button id="refresh-gallery" class="pill-chip" title="Re-grab images from source tabs" style="background:rgba(100,180,255,0.15);color:#64b4ff;border-color:rgba(100,180,255,0.3);">Refresh</button>
+      <button id="clear-gallery" class="pill-chip" title="Clear gallery and start fresh">Clear</button>
     </div>
   </header>
 
@@ -43,85 +54,11 @@
     </div>
   </section>
 
-  <nav class="filter-bar">
-    <div class="filter-row hidden" id="tab-filter-row">
-      <span class="filter-label">Tab</span>
-      <div class="filter-tabs" id="tab-tabs">
-        <button class="tab active" data-tab="all">All Tabs</button>
-        <!-- Dynamically populated -->
-      </div>
-    </div>
-    <div class="filter-row">
-      <span class="filter-label">Source</span>
-      <div class="filter-tabs" id="source-tabs">
-        <button class="tab active" data-filter="all">All</button>
-        <button class="tab" data-filter="img">IMG</button>
-        <button class="tab" data-filter="css-bg">CSS BG</button>
-        <button class="tab" data-filter="picture">Picture</button>
-        <button class="tab" data-filter="meta">Meta</button>
-        <button class="tab" data-filter="favicon">Icons</button>
-        <button class="tab" data-filter="video-poster">Posters</button>
-      </div>
-    </div>
-    <div class="filter-row">
-      <span class="filter-label">Type</span>
-      <div class="filter-tabs" id="type-tabs">
-        <button class="tab active" data-type="all">All</button>
-        <button class="tab" data-type="jpg">JPG <span class="tab-count" id="count-jpg">0</span></button>
-        <button class="tab" data-type="png">PNG <span class="tab-count" id="count-png">0</span></button>
-        <button class="tab" data-type="gif">GIF <span class="tab-count" id="count-gif">0</span></button>
-        <button class="tab" data-type="webp">WebP <span class="tab-count" id="count-webp">0</span></button>
-        <button class="tab" data-type="svg">SVG <span class="tab-count" id="count-svg">0</span></button>
-        <button class="tab" data-type="avif">AVIF <span class="tab-count" id="count-avif">0</span></button>
-        <button class="tab" data-type="ico">ICO <span class="tab-count" id="count-ico">0</span></button>
-        <button class="tab" data-type="other">Other <span class="tab-count" id="count-other">0</span></button>
-      </div>
-    </div>
-    <div class="filter-row">
-      <span class="filter-label">Color</span>
-      <div class="filter-tabs" id="color-tabs">
-        <button class="color-tab active" data-color="all" title="All colors">All</button>
-        <button class="color-tab" data-color="red" title="Red"><span class="color-dot" style="background:#e53935"></span></button>
-        <button class="color-tab" data-color="orange" title="Orange"><span class="color-dot" style="background:#fb8c00"></span></button>
-        <button class="color-tab" data-color="yellow" title="Yellow"><span class="color-dot" style="background:#fdd835"></span></button>
-        <button class="color-tab" data-color="green" title="Green"><span class="color-dot" style="background:#43a047"></span></button>
-        <button class="color-tab" data-color="cyan" title="Cyan"><span class="color-dot" style="background:#00acc1"></span></button>
-        <button class="color-tab" data-color="blue" title="Blue"><span class="color-dot" style="background:#1e88e5"></span></button>
-        <button class="color-tab" data-color="purple" title="Purple"><span class="color-dot" style="background:#8e24aa"></span></button>
-        <button class="color-tab" data-color="pink" title="Pink"><span class="color-dot" style="background:#e91e8a"></span></button>
-        <button class="color-tab" data-color="brown" title="Brown"><span class="color-dot" style="background:#795548"></span></button>
-        <button class="color-tab" data-color="white" title="White"><span class="color-dot color-dot-white" style="background:#ffffff"></span></button>
-        <button class="color-tab" data-color="gray" title="Gray"><span class="color-dot" style="background:#9e9e9e"></span></button>
-        <button class="color-tab" data-color="black" title="Black"><span class="color-dot" style="background:#212121"></span></button>
-        <span id="color-extract-status" class="color-extract-status"></span>
-      </div>
-    </div>
-    <div class="filter-controls">
-      <input type="text" id="search-input" class="search-input" placeholder="Filter by alt text or URL...">
-      <select id="size-filter" class="size-filter">
-        <option value="0">All sizes</option>
-        <option value="min-100">100px+</option>
-        <option value="min-200">200px+</option>
-        <option value="min-400">400px+</option>
-        <option value="min-800">800px+</option>
-        <option value="max-100">Under 100px</option>
-        <option value="max-200">Under 200px</option>
-        <option value="max-400">Under 400px</option>
-      </select>
-      <select id="sort-by" class="size-filter">
-        <option value="default">Sort: Default</option>
-        <option value="size-desc">Largest first</option>
-        <option value="size-asc">Smallest first</option>
-        <option value="name-asc">Name A-Z</option>
-        <option value="name-desc">Name Z-A</option>
-        <option value="type">By type</option>
-      </select>
-      <label class="view-toggle" title="Toggle grid/list view">
-        <input type="checkbox" id="view-list" hidden>
-        <span id="view-icon">Grid</span>
-      </label>
-    </div>
-  </nav>
+  <!-- Multi-tab selector subheader (shown when images from multiple tabs) -->
+  <div class="tab-selector-bar hidden" id="tabSelectorBar">
+    <span class="filter-label">Tabs</span>
+    <div class="tab-selector-checks" id="tabSelectorChecks"></div>
+  </div>
 
   <div class="ai-search-bar">
     <svg class="ai-search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
@@ -144,36 +81,153 @@
     </div>
     <div class="display-group">
       <span class="display-group-label">Filter</span>
-      <button class="filter-swatch active" data-filter="none" title="Normal">Off</button>
-      <button class="filter-swatch" data-filter="sepia" title="Sepia / warm tone">Sepia</button>
-      <button class="filter-swatch" data-filter="grayscale" title="Grayscale">Gray</button>
-      <button class="filter-swatch" data-filter="invert" title="Invert colors">Invert</button>
-      <button class="filter-swatch" data-filter="warm" title="Blue light filter (warm)">Warm</button>
-      <button class="filter-swatch" data-filter="cool" title="Cool / blue shift">Cool</button>
-      <button class="filter-swatch" data-filter="highcontrast" title="High contrast">Hi-Con</button>
+      <label class="toggle-switch" id="filter-toggle" title="Toggle image filter on/off">
+        <input type="checkbox" id="filter-toggle-cb">
+        <span class="toggle-track"><span class="toggle-knob"></span></span>
+      </label>
+      <button class="pill-chip" data-filter="sepia" title="Sepia / warm tone">Sepia</button>
+      <button class="pill-chip" data-filter="grayscale" title="Grayscale">Gray</button>
+      <button class="pill-chip" data-filter="invert" title="Invert colors">Invert</button>
+      <button class="pill-chip" data-filter="warm" title="Blue light filter (warm)">Warm</button>
+      <button class="pill-chip" data-filter="cool" title="Cool / blue shift">Cool</button>
+      <button class="pill-chip" data-filter="highcontrast" title="High contrast">Hi-Con</button>
     </div>
     <div class="display-group">
       <span class="display-group-label">Brightness</span>
       <input type="range" id="brightness-slider" min="50" max="200" value="100" class="display-slider" title="Brightness">
       <span id="brightness-val" class="slider-val">100%</span>
     </div>
+    <div class="display-group">
+      <span class="display-group-label">Selection</span>
+      <button id="select-all" class="pill-chip" title="Select all images"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Select All</button>
+      <button id="deselect-all" class="pill-chip" title="Deselect all"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Deselect</button>
+      <button id="show-selected-only" class="pill-chip" title="Show only selected images"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="9 11 12 14 22 4"/></svg> Selected</button>
+    </div>
   </div>
 
-  <div class="actions-bar">
-    <div class="actions-left">
-      <button id="select-all" class="btn btn-secondary">Select All</button>
-      <button id="deselect-all" class="btn btn-secondary">Deselect</button>
-      <button id="show-selected-only" class="btn btn-secondary" title="Show only selected images">Show Selected</button>
-      <button id="download-selected" class="btn btn-primary" disabled>Download Selected</button>
-      <button id="save-to-cloud" class="btn btn-secondary" disabled>Save to Cloud</button>
-      <button id="insert-to-draft" class="btn btn-secondary" disabled title="Insert image links into Draft Pad">Insert to Draft</button>
-      <button id="insert-to-chat" class="btn btn-secondary" disabled title="Insert image links into Chat">Insert to Chat</button>
+  <!-- Filters & Actions floating panel -->
+  <div class="fp hidden" id="actionsPanel" data-panel-id="actions">
+    <div class="fp-header">
+      <span class="fp-title">Filter Controls</span>
+      <span class="fp-count" id="actionsPanelCount"></span>
+      <button class="pill-chip" id="resetFilters" title="Reset all filters" style="background:rgba(100,180,255,0.15);color:#64b4ff;border-color:rgba(100,180,255,0.3);font-size:10px;padding:2px 8px;">Refresh</button>
+      <button class="fp-close" id="actionsPanelClose">&times;</button>
     </div>
-    <div class="actions-right">
-      <button id="compare-selected" class="btn btn-secondary" disabled title="Compare selected images side-by-side">Compare</button>
-      <button id="export-urls" class="btn btn-secondary">Export URLs</button>
+    <div class="img-filter-summary" id="filterSummary"></div>
+    <div class="fp-tabs">
+      <button class="fp-tab active" data-ptab="source">Source</button>
+      <button class="fp-tab" data-ptab="type">Type</button>
+      <button class="fp-tab" data-ptab="color">Color</button>
+      <button class="fp-tab" data-ptab="search">Search</button>
     </div>
+    <!-- Tab: Source -->
+    <div class="fp-pane active" data-ptab-pane="source">
+      <div class="img-actions-group">
+        <div class="filter-tabs" id="source-tabs">
+          <button class="pill-chip active" data-filter="all">All</button>
+          <button class="pill-chip" data-filter="img">IMG</button>
+          <button class="pill-chip" data-filter="css-bg">CSS BG</button>
+          <button class="pill-chip" data-filter="picture">Picture</button>
+          <button class="pill-chip" data-filter="meta">Meta</button>
+          <button class="pill-chip" data-filter="favicon">Icons</button>
+          <button class="pill-chip" data-filter="video-poster">Posters</button>
+        </div>
+      </div>
+      <div class="img-actions-group">
+        <span class="img-actions-label">Size</span>
+        <div class="filter-tabs" id="size-tabs">
+          <button class="pill-chip active" data-size="all">All</button>
+          <button class="pill-chip" data-size="small">Small</button>
+          <button class="pill-chip" data-size="medium">Medium</button>
+          <button class="pill-chip" data-size="big">Big</button>
+          <button class="pill-chip" data-size="large">Large</button>
+          <button class="pill-chip" data-size="min-100">100px+</button>
+          <button class="pill-chip" data-size="min-200">200px+</button>
+          <button class="pill-chip" data-size="min-400">400px+</button>
+          <button class="pill-chip" data-size="min-800">800px+</button>
+          <button class="pill-chip" data-size="max-100">&lt;100px</button>
+          <button class="pill-chip" data-size="max-200">&lt;200px</button>
+          <button class="pill-chip" data-size="max-400">&lt;400px</button>
+        </div>
+      </div>
+    </div>
+    <!-- Tab: Type -->
+    <div class="fp-pane" data-ptab-pane="type">
+      <div class="img-actions-group">
+        <div class="filter-tabs" id="type-tabs">
+          <button class="pill-chip active" data-type="all">All</button>
+          <button class="pill-chip" data-type="jpg">JPG <span class="tab-count" id="count-jpg">0</span></button>
+          <button class="pill-chip" data-type="png">PNG <span class="tab-count" id="count-png">0</span></button>
+          <button class="pill-chip" data-type="gif">GIF <span class="tab-count" id="count-gif">0</span></button>
+          <button class="pill-chip" data-type="webp">WebP <span class="tab-count" id="count-webp">0</span></button>
+          <button class="pill-chip" data-type="svg">SVG <span class="tab-count" id="count-svg">0</span></button>
+          <button class="pill-chip" data-type="avif">AVIF <span class="tab-count" id="count-avif">0</span></button>
+          <button class="pill-chip" data-type="ico">ICO <span class="tab-count" id="count-ico">0</span></button>
+          <button class="pill-chip" data-type="other">Other <span class="tab-count" id="count-other">0</span></button>
+        </div>
+      </div>
+    </div>
+    <!-- Tab: Color -->
+    <div class="fp-pane" data-ptab-pane="color">
+      <div class="img-actions-group">
+        <div class="filter-tabs" id="color-tabs">
+          <button class="color-tab active" data-color="all" title="All colors">All</button>
+          <button class="color-tab" data-color="red" title="Red"><span class="color-dot" style="background:#e53935"></span></button>
+          <button class="color-tab" data-color="orange" title="Orange"><span class="color-dot" style="background:#fb8c00"></span></button>
+          <button class="color-tab" data-color="yellow" title="Yellow"><span class="color-dot" style="background:#fdd835"></span></button>
+          <button class="color-tab" data-color="green" title="Green"><span class="color-dot" style="background:#43a047"></span></button>
+          <button class="color-tab" data-color="cyan" title="Cyan"><span class="color-dot" style="background:#00acc1"></span></button>
+          <button class="color-tab" data-color="blue" title="Blue"><span class="color-dot" style="background:#1e88e5"></span></button>
+          <button class="color-tab" data-color="purple" title="Purple"><span class="color-dot" style="background:#8e24aa"></span></button>
+          <button class="color-tab" data-color="pink" title="Pink"><span class="color-dot" style="background:#e91e8a"></span></button>
+          <button class="color-tab" data-color="brown" title="Brown"><span class="color-dot" style="background:#795548"></span></button>
+          <button class="color-tab" data-color="white" title="White"><span class="color-dot color-dot-white" style="background:#ffffff"></span></button>
+          <button class="color-tab" data-color="gray" title="Gray"><span class="color-dot" style="background:#9e9e9e"></span></button>
+          <button class="color-tab" data-color="black" title="Black"><span class="color-dot" style="background:#212121"></span></button>
+          <span id="color-extract-status" class="color-extract-status"></span>
+        </div>
+      </div>
+    </div>
+    <!-- Tab: Search -->
+    <div class="fp-pane" data-ptab-pane="search">
+      <div class="img-actions-group">
+        <input type="text" id="search-input" class="search-input" placeholder="Filter by alt text or URL..." style="width:100%;">
+      </div>
+      <div class="img-actions-group" style="gap:4px;">
+        <select id="sort-by" class="select-compact">
+          <option value="default">Sort: Default</option>
+          <option value="size-desc">Largest first</option>
+          <option value="size-asc">Smallest first</option>
+          <option value="name-asc">Name A-Z</option>
+          <option value="name-desc">Name Z-A</option>
+          <option value="type">By type</option>
+        </select>
+        <label class="view-toggle" title="Toggle grid/list view">
+          <input type="checkbox" id="view-list" hidden>
+          <span id="view-icon">Grid</span>
+        </label>
+      </div>
+    </div>
+    <!-- Actions moved to header -->
   </div>
+  <button class="edge-tab edge-tab-right" id="actionsTab" title="Controls">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+    <span class="img-actions-badge" id="actionsBadge"></span>
+  </button>
+
+  <!-- Session History floating panel -->
+  <div class="fp hidden" id="historyPanel" data-panel-id="history" style="left:12px;right:auto;width:280px;">
+    <div class="fp-header">
+      <span class="fp-title">Session History</span>
+      <button class="pill-chip" id="clearAllHistory" title="Clear all history" style="font-size:10px;padding:2px 8px;opacity:0.6;">Clear All</button>
+      <button class="fp-close" id="historyPanelClose">&times;</button>
+    </div>
+    <div id="historyCount" style="padding:2px 10px 4px;font-size:10px;color:var(--text-muted);"></div>
+    <div id="historyTimeline" style="padding:8px;overflow-y:auto;max-height:calc(100vh - 160px);display:flex;flex-direction:column;gap:0;"></div>
+  </div>
+  <button class="edge-tab edge-tab-left" id="historyTab" title="Session History">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+  </button>
 
   <main id="image-grid" class="image-grid">
     <div class="empty-state" id="empty-state">
@@ -198,7 +252,7 @@
           <button id="preview-zoom-actual" class="btn btn-secondary" title="Actual size (1:1)">1:1</button>
         </div>
         <div class="preview-filter-controls">
-          <select id="preview-filter-select" class="size-filter" title="Image filter">
+          <select id="preview-filter-select" class="select-compact" title="Image filter">
             <option value="none">Normal</option>
             <option value="sepia">Sepia</option>
             <option value="grayscale">Grayscale</option>
@@ -252,6 +306,11 @@
     </div>
   </div>
 
+  <div id="argus-chat-container" style="position:fixed;bottom:8px;left:50%;transform:translateX(-50%);z-index:100;"></div>
+
+  <script src="../lib/purify.min.js"></script>
+  <script src="../lib/marked.min.js"></script>
+  <script src="../lib/argus-chat.js"></script>
   <script src="images.js"></script>
 </body>
 </html>

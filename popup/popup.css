@@ -845,7 +845,7 @@ textarea {
   display: none;
   flex-wrap: wrap;
   gap: 4px;
-  padding: 24px 0 8px;
+  padding: 22px 0 22px;
   justify-content: center;
 }
 .tools-drawer-items.visible {

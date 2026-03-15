@@ -9660,14 +9660,21 @@ async function updateStorageUsage() {
 
     // Categorize storage.local keys
     let ephemeralBytes = 0, ephemeralCount = 0;
+    let conversationBytes = 0, conversationCount = 0;
+    let settingsOnlyBytes = 0, settingsOnlyCount = 0;
+    const ephemeralPrefixes = ["tl-result-", "proj-view-", "techstack-", "metadata-", "linkmap-", "whois-", "result-"];
+    const convPrefixes = ["conv-", "chat-", "followup-", "ai-"];
     for (const [key, val] of Object.entries(all)) {
-      if (key.startsWith("tl-result-") || key.startsWith("proj-view-") ||
-          key.endsWith("-pipeline") || key.startsWith("techstack-") ||
-          key.startsWith("metadata-") || key.startsWith("linkmap-") ||
-          key.startsWith("whois-") || key.startsWith("result-")) {
-        const s = new Blob([JSON.stringify(val)]).size;
+      const s = new Blob([JSON.stringify(val)]).size;
+      if (ephemeralPrefixes.some(p => key.startsWith(p)) || key.endsWith("-pipeline")) {
         ephemeralBytes += s;
         ephemeralCount++;
+      } else if (convPrefixes.some(p => key.startsWith(p))) {
+        conversationBytes += s;
+        conversationCount++;
+      } else {
+        settingsOnlyBytes += s;
+        settingsOnlyCount++;
       }
     }
 
@@ -9692,10 +9699,10 @@ async function updateStorageUsage() {
       display.style.color = "var(--text-secondary)";
     }
 
-    // Build breakdown
+    // Build full breakdown — sorted by size, grouped by tier
     const storeLabels = {
       history: "Analysis History",
-      snapshots: "Monitor Snapshots",
+      snapshots: "Monitor Snapshots (IDB)",
       changes: "Monitor Changes",
       feedEntries: "Feed Entries",
       kgNodes: "KG Nodes",
@@ -9705,50 +9712,142 @@ async function updateStorageUsage() {
       monitors: "Monitors",
       feeds: "Feeds",
       watchlist: "Watchlist",
+      chatSessions: "Chat Sessions",
+      drafts: "Drafts",
+      pageTracker: "Page Tracker",
+      sources: "Sources",
     };
-    const rows = [];
+
+    // Collect all breakdown entries as { label, bytes, detail, tier, color }
+    const allEntries = [];
+
+    // IndexedDB stores
     for (const [store, label] of Object.entries(storeLabels)) {
       const s = idbSizes[store];
       if (s && s.bytes > 0) {
-        rows.push(`${label}: ${fmtBytes(s.bytes)} (${s.count} items)`);
+        allEntries.push({ label, bytes: s.bytes, detail: s.count + " items", tier: "IndexedDB", color: "#e94560", store });
       }
     }
+
+    // OPFS snapshot files
     if (opfsBytes > 0) {
-      rows.push(`Snapshot Files (HTML/PNG): ${fmtBytes(opfsBytes)}`);
+      allEntries.push({ label: "Snapshot Files (HTML/PNG)", bytes: opfsBytes, detail: "OPFS binary", tier: "OPFS", color: "#6cb4ee", store: "_opfs" });
     }
+
+    // browser.storage.local — cached/ephemeral
     if (ephemeralCount > 0) {
-      rows.push(`Cached Results: ${fmtBytes(ephemeralBytes)} (${ephemeralCount} keys)`);
+      allEntries.push({ label: "Cached Results", bytes: ephemeralBytes, detail: ephemeralCount + " keys", tier: "storage.local", color: "#ff9800", store: "_cached" });
     }
-    const settingsBytes = localBytes - ephemeralBytes;
-    if (settingsBytes > 0) {
-      rows.push(`Settings & Config: ${fmtBytes(settingsBytes)}`);
+
+    // browser.storage.local — conversation/AI response data
+    if (conversationCount > 0) {
+      allEntries.push({ label: "AI Conversations", bytes: conversationBytes, detail: conversationCount + " keys", tier: "storage.local", color: "#ab47bc", store: "_conversations" });
     }
+
+    // browser.storage.local — actual settings
+    if (settingsOnlyBytes > 0) {
+      allEntries.push({ label: "Settings & Config", bytes: settingsOnlyBytes, detail: settingsOnlyCount + " keys", tier: "storage.local", color: "#4caf50", store: "_settings" });
+    }
+
     // Sort by size descending
-    breakdown.innerHTML = rows.join("<br>");
+    allEntries.sort((a, b) => b.bytes - a.bytes);
+
+    // Build settings breakdown (detailed text)
+    const rows = allEntries.map(e => {
+      const detailStr = e.detail ? ` (${e.detail})` : "";
+      return `${e.label}: ${fmtBytes(e.bytes)}${detailStr}`;
+    });
+
+    // Tier subtotals
+    const idbTotal = (idbSizes._total || 0);
+    const tierSummary = [];
+    if (idbTotal > 0) tierSummary.push(`IndexedDB: ${fmtBytes(idbTotal)}`);
+    if (opfsBytes > 0) tierSummary.push(`OPFS: ${fmtBytes(opfsBytes)}`);
+    if (localBytes > 0) tierSummary.push(`storage.local: ${fmtBytes(localBytes)}`);
+
+    breakdown.innerHTML = rows.join("<br>") + (tierSummary.length ? '<br><span style="opacity:0.6;font-size:10px;">— ' + tierSummary.join(" · ") + '</span>' : "");
     breakdown.style.display = rows.length ? "block" : "none";
 
     // Update home page storage widget
     const homeTotal = document.getElementById("home-storage-total");
-    const homeFill = document.getElementById("home-storage-fill");
+    const homeBar = document.getElementById("home-storage-bar");
     const homeBreakdown = document.getElementById("home-storage-breakdown");
     if (homeTotal) {
       homeTotal.textContent = fmtBytes(totalBytes);
       if (totalBytes > 8 * 1048576) {
         homeTotal.style.color = "var(--error)";
-        homeFill.style.background = "var(--error)";
       } else if (totalBytes > 5 * 1048576) {
         homeTotal.style.color = "var(--warning, #ffb74d)";
-        homeFill.style.background = "var(--warning, #ffb74d)";
       } else {
         homeTotal.style.color = "var(--text-primary)";
-        homeFill.style.background = "var(--accent)";
       }
-      // Bar fill — assume 10MB as soft max for visual
-      const pct = Math.min(100, (totalBytes / (10 * 1048576)) * 100);
-      homeFill.style.width = pct + "%";
-      // Top 5 breakdown items for compact view
-      homeBreakdown.innerHTML = rows.slice(0, 5).join("<br>");
-      homeBreakdown.style.display = rows.length ? "block" : "none";
+
+      // Stacked segmented bar — each entry gets a colored segment
+      if (homeBar) {
+        homeBar.innerHTML = "";
+        allEntries.forEach(e => {
+          const pct = totalBytes > 0 ? (e.bytes / totalBytes) * 100 : 0;
+          if (pct < 0.5) return; // skip tiny slivers
+          const seg = document.createElement("div");
+          seg.style.cssText = `height:100%;width:${pct}%;background:${e.color};display:inline-block;transition:width 0.4s;`;
+          seg.title = `${e.label}: ${fmtBytes(e.bytes)}`;
+          homeBar.appendChild(seg);
+        });
+      }
+
+      // Full breakdown — all entries, sorted by size, with color dots + delete buttons
+      homeBreakdown.innerHTML = "";
+      homeBreakdown.style.display = allEntries.length ? "block" : "none";
+
+      allEntries.forEach(e => {
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;align-items:center;gap:6px;padding:2px 0;";
+
+        const dot = document.createElement("span");
+        dot.style.cssText = `display:inline-block;width:8px;height:8px;border-radius:50%;background:${e.color};flex-shrink:0;`;
+        row.appendChild(dot);
+
+        const text = document.createElement("span");
+        text.style.cssText = "flex:1;min-width:0;";
+        const detailStr = e.detail ? ` <span style="opacity:0.5">(${e.detail})</span>` : "";
+        text.innerHTML = `${e.label}: <strong>${fmtBytes(e.bytes)}</strong>${detailStr}`;
+        row.appendChild(text);
+
+        // Add delete button (skip settings — not clearable)
+        if (e.store && e.store !== "_settings") {
+          const del = document.createElement("button");
+          del.style.cssText = "background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);cursor:pointer;padding:1px 6px;font-size:10px;flex-shrink:0;transition:all 0.15s;";
+          del.textContent = "Clear";
+          del.title = `Clear all ${e.label}`;
+          del.addEventListener("mouseenter", () => { del.style.color = "var(--error)"; del.style.borderColor = "var(--error)"; });
+          del.addEventListener("mouseleave", () => { del.style.color = "var(--text-muted)"; del.style.borderColor = "var(--border)"; });
+          del.addEventListener("click", async () => {
+            if (!confirm(`Clear all ${e.label}? This cannot be undone.`)) return;
+            del.textContent = "...";
+            del.disabled = true;
+            try {
+              await purgeStorageEntry(e.store);
+              del.textContent = "Done";
+              del.style.color = "var(--success)";
+              updateStorageUsage();
+            } catch {
+              del.textContent = "Fail";
+              del.style.color = "var(--error)";
+            }
+          });
+          row.appendChild(del);
+        }
+
+        homeBreakdown.appendChild(row);
+      });
+
+      // Tier subtotal line
+      if (tierSummary.length) {
+        const tierLine = document.createElement("div");
+        tierLine.style.cssText = "opacity:0.5;font-size:10px;padding-top:4px;";
+        tierLine.textContent = "— " + tierSummary.join(" · ");
+        homeBreakdown.appendChild(tierLine);
+      }
     }
   } catch {
     display.textContent = "Unable to calculate";
@@ -9760,6 +9859,39 @@ function showPurgeStatus(msg) {
   status.textContent = msg;
   status.classList.remove("hidden");
   setTimeout(() => status.classList.add("hidden"), 3000);
+}
+
+async function purgeStorageEntry(store) {
+  const idbStores = {
+    history: () => ArgusDB.History.clear(),
+    snapshots: () => ArgusDB.Snapshots.clear(),
+    changes: () => ArgusDB.Changes.clear(),
+    feedEntries: () => ArgusDB.FeedEntries.clear(),
+    kgNodes: () => ArgusDB.KGNodes.clear(),
+    kgEdges: () => ArgusDB.KGEdges.clear(),
+    projects: () => ArgusDB.Projects.clear(),
+    bookmarks: () => ArgusDB.Bookmarks.clear(),
+    monitors: () => ArgusDB.Monitors.clear(),
+    feeds: () => ArgusDB.Feeds.clear(),
+    watchlist: () => ArgusDB.Watchlist.clear(),
+    chatSessions: () => ArgusDB.ChatSessions.clear(),
+    drafts: () => ArgusDB.Drafts.clear(),
+    pageTracker: () => ArgusDB.PageTracker.clear(),
+    sources: () => ArgusDB.Sources.clear(),
+  };
+
+  if (idbStores[store]) {
+    await idbStores[store]();
+  } else if (store === "_opfs") {
+    await browser.runtime.sendMessage({ action: "purgeOpfsFiles" });
+  } else if (store === "_cached") {
+    await purgeAllCachedData();
+  } else if (store === "_conversations") {
+    const all = await browser.storage.local.get(null);
+    const convPrefixes = ["conv-", "chat-", "followup-", "ai-"];
+    const keys = Object.keys(all).filter(k => convPrefixes.some(p => k.startsWith(p)));
+    if (keys.length) await browser.storage.local.remove(keys);
+  }
 }
 
 async function purgeOldHistory() {

@@ -3,10 +3,172 @@
 
   const params = new URLSearchParams(location.search);
   const storeKey = params.get("id");
+
+  // ── History Panel (shared between landing page & gallery view) ──
+  async function populateHistoryPanel(activeStoreKey) {
+    const HISTORY_KEY = "imageGrabberHistory";
+    const panel = document.getElementById("historyPanel");
+    const tab = document.getElementById("historyTab");
+    const timeline = document.getElementById("historyTimeline");
+    const countEl = document.getElementById("historyCount");
+    if (!panel || !timeline) return;
+
+    // Toggle
+    tab.addEventListener("click", () => {
+      panel.classList.toggle("hidden");
+      PanelState.save("images", "history", { visible: !panel.classList.contains("hidden") });
+    });
+    document.getElementById("historyPanelClose").addEventListener("click", () => {
+      panel.classList.add("hidden");
+      PanelState.save("images", "history", { visible: false });
+    });
+
+    // Load history
+    const hist = (await browser.storage.local.get(HISTORY_KEY))[HISTORY_KEY] || [];
+    if (hist.length === 0) { tab.style.display = "none"; return; }
+
+    // Verify entries
+    const keys = hist.map(h => h.storeKey);
+    const allData = await browser.storage.local.get(keys);
+    const valid = hist.filter(h => allData[h.storeKey]);
+    if (valid.length === 0) { tab.style.display = "none"; return; }
+    if (valid.length !== hist.length) {
+      await browser.storage.local.set({ [HISTORY_KEY]: valid });
+    }
+
+    const totalImages = valid.reduce((sum, h) => sum + (h.imageCount || 0), 0);
+    countEl.textContent = `${valid.length} session${valid.length !== 1 ? "s" : ""} · ${totalImages} images`;
+
+    function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+    function ago(ts) {
+      const ms = Date.now() - ts;
+      if (ms < 60000) return "just now";
+      if (ms < 3600000) return Math.round(ms / 60000) + "m ago";
+      if (ms < 86400000) return Math.round(ms / 3600000) + "h ago";
+      return Math.round(ms / 86400000) + "d ago";
+    }
+
+    timeline.innerHTML = "";
+    valid.forEach(entry => {
+      const node = document.createElement("div");
+      node.className = "history-node" + (entry.storeKey === activeStoreKey ? " active" : "");
+
+      const title = entry.multiTab
+        ? `${entry.tabCount} tabs`
+        : esc((entry.pageTitle || entry.pageUrl || "Untitled").slice(0, 35));
+
+      const thumbs = (entry.thumbnails || []).slice(0, 4);
+      const thumbHtml = thumbs.map(src =>
+        `<img src="${esc(src)}" onerror="this.style.display='none'">`
+      ).join("");
+
+      node.innerHTML = `
+        <button class="hn-delete" title="Delete">&times;</button>
+        <div class="hn-title" title="${esc(entry.pageUrl || "")}">${title}</div>
+        <div class="hn-meta">${entry.imageCount} images · ${ago(entry.timestamp)}</div>
+        ${thumbHtml ? `<div class="hn-thumbs">${thumbHtml}</div>` : ""}
+      `;
+
+      // Click to load
+      node.addEventListener("click", (e) => {
+        if (e.target.closest(".hn-delete")) return;
+        if (entry.storeKey === activeStoreKey) return; // already viewing
+        location.search = `?id=${encodeURIComponent(entry.storeKey)}`;
+      });
+
+      // Delete
+      node.querySelector(".hn-delete").addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const updated = (await browser.storage.local.get(HISTORY_KEY))[HISTORY_KEY] || [];
+        const filtered = updated.filter(h => h.storeKey !== entry.storeKey);
+        await browser.storage.local.set({ [HISTORY_KEY]: filtered });
+        await browser.storage.local.remove(entry.storeKey);
+        node.remove();
+        const remaining = timeline.querySelectorAll(".history-node").length;
+        countEl.textContent = remaining ? `${remaining} session${remaining !== 1 ? "s" : ""}` : "";
+        if (remaining === 0) { panel.classList.add("hidden"); tab.style.display = "none"; }
+      });
+
+      timeline.appendChild(node);
+    });
+
+    // Clear All
+    document.getElementById("clearAllHistory").addEventListener("click", async () => {
+      if (!confirm("Delete all session history and stored images?")) return;
+      const keysToRemove = valid.map(h => h.storeKey);
+      keysToRemove.push(HISTORY_KEY, "imageGrabberSession");
+      await browser.storage.local.remove(keysToRemove);
+      try { indexedDB.deleteDatabase("ArgusImageCache"); } catch {}
+      sessionStorage.removeItem("imageGrabberActive");
+      timeline.innerHTML = "";
+      panel.classList.add("hidden");
+      tab.style.display = "none";
+      countEl.textContent = "";
+    });
+
+    // Draggable
+    {
+      const header = panel.querySelector(".fp-header");
+      let dragging = false, startX, startY, startLeft, startTop;
+      header.addEventListener("mousedown", (e) => {
+        if (e.target.closest("button, input")) return;
+        dragging = true;
+        const rect = panel.getBoundingClientRect();
+        startX = e.clientX; startY = e.clientY;
+        startLeft = rect.left; startTop = rect.top;
+        header.style.cursor = "grabbing";
+        e.preventDefault();
+      });
+      document.addEventListener("mousemove", (e) => {
+        if (!dragging) return;
+        panel.style.left = (startLeft + e.clientX - startX) + "px";
+        panel.style.top = (startTop + e.clientY - startY) + "px";
+        panel.style.right = "auto";
+        panel.style.transform = "none";
+      });
+      document.addEventListener("mouseup", () => {
+        if (!dragging) return;
+        dragging = false;
+        header.style.cursor = "grab";
+        const rect = panel.getBoundingClientRect();
+        PanelState.save("images", "history", { left: rect.left, top: rect.top });
+      });
+    }
+
+    // Resizable
+    {
+      const handle = document.createElement("div");
+      handle.className = "fp-resize";
+      panel.appendChild(handle);
+      let resizing = false, rStartX, rStartY, rStartW, rStartH;
+      handle.addEventListener("mousedown", (e) => {
+        resizing = true;
+        rStartX = e.clientX; rStartY = e.clientY;
+        rStartW = panel.offsetWidth; rStartH = panel.offsetHeight;
+        e.preventDefault(); e.stopPropagation();
+      });
+      document.addEventListener("mousemove", (e) => {
+        if (!resizing) return;
+        panel.style.width = Math.max(180, rStartW + (e.clientX - rStartX)) + "px";
+        panel.style.height = Math.max(150, rStartH + (e.clientY - rStartY)) + "px";
+      });
+      document.addEventListener("mouseup", () => {
+        if (!resizing) return;
+        resizing = false;
+        PanelState.save("images", "history", { width: panel.offsetWidth, height: panel.offsetHeight });
+      });
+    }
+
+    // Restore panel state (position, size, visibility)
+    PanelState.apply(panel, "images", "history");
+  }
+
   if (!storeKey) {
     // Standalone mode — show tab picker landing
     document.querySelector(".header-title").textContent = "Image Grabber";
     document.getElementById("page-url").textContent = "";
+    // Override grid layout so the landing page renders as a simple block
+    document.getElementById("image-grid").style.display = "block";
     const emptyEl = document.getElementById("empty-state");
     emptyEl.innerHTML = `
       <div style="max-width:520px;margin:0 auto;text-align:center;">
@@ -28,7 +190,8 @@
 
     // Load open tabs into the picker
     (async () => {
-      const allTabs = await browser.tabs.query({ currentWindow: true });
+      // Query all windows so we see every open web tab
+      const allTabs = await browser.tabs.query({});
       const webTabs = allTabs.filter(t => t.url && (t.url.startsWith("http://") || t.url.startsWith("https://")));
       const picker = document.getElementById("grab-tab-picker");
 
@@ -38,35 +201,30 @@
         return;
       }
 
-      picker.innerHTML = "";
-      for (const tab of webTabs) {
-        const label = document.createElement("label");
-        label.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;cursor:pointer;font-size:12px;";
-        label.addEventListener("mouseenter", () => { label.style.background = "var(--bg-surface)"; });
-        label.addEventListener("mouseleave", () => { label.style.background = ""; });
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.checked = true;
-        cb.value = tab.id;
-        cb.className = "grab-tab-cb";
-        cb.style.accentColor = "var(--accent)";
-        if (tab.favIconUrl) {
-          const ico = document.createElement("img");
-          ico.src = tab.favIconUrl;
-          ico.style.cssText = "width:16px;height:16px;border-radius:2px;flex-shrink:0;";
-          ico.onerror = () => { ico.style.display = "none"; };
-          label.appendChild(cb);
-          label.appendChild(ico);
-        } else {
-          label.appendChild(cb);
-        }
-        const title = document.createElement("span");
-        title.style.cssText = "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;";
-        title.textContent = tab.title || tab.url;
-        title.title = tab.url;
-        label.appendChild(title);
-        picker.appendChild(label);
-      }
+      function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+      const rows = webTabs.map(tab => {
+        const title = esc((tab.title && tab.title.trim()) || tab.url || "Untitled");
+        const ico = tab.favIconUrl ? `<td style="width:16px;padding:0"><img src="${esc(tab.favIconUrl)}" style="width:16px;height:16px;border-radius:2px;vertical-align:middle"></td>` : `<td style="width:0;padding:0"></td>`;
+        return `<tr class="grab-tab-row" style="cursor:pointer;font-size:12px;color:var(--text-secondary)"><td style="width:20px;padding:4px"><input type="checkbox" checked value="${tab.id}" class="grab-tab-cb" style="accent-color:var(--accent)"></td>${ico}<td style="padding:4px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px" title="${esc(tab.url)}">${title}</td></tr>`;
+      }).join("");
+      picker.innerHTML = `<table style="width:100%;border-collapse:collapse">${rows}</table>`;
+
+      // Hide broken favicons
+      picker.querySelectorAll(".grab-tab-row img").forEach(img => {
+        img.addEventListener("error", () => { img.style.display = "none"; });
+      });
+
+      // Click row to toggle checkbox
+      picker.querySelectorAll(".grab-tab-row").forEach(row => {
+        row.addEventListener("click", (e) => {
+          if (e.target.tagName !== "INPUT") {
+            const cb = row.querySelector(".grab-tab-cb");
+            cb.checked = !cb.checked;
+            cb.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+        });
+      });
 
       // Select All toggle
       const selectAllCb = document.getElementById("grab-select-all");
@@ -111,12 +269,47 @@
       } catch (e) { btn.textContent = e.message || "Failed"; btn.disabled = false; }
     });
 
+    // ── Auto-resume check (internal Argus navigation only) ──
+    (async () => {
+      try {
+        const SESSION_KEY = "imageGrabberSession";
+        const localRaw = localStorage.getItem(SESSION_KEY);
+        localStorage.removeItem(SESSION_KEY);
+
+        let saved = null;
+        if (localRaw) {
+          try { saved = JSON.parse(localRaw); } catch { saved = null; }
+          if (saved && saved.storeKey) {
+            await browser.storage.local.set({ [SESSION_KEY]: saved });
+          }
+        }
+        if (!saved || !saved.storeKey) {
+          saved = (await browser.storage.local.get(SESSION_KEY))[SESSION_KEY];
+        }
+        if (saved && saved.storeKey) {
+          const hasData = await browser.storage.local.get(saved.storeKey);
+          if (hasData[saved.storeKey]) {
+            const wasActive = sessionStorage.getItem("imageGrabberActive");
+            if (wasActive === saved.storeKey) {
+              location.search = `?id=${encodeURIComponent(saved.storeKey)}`;
+              return;
+            }
+          } else {
+            await browser.storage.local.remove(SESSION_KEY);
+          }
+        }
+      } catch {}
+    })();
+
+    populateHistoryPanel(null);
+
     // Hide filter/action bars and clear button in standalone mode
     document.querySelector(".stats-bar")?.classList.add("hidden");
     document.querySelector(".filter-bar")?.classList.add("hidden");
     document.querySelector(".ai-search-bar")?.classList.add("hidden");
     document.querySelector(".display-bar")?.classList.add("hidden");
     document.querySelector(".actions-bar")?.classList.add("hidden");
+    document.getElementById("refresh-gallery")?.classList.add("hidden");
     document.getElementById("clear-gallery")?.classList.add("hidden");
     return;
   }
@@ -125,16 +318,113 @@
   if (!stored || !stored.images) { document.getElementById("empty-state").innerHTML = "<p>No image data found.</p>"; return; }
 
   const { images, pageUrl, pageTitle, stats, multiTab, tabSources } = stored;
+  const SESSION_KEY = "imageGrabberSession";
 
-  // Header
-  const urlEl = document.getElementById("page-url");
-  urlEl.href = pageUrl || "#";
-  urlEl.textContent = pageTitle || pageUrl || "";
+  // Mark this tab as having an active Image Grabber session (sessionStorage is
+  // per-tab and cleared on extension reload — used by the landing page to decide
+  // whether to auto-resume or show the tab picker)
+  sessionStorage.setItem("imageGrabberActive", storeKey);
+
+  // Persist session pointer to browser.storage.local
+  browser.storage.local.set({ [SESSION_KEY]: { storeKey, timestamp: Date.now() } }).catch(() => {});
+
+  // ── Session History — upsert this session into history array ──
+  const HISTORY_KEY = "imageGrabberHistory";
+  const MAX_HISTORY = 20;
+  (async () => {
+    try {
+      const hist = (await browser.storage.local.get(HISTORY_KEY))[HISTORY_KEY] || [];
+      const entry = {
+        storeKey,
+        timestamp: Date.now(),
+        imageCount: images.length,
+        pageTitle: pageTitle || "",
+        pageUrl: pageUrl || "",
+        multiTab: !!multiTab,
+        tabCount: tabSources?.length || 1,
+        thumbnails: images.slice(0, 4).map(img => img.src),
+      };
+      // Upsert — replace existing entry for same storeKey, or prepend
+      const idx = hist.findIndex(h => h.storeKey === storeKey);
+      if (idx >= 0) hist.splice(idx, 1);
+      hist.unshift(entry);
+      // Trim to max and clean up orphaned image data
+      const removed = hist.splice(MAX_HISTORY);
+      await browser.storage.local.set({ [HISTORY_KEY]: hist });
+      // Remove stored image data for entries that fell off the end
+      if (removed.length) {
+        const activeKeys = new Set(hist.map(h => h.storeKey));
+        const toRemove = removed.filter(h => !activeKeys.has(h.storeKey)).map(h => h.storeKey);
+        if (toRemove.length) await browser.storage.local.remove(toRemove);
+      }
+    } catch {}
+  })();
+
+  // Header — hide page-url text (redundant with stats bar, causes button reflow)
+  document.getElementById("page-url").style.display = "none";
   document.title = `Images - ${pageTitle || pageUrl || "Argus"}`;
 
-  // Clear gallery → remove stored data and go back to landing
+  // Refresh gallery → re-grab images from the same source tabs
+  document.getElementById("refresh-gallery").addEventListener("click", async () => {
+    const btn = document.getElementById("refresh-gallery");
+    btn.disabled = true;
+    btn.style.opacity = "0.5";
+    try {
+      // Get tab IDs from original source tabs (try to match by URL)
+      if (multiTab && tabSources) {
+        const allTabs = await browser.tabs.query({});
+        const tabIds = [];
+        for (const ts of tabSources) {
+          const match = allTabs.find(t => t.url === ts.url);
+          if (match) tabIds.push(match.id);
+        }
+        if (tabIds.length > 0) {
+          const resp = tabIds.length === 1
+            ? await browser.runtime.sendMessage({ action: "extractImages", tabId: tabIds[0] })
+            : await browser.runtime.sendMessage({ action: "extractImagesMultiTab", tabIds });
+          if (resp && resp.success) {
+            const data = tabIds.length === 1
+              ? { pageUrl: resp.pageUrl, pageTitle: resp.pageTitle, images: resp.images, stats: resp.stats }
+              : resp.data;
+            await browser.storage.local.set({ [storeKey]: data });
+            location.reload();
+            return;
+          }
+        }
+      } else {
+        // Single-tab mode — find tab by pageUrl
+        const allTabs = await browser.tabs.query({});
+        const match = allTabs.find(t => t.url === pageUrl);
+        if (match) {
+          const resp = await browser.runtime.sendMessage({ action: "extractImages", tabId: match.id });
+          if (resp && resp.success) {
+            await browser.storage.local.set({ [storeKey]: { pageUrl: resp.pageUrl, pageTitle: resp.pageTitle, images: resp.images, stats: resp.stats } });
+            location.reload();
+            return;
+          }
+        }
+      }
+      // If we get here, source tabs not found
+      btn.title = "Source tabs not found";
+      setTimeout(() => { btn.title = "Re-grab images from source tabs"; btn.disabled = false; btn.style.opacity = ""; }, 2000);
+    } catch {
+      btn.disabled = false;
+      btn.style.opacity = "";
+    }
+  });
+
+  // Clear gallery → remove stored data, session state, history entry, image cache, and go back to landing
   document.getElementById("clear-gallery").addEventListener("click", async () => {
-    await browser.storage.local.remove(storeKey);
+    localStorage.removeItem(SESSION_KEY);
+    // Remove from history
+    try {
+      const hist = (await browser.storage.local.get(HISTORY_KEY))[HISTORY_KEY] || [];
+      const filtered = hist.filter(h => h.storeKey !== storeKey);
+      await browser.storage.local.set({ [HISTORY_KEY]: filtered });
+    } catch {}
+    await browser.storage.local.remove([storeKey, SESSION_KEY]);
+    await clearImageCache();
+    sessionStorage.removeItem("imageGrabberActive");
     location.search = "";
   });
 
@@ -158,7 +448,7 @@
   // Populate type counts and hide empty tabs
   const typeCounts = {};
   images.forEach(img => { typeCounts[img.typeNorm] = (typeCounts[img.typeNorm] || 0) + 1; });
-  document.querySelectorAll("#type-tabs .tab[data-type]").forEach(tab => {
+  document.querySelectorAll("#type-tabs .pill-chip[data-type]").forEach(tab => {
     const t = tab.dataset.type;
     if (t === "all") return;
     const count = typeCounts[t] || 0;
@@ -172,52 +462,234 @@
   const otherCountEl = document.getElementById("count-other");
   if (otherCountEl) otherCountEl.textContent = otherCount;
   if (otherCount === 0) {
-    const otherTab = document.querySelector('#type-tabs .tab[data-type="other"]');
+    const otherTab = document.querySelector('#type-tabs .pill-chip[data-type="other"]');
     if (otherTab) otherTab.classList.add("tab-zero");
   }
+
+  // Discuss with AI — standard ArgusChat component (same as Connection Graph)
+  {
+    const typeSummary = Object.entries(typeCounts).map(([t, c]) => `${t.toUpperCase()}: ${c}`).join(", ");
+    const contextLines = [
+      `Page: ${pageTitle || pageUrl || "Unknown"}`,
+      `Total images: ${images.length}`,
+      `Types: ${typeSummary}`,
+      `Sources: IMG=${stats?.bySource?.img || 0}, CSS-BG=${stats?.bySource?.["css-bg"] || 0}, Meta=${stats?.bySource?.meta || 0}, Favicon=${stats?.bySource?.favicon || 0}`,
+    ];
+    if (images.length <= 200) {
+      contextLines.push("\nImage list:");
+      images.forEach((img, i) => {
+        const name = img.filename || img.src?.split("/").pop()?.split("?")[0] || "unknown";
+        contextLines.push(`${i + 1}. ${name} (${img.typeNorm || "?"}, ${img.width || "?"}x${img.height || "?"}, src: ${img.source || "?"})`);
+      });
+    }
+
+    ArgusChat.init({
+      container: document.getElementById("argus-chat-container"),
+      contextType: "Image Grabber",
+      contextData: contextLines.join("\n"),
+      pageTitle: pageTitle || ""
+    });
+  }
+
+  // ── Button icon SVGs (preserved during dynamic text updates) ──
+  const ICONS = {
+    download: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+    cloud: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>',
+    draft: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+    chat: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>',
+    selected: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="9 11 12 14 22 4"/></svg>',
+    project: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>',
+  };
+  function btnLabel(icon, text) { return icon + " " + text; }
 
   // State
   const selected = new Set();
   let currentFilter = "all";
   let currentTypeFilter = "all";
   let searchQuery = "";
-  let sizeMode = "none"; // "none", "min", "max"
-  let sizeThreshold = 0;
+  let currentSizeFilter = "all"; // "all", "small", "medium", "big", "large"
   let listView = false;
   let aiMatchIndices = null; // null = no AI filter active, Set = matched image indices
   let aiSearching = false;
   let sortBy = "default";
   let showSelectedOnly = false;
   let currentColorFilter = "all"; // color search filter (not display overlay)
-  let currentTabFilter = "all";  // multi-tab filter
+  // multi-tab filter uses enabledTabs Set (defined in setup below)
   const imageColors = new Map(); // src → Set of dominant color names
 
-  // ── Multi-Tab Filter Setup ──
-  if (multiTab && tabSources && tabSources.length > 1) {
-    const tabRow = document.getElementById("tab-filter-row");
-    tabRow.classList.remove("hidden");
-    const tabTabs = document.getElementById("tab-tabs");
-    // Update "All Tabs" count
-    tabTabs.querySelector('[data-tab="all"]').textContent = `All Tabs (${tabSources.length})`;
-    tabSources.forEach(ts => {
-      const btn = document.createElement("button");
-      btn.className = "tab";
-      btn.dataset.tab = ts.url;
-      // Shorten the title for display
-      let label = ts.title || ts.url;
-      if (label.length > 30) label = label.slice(0, 28) + "...";
-      btn.innerHTML = `${label} <span class="tab-count">${ts.imageCount}</span>`;
-      btn.title = ts.url;
-      tabTabs.appendChild(btn);
+  // ── Session Persistence ──
+  const CACHE_DB_NAME = "ArgusImageCache";
+  const CACHE_DB_VERSION = 1;
+  let saveTimeout = null;
+
+  // Open IndexedDB for image blob caching
+  function openCacheDB() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(CACHE_DB_NAME, CACHE_DB_VERSION);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains("blobs")) {
+          db.createObjectStore("blobs", { keyPath: "url" });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
     });
-    tabTabs.querySelectorAll(".tab").forEach(tab => {
-      tab.addEventListener("click", () => {
-        tabTabs.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-        tab.classList.add("active");
-        currentTabFilter = tab.dataset.tab;
-        render();
+  }
+
+  async function cacheImageBlob(src) {
+    try {
+      const resp = await fetch(src, { mode: "cors" });
+      if (!resp.ok) return;
+      const blob = await resp.blob();
+      if (blob.size > 5 * 1024 * 1024) return; // skip >5MB
+      const db = await openCacheDB();
+      const tx = db.transaction("blobs", "readwrite");
+      tx.objectStore("blobs").put({ url: src, blob, cachedAt: Date.now() });
+      db.close();
+    } catch { /* CORS or network — skip */ }
+  }
+
+  async function getCachedBlob(src) {
+    try {
+      const db = await openCacheDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction("blobs", "readonly");
+        const req = tx.objectStore("blobs").get(src);
+        req.onsuccess = () => { db.close(); resolve(req.result?.blob || null); };
+        req.onerror = () => { db.close(); resolve(null); };
       });
+    } catch { return null; }
+  }
+
+  async function clearImageCache() {
+    try {
+      const db = await openCacheDB();
+      const tx = db.transaction("blobs", "readwrite");
+      tx.objectStore("blobs").clear();
+      db.close();
+    } catch {}
+  }
+
+  function collectSessionState() {
+    return {
+      storeKey,
+      selected: [...selected],
+      currentFilter,
+      currentTypeFilter,
+      currentSizeFilter,
+      currentColorFilter,
+      searchQuery,
+      sortBy,
+      listView,
+      showSelectedOnly,
+      enabledTabs: [...enabledTabs],
+      imageColors: [...imageColors.entries()].map(([k, v]) => [k, [...v]]),
+      // Display settings read from DOM
+      activeBg: document.querySelector(".bg-swatch.active")?.dataset.bg || "default",
+      filterToggleOn: document.getElementById("filter-toggle-cb")?.checked || false,
+      selectedDisplayFilter: document.querySelector('.display-group .pill-chip[data-filter].active')?.dataset.filter || "sepia",
+      brightness: document.getElementById("brightness-slider")?.value || "100",
+      activePanelTab: document.querySelector("#actionsPanel .fp-tab.active")?.dataset.ptab || "source",
+      timestamp: Date.now()
+    };
+  }
+
+  function saveSession() {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(async () => {
+      try {
+        const state = collectSessionState();
+        await browser.storage.local.set({ [SESSION_KEY]: state });
+      } catch {}
+    }, 300);
+  }
+
+  // Flush state synchronously on page unload — localStorage is the only
+  // synchronous storage API, so it's the last-resort save before the page dies.
+  // Do NOT write to localStorage anywhere else (stale entries survive extension resets).
+  function flushToLocalStorage() {
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify(collectSessionState()));
+    } catch {}
+  }
+  window.addEventListener("pagehide", flushToLocalStorage);
+  window.addEventListener("beforeunload", flushToLocalStorage);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      flushToLocalStorage();
+      // Also fire an async save to browser.storage.local
+      saveSession();
+    }
+  });
+
+  // Periodic backup save every 5 seconds (belt-and-suspenders for when
+  // browser.tabs.update() destroys the page without unload events)
+  setInterval(() => {
+    try {
+      const state = collectSessionState();
+      browser.storage.local.set({ [SESSION_KEY]: state }).catch(() => {});
+    } catch {}
+  }, 5000);
+
+  async function restoreSession() {
+    try {
+      // Check localStorage first (saved synchronously on page unload)
+      const localRaw = localStorage.getItem(SESSION_KEY);
+      localStorage.removeItem(SESSION_KEY); // always clean up
+
+      let saved = null;
+      if (localRaw) {
+        const fromLocal = JSON.parse(localRaw);
+        if (fromLocal && fromLocal.storeKey === storeKey) {
+          // Migrate to browser.storage.local
+          await browser.storage.local.set({ [SESSION_KEY]: fromLocal });
+          saved = fromLocal;
+        }
+      }
+      if (!saved) {
+        saved = (await browser.storage.local.get(SESSION_KEY))[SESSION_KEY];
+      }
+      if (!saved || saved.storeKey !== storeKey) return null;
+      // Only return if this is a full session (has selections array), not a minimal pointer
+      if (!saved.hasOwnProperty("selected")) return null;
+      return saved;
+    } catch { return null; }
+  }
+
+  // ── Multi-Tab Filter Setup (subheader checkboxes) ──
+  const enabledTabs = new Set(); // URLs of enabled tabs; empty = show all
+  if (multiTab && tabSources && tabSources.length > 1) {
+    const bar = document.getElementById("tabSelectorBar");
+    bar.classList.remove("hidden");
+    const container = document.getElementById("tabSelectorChecks");
+    container.innerHTML = "";
+    tabSources.forEach(ts => {
+      let label = ts.title || ts.url;
+      if (label.length > 35) label = label.slice(0, 33) + "…";
+      const lbl = document.createElement("label");
+      lbl.title = ts.url;
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = true;
+      cb.dataset.tabUrl = ts.url;
+      cb.addEventListener("change", () => {
+        rebuildEnabledTabs();
+        render(); saveSession();
+      });
+      lbl.appendChild(cb);
+      lbl.appendChild(document.createTextNode(` ${label} (${ts.imageCount})`));
+      container.appendChild(lbl);
     });
+    function rebuildEnabledTabs() {
+      enabledTabs.clear();
+      const cbs = container.querySelectorAll("input[type=checkbox]");
+      const allChecked = [...cbs].every(c => c.checked);
+      if (!allChecked) {
+        cbs.forEach(c => { if (c.checked) enabledTabs.add(c.dataset.tabUrl); });
+      }
+      // enabledTabs empty = show all
+    }
   }
 
   // ── Color Extraction (canvas pixel sampling) ──
@@ -344,17 +816,27 @@
   function getFiltered() {
     let result = images.filter(img => {
       if (showSelectedOnly && !selected.has(img.src)) return false;
-      if (currentTabFilter !== "all" && img.tabUrl !== currentTabFilter) return false;
+      if (enabledTabs.size > 0 && !enabledTabs.has(img.tabUrl)) return false;
       if (currentFilter !== "all" && img.source !== currentFilter) return false;
       if (currentTypeFilter !== "all") {
         if (currentTypeFilter === "other") {
           if (explicitTypes.has(img.typeNorm)) return false;
         } else if (img.typeNorm !== currentTypeFilter) return false;
       }
-      if (sizeThreshold > 0 && img.width && img.height) {
+      if (currentSizeFilter !== "all" && img.width && img.height) {
         const larger = Math.max(img.width, img.height);
-        if (sizeMode === "min" && larger < sizeThreshold) return false;
-        if (sizeMode === "max" && larger >= sizeThreshold) return false;
+        if (currentSizeFilter === "small" && larger >= 200) return false;
+        if (currentSizeFilter === "medium" && (larger < 200 || larger >= 500)) return false;
+        if (currentSizeFilter === "big" && (larger < 500 || larger >= 1000)) return false;
+        if (currentSizeFilter === "large" && larger < 1000) return false;
+        if (currentSizeFilter.startsWith("min-")) {
+          const thresh = parseInt(currentSizeFilter.slice(4));
+          if (larger < thresh) return false;
+        }
+        if (currentSizeFilter.startsWith("max-")) {
+          const thresh = parseInt(currentSizeFilter.slice(4));
+          if (larger >= thresh) return false;
+        }
       }
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
@@ -383,9 +865,45 @@
     return result;
   }
 
+  function updateFilterSummary() {
+    const el = document.getElementById("filterSummary");
+    if (!el) return;
+    el.classList.add("has-filters");
+
+    const src = currentFilter !== "all" ? currentFilter : "all";
+    const typ = currentTypeFilter !== "all" ? currentTypeFilter : "all";
+    const col = currentColorFilter !== "all" ? currentColorFilter : "all";
+    const sz = currentSizeFilter !== "all" ? currentSizeFilter : "all";
+    const srch = searchQuery || (aiMatchIndices ? "AI vision" : "—");
+
+    el.innerHTML = [
+      `<span class="filter-tag"><span class="filter-tag-label">Source:</span> <span class="filter-tag-value">${src}</span></span>`,
+      `<span class="filter-tag"><span class="filter-tag-label">Type:</span> <span class="filter-tag-value">${typ}</span></span>`,
+      `<span class="filter-tag"><span class="filter-tag-label">Size:</span> <span class="filter-tag-value">${sz}</span></span>`,
+      `<span class="filter-tag"><span class="filter-tag-label">Color:</span> <span class="filter-tag-value">${col}</span></span>`,
+      `<span class="filter-tag"><span class="filter-tag-label">Search:</span> <span class="filter-tag-value">${srch}</span></span>`,
+    ].join("<br>");
+  }
+
+  function updateStats(filtered) {
+    document.getElementById("stat-total").textContent = filtered.length;
+    let imgCount = 0, cssCount = 0, metaCount = 0;
+    for (const img of filtered) {
+      const s = img.source;
+      if (s === "img") imgCount++;
+      else if (s === "css-bg") cssCount++;
+      else if (s === "meta" || s === "favicon") metaCount++;
+    }
+    document.getElementById("stat-img").textContent = imgCount;
+    document.getElementById("stat-css").textContent = cssCount;
+    document.getElementById("stat-meta").textContent = metaCount;
+  }
+
   function render() {
+    updateFilterSummary();
     const grid = document.getElementById("image-grid");
     const filtered = getFiltered();
+    updateStats(filtered);
 
     if (filtered.length === 0) {
       grid.innerHTML = '<div class="empty-state"><p>No images match the current filters.</p></div>';
@@ -422,7 +940,23 @@
       thumb.alt = img.alt || "";
       // Use the image src directly — cross-origin will just show broken
       thumb.src = img.src;
-      thumb.addEventListener("error", () => {
+      // Cache image blob when it loads (for closed-tab resilience)
+      thumb.addEventListener("load", () => {
+        if (!thumb.dataset.cached) {
+          thumb.dataset.cached = "1";
+          cacheImageBlob(img.src);
+        }
+      });
+      thumb.addEventListener("error", async () => {
+        // Try loading from IndexedDB cache (image may be from a closed tab)
+        if (!thumb.dataset.cacheAttempted) {
+          thumb.dataset.cacheAttempted = "1";
+          const blob = await getCachedBlob(img.src);
+          if (blob) {
+            thumb.src = URL.createObjectURL(blob);
+            return;
+          }
+        }
         thumb.style.display = "none";
         const placeholder = document.createElement("div");
         placeholder.style.cssText = "width:100%;aspect-ratio:1;display:flex;align-items:center;justify-content:center;background:var(--bg-primary);color:var(--text-muted);font-size:11px;text-align:center;padding:8px;";
@@ -527,6 +1061,7 @@
       card.querySelector(".card-checkbox").checked = isSel;
     });
     updateSelectedCount();
+    saveSession();
   }
 
   function updateSelectedCount() {
@@ -534,9 +1069,11 @@
     document.getElementById("download-selected").disabled = selected.size === 0;
     document.getElementById("save-to-cloud").disabled = selected.size === 0;
     document.getElementById("insert-to-draft").disabled = selected.size === 0;
-    document.getElementById("insert-to-chat").disabled = selected.size === 0;
+    document.getElementById("add-to-project").disabled = selected.size === 0;
     const cmpBtn = document.getElementById("compare-selected");
     if (cmpBtn) cmpBtn.disabled = selected.size < 2;
+    const apc = document.getElementById("actionsPanelCount");
+    if (apc) apc.textContent = selected.size ? selected.size + " sel" : "";
   }
 
   // ── Preview Modal ──
@@ -603,6 +1140,11 @@
   function openPreview(img) {
     resetPreviewControls();
     pImg.src = img.src;
+    // Fallback to cache if original fails in preview
+    pImg.onerror = async () => {
+      const blob = await getCachedBlob(img.src);
+      if (blob) pImg.src = URL.createObjectURL(blob);
+    };
     document.getElementById("preview-filename").textContent = decodeURIComponent(img.filename || "image");
     document.getElementById("preview-dimensions").textContent =
       (img.width && img.height) ? `${img.width} x ${img.height} · ${img.type || "unknown"}` : (img.type || "");
@@ -743,22 +1285,22 @@
   // ── Filter Tabs ──
 
   // Source tabs
-  document.querySelectorAll("#source-tabs .tab").forEach(tab => {
+  document.querySelectorAll("#source-tabs .pill-chip").forEach(tab => {
     tab.addEventListener("click", () => {
-      document.querySelectorAll("#source-tabs .tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll("#source-tabs .pill-chip").forEach(t => t.classList.remove("active"));
       tab.classList.add("active");
       currentFilter = tab.dataset.filter;
-      render();
+      render(); saveSession();
     });
   });
 
   // Type tabs
-  document.querySelectorAll("#type-tabs .tab").forEach(tab => {
+  document.querySelectorAll("#type-tabs .pill-chip").forEach(tab => {
     tab.addEventListener("click", () => {
-      document.querySelectorAll("#type-tabs .tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll("#type-tabs .pill-chip").forEach(t => t.classList.remove("active"));
       tab.classList.add("active");
       currentTypeFilter = tab.dataset.type;
-      render();
+      render(); saveSession();
     });
   });
 
@@ -768,40 +1310,35 @@
       document.querySelectorAll("#color-tabs .color-tab").forEach(t => t.classList.remove("active"));
       tab.classList.add("active");
       currentColorFilter = tab.dataset.color;
-      render();
+      render(); saveSession();
     });
   });
 
   document.getElementById("search-input").addEventListener("input", (e) => {
     searchQuery = e.target.value.trim();
-    render();
+    render(); saveSession();
   });
 
-  document.getElementById("size-filter").addEventListener("change", (e) => {
-    const v = e.target.value;
-    if (v === "0") {
-      sizeMode = "none";
-      sizeThreshold = 0;
-    } else if (v.startsWith("min-")) {
-      sizeMode = "min";
-      sizeThreshold = parseInt(v.slice(4));
-    } else if (v.startsWith("max-")) {
-      sizeMode = "max";
-      sizeThreshold = parseInt(v.slice(4));
-    }
-    render();
+  // Size pill-chip filter
+  document.querySelectorAll("#size-tabs .pill-chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#size-tabs .pill-chip").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      currentSizeFilter = btn.dataset.size;
+      render(); saveSession();
+    });
   });
 
   document.getElementById("sort-by").addEventListener("change", (e) => {
     sortBy = e.target.value;
-    render();
+    render(); saveSession();
   });
 
   // View toggle
   document.getElementById("view-list").addEventListener("change", (e) => {
     listView = e.target.checked;
     document.getElementById("view-icon").textContent = listView ? "List" : "Grid";
-    render();
+    render(); saveSession();
   });
 
   // ── Display Controls ──
@@ -835,18 +1372,35 @@
       grid.classList.remove("bg-white", "bg-light", "bg-mid", "bg-black", "bg-checker");
       const bg = btn.dataset.bg;
       if (bg !== "default") grid.classList.add("bg-" + bg);
+      saveSession();
     });
   });
 
-  // Color filter buttons
-  document.querySelectorAll(".filter-swatch").forEach(btn => {
+  // Color filter toggle + pill-chip buttons
+  const filterToggleCb = document.getElementById("filter-toggle-cb");
+  const filterPills = document.querySelectorAll('.display-group .pill-chip[data-filter]');
+  let selectedFilter = "sepia"; // default filter when toggled on
+
+  function applyFilter() {
+    grid.classList.remove("filter-sepia", "filter-grayscale", "filter-invert", "filter-warm", "filter-cool", "filter-highcontrast");
+    if (filterToggleCb.checked) {
+      currentDisplayFilter = selectedFilter;
+      grid.classList.add("filter-" + selectedFilter);
+    } else {
+      currentDisplayFilter = "none";
+    }
+    applyDisplaySettings();
+  }
+
+  filterToggleCb.addEventListener("change", () => { applyFilter(); saveSession(); });
+
+  filterPills.forEach(btn => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll(".filter-swatch").forEach(b => b.classList.remove("active"));
+      filterPills.forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
-      grid.classList.remove("filter-sepia", "filter-grayscale", "filter-invert", "filter-warm", "filter-cool", "filter-highcontrast");
-      currentDisplayFilter = btn.dataset.filter;
-      if (currentDisplayFilter !== "none") grid.classList.add("filter-" + currentDisplayFilter);
-      applyDisplaySettings();
+      selectedFilter = btn.dataset.filter;
+      filterToggleCb.checked = true;
+      applyFilter(); saveSession();
     });
   });
 
@@ -857,43 +1411,43 @@
   brightnessSlider.addEventListener("input", () => {
     currentBrightness = brightnessSlider.value / 100;
     brightnessValEl.textContent = brightnessSlider.value + "%";
-    applyDisplaySettings();
+    applyDisplaySettings(); saveSession();
   });
   brightnessSlider.addEventListener("dblclick", () => {
     brightnessSlider.value = 100;
     currentBrightness = 1;
     brightnessValEl.textContent = "100%";
-    applyDisplaySettings();
+    applyDisplaySettings(); saveSession();
   });
 
   // ── Bulk Actions ──
 
   document.getElementById("select-all").addEventListener("click", () => {
     getFiltered().forEach(img => selected.add(img.src));
-    render();
+    render(); saveSession();
   });
 
   document.getElementById("deselect-all").addEventListener("click", () => {
     selected.clear();
     showSelectedOnly = false;
     const ssBtn = document.getElementById("show-selected-only");
-    ssBtn.textContent = "Show Selected";
+    ssBtn.innerHTML = btnLabel(ICONS.selected, "Selected");
     ssBtn.classList.remove("active-toggle");
-    render();
+    render(); saveSession();
   });
 
   document.getElementById("show-selected-only").addEventListener("click", () => {
     showSelectedOnly = !showSelectedOnly;
     const ssBtn = document.getElementById("show-selected-only");
-    ssBtn.textContent = showSelectedOnly ? "Show All" : "Show Selected";
+    ssBtn.innerHTML = btnLabel(ICONS.selected, showSelectedOnly ? "Show All" : "Selected");
     ssBtn.classList.toggle("active-toggle", showSelectedOnly);
-    render();
+    render(); saveSession();
   });
 
   document.getElementById("download-selected").addEventListener("click", async () => {
     const btn = document.getElementById("download-selected");
     btn.disabled = true;
-    btn.textContent = "Downloading...";
+    btn.innerHTML = btnLabel(ICONS.download, "Downloading...");
     let count = 0;
     for (const src of selected) {
       try {
@@ -912,14 +1466,14 @@
         } catch { /* skip */ }
       }
     }
-    btn.textContent = `Downloaded ${count}`;
-    setTimeout(() => { btn.textContent = "Download Selected"; btn.disabled = selected.size === 0; }, 2000);
+    btn.innerHTML = btnLabel(ICONS.download, `Downloaded ${count}`);
+    setTimeout(() => { btn.innerHTML = btnLabel(ICONS.download, "Download"); btn.disabled = selected.size === 0; }, 2000);
   });
 
   document.getElementById("save-to-cloud").addEventListener("click", async () => {
     const btn = document.getElementById("save-to-cloud");
     btn.disabled = true;
-    btn.textContent = "Saving...";
+    btn.innerHTML = btnLabel(ICONS.cloud, "Saving...");
 
     const selectedImages = images.filter(img => selected.has(img.src));
     let saved = 0;
@@ -945,8 +1499,8 @@
       }
     }
 
-    btn.textContent = errors ? `Saved ${saved}, ${errors} failed` : `Saved ${saved} to cloud`;
-    setTimeout(() => { btn.textContent = "Save to Cloud"; btn.disabled = selected.size === 0; }, 3000);
+    btn.innerHTML = btnLabel(ICONS.cloud, errors ? `Saved ${saved}, ${errors} failed` : `Saved ${saved}`);
+    setTimeout(() => { btn.innerHTML = btnLabel(ICONS.cloud, "+ Cloud"); btn.disabled = selected.size === 0; }, 3000);
   });
 
   document.getElementById("export-urls").addEventListener("click", () => {
@@ -1001,26 +1555,26 @@
   document.getElementById("insert-to-draft").addEventListener("click", async () => {
     const btn = document.getElementById("insert-to-draft");
     btn.disabled = true;
-    btn.textContent = "Inserting...";
+    btn.innerHTML = btnLabel(ICONS.draft, "Inserting...");
     const selectedImages = images.filter(img => selected.has(img.src));
     const md = await buildImageMarkdown(selectedImages);
     await sendToDraft(md);
-    btn.textContent = "Sent!";
-    setTimeout(() => { btn.textContent = "Insert to Draft"; btn.disabled = selected.size === 0; }, 2000);
+    btn.innerHTML = btnLabel(ICONS.draft, "Sent!");
+    setTimeout(() => { btn.innerHTML = btnLabel(ICONS.draft, "+ Draft"); btn.disabled = selected.size === 0; }, 2000);
   });
 
   // Preview modal — insert single image to draft
   document.getElementById("preview-insert-draft").addEventListener("click", async () => {
     const btn = document.getElementById("preview-insert-draft");
     if (previewCurrentIndex < 0 || !previewCurrentImages[previewCurrentIndex]) return;
-    btn.textContent = "Sending...";
+    btn.innerHTML = btnLabel(ICONS.draft, "Sending...");
     btn.disabled = true;
     const img = previewCurrentImages[previewCurrentIndex];
     const md = await buildImageMarkdown([img]);
     await sendToDraft(md);
-    btn.textContent = "Sent!";
+    btn.innerHTML = btnLabel(ICONS.draft, "Sent!");
     btn.disabled = false;
-    setTimeout(() => { btn.textContent = "To Draft"; }, 1500);
+    setTimeout(() => { btn.innerHTML = btnLabel(ICONS.draft, "To Draft"); }, 1500);
   });
 
   // ── Insert to Chat ──
@@ -1039,29 +1593,66 @@
     }
   }
 
-  document.getElementById("insert-to-chat").addEventListener("click", async () => {
-    const btn = document.getElementById("insert-to-chat");
-    btn.disabled = true;
-    btn.textContent = "Inserting...";
-    const selectedImages = images.filter(img => selected.has(img.src));
-    const md = await buildImageMarkdown(selectedImages);
-    await sendToChat(md);
-    btn.textContent = "Sent!";
-    setTimeout(() => { btn.textContent = "Insert to Chat"; btn.disabled = selected.size === 0; }, 2000);
-  });
-
   // Preview modal — insert single image to chat
   document.getElementById("preview-insert-chat").addEventListener("click", async () => {
     const btn = document.getElementById("preview-insert-chat");
     if (previewCurrentIndex < 0 || !previewCurrentImages[previewCurrentIndex]) return;
-    btn.textContent = "Sending...";
+    btn.innerHTML = btnLabel(ICONS.chat, "Sending...");
     btn.disabled = true;
     const img = previewCurrentImages[previewCurrentIndex];
     const md = await buildImageMarkdown([img]);
     await sendToChat(md);
-    btn.textContent = "Sent!";
+    btn.innerHTML = btnLabel(ICONS.chat, "Sent!");
     btn.disabled = false;
-    setTimeout(() => { btn.textContent = "To Chat"; }, 1500);
+    setTimeout(() => { btn.innerHTML = btnLabel(ICONS.chat, "To Chat"); }, 1500);
+  });
+
+  // ── Add to Project ──
+
+  document.getElementById("add-to-project").addEventListener("click", async () => {
+    const projBtn = document.getElementById("add-to-project");
+    const resp = await browser.runtime.sendMessage({ action: "getProjects" });
+    if (!resp.success || !resp.projects.length) {
+      alert("No projects yet. Create one in the Argus console first.");
+      return;
+    }
+    let picker = projBtn.querySelector(".proj-picker");
+    if (picker) { picker.remove(); return; }
+    picker = document.createElement("div");
+    picker.className = "proj-picker";
+    picker.style.cssText = "position:absolute;bottom:100%;left:0;z-index:99;background:var(--bg-secondary,#1a1a2e);border:1px solid var(--border,#333);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,0.4);max-height:200px;overflow-y:auto;min-width:180px;margin-bottom:4px;";
+    for (const proj of resp.projects) {
+      const opt = document.createElement("div");
+      opt.style.cssText = "padding:8px 12px;cursor:pointer;font-size:13px;";
+      opt.textContent = proj.name;
+      opt.addEventListener("mouseenter", () => opt.style.background = "var(--bg-hover,#2a2a4a)");
+      opt.addEventListener("mouseleave", () => opt.style.background = "");
+      opt.addEventListener("click", async () => {
+        const selectedImages = images.filter(img => selected.has(img.src));
+        const md = await buildImageMarkdown(selectedImages);
+        await browser.runtime.sendMessage({
+          action: "addProjectItem",
+          projectId: proj.id,
+          item: {
+            type: "images",
+            url: pageUrl || "",
+            title: "Image Grabber — " + selectedImages.length + " images",
+            summary: md.slice(0, 500),
+            analysisContent: md,
+            tags: ["images"]
+          }
+        });
+        picker.remove();
+        projBtn.innerHTML = btnLabel(ICONS.project, "Added!");
+        setTimeout(() => { projBtn.innerHTML = btnLabel(ICONS.project, "+ Project"); projBtn.disabled = selected.size === 0; }, 1500);
+      });
+      picker.appendChild(opt);
+    }
+    projBtn.style.position = "relative";
+    projBtn.appendChild(picker);
+    setTimeout(() => document.addEventListener("click", function dismiss(e) {
+      if (!picker.contains(e.target) && e.target !== projBtn) { picker.remove(); document.removeEventListener("click", dismiss); }
+    }), 0);
   });
 
   // ── AI Vision Search ──
@@ -1149,7 +1740,7 @@
     aiSearching = false;
     aiBtn.disabled = false;
     aiBtn.textContent = "Search Images";
-    render();
+    render(); saveSession();
   }
 
   aiBtn.addEventListener("click", runAiSearch);
@@ -1163,7 +1754,7 @@
     aiStatus.textContent = "";
     aiStatus.className = "ai-search-status";
     aiClear.classList.add("hidden");
-    render();
+    render(); saveSession();
   });
 
   // ── Compare Mode ──
@@ -1266,12 +1857,243 @@
     compareModal.classList.add("hidden");
   });
 
+  // ── Restore saved session state before first render ──
+  const savedSession = await restoreSession();
+  if (savedSession) {
+    // Restore selections
+    if (savedSession.selected) savedSession.selected.forEach(s => selected.add(s));
+
+    // Restore filters
+    if (savedSession.currentFilter && savedSession.currentFilter !== "all") {
+      currentFilter = savedSession.currentFilter;
+      document.querySelectorAll("#source-tabs .pill-chip").forEach(b => b.classList.remove("active"));
+      document.querySelector(`#source-tabs .pill-chip[data-filter="${currentFilter}"]`)?.classList.add("active");
+    }
+    if (savedSession.currentTypeFilter && savedSession.currentTypeFilter !== "all") {
+      currentTypeFilter = savedSession.currentTypeFilter;
+      document.querySelectorAll("#type-tabs .pill-chip").forEach(b => b.classList.remove("active"));
+      document.querySelector(`#type-tabs .pill-chip[data-type="${currentTypeFilter}"]`)?.classList.add("active");
+    }
+    if (savedSession.currentSizeFilter && savedSession.currentSizeFilter !== "all") {
+      currentSizeFilter = savedSession.currentSizeFilter;
+      document.querySelectorAll("#size-tabs .pill-chip").forEach(b => b.classList.remove("active"));
+      document.querySelector(`#size-tabs .pill-chip[data-size="${currentSizeFilter}"]`)?.classList.add("active");
+    }
+    if (savedSession.currentColorFilter && savedSession.currentColorFilter !== "all") {
+      currentColorFilter = savedSession.currentColorFilter;
+      document.querySelectorAll("#color-tabs .color-tab").forEach(b => b.classList.remove("active"));
+      document.querySelector(`#color-tabs .color-tab[data-color="${currentColorFilter}"]`)?.classList.add("active");
+    }
+
+    // Restore search & sort
+    if (savedSession.searchQuery) {
+      searchQuery = savedSession.searchQuery;
+      const searchInput = document.getElementById("search-input");
+      if (searchInput) searchInput.value = searchQuery;
+    }
+    if (savedSession.sortBy && savedSession.sortBy !== "default") {
+      sortBy = savedSession.sortBy;
+      const sortSelect = document.getElementById("sort-by");
+      if (sortSelect) sortSelect.value = sortBy;
+    }
+    if (savedSession.listView) {
+      listView = true;
+      document.getElementById("view-list").checked = true;
+      document.getElementById("view-icon").textContent = "List";
+    }
+    if (savedSession.showSelectedOnly) {
+      showSelectedOnly = true;
+      const ssBtn = document.getElementById("show-selected-only");
+      if (ssBtn) { ssBtn.innerHTML = btnLabel(ICONS.selected, "Show All"); ssBtn.classList.add("active-toggle"); }
+    }
+
+    // Restore multi-tab filter
+    if (savedSession.enabledTabs && savedSession.enabledTabs.length > 0) {
+      savedSession.enabledTabs.forEach(url => enabledTabs.add(url));
+      document.querySelectorAll("#tabSelectorChecks input[type=checkbox]").forEach(cb => {
+        cb.checked = enabledTabs.has(cb.dataset.tabUrl);
+      });
+    }
+
+    // Restore display settings
+    if (savedSession.activeBg && savedSession.activeBg !== "default") {
+      document.querySelectorAll(".bg-swatch").forEach(b => b.classList.remove("active"));
+      document.querySelector(`.bg-swatch[data-bg="${savedSession.activeBg}"]`)?.classList.add("active");
+      grid.classList.remove("bg-white", "bg-light", "bg-mid", "bg-black", "bg-checker");
+      grid.classList.add("bg-" + savedSession.activeBg);
+    }
+    if (savedSession.filterToggleOn) {
+      const fCb = document.getElementById("filter-toggle-cb");
+      if (fCb) fCb.checked = true;
+      if (savedSession.selectedDisplayFilter) {
+        selectedFilter = savedSession.selectedDisplayFilter;
+        filterPills.forEach(b => b.classList.remove("active"));
+        document.querySelector(`.display-group .pill-chip[data-filter="${selectedFilter}"]`)?.classList.add("active");
+      }
+      applyFilter();
+    }
+    if (savedSession.brightness && savedSession.brightness !== "100") {
+      brightnessSlider.value = savedSession.brightness;
+      currentBrightness = savedSession.brightness / 100;
+      brightnessValEl.textContent = savedSession.brightness + "%";
+      applyDisplaySettings();
+    }
+
+    // Restore color data (avoids re-extraction for already analyzed images)
+    if (savedSession.imageColors && savedSession.imageColors.length > 0) {
+      for (const [src, colors] of savedSession.imageColors) {
+        imageColors.set(src, new Set(colors));
+      }
+      updateColorTabCounts();
+    }
+
+    // Restore active panel tab
+    if (savedSession.activePanelTab) {
+      const ap = document.getElementById("actionsPanel");
+      if (ap) {
+        ap.querySelectorAll(".fp-tab").forEach(t => t.classList.remove("active"));
+        ap.querySelectorAll(".fp-pane").forEach(p => p.classList.remove("active"));
+        const tab = ap.querySelector(`.fp-tab[data-ptab="${savedSession.activePanelTab}"]`);
+        const pane = ap.querySelector(`[data-ptab-pane="${savedSession.activePanelTab}"]`);
+        if (tab) tab.classList.add("active");
+        if (pane) pane.classList.add("active");
+      }
+    }
+  }
+
   // Initial render
   render();
 
   // Start color extraction in background after initial render
-  extractAllColors().then(() => render()); // re-render to add color dots
+  // Skip images that were already analyzed from saved session
+  const alreadyCached = imageColors.size;
+  extractAllColors().then(() => {
+    render(); // re-render to add color dots
+    if (imageColors.size > alreadyCached) saveSession(); // persist new color data
+  });
 
   // Cleanup stored data after load (it's in memory now)
   // browser.storage.local.remove(storeKey); // Keep for now in case user refreshes
+
+  // ── Actions floating panel ──
+  const actionsPanel = document.getElementById("actionsPanel");
+  const actionsTab = document.getElementById("actionsTab");
+  const actionsPanelClose = document.getElementById("actionsPanelClose");
+
+  actionsTab.addEventListener("click", () => {
+    actionsPanel.classList.toggle("hidden");
+    PanelState.save("images", "actions", { visible: !actionsPanel.classList.contains("hidden") });
+  });
+  actionsPanelClose.addEventListener("click", () => {
+    actionsPanel.classList.add("hidden");
+    PanelState.save("images", "actions", { visible: false });
+  });
+
+  // Reset all filters
+  document.getElementById("resetFilters").addEventListener("click", () => {
+    currentFilter = "all";
+    currentTypeFilter = "all";
+    currentSizeFilter = "all";
+    currentColorFilter = "all";
+    searchQuery = "";
+    sortBy = "default";
+    showSelectedOnly = false;
+    // Reset source pills
+    document.querySelectorAll("#source-tabs .pill-chip").forEach(b => b.classList.remove("active"));
+    document.querySelector('#source-tabs .pill-chip[data-filter="all"]')?.classList.add("active");
+    // Reset size pills
+    document.querySelectorAll("#size-tabs .pill-chip").forEach(b => b.classList.remove("active"));
+    document.querySelector('#size-tabs .pill-chip[data-size="all"]')?.classList.add("active");
+    // Reset type pills
+    document.querySelectorAll("#type-tabs .pill-chip").forEach(b => b.classList.remove("active"));
+    document.querySelector('#type-tabs .pill-chip[data-type="all"]')?.classList.add("active");
+    // Reset color tabs
+    document.querySelectorAll("#color-tabs .color-tab").forEach(b => b.classList.remove("active"));
+    document.querySelector('#color-tabs .color-tab[data-color="all"]')?.classList.add("active");
+    // Reset search input
+    const searchInput = document.getElementById("search-input");
+    if (searchInput) searchInput.value = "";
+    // Reset sort
+    const sortSelect = document.getElementById("sort-by");
+    if (sortSelect) sortSelect.value = "default";
+    // Reset show-selected toggle
+    const ssBtn = document.getElementById("show-selected-only");
+    if (ssBtn) { ssBtn.innerHTML = btnLabel(ICONS.selected, "Selected"); ssBtn.classList.remove("active-toggle"); }
+    // Reset multi-tab checkboxes (re-check all)
+    enabledTabs.clear();
+    document.querySelectorAll("#tabSelectorChecks input[type=checkbox]").forEach(cb => { cb.checked = true; });
+    render(); saveSession();
+  });
+
+  // Internal panel tab switching
+  actionsPanel.querySelectorAll(".fp-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      actionsPanel.querySelectorAll(".fp-tab").forEach(t => t.classList.remove("active"));
+      actionsPanel.querySelectorAll(".fp-pane").forEach(p => p.classList.remove("active"));
+      tab.classList.add("active");
+      const pane = actionsPanel.querySelector(`[data-ptab-pane="${tab.dataset.ptab}"]`);
+      if (pane) pane.classList.add("active");
+      saveSession();
+    });
+  });
+
+  // Draggable
+  {
+    const header = actionsPanel.querySelector(".fp-header");
+    let dragging = false, startX, startY, startLeft, startTop;
+    header.addEventListener("mousedown", (e) => {
+      if (e.target.closest("button, input")) return;
+      dragging = true;
+      const rect = actionsPanel.getBoundingClientRect();
+      startX = e.clientX; startY = e.clientY;
+      startLeft = rect.left; startTop = rect.top;
+      header.style.cursor = "grabbing";
+      e.preventDefault();
+    });
+    document.addEventListener("mousemove", (e) => {
+      if (!dragging) return;
+      actionsPanel.style.left = (startLeft + e.clientX - startX) + "px";
+      actionsPanel.style.top = (startTop + e.clientY - startY) + "px";
+      actionsPanel.style.right = "auto";
+      actionsPanel.style.transform = "none";
+    });
+    document.addEventListener("mouseup", () => {
+      if (!dragging) return;
+      dragging = false;
+      header.style.cursor = "grab";
+      const rect = actionsPanel.getBoundingClientRect();
+      PanelState.save("images", "actions", { left: rect.left, top: rect.top });
+    });
+  }
+
+  // Resizable
+  {
+    const handle = document.createElement("div");
+    handle.className = "fp-resize";
+    actionsPanel.appendChild(handle);
+    let resizing = false, rStartX, rStartY, rStartW, rStartH;
+    handle.addEventListener("mousedown", (e) => {
+      resizing = true;
+      rStartX = e.clientX; rStartY = e.clientY;
+      rStartW = actionsPanel.offsetWidth; rStartH = actionsPanel.offsetHeight;
+      e.preventDefault(); e.stopPropagation();
+    });
+    document.addEventListener("mousemove", (e) => {
+      if (!resizing) return;
+      actionsPanel.style.width = Math.max(180, rStartW + (e.clientX - rStartX)) + "px";
+      actionsPanel.style.height = Math.max(150, rStartH + (e.clientY - rStartY)) + "px";
+    });
+    document.addEventListener("mouseup", () => {
+      if (!resizing) return;
+      resizing = false;
+      PanelState.save("images", "actions", { width: actionsPanel.offsetWidth, height: actionsPanel.offsetHeight });
+    });
+  }
+
+  // Restore saved state
+  PanelState.apply(actionsPanel, "images", "actions");
+
+  // Populate session history panel
+  populateHistoryPanel(storeKey);
+
 })();

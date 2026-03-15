@@ -181,11 +181,12 @@
     "app-chat":     { label: "Chat",     icon: [["path", { d: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" }]], path: "chat/chat.html" },
     "app-terminal": { label: "Terminal", icon: [["polyline", { points: "4 17 10 11 4 5" }], ["line", { x1: "12", y1: "19", x2: "20", y2: "19" }]], path: "ssh/ssh.html" },
     "app-finance":  { label: "Finance",  icon: [["line", { x1: "12", y1: "1", x2: "12", y2: "23" }], ["path", { d: "M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" }]], path: "finance/finance.html" },
-    "app-results":  { label: "Results",  icon: [["path", { d: "M9 11l3 3L22 4" }], ["path", { d: "M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" }]], path: "results/results.html" }
+    "app-results":  { label: "Results",  icon: [["path", { d: "M9 11l3 3L22 4" }], ["path", { d: "M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" }]], path: "results/results.html" },
+    "app-link-map": { label: "Link Map", icon: [["circle", { cx: "12", cy: "5", r: "3" }], ["line", { x1: "12", y1: "8", x2: "12", y2: "12" }], ["line", { x1: "12", y1: "12", x2: "6", y2: "18" }], ["line", { x1: "12", y1: "12", x2: "18", y2: "18" }], ["circle", { cx: "6", cy: "19", r: "2" }], ["circle", { cx: "18", cy: "19", r: "2" }]], path: "osint/link-map.html" }
   };
 
   // MFT (tool) tabs — selectable in pickers, can be pinned/visible
-  const ALL_TAB_IDS = ["app-projects", "app-reader", "app-reports", "app-kg", "app-workbench", "app-draft", "app-images", "app-chat", "app-terminal", "app-finance"];
+  const ALL_TAB_IDS = ["app-projects", "app-reader", "app-reports", "app-kg", "app-workbench", "app-draft", "app-images", "app-chat", "app-terminal", "app-finance", "app-link-map"];
   const DEFAULT_TAB_ORDER = [...ALL_TAB_IDS];
   const DEFAULT_VISIBLE_TABS = ["app-projects", "app-reader", "app-reports", "app-kg", "app-workbench", "app-chat", "app-terminal", "app-finance"];
   const MAX_VISIBLE_TABS = 8;
@@ -204,7 +205,8 @@
     "/ssh/": "app-terminal",
     "/finance/": "app-finance",
     "/results/": "app-results",
-    "/osint/regex": "app-results"
+    "/osint/regex": "app-results",
+    "/osint/link-map": "app-link-map"
   };
 
   // ── Quick-jump button (⋯) — shows hidden/non-visible MFT tabs ──

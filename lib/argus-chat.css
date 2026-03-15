@@ -202,26 +202,8 @@
   flex-wrap: wrap;
   position: relative;
 }
-.argus-chat-action-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  font-size: 11px;
-  font-family: inherit;
-  color: var(--text-secondary, #aaa);
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.argus-chat-action-btn:hover {
-  color: var(--text-primary, #eee);
-  background: rgba(255,255,255,0.08);
-  border-color: rgba(255,255,255,0.15);
-}
-.argus-chat-action-btn svg {
+/* Action buttons use .pill-chip from argus-std.css */
+.argus-chat-actions .pill-chip svg {
   flex-shrink: 0;
 }
 

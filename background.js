@@ -1453,6 +1453,8 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "clearHistory") return handleClearHistory();
   if (message.action === "searchHistory") return handleSearchHistory(message);
   if (message.action === "getHistoryForUrl") return handleGetHistoryForUrl(message);
+  if (message.action === "getLinkMapForUrl") return handleGetLinkMapForUrl(message);
+  if (message.action === "getLinkMapHistory") return handleGetLinkMapHistory();
   if (message.action === "getArchiveCheck") {
     const cached = archiveCheckCache.get(message.tabId);
     return Promise.resolve({ success: true, archiveUrl: cached?.archiveUrl || null, checked: !!cached });
@@ -2458,6 +2460,30 @@ async function handleGetHistoryForUrl(message) {
   const all = await ArgusDB.History.getAllSorted();
   const matches = all.filter(h => h.pageUrl === message.url);
   return { success: true, history: matches.slice(0, 10), total: matches.length };
+}
+
+async function handleGetLinkMapForUrl(message) {
+  const all = await ArgusDB.History.getAllSorted();
+  const match = all.find(h => h.pageUrl === message.url && h.preset === "link-map" && h.linkMapData);
+  if (match) {
+    return { success: true, found: true, historyId: match.id, timestamp: match.timestamp, linkMapData: match.linkMapData, pageTitle: match.pageTitle, pageUrl: match.pageUrl };
+  }
+  return { success: true, found: false };
+}
+
+async function handleGetLinkMapHistory() {
+  const all = await ArgusDB.History.getAllSorted();
+  const entries = all
+    .filter(h => h.preset === "link-map" && h.linkMapData)
+    .map(h => ({
+      id: h.id,
+      pageUrl: h.pageUrl,
+      pageTitle: h.pageTitle,
+      timestamp: h.timestamp,
+      totalLinks: h.linkMapData.stats?.totalLinks || 0,
+      uniqueDomains: h.linkMapData.stats?.uniqueDomains || 0
+    }));
+  return { success: true, entries };
 }
 
 async function handleGetSelection(message) {

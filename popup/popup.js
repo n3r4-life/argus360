@@ -1230,8 +1230,24 @@ function attachEventListeners() {
   });
 
   document.getElementById("osint-links").addEventListener("click", async () => {
-    showToast("Mapping links...", "loading");
+    showToast("Checking for cached link map...", "loading");
     const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const pageUrl = tabs[0]?.url;
+
+    // Check for existing link map in history
+    try {
+      const cached = await browser.runtime.sendMessage({ action: "getLinkMapForUrl", url: pageUrl });
+      if (cached?.found) {
+        const storeKey = `linkmap-${Date.now()}`;
+        await browser.storage.local.set({ [storeKey]: { pageUrl: cached.pageUrl, pageTitle: cached.pageTitle, links: cached.linkMapData.links, stats: cached.linkMapData.stats, cached: true, cachedAt: cached.timestamp, historyId: cached.historyId } });
+        browser.tabs.create({ url: browser.runtime.getURL(`osint/link-map.html?id=${encodeURIComponent(storeKey)}&mode=cached`) });
+        window.close();
+        return;
+      }
+    } catch {}
+
+    // No cached version — extract fresh
+    showToast("Mapping links...", "loading");
     const resp = await browser.runtime.sendMessage({ action: "extractLinks", tabId: currentTabId });
     if (resp && resp.success) {
       const storeKey = `linkmap-${Date.now()}`;

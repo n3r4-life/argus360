@@ -1,0 +1,515 @@
+/*
+ * Argus Standard Styles
+ * =====================
+ * Canonical CSS variables, buttons, inputs, and panel patterns.
+ * Include this FIRST in every Argus HTML page.
+ *
+ * Usage:  <link rel="stylesheet" href="../shared/argus-std.css">
+ *
+ * Page-specific CSS only needs to define layout and components —
+ * NOT re-declare :root, buttons, inputs, etc.
+ */
+
+/* ── CSS Variables ── */
+:root {
+  /* Backgrounds */
+  --bg-primary:   #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-surface:   #0f3460;
+  --bg-card:      #1e2a4a;
+
+  /* Text */
+  --text-primary:   #e8e8e8;
+  --text-secondary: #a0a0b0;
+  --text-muted:     #6a6a80;
+
+  /* Accent */
+  --accent:       #e94560;
+  --accent-hover: #ff6b81;
+  --accent-dim:   rgba(233, 69, 96, 0.15);
+
+  /* Status */
+  --success: #4caf50;
+  --error:   #ff5252;
+  --warning: #ff9800;
+
+  /* Borders & Radius */
+  --border:       #2a2a4a;
+  --border-light: #3a3a5a;
+  --radius:       6px;
+  --radius-lg:    12px;
+
+  /* Shadows */
+  --shadow:       0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-lg:    0 8px 32px rgba(0, 0, 0, 0.4);
+
+  /* Typography */
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ── Reset ── */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ── Buttons ── */
+/*
+ * BUTTON HIERARCHY — DO NOT DEVIATE
+ * ==================================
+ * 1. pill-chip     — DEFAULT button everywhere. Toggles, filters, IO actions,
+ *                    secondary actions (Save, Export, Download, Cloud, Draft…).
+ *                    Small, rounded, uppercase, subtle border.
+ *                    Add inline SVG icons inside pills for expressiveness.
+ *                    Active/toggled state: .pill-chip.active (accent border).
+ *
+ * 2. tool-chip     — Accent-tinted pills for CROSS-DATA / CROSS-PAGE actions.
+ *                    The "connective tissue" of Argus: +Source, +Project, +Draft,
+ *                    +Bookmark, +Monitor, +X Post, +LinkedIn, +Pastebin, +RSS,
+ *                    +Collect, Insert, etc. Visually distinct via accent tint.
+ *
+ * 3. btn btn-primary — Large, accent-filled. ONLY for primary "go" actions
+ *                    (Quick Post, Run Script, Analyze It, Search Images).
+ *                    NEVER use for IO/secondary actions.
+ *
+ * 4. select-compact — Tight, small, readable dropdowns. For mode/provider
+ *                    selects (Research Report, OpenAI, full-page, etc.).
+ *
+ * 5. icon-btn      — Minimal chrome icon-only buttons.
+ *
+ * 6. cat-btn       — Equal-width toggle tabs in a .cat-row.
+ *
+ * RULES:
+ *  - Do NOT invent new button styles per page.
+ *  - Do NOT use .btn for IO/secondary actions — use pill-chip.
+ *  - Pill-chips with inline icons are preferred where they add clarity.
+ *  - Cross-data tool-chips should appear everywhere data can flow
+ *    to another tab, page, or Argus ecosystem element.
+ *  - "Discuss with AI" = tool-chip with chat icon, fixed bottom-left.
+ */
+
+/* Base button */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Primary — accent fill */
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
+
+/* Secondary — transparent */
+.btn-secondary { background: transparent; }
+
+/* Active toggle state */
+.btn.active-toggle { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Icon button — minimal chrome */
+.icon-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  font-family: var(--font);
+  transition: all 0.15s;
+}
+.icon-btn:hover { color: var(--text-primary); background: var(--border); }
+
+/* Accent icon button */
+.icon-btn-accent {
+  color: var(--accent);
+  background: rgba(233, 69, 96, 0.1);
+  border: 1px solid rgba(233, 69, 96, 0.3);
+}
+.icon-btn-accent:hover {
+  color: var(--accent-hover);
+  background: rgba(233, 69, 96, 0.2);
+}
+
+/*
+ * Category buttons — equal-width row of toggle tabs
+ * Used in popup tools accordion, filter rows, etc.
+ *
+ *   <div class="cat-row">
+ *     <button class="cat-btn active">General</button>
+ *     <button class="cat-btn">Research</button>
+ *     <button class="cat-btn">Custom</button>
+ *   </div>
+ */
+.cat-row {
+  display: flex;
+  gap: 4px;
+}
+.cat-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  padding: 5px 0;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.12s;
+  font-family: var(--font);
+  text-align: center;
+}
+.cat-btn:hover {
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.4);
+  background: var(--border);
+}
+.cat-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(233, 69, 96, 0.1);
+}
+
+/*
+ * Pill chips — rounded, compact toggles
+ * Used in search categories, mode toggles, tag badges
+ *
+ *   <button class="pill-chip active">All</button>
+ *   <button class="pill-chip">Custom</button>
+ */
+.pill-chip {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.12s;
+  font-family: var(--font);
+  white-space: nowrap;
+}
+.pill-chip:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+.pill-chip.active {
+  color: var(--text-primary);
+  border-color: var(--text-primary);
+}
+
+/*
+ * Tool chips — accent-tinted pill buttons
+ * Used for clickable action chips (tools, prompts)
+ */
+.tool-chip {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 3px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(233, 69, 96, 0.25);
+  background: rgba(233, 69, 96, 0.06);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.12s;
+  font-family: var(--font);
+  text-align: center;
+  white-space: nowrap;
+}
+.tool-chip:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+  background: rgba(233, 69, 96, 0.15);
+}
+
+/*
+ * Status chips — small inline indicators
+ */
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.status-chip:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+  background: rgba(233, 69, 96, 0.08);
+}
+.status-chip svg { flex-shrink: 0; }
+
+/*
+ * Mode toggles — rounded pill buttons with icon
+ */
+.mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.mode-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+.mode-btn.active {
+  background: rgba(233, 69, 96, 0.15);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ── Form Elements ── */
+
+select, input, textarea {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font);
+  font-size: 13px;
+  outline: none;
+}
+select:focus, input:focus, textarea:focus { border-color: var(--accent); }
+textarea { resize: vertical; min-height: 60px; }
+input::placeholder, textarea::placeholder { color: var(--text-muted); }
+
+/*
+ * Compact select — popup-style dropdown with custom arrow
+ */
+.select-compact {
+  width: auto;
+  min-width: 0;
+  padding: 4px 22px 4px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  border: 1px solid rgba(255,255,255,0.25);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  transition: all 0.12s;
+}
+.select-compact:hover { border-color: var(--accent); color: var(--text-primary); }
+.select-compact:focus { outline: none; border-color: var(--accent); }
+
+/* ── Floating Panel Standard ──
+ *
+ * Shared structure for all floating draggable panels.
+ *
+ *   <div class="fp" id="myPanel">
+ *     <div class="fp-header">
+ *       <span class="fp-title">Title</span>
+ *       <button class="fp-close">&times;</button>
+ *     </div>
+ *     <div class="fp-body">...</div>
+ *   </div>
+ */
+
+.fp {
+  position: fixed;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  z-index: 20;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+.fp.hidden { display: none; }
+
+.fp-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: grab;
+  user-select: none;
+  background: var(--bg-surface);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.fp-header:active { cursor: grabbing; }
+.fp-title { font-weight: 700; font-size: 13px; flex: 1; }
+.fp-count { font-size: 11px; color: var(--text-muted); }
+.fp-close {
+  width: 24px;
+  height: 24px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-family: var(--font);
+  transition: all 0.15s;
+}
+.fp-close:hover { color: var(--accent); border-color: var(--accent); }
+
+.fp-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+/* Panel internal tabs */
+.fp-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.fp-tab {
+  flex: 0 1 auto;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.fp-tab:hover { color: var(--text-secondary); }
+.fp-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Tab panes */
+.fp-pane {
+  display: none;
+  padding: 8px;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  flex: 1;
+}
+.fp-pane.active { display: flex; }
+
+/* Resize handle */
+.fp-resize {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, var(--text-muted) 50%, transparent 55%, var(--text-muted) 70%, transparent 72%);
+  opacity: 0.4;
+  border-radius: 0 0 var(--radius) 0;
+  transition: opacity 0.15s;
+}
+.fp-resize:hover { opacity: 0.8; }
+
+/*
+ * Edge tab — button that sticks to viewport edge to toggle a panel
+ *
+ *   <button class="edge-tab edge-tab-right">...</button>
+ *   <button class="edge-tab edge-tab-left">...</button>
+ */
+.edge-tab {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 52px;
+  background: var(--bg-surface);
+  border: 1px solid rgba(255,255,255,0.25);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 19;
+  transition: all 0.12s;
+}
+.edge-tab:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(233, 69, 96, 0.1);
+}
+.edge-tab-right {
+  right: 0;
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+}
+.edge-tab-left {
+  left: 0;
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+}
+
+/* ── Panel deferred reveal ── */
+.panel-deferred { opacity: 0 !important; pointer-events: none; }
+.panel-revealed { opacity: 1 !important; pointer-events: auto; transition: opacity 0.4s ease; }
+
+/* ── Utility ── */
+.hidden { display: none !important; }
+
+/* ── Animations ── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* Spinner */
+.btn-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  vertical-align: middle;
+}

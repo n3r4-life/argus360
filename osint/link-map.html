@@ -4,19 +4,68 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Argus - Link Map</title>
+  <link rel="stylesheet" href="../shared/argus-std.css">
   <link rel="stylesheet" href="link-map.css">
   <link rel="stylesheet" href="../lib/argus-chat.css">
   <link rel="stylesheet" href="../shared/ribbon.css">
 </head>
 <body>
   <script src="../shared/ribbon.js"></script>
+  <script src="../shared/panel-state.js"></script>
   <header class="header">
     <div class="header-left">
       <img src="../icons/icon-32.png" alt="" class="header-icon">
       <h1 class="header-title">Link Map</h1>
     </div>
-    <a id="page-url" class="page-url" href="#" target="_blank" title="Open analyzed page"></a>
+    <div class="header-right">
+      <button id="history-btn" class="btn btn-secondary" title="Browse previous link map scans">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        History
+      </button>
+      <a id="page-url" class="page-url" href="#" target="_blank" title="Open analyzed page"></a>
+    </div>
   </header>
+
+  <!-- Link Map History panel (floating) -->
+  <div class="fp lm-history-panel hidden" id="historyOverlay">
+    <div class="fp-header">
+      <span class="fp-title">History</span>
+      <span class="fp-count" id="historyCount"></span>
+      <button class="fp-close" id="historyClose">&times;</button>
+    </div>
+    <div class="lm-history-search-row">
+      <input type="text" id="historySearch" class="lm-history-search" placeholder="Filter by URL or title...">
+    </div>
+    <div class="lm-history-list" id="historyList">
+      <div class="lm-history-empty">Loading...</div>
+    </div>
+  </div>
+  <button class="edge-tab edge-tab-left" id="historyTab" title="Toggle history">
+    <span>&#128218;</span>
+  </button>
+
+  <!-- Cache banner (hidden by default) -->
+  <div class="cache-banner hidden" id="cacheBanner">
+    <div class="cache-banner-left">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span>Cached version from <strong id="cacheDate"></strong></span>
+    </div>
+    <div class="cache-banner-right">
+      <button class="cache-refresh-btn" id="cacheRefresh" title="Re-scan page and compare changes">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        Refresh &amp; Compare
+      </button>
+    </div>
+  </div>
+
+  <!-- Diff summary (hidden by default) -->
+  <div class="diff-banner hidden" id="diffBanner">
+    <div class="diff-summary" id="diffSummary"></div>
+    <div class="diff-toggle-row">
+      <button class="diff-toggle-btn active" id="diffShowCurrent" data-diffview="current">Current</button>
+      <button class="diff-toggle-btn" id="diffShowChanges" data-diffview="changes">Changes Only</button>
+    </div>
+  </div>
 
   <section id="stats-bar" class="stats-bar">
     <div class="stat-badge">
@@ -50,11 +99,35 @@
   <div class="actions-bar">
     <div class="actions-left">
       <div class="project-picker-wrapper">
-        <button id="add-to-project" class="btn btn-primary">Add All to Project</button>
+        <button id="add-to-project" class="btn btn-secondary" title="Add all links to a project">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+          To Project
+        </button>
         <div id="project-picker" class="project-picker hidden"></div>
       </div>
-      <button id="export-csv" class="btn btn-secondary">Export CSV</button>
+      <button id="export-csv" class="btn btn-secondary" title="Export current view as CSV">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Export View
+      </button>
+      <button id="xref-sources-btn" class="btn btn-secondary" title="Cross-reference all links against your saved sources">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        X-Ref Sources
+      </button>
     </div>
+  </div>
+
+  <div class="search-bar">
+    <input type="text" id="link-search" class="link-search-input" placeholder="Search links... supports: term1 | term2 &middot; /regex/ &middot; &quot;exact phrase&quot;">
+    <button id="search-mode-toggle" class="search-mode-btn" title="Toggle regex mode">RE</button>
+    <span id="search-count" class="search-count"></span>
   </div>
 
   <main id="link-list" class="link-list">
@@ -64,6 +137,60 @@
   </main>
 
   <div id="argus-chat-container" style="padding:16px 20px;"></div>
+
+  <!-- ── Collector panel (floating) ── -->
+  <button class="collector-tab" id="collectorTab" title="Collector">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73L13 2.27a2 2 0 0 0-2 0L4 6.27A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+      <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+      <line x1="12" y1="22.08" x2="12" y2="12"/>
+    </svg>
+    <span class="collector-badge" id="collectorBadge"></span>
+  </button>
+
+  <div class="collector-panel hidden" id="collectorPanel">
+    <div class="collector-header" id="collectorDragHandle">
+      <span class="collector-title">Collector</span>
+      <div class="collector-header-actions">
+        <button class="collector-clear-btn" id="collectorClear" title="Clear all">Clear</button>
+        <button class="collector-close-btn" id="collectorClose">&times;</button>
+      </div>
+    </div>
+    <div class="collector-search-row">
+      <input type="text" id="collectorSearch" class="collector-search" placeholder="Filter collected...">
+      <select id="collectorSort" class="collector-sort" title="Sort items">
+        <option value="added">Recent</option>
+        <option value="alpha">A &rarr; Z</option>
+        <option value="type">By Type</option>
+      </select>
+    </div>
+    <div class="collector-tabs">
+      <button class="collector-tab-btn active" data-coltab="all">All</button>
+      <button class="collector-tab-btn" data-coltab="emails">Email</button>
+      <button class="collector-tab-btn" data-coltab="phones">Phone</button>
+      <button class="collector-tab-btn" data-coltab="social">Social</button>
+      <button class="collector-tab-btn" data-coltab="files">File</button>
+      <button class="collector-tab-btn" data-coltab="links">Link</button>
+    </div>
+    <div class="collector-list" id="collectorList"></div>
+    <div class="collector-footer">
+      <button class="collector-export-btn" id="collectorExport" title="Export collected items as CSV">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Export
+      </button>
+      <span class="collector-count" id="collectorCount">0 items</span>
+      <button class="collector-xref-btn" id="collectorXref" title="Cross-reference with sources">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        X-Ref Sources
+      </button>
+    </div>
+  </div>
 
   <script src="../lib/purify.min.js"></script>
   <script src="../lib/marked.min.js"></script>

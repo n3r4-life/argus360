@@ -320,6 +320,7 @@ async function handleExtractLinks(message) {
         content,
         preset: "link-map",
         presetLabel: `Link Map (${s.totalLinks} links)`,
+        linkMapData: { links: l, stats: s },
       });
     } catch (e) { console.warn("[LinkMap] Failed to save to history:", e); }
 
