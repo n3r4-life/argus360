@@ -2058,8 +2058,7 @@
 
       <!-- Toolbar -->
       <div class="src-toolbar">
-        <div class="src-search-row">
-          <input type="text" id="src-search" class="src-search-input" placeholder="Search sources by name, handle, tag, email, address...">
+        <div class="src-filter-row">
           <select id="src-filter-type" class="src-filter-select">
             <option value="">All Types</option>
             <option value="person">People</option>
@@ -2082,6 +2081,12 @@
             <option value="alias">Aliases</option>
             <option value="entity">Other</option>
           </select>
+          <select id="src-filter-folder" class="src-filter-select">
+            <option value="">All Folders</option>
+          </select>
+          <button id="src-folder-add" class="btn btn-secondary btn-sm" title="Create folder">+ Folder</button>
+          <button id="src-folder-rename" class="btn btn-secondary btn-sm" title="Rename selected folder" disabled>Rename</button>
+          <button id="src-folder-delete" class="btn btn-secondary btn-sm" title="Delete selected folder" disabled>Delete Folder</button>
           <select id="src-filter-tag" class="src-filter-select">
             <option value="">All Tags</option>
           </select>
@@ -2132,6 +2137,13 @@
             </div>
             <div class="form-row">
               <div class="form-group flex-1">
+                <label for="src-folder">Folder</label>
+                <input type="text" id="src-folder" placeholder="e.g. OSINT / Journalists — leave blank for ungrouped" list="src-folder-list">
+                <datalist id="src-folder-list"></datalist>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group flex-1">
                 <label for="src-aliases">Aliases <span class="hint" style="display:inline;">(comma-separated)</span></label>
                 <input type="text" id="src-aliases" placeholder="alt name, nickname, ...">
               </div>
@@ -2166,6 +2178,15 @@
             </div>
           </div>
         </section>
+      </div>
+
+      <!-- Search bar -->
+      <div class="src-search-bar" id="src-search-bar">
+        <span class="src-search-slash" style="display:none">/</span>
+        <input type="text" id="src-search" class="src-search-input" placeholder="Search sources..." spellcheck="false">
+        <span class="src-search-slash" style="display:none">/i</span>
+        <button class="src-search-mode" id="src-search-mode" title="Toggle regex mode">RE</button>
+        <span class="src-search-count" id="src-search-count"></span>
       </div>
 
       <!-- Source cards grid -->
@@ -2344,6 +2365,15 @@
                 <span>Track My Pages</span>
               </label>
               <span class="hint">Record every page you visit and every Argus action you take — stored in IndexedDB, independent of browser history. Clearing your browser cache or history will NOT delete this data.</span>
+            </div>
+          </div>
+          <div class="form-row" style="margin-top:8px;">
+            <div class="form-group flex-1">
+              <label class="toggle-label">
+                <input type="checkbox" id="trawl-enabled">
+                <span>Trawl Net</span>
+              </label>
+              <span class="hint">Passively extract contact data, business info, and metadata from every page you visit. Emails, phones, addresses, JSON-LD business data, and social links are collected silently and stored on Page Tracker entries. Requires Track My Pages. Respects your forced-private domain list.</span>
             </div>
           </div>
         </div>

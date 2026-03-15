@@ -46,7 +46,9 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === "complete") detectFeedOnTab(tabId);
   // Page Tracker: record visit when page finishes loading
   if (changeInfo.status === "complete" && tab?.url) {
-    trackPageVisit(tab.url, tab.title, tab.favIconUrl);
+    trackPageVisit(tab.url, tab.title, tab.favIconUrl).then(() => {
+      trawlCollect(tabId, tab.url);
+    });
   }
 });
 
@@ -72,7 +74,117 @@ async function trackPageAction(url, actionType, detail) {
   } catch (e) { console.warn("[PageTracker] action error:", e); }
 }
 
-browser.tabs.onActivated.addListener(({ tabId }) => updateBrowserActionForTab(tabId));
+// ──────────────────────────────────────────────
+// Trawl Net — passive contact/business extraction
+// ──────────────────────────────────────────────
+const TRAWL_SKIP_RE = /^(about:|moz-extension:|chrome:|chrome-extension:|file:)/;
+
+async function trawlCollect(tabId, url) {
+  try {
+    if (!url || TRAWL_SKIP_RE.test(url)) return;
+    const { trawlEnabled } = await browser.storage.local.get({ trawlEnabled: false });
+    if (!trawlEnabled) return;
+    // Check domain exclusion (forced-private list)
+    const { incognitoForceEnabled, incognitoSites } = await browser.storage.local.get({ incognitoForceEnabled: false, incognitoSites: [] });
+    if (incognitoForceEnabled && incognitoSites.length) {
+      try {
+        const host = new URL(url).hostname.replace(/^www\./, "");
+        if (incognitoSites.some(d => host === d || host.endsWith("." + d))) return;
+      } catch {}
+    }
+    const results = await browser.tabs.executeScript(tabId, {
+      code: `(function() {
+        const data = { emails:[], phones:[], addresses:[], businessName:"", contacts:[], socialLinks:[], geo:null, schema:null, meta:{}, scrollDepth:0, extractedAt:Date.now() };
+        // Strategy A: JSON-LD / Schema.org
+        try {
+          const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+          for (const s of scripts) {
+            try {
+              let json = JSON.parse(s.textContent);
+              if (Array.isArray(json)) json = json[0];
+              const t = json["@type"] || "";
+              if (/Organization|LocalBusiness|Person|Store|Restaurant|Hotel|MedicalBusiness|LegalService|FinancialService|RealEstateAgent/i.test(t)) {
+                data.schema = { type: t, raw: json };
+                data.businessName = json.name || json.legalName || "";
+                if (json.telephone) data.phones.push(json.telephone);
+                if (json.email) data.emails.push(json.email);
+                if (json.sameAs) data.socialLinks.push(...(Array.isArray(json.sameAs) ? json.sameAs : [json.sameAs]));
+                if (json.geo) data.geo = { lat: parseFloat(json.geo.latitude), lng: parseFloat(json.geo.longitude) };
+                if (json.address) {
+                  const a = json.address;
+                  const parts = [a.streetAddress, a.addressLocality, a.addressRegion, a.postalCode, a.addressCountry].filter(Boolean);
+                  if (parts.length) data.addresses.push(parts.join(", "));
+                }
+                if (json.contactPoint) {
+                  const cps = Array.isArray(json.contactPoint) ? json.contactPoint : [json.contactPoint];
+                  for (const cp of cps) {
+                    if (cp.email) data.emails.push(cp.email);
+                    if (cp.telephone) data.phones.push(cp.telephone);
+                    if (cp.name || cp.email) data.contacts.push({ name: cp.name || "", role: cp.contactType || "", email: cp.email || "" });
+                  }
+                }
+              }
+              if (/Person/i.test(t) && json.name) {
+                data.contacts.push({ name: json.name, role: json.jobTitle || "", email: json.email || "" });
+              }
+            } catch {}
+          }
+        } catch {}
+        // Strategy B: Open Graph & Meta tags
+        try {
+          const og = (n) => { const el = document.querySelector('meta[property="'+n+'"]'); return el ? el.content : ""; };
+          const mt = (n) => { const el = document.querySelector('meta[name="'+n+'"]'); return el ? el.content : ""; };
+          data.meta = { siteName: og("og:site_name") || "", description: og("og:description") || mt("description") || "", author: mt("author") || "", canonical: (document.querySelector('link[rel="canonical"]') || {}).href || "" };
+          if (!data.businessName && data.meta.siteName) data.businessName = data.meta.siteName;
+        } catch {}
+        // Strategy C: Regex fallback on visible text
+        try {
+          const text = document.body.innerText || "";
+          const emailRe = /[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}/g;
+          const phoneRe = /(?:\\+?1[\\-\\s.]?)?\\(?\\d{3}\\)?[\\-\\s.]?\\d{3}[\\-\\s.]?\\d{4}/g;
+          const addrRe = /\\d{1,5}\\s+\\w+(?:\\s+\\w+){0,3}\\s+(?:St|Street|Ave|Avenue|Blvd|Boulevard|Dr|Drive|Rd|Road|Ln|Lane|Ct|Court|Way|Pl|Place|Pkwy|Parkway|Hwy|Highway|Circle|Cir)\\b[.,]?\\s*\\w+[.,]?\\s*[A-Z]{2}\\s*\\d{5}/gi;
+          (text.match(emailRe) || []).forEach(e => data.emails.push(e));
+          (text.match(phoneRe) || []).forEach(p => data.phones.push(p));
+          (text.match(addrRe) || []).forEach(a => data.addresses.push(a));
+        } catch {}
+        // Deduplicate
+        data.emails = [...new Set(data.emails)];
+        data.phones = [...new Set(data.phones)];
+        data.addresses = [...new Set(data.addresses)];
+        data.socialLinks = [...new Set(data.socialLinks)];
+        // Scroll depth
+        try { data.scrollDepth = Math.min(1, window.scrollY / Math.max(1, document.documentElement.scrollHeight - window.innerHeight)); } catch {}
+        return data;
+      })();`
+    });
+    const data = results?.[0];
+    if (!data) return;
+    const hasData = data.emails.length || data.phones.length || data.addresses.length || data.businessName || data.contacts.length || data.socialLinks.length;
+    if (!hasData) return;
+    await ArgusDB.PageTracker.setTrawlData(url, data);
+    console.log(`[Trawl] collected from ${new URL(url).hostname}: ${data.emails.length}e ${data.phones.length}p ${data.addresses.length}a`);
+  } catch (e) {
+    // Content script injection may fail on restricted pages — silent
+  }
+}
+
+// ── Tab dwell-time tracking for Trawl engagement scoring ──
+let _trawlActiveTab = { tabId: null, url: null, at: null };
+
+browser.tabs.onActivated.addListener(({ tabId }) => {
+  // Record dwell time for previous tab
+  if (_trawlActiveTab.tabId && _trawlActiveTab.at && _trawlActiveTab.url) {
+    const ms = Date.now() - _trawlActiveTab.at;
+    if (ms > 2000) { // ignore <2s flickers
+      ArgusDB.PageTracker.addDwellTime(_trawlActiveTab.url, ms).catch(() => {});
+    }
+  }
+  // Start tracking new tab
+  browser.tabs.get(tabId).then(tab => {
+    _trawlActiveTab = { tabId, url: tab?.url || null, at: Date.now() };
+  }).catch(() => { _trawlActiveTab = { tabId: null, url: null, at: null }; });
+  updateBrowserActionForTab(tabId);
+});
 
 function updateBrowserActionForTab(tabId) {
   browser.tabs.get(tabId).then(tab => {
@@ -310,7 +422,7 @@ async function createContextMenus() {
   const bmFolders = await ArgusDB.BookmarkFolders.getAll();
   if (bmFolders.length > 0) {
     // Build folder hierarchy — top-level folders first, then children
-    const topFolders = bmFolders.filter(f => !f.parentId);
+    const topFolders = bmFolders.filter(f => !f.parentId && f.name !== "Unsorted");
     const childMap = {};
     for (const f of bmFolders) {
       if (f.parentId) {
@@ -585,6 +697,49 @@ async function createContextMenus() {
     }
   } catch (e) { console.warn("[Argus] Cloud context menu check failed:", e); }
 
+  // ── Add to Sources ──
+  browser.contextMenus.create({
+    id: "argus-sep-sources",
+    parentId: "argus-parent",
+    type: "separator",
+    contexts: ["page", "link"]
+  });
+  browser.contextMenus.create({
+    id: "argus-sources-parent",
+    parentId: "argus-parent",
+    title: "\uD83D\uDCCC Add to Sources",
+    contexts: ["page", "link"]
+  });
+  browser.contextMenus.create({
+    id: "argus-source-ungrouped",
+    parentId: "argus-sources-parent",
+    title: "Ungrouped",
+    contexts: ["page", "link"]
+  });
+
+  // Dynamic folder sub-items from existing sources
+  try {
+    const allSources = await ArgusDB.Sources.getAll();
+    const folders = new Set();
+    for (const s of (allSources || [])) { if (s.folder) folders.add(s.folder); }
+    if (folders.size > 0) {
+      browser.contextMenus.create({
+        id: "argus-source-folder-sep",
+        parentId: "argus-sources-parent",
+        type: "separator",
+        contexts: ["page", "link"]
+      });
+      for (const f of [...folders].sort()) {
+        browser.contextMenus.create({
+          id: `argus-source-folder-${f}`,
+          parentId: "argus-sources-parent",
+          title: `📁 ${f}`,
+          contexts: ["page", "link"]
+        });
+      }
+    }
+  } catch (e) { console.warn("[Argus] Source folders menu failed:", e); }
+
   // ── Wipe All Data ──
   browser.contextMenus.create({
     id: "argus-sep-wipe",
@@ -604,7 +759,7 @@ createContextMenus();
 
 // Rebuild context menus when presets or projects change
 browser.storage.onChanged.addListener((changes) => {
-  if (changes.customPresets || changes.argusProjects || changes.automations || changes.argusCloudProviders) createContextMenus();
+  if (changes.customPresets || changes.argusProjects || changes.automations || changes.argusCloudProviders || changes.argusSources) createContextMenus();
   if (changes.showBadge) updateBadge();
 });
 
@@ -1455,6 +1610,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "getHistoryForUrl") return handleGetHistoryForUrl(message);
   if (message.action === "getLinkMapForUrl") return handleGetLinkMapForUrl(message);
   if (message.action === "getLinkMapHistory") return handleGetLinkMapHistory();
+  if (message.action === "saveLinkMapHistory") return saveToHistory(message.entry).then(() => ({ success: true }));
   if (message.action === "getArchiveCheck") {
     const cached = archiveCheckCache.get(message.tabId);
     return Promise.resolve({ success: true, archiveUrl: cached?.archiveUrl || null, checked: !!cached });
@@ -1577,6 +1733,9 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "searchTrackerPages") return ArgusDB.PageTracker.search(message.query).then(pages => ({ success: true, pages }));
   if (message.action === "deleteTrackerPage") return ArgusDB.PageTracker.remove(message.id).then(() => ({ success: true }));
   if (message.action === "clearTracker") return ArgusDB.PageTracker.clear().then(() => ({ success: true }));
+  // Trawl Net
+  if (message.action === "getTrawlStatus") return browser.storage.local.get({ trawlEnabled: false }).then(s => ({ success: true, enabled: s.trawlEnabled }));
+  if (message.action === "setTrawlEnabled") return browser.storage.local.set({ trawlEnabled: message.enabled }).then(() => ({ success: true }));
   // Projects
   if (message.action === "getProjects") return handleGetProjects(message);
   if (message.action === "getDefaultProject") return browser.storage.local.get({ defaultProjectId: null }).then(s => ({ defaultProjectId: s.defaultProjectId }));
@@ -3692,6 +3851,39 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
   }
   if (info.menuItemId === "argus-save-page-to-cloud") {
     if (tab && tab.url) handleSaveToCloud(tab.url, tab);
+    return;
+  }
+
+  // Add to Sources (right-click → page or link)
+  if (info.menuItemId === "argus-source-ungrouped" || info.menuItemId.startsWith("argus-source-folder-")) {
+    const folder = info.menuItemId === "argus-source-ungrouped"
+      ? ""
+      : info.menuItemId.replace("argus-source-folder-", "");
+    const url = info.linkUrl || (tab && tab.url) || "";
+    if (!url || url.startsWith("about:") || url.startsWith("moz-extension:") || url.startsWith("chrome:")) return;
+    let name = "";
+    try { name = new URL(url).hostname.replace(/^www\./, ""); } catch { name = url.slice(0, 80); }
+    // If it's the page itself (not a link), use the tab title
+    if (!info.linkUrl && tab?.title) name = tab.title.slice(0, 120);
+
+    const source = {
+      id: `src-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name,
+      type: "entity",
+      aliases: [],
+      addresses: [{ type: "website", value: url, label: "" }],
+      tags: ["context-menu"],
+      location: "",
+      notes: "",
+      folder,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    try {
+      await ArgusDB.Sources.save(source);
+      // Rebuild menus so new folder shows up
+      createContextMenus();
+    } catch (e) { console.warn("[Argus] Failed to save source from context menu:", e); }
     return;
   }
 

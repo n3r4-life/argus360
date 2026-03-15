@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Argus - Trawl Net</title>
+  <link rel="stylesheet" href="../shared/argus-std.css">
+  <link rel="stylesheet" href="trawl.css">
+  <link rel="stylesheet" href="../lib/argus-chat.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+</head>
+<body>
+  <script src="../shared/ribbon.js"></script>
+  <script src="../shared/panel-state.js"></script>
+  <header class="header">
+    <div class="header-left">
+      <img src="../icons/icon-32.png" alt="" class="header-icon">
+      <h1 class="header-title">Trawl Net</h1>
+      <select id="project-select" class="select-compact header-project-select" title="Active project context for AI chat">
+        <option value="">No project</option>
+      </select>
+    </div>
+    <div class="header-right">
+      <button class="pill-chip" id="date-today" title="Today only">Today</button>
+      <button class="pill-chip" id="date-week" title="Last 7 days">7 Days</button>
+      <button class="pill-chip" id="date-all" title="All trawl data">All</button>
+      <input type="date" id="date-from" class="date-input" title="From date">
+      <input type="date" id="date-to" class="date-input" title="To date">
+      <button class="pill-chip" id="export-csv" title="Export all trawl data as CSV">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        CSV
+      </button>
+    </div>
+  </header>
+
+  <section class="stats-bar" id="stats-bar">
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-pages">0</span>
+      <span class="stat-label">Pages</span>
+    </div>
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-with-data">0</span>
+      <span class="stat-label">With Data</span>
+    </div>
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-domains">0</span>
+      <span class="stat-label">Domains</span>
+    </div>
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-contacts">0</span>
+      <span class="stat-label">Contacts</span>
+    </div>
+    <div class="stat-badge">
+      <span class="stat-value" id="stat-top-score">0</span>
+      <span class="stat-label">Top Score</span>
+    </div>
+  </section>
+
+  <!-- Search bar -->
+  <div class="trawl-search-bar" id="search-bar">
+    <span class="trawl-search-slash hidden">/</span>
+    <input type="text" id="trawl-search" class="trawl-search-input" placeholder="Search businesses, emails, phones, domains...">
+    <span class="trawl-search-slash hidden">/i</span>
+    <button class="trawl-search-mode" id="search-mode" title="Toggle regex mode">RE</button>
+    <span class="trawl-search-count" id="search-count"></span>
+  </div>
+
+  <!-- View toggle tabs -->
+  <nav class="view-tabs">
+    <button class="pill-chip active" data-view="table" title="Sortable data table">Table</button>
+    <button class="pill-chip" data-view="timeline" title="Chronological session timeline">Timeline</button>
+    <button class="pill-chip" data-view="cloud" title="Weighted contact cloud">Cloud</button>
+    <span style="flex:1"></span>
+    <button class="pill-chip" id="copy-emails" title="Copy all emails to clipboard">Copy Emails</button>
+    <button class="pill-chip" id="copy-phones" title="Copy all phones to clipboard">Copy Phones</button>
+  </nav>
+
+  <!-- Top-3 "You probably want this" cards -->
+  <section id="top-cards" class="top-cards"></section>
+
+  <!-- Main content views -->
+  <main>
+    <div id="view-table"></div>
+    <div id="view-timeline" class="hidden"></div>
+    <div id="view-cloud" class="hidden"></div>
+    <div id="empty-state" class="empty-state hidden">
+      <h2>No Trawl Data Yet</h2>
+      <p>Enable Trawl Net from the popup toolbar, then browse naturally. Contact data, business info, and metadata will be collected passively from every page you visit.</p>
+    </div>
+  </main>
+
+  <div id="argus-chat-container"></div>
+
+  <script src="../lib/purify.min.js"></script>
+  <script src="../lib/marked.min.js"></script>
+  <script src="../lib/argus-chat.js"></script>
+  <script src="trawl.js"></script>
+</body>
+</html>

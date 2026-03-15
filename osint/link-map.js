@@ -436,6 +436,8 @@
 
   function bindTabs() {
     $$('.filter-tabs .pill-chip[data-filter]').forEach((tab) => {
+      if (tab._tabBound) return;
+      tab._tabBound = true;
       tab.addEventListener('click', () => {
         $$('.filter-tabs .pill-chip[data-filter]').forEach((t) => t.classList.remove('active'));
         tab.classList.add('active');
@@ -682,7 +684,23 @@
       countSpan.className = 'domain-count';
       countSpan.textContent = grouped[folder].length;
       header.appendChild(countSpan);
-      header.addEventListener('click', () => group.classList.toggle('collapsed'));
+      // "Import to Sources" button on folder headers
+      if (folder !== 'Unsorted') {
+        const importBtn = document.createElement('button');
+        importBtn.className = 'pill-chip folder-import-btn';
+        importBtn.textContent = '+ Sources';
+        importBtn.title = `Import all ${grouped[folder].length} links as sources in folder "${folder}"`;
+        importBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          importFolderToSources(folder, grouped[folder]);
+        });
+        header.appendChild(importBtn);
+      }
+
+      header.addEventListener('click', (e) => {
+        if (e.target.closest('.folder-import-btn')) return;
+        group.classList.toggle('collapsed');
+      });
       group.appendChild(header);
 
       const linksContainer = document.createElement('div');
@@ -1071,6 +1089,7 @@
       tags: ['link-map'],
       location: '',
       notes: 'Added from Link Map',
+      folder: '',
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -1093,6 +1112,7 @@
       tags: ['link-map'],
       location: '',
       notes: 'Email found via Link Map',
+      folder: '',
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -1116,6 +1136,32 @@
     } catch (err) {
       console.warn('Failed to save contact:', err);
     }
+  }
+
+  async function importFolderToSources(folderName, links) {
+    const api = typeof browser !== 'undefined' ? browser : chrome;
+    let created = 0;
+    for (const link of links) {
+      const name = link.text || link.url;
+      const source = {
+        id: 'src-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+        name: name.slice(0, 120),
+        type: 'entity',
+        aliases: [],
+        addresses: [{ type: 'website', value: link.url, label: '' }],
+        tags: ['link-map', 'imported'],
+        location: '',
+        notes: `Bulk imported from bookmark folder "${folderName}"`,
+        folder: folderName,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      try {
+        await api.runtime.sendMessage({ action: 'saveSource', source });
+        created++;
+      } catch {}
+    }
+    showToast(`Imported ${created} source${created !== 1 ? 's' : ''} into folder "${folderName}"`);
   }
 
   /* ── Actions ── */
@@ -1192,6 +1238,28 @@
 
     walk(doc.body, '');
     return { links, folders };
+  }
+
+  async function saveImportToHistory(data, totalLinks, folderCount) {
+    try {
+      const api = typeof browser !== 'undefined' ? browser : chrome;
+      const domains = new Set();
+      (data.links.external || []).forEach(l => { if (l.domain) domains.add(l.domain); });
+      await api.runtime.sendMessage({
+        action: 'saveLinkMapHistory',
+        entry: {
+          pageTitle: data.pageTitle,
+          pageUrl: data.pageUrl,
+          content: `# Imported Bookmarks\n\n**${totalLinks} bookmarks** from ${folderCount} folders`,
+          preset: 'link-map',
+          presetLabel: `Import (${totalLinks} bookmarks)`,
+          linkMapData: {
+            links: data.links,
+            stats: { totalLinks, uniqueDomains: domains.size }
+          }
+        }
+      });
+    } catch (e) { console.warn('Failed to save import to history:', e); }
   }
 
   function handleBookmarkImport() {
@@ -1273,7 +1341,11 @@
     });
   }
 
+  let _actionsBound = false;
   function bindActions() {
+    if (_actionsBound) return;
+    _actionsBound = true;
+
     $('#export-csv').addEventListener('click', exportCSV);
     $('#add-to-project').addEventListener('click', toggleProjectPicker);
     handleBookmarkImport();
@@ -2110,14 +2182,15 @@
     overlay.innerHTML = `
       <div class="collector-overlay-box">
         <div class="collector-overlay-title">Add to Sources</div>
-        <div class="collector-overlay-subtitle">${collected.length} item${collected.length === 1 ? '' : 's'} will be merged into a new source</div>
-        <label class="collector-overlay-option">
-          <span>Source name:</span>
-          <input type="text" id="sourceNameInput" class="collector-overlay-input" placeholder="e.g. Target Alpha" value="${linkData?.pageTitle || ''}">
-        </label>
+        <div class="collector-overlay-subtitle">${collected.length} item${collected.length === 1 ? '' : 's'} will each become an individual source card</div>
         <label class="collector-overlay-option">
           <span>Source type:</span>
           <select id="sourceTypeSelect" class="select-compact">${typeOpts}</select>
+        </label>
+        <label class="collector-overlay-option">
+          <span>Folder:</span>
+          <input type="text" id="sourceFolderInput" class="collector-overlay-input" placeholder="e.g. OSINT / Journalists — leave blank for ungrouped" list="sourceFolderList">
+          <datalist id="sourceFolderList"></datalist>
         </label>
         <div class="collector-overlay-actions">
           <button class="pill-chip" id="sourceCancel">Cancel</button>
@@ -2126,50 +2199,57 @@
       </div>`;
     $('#collectorPanel').appendChild(overlay);
 
+    // Pre-fill folder from collector dropdown + populate autocomplete
+    const collectorFolderVal = $('#collectorFolder')?.value || '';
+    const folderInput = overlay.querySelector('#sourceFolderInput');
+    if (folderInput && collectorFolderVal) folderInput.value = collectorFolderVal;
+
+    (async () => {
+      try {
+        const api = typeof browser !== 'undefined' ? browser : chrome;
+        const resp = await api.runtime.sendMessage({ action: 'getSources' });
+        const folders = new Set();
+        for (const s of (resp?.sources || [])) { if (s.folder) folders.add(s.folder); }
+        const dl = overlay.querySelector('#sourceFolderList');
+        if (dl) { for (const f of [...folders].sort()) dl.innerHTML += `<option value="${f}">`; }
+      } catch {}
+    })();
+
     overlay.querySelector('#sourceCancel').addEventListener('click', () => overlay.remove());
     overlay.querySelector('#sourceConfirm').addEventListener('click', async () => {
-      const name = overlay.querySelector('#sourceNameInput').value.trim();
+      const folder = (overlay.querySelector('#sourceFolderInput')?.value || '').trim();
       const type = overlay.querySelector('#sourceTypeSelect').value;
-      if (!name) {
-        overlay.querySelector('#sourceNameInput').style.borderColor = 'var(--error)';
-        return;
-      }
       overlay.remove();
 
-      // Map collector items to source addresses
+      // Create one source per collected item
       const addrTypeMap = { email: 'email', phone: 'phone', social: 'website', link: 'website', file: 'website' };
-      const addresses = collected.map(c => ({
-        type: addrTypeMap[c.type] || 'website',
-        value: c.url || c.value,
-        label: c.label || c.value || ''
-      })).filter(a => a.value);
-
       const api = typeof browser !== 'undefined' ? browser : chrome;
-      try {
+      let created = 0;
+      for (const c of collected) {
+        const value = c.url || c.value;
+        if (!value) continue;
+        const srcName = c.label || c.value || value;
         const source = {
           id: 'src-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
-          name,
+          name: srcName.slice(0, 120),
           type,
           aliases: [],
-          addresses,
+          addresses: [{ type: addrTypeMap[c.type] || 'website', value, label: '' }],
           tags: ['link-map', 'collected'],
           location: '',
-          notes: `Auto-created from Link Map collector (${linkData?.pageUrl || 'unknown page'})`,
+          notes: `Collected from ${linkData?.pageUrl || 'Link Map'}`,
+          folder,
           createdAt: Date.now(),
           updatedAt: Date.now()
         };
-        const resp = await api.runtime.sendMessage({ action: 'saveSource', source });
-        if (resp?.success) {
-          showXrefToast(`Source "${name}" created with ${addresses.length} address${addresses.length === 1 ? '' : 'es'}.`, addresses.length);
-          // Reload sources so x-ref picks up the new one
-          await loadSources();
-          renderCollector();
-        } else {
-          showXrefToast('Failed to create source.', 0);
-        }
-      } catch (e) {
-        showXrefToast('Error creating source: ' + e.message, 0);
+        try {
+          await api.runtime.sendMessage({ action: 'saveSource', source });
+          created++;
+        } catch {}
       }
+      showXrefToast(`Created ${created} source${created !== 1 ? 's' : ''}${folder ? ` in folder "${folder}"` : ''}.`, created);
+      await loadSources();
+      renderCollector();
     });
   }
 
@@ -2234,7 +2314,10 @@
     if (tabBtn) {
       tabBtn.addEventListener('click', () => {
         panel.classList.toggle('hidden');
-        if (!panel.classList.contains('hidden')) renderCollector();
+        if (!panel.classList.contains('hidden')) {
+          renderCollector();
+          populateCollectorFolders();
+        }
       });
     }
 
@@ -2290,6 +2373,23 @@
       });
       document.addEventListener('mouseup', () => { dragging = false; });
     }
+  }
+
+  async function populateCollectorFolders() {
+    const sel = $('#collectorFolder');
+    if (!sel) return;
+    const current = sel.value;
+    try {
+      const api = typeof browser !== 'undefined' ? browser : chrome;
+      const resp = await api.runtime.sendMessage({ action: 'getSources' });
+      const folders = new Set();
+      for (const s of (resp?.sources || [])) { if (s.folder) folders.add(s.folder); }
+      sel.innerHTML = '<option value="">No folder (ungrouped)</option>';
+      for (const f of [...folders].sort()) {
+        sel.innerHTML += `<option value="${f}">${f}</option>`;
+      }
+      sel.value = current;
+    } catch {}
   }
 
   /* ── History popup ── */
@@ -2488,6 +2588,8 @@
       showCacheBanner();
       renderStats();
       renderLinks();
+      bindTabs();
+      bindActions();
 
       // Init or refresh chat — may not exist if page loaded without data
       if (document.querySelector('.argus-chat-toggle')) {

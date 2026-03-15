@@ -466,6 +466,7 @@ const el = {
   tempValue: document.getElementById("temp-value"),
   showBadge: document.getElementById("show-badge"),
   trackMyPages: document.getElementById("track-my-pages"),
+  trawlEnabled: document.getElementById("trawl-enabled"),
   incognitoForceEnabled: document.getElementById("incognito-force-enabled"),
   incognitoAddDomain: document.getElementById("incognito-add-domain"),
   incognitoAddBtn: document.getElementById("incognito-add-btn"),
@@ -1028,7 +1029,8 @@ function initResourcesTab() {
               addresses: [{ type: "website", value: url, label: cat.title + " resource" }],
               tags: ["resource", cat.id || cat.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")],
               location: "",
-              notes: desc ? `${cat.title}: ${desc}` : `Added from ${cat.title} resource card`
+              notes: desc ? `${cat.title}: ${desc}` : `Added from ${cat.title} resource card`,
+              folder: ""
             }
           });
         } catch { /* source save is best-effort */ }
@@ -1271,6 +1273,7 @@ async function loadAllSettings() {
     maxHistorySize: 200,
     showBadge: true,
     trackMyPages: false,
+    trawlEnabled: false,
     incognitoForceEnabled: false,
     incognitoSites: [],
     responseLanguage: "auto",
@@ -1308,6 +1311,7 @@ async function loadAllSettings() {
   el.tempValue.textContent = settings.temperature;
   el.showBadge.checked = settings.showBadge !== false;
   el.trackMyPages.checked = settings.trackMyPages === true;
+  el.trawlEnabled.checked = settings.trawlEnabled === true;
   el.incognitoForceEnabled.checked = settings.incognitoForceEnabled === true;
   renderIncognitoSites(settings.incognitoSites || []);
   el.responseLanguage.value = settings.responseLanguage ?? "auto";
@@ -1942,6 +1946,7 @@ async function saveAllSettings() {
     maxHistorySize: parseInt(el.maxHistory.value, 10) || 200,
     showBadge: el.showBadge.checked,
     trackMyPages: el.trackMyPages.checked,
+    trawlEnabled: el.trawlEnabled.checked,
     incognitoForceEnabled: el.incognitoForceEnabled.checked,
     responseLanguage: el.responseLanguage.value,
     dataProviders,
@@ -3912,7 +3917,20 @@ function attachListeners() {
   el.thinkingBudget.addEventListener("input", scheduleSave);
   el.responseLanguage.addEventListener("change", scheduleSave);
   el.showBadge.addEventListener("change", scheduleSave);
-  el.trackMyPages.addEventListener("change", scheduleSave);
+  el.trackMyPages.addEventListener("change", () => {
+    // If Track My Pages is turned off, also disable Trawl Net
+    if (!el.trackMyPages.checked && el.trawlEnabled.checked) {
+      el.trawlEnabled.checked = false;
+    }
+    scheduleSave();
+  });
+  el.trawlEnabled.addEventListener("change", () => {
+    // Trawl requires Track My Pages
+    if (el.trawlEnabled.checked && !el.trackMyPages.checked) {
+      el.trackMyPages.checked = true;
+    }
+    scheduleSave();
+  });
   el.incognitoForceEnabled.addEventListener("change", async () => {
     if (el.incognitoForceEnabled.checked) {
       // Request webNavigation permission if needed
@@ -6623,6 +6641,7 @@ function initMainTabs() {
             tags: ["search-engine"],
             location: "",
             notes: `Custom search engine. Query pattern: ${url}`,
+            folder: "",
           }
         });
       }
@@ -10371,7 +10390,7 @@ const SOURCE_ADDR_TYPES = {
   custom:    { label: "Other",        icon: "📌", prefix: null,                            example: "Any URL, handle, or address" },
 };
 
-const srcState = { initialized: false, sources: [], editingId: null };
+const srcState = { initialized: false, sources: [], editingId: null, regexMode: false };
 
 function initSources() {
   if (srcState.initialized) return;
@@ -10382,8 +10401,34 @@ function initSources() {
   document.getElementById("src-cancel").addEventListener("click", hideSourceEditor);
   document.getElementById("src-save").addEventListener("click", saveSource);
   document.getElementById("src-search").addEventListener("input", debounce(filterSources, 300));
+  document.getElementById("src-search-mode")?.addEventListener("click", () => {
+    srcState.regexMode = !srcState.regexMode;
+    const btn = document.getElementById("src-search-mode");
+    const bar = document.getElementById("src-search-bar");
+    const slashes = bar?.querySelectorAll(".src-search-slash") || [];
+    const input = document.getElementById("src-search");
+    btn.classList.toggle("active", srcState.regexMode);
+    slashes.forEach(s => s.style.display = srcState.regexMode ? "" : "none");
+    input.placeholder = srcState.regexMode
+      ? "regex — e.g. gmail\\.com|yahoo  ^john  \\d{3}-\\d{4}"
+      : "Search sources...";
+    if (srcState.regexMode) input.classList.add("src-search-mono");
+    else input.classList.remove("src-search-mono");
+    filterSources();
+  });
   document.getElementById("src-filter-type").addEventListener("change", filterSources);
   document.getElementById("src-filter-tag").addEventListener("change", filterSources);
+  document.getElementById("src-filter-folder")?.addEventListener("change", () => {
+    filterSources();
+    const folderVal = document.getElementById("src-filter-folder").value;
+    document.getElementById("src-folder-rename").disabled = !folderVal;
+    document.getElementById("src-folder-delete").disabled = !folderVal;
+  });
+
+  // Folder management
+  document.getElementById("src-folder-add")?.addEventListener("click", srcFolderAdd);
+  document.getElementById("src-folder-rename")?.addEventListener("click", srcFolderRename);
+  document.getElementById("src-folder-delete")?.addEventListener("click", srcFolderDelete);
 
   // Import / Export
   document.getElementById("src-import").addEventListener("click", () => document.getElementById("src-import-file").click());
@@ -10442,28 +10487,173 @@ function populateTagFilter() {
     sel.innerHTML += `<option value="${t}">${t}</option>`;
   }
   sel.value = current;
+
+  // Populate folder filter + datalist (merge stored folder list + folders from sources)
+  const folderSel = document.getElementById("src-filter-folder");
+  const folderList = document.getElementById("src-folder-list");
+  const currentFolder = folderSel?.value || "";
+  const folders = new Set();
+  for (const s of srcState.sources) {
+    if (s.folder) folders.add(s.folder);
+  }
+  // Also include stored folder names (so empty folders persist)
+  getSrcFolderList().then(stored => {
+    for (const f of stored) folders.add(f);
+    if (folderSel) {
+      folderSel.innerHTML = '<option value="">All Folders</option>';
+      for (const f of [...folders].sort()) {
+        folderSel.innerHTML += `<option value="${f}">${f}</option>`;
+      }
+      folderSel.value = currentFolder;
+    }
+    if (folderList) {
+      folderList.innerHTML = '';
+      for (const f of [...folders].sort()) {
+        folderList.innerHTML += `<option value="${f}">`;
+      }
+    }
+  });
+}
+
+function srcFolderAdd() {
+  const name = prompt("New folder name:");
+  if (!name || !name.trim()) return;
+  const folderName = name.trim();
+  // Check if any source already uses this folder
+  if (srcState.sources.some(s => s.folder === folderName)) {
+    alert(`Folder "${folderName}" already exists.`);
+    return;
+  }
+  // Create a placeholder by setting the folder in the filter — it'll appear once a source uses it
+  // But we also store it in a dedicated list so empty folders persist
+  saveSrcFolderList(folderName);
+  populateTagFilter();
+  document.getElementById("src-filter-folder").value = folderName;
+  document.getElementById("src-filter-folder").dispatchEvent(new Event("change"));
+}
+
+async function srcFolderRename() {
+  const folderSel = document.getElementById("src-filter-folder");
+  const oldName = folderSel.value;
+  if (!oldName) return;
+  const newName = prompt(`Rename folder "${oldName}" to:`, oldName);
+  if (!newName || !newName.trim() || newName.trim() === oldName) return;
+  const trimmed = newName.trim();
+  // Rename on all sources that use this folder
+  let count = 0;
+  for (const src of srcState.sources) {
+    if (src.folder === oldName) {
+      src.folder = trimmed;
+      await browser.runtime.sendMessage({ action: "saveSource", source: src });
+      count++;
+    }
+  }
+  // Update stored folder list
+  await renameSrcFolder(oldName, trimmed);
+  populateTagFilter();
+  folderSel.value = trimmed;
+  folderSel.dispatchEvent(new Event("change"));
+  filterSources();
+}
+
+async function srcFolderDelete() {
+  const folderSel = document.getElementById("src-filter-folder");
+  const folderName = folderSel.value;
+  if (!folderName) return;
+  const sourcesInFolder = srcState.sources.filter(s => s.folder === folderName);
+  const action = sourcesInFolder.length > 0
+    ? prompt(`Folder "${folderName}" has ${sourcesInFolder.length} source(s).\nType DELETE to remove folder AND sources, or KEEP to ungroup them:`)
+    : "empty";
+  if (!action) return;
+  const choice = action.trim().toUpperCase();
+  if (choice === "DELETE") {
+    for (const src of sourcesInFolder) {
+      await browser.runtime.sendMessage({ action: "deleteSource", sourceId: src.id });
+    }
+  } else if (choice === "KEEP") {
+    for (const src of sourcesInFolder) {
+      src.folder = "";
+      await browser.runtime.sendMessage({ action: "saveSource", source: src });
+    }
+  } else if (choice !== "EMPTY") {
+    return; // cancelled or unrecognized
+  }
+  await removeSrcFolder(folderName);
+  populateTagFilter();
+  folderSel.value = "";
+  folderSel.dispatchEvent(new Event("change"));
+  loadSources();
+}
+
+// Persist folder names independently so empty folders survive
+async function getSrcFolderList() {
+  try {
+    const res = await browser.storage.local.get({ argusSrcFolders: [] });
+    return res.argusSrcFolders || [];
+  } catch { return []; }
+}
+async function saveSrcFolderList(newFolder) {
+  const list = await getSrcFolderList();
+  if (!list.includes(newFolder)) {
+    list.push(newFolder);
+    await browser.storage.local.set({ argusSrcFolders: list });
+  }
+}
+async function renameSrcFolder(oldName, newName) {
+  const list = await getSrcFolderList();
+  const idx = list.indexOf(oldName);
+  if (idx !== -1) list[idx] = newName;
+  else list.push(newName);
+  await browser.storage.local.set({ argusSrcFolders: list });
+}
+async function removeSrcFolder(name) {
+  const list = await getSrcFolderList();
+  const filtered = list.filter(f => f !== name);
+  await browser.storage.local.set({ argusSrcFolders: filtered });
 }
 
 function filterSources() {
-  const q = (document.getElementById("src-search")?.value || "").toLowerCase();
+  const raw = (document.getElementById("src-search")?.value || "").trim();
   const typeFilter = document.getElementById("src-filter-type")?.value || "";
   const tagFilter = document.getElementById("src-filter-tag")?.value || "";
+  const folderFilter = document.getElementById("src-filter-folder")?.value || "";
+  const countEl = document.getElementById("src-search-count");
+  const searchBar = document.querySelector(".src-search-bar");
 
   let filtered = srcState.sources;
   if (typeFilter) filtered = filtered.filter(s => s.type === typeFilter);
   if (tagFilter) filtered = filtered.filter(s => (s.tags || []).includes(tagFilter));
-  if (q) {
-    filtered = filtered.filter(s =>
-      (s.name || "").toLowerCase().includes(q) ||
-      (s.aliases || []).some(a => a.toLowerCase().includes(q)) ||
-      (s.tags || []).some(t => t.toLowerCase().includes(q)) ||
-      (s.location || "").toLowerCase().includes(q) ||
-      (s.notes || "").toLowerCase().includes(q) ||
-      (s.addresses || []).some(a =>
-        (a.label || "").toLowerCase().includes(q) ||
-        (a.value || "").toLowerCase().includes(q)
-      )
-    );
+  if (folderFilter) filtered = filtered.filter(s => (s.folder || "") === folderFilter);
+
+  const sourceText = (s) => [
+    s.name, s.type, s.folder, s.location, s.notes,
+    ...(s.aliases || []),
+    ...(s.tags || []),
+    ...(s.addresses || []).flatMap(a => [a.label, a.value])
+  ].filter(Boolean).join(" ");
+
+  if (raw && srcState.regexMode) {
+    let re;
+    try {
+      re = new RegExp(raw, "i");
+      if (searchBar) searchBar.classList.remove("src-search-error");
+    } catch {
+      if (searchBar) searchBar.classList.add("src-search-error");
+      if (countEl) countEl.textContent = "invalid regex";
+      renderSourcesGrid(filtered);
+      return;
+    }
+    filtered = filtered.filter(s => re.test(sourceText(s)));
+  } else if (raw) {
+    if (searchBar) searchBar.classList.remove("src-search-error");
+    const q = raw.toLowerCase();
+    filtered = filtered.filter(s => sourceText(s).toLowerCase().includes(q));
+  } else {
+    if (searchBar) searchBar.classList.remove("src-search-error");
+  }
+
+  if (countEl) {
+    countEl.textContent = raw ? `${filtered.length} / ${srcState.sources.length}` : "";
   }
   renderSourcesGrid(filtered);
 }
@@ -10517,8 +10707,46 @@ async function renderSourcesGrid(sources) {
     }
   } catch { /* unavailable */ }
 
+  // Group by folder when showing all folders
+  const folderFilter = document.getElementById("src-filter-folder")?.value || "";
+  const hasFolders = sources.some(s => s.folder);
+  let orderedSources = sources;
+  if (!folderFilter && hasFolders) {
+    // Sort: sources with folders first (alphabetical by folder), then ungrouped
+    orderedSources = [...sources].sort((a, b) => {
+      if (a.folder && !b.folder) return -1;
+      if (!a.folder && b.folder) return 1;
+      if (a.folder && b.folder) return a.folder.localeCompare(b.folder);
+      return 0;
+    });
+  }
+
   grid.innerHTML = "";
-  for (const src of sources) {
+  let currentFolder = null;
+  let currentSubGrid = grid; // default: cards go directly into grid
+  for (const src of orderedSources) {
+    // Insert folder section with its own sub-grid when grouping
+    if (!folderFilter && hasFolders) {
+      const sf = src.folder || "__ungrouped__";
+      if (sf !== currentFolder) {
+        currentFolder = sf;
+        const section = document.createElement("div");
+        section.className = "src-folder-section";
+        const header = document.createElement("div");
+        header.className = "src-folder-header";
+        if (sf === "__ungrouped__") {
+          header.innerHTML = `<span class="src-folder-header-icon">📋</span> Ungrouped`;
+        } else {
+          header.innerHTML = `<span class="src-folder-header-icon">📁</span> ${escapeHtml(sf)}`;
+        }
+        section.appendChild(header);
+        const subGrid = document.createElement("div");
+        subGrid.className = "src-grid src-folder-grid";
+        section.appendChild(subGrid);
+        grid.appendChild(section);
+        currentSubGrid = subGrid;
+      }
+    }
     const card = document.createElement("div");
     card.className = "src-card";
     card.dataset.srcId = src.id;
@@ -10541,12 +10769,14 @@ async function renderSourcesGrid(sources) {
     `;
     card.appendChild(header);
 
-    // Addresses
+    // Addresses (truncate to first 5, expandable)
     if (src.addresses?.length) {
+      const MAX_VISIBLE = 5;
       const addrs = document.createElement("div");
       addrs.className = "src-card-addresses";
       let hasActiveFeed = false;
       let hasMonitoredPage = false;
+      const allChips = [];
       for (const addr of src.addresses) {
         const def = SOURCE_ADDR_TYPES[addr.type] || SOURCE_ADDR_TYPES.custom;
         const chip = document.createElement("a");
@@ -10564,13 +10794,27 @@ async function renderSourcesGrid(sources) {
         if (url) { chip.href = url; chip.target = "_blank"; }
         const liveTag = isFeed ? '<span class="src-chip-live">FEED</span>' : isPageMonitor ? '<span class="src-chip-live">MON</span>' : "";
         chip.innerHTML = `<span class="src-chip-icon">${def.icon}</span><span class="src-chip-label">${escapeHtml(addr.label || addr.value)}</span>${liveTag}`;
-
-        // Right-click to copy value
         chip.addEventListener("contextmenu", (e) => {
           e.preventDefault();
           navigator.clipboard.writeText(addr.value);
         });
-        addrs.appendChild(chip);
+        allChips.push(chip);
+      }
+      const overflow = allChips.length > MAX_VISIBLE;
+      for (let i = 0; i < allChips.length; i++) {
+        if (overflow && i >= MAX_VISIBLE) allChips[i].classList.add("src-addr-hidden");
+        addrs.appendChild(allChips[i]);
+      }
+      if (overflow) {
+        const moreBtn = document.createElement("button");
+        moreBtn.className = "src-addr-more";
+        const hiddenCount = allChips.length - MAX_VISIBLE;
+        moreBtn.textContent = `+${hiddenCount} more`;
+        moreBtn.addEventListener("click", () => {
+          addrs.querySelectorAll(".src-addr-hidden").forEach(el => el.classList.remove("src-addr-hidden"));
+          moreBtn.remove();
+        });
+        addrs.appendChild(moreBtn);
       }
       if (hasActiveFeed || hasMonitoredPage) {
         const badge = document.createElement("div");
@@ -10582,6 +10826,14 @@ async function renderSourcesGrid(sources) {
         addrs.appendChild(badge);
       }
       card.appendChild(addrs);
+    }
+
+    // Folder badge
+    if (src.folder) {
+      const folderBadge = document.createElement("div");
+      folderBadge.className = "src-card-folder";
+      folderBadge.innerHTML = `<span class="src-folder-badge">📁 ${escapeHtml(src.folder)}</span>`;
+      card.appendChild(folderBadge);
     }
 
     // Location + Tags
@@ -10638,7 +10890,7 @@ async function renderSourcesGrid(sources) {
     actions.appendChild(delBtn);
 
     card.appendChild(actions);
-    grid.appendChild(card);
+    currentSubGrid.appendChild(card);
   }
 }
 
@@ -10664,6 +10916,7 @@ function showSourceEditor(source) {
   document.getElementById("src-location").value = source?.location || "";
   document.getElementById("src-tags").value = (source?.tags || []).join(", ");
   document.getElementById("src-notes").value = source?.notes || "";
+  document.getElementById("src-folder").value = source?.folder || "";
 
   // Populate address rows
   const list = document.getElementById("src-addr-list");
@@ -10756,6 +11009,7 @@ async function saveSource() {
     tags,
     location: document.getElementById("src-location").value.trim(),
     notes: document.getElementById("src-notes").value.trim(),
+    folder: document.getElementById("src-folder").value.trim(),
   };
 
   // Preserve timestamps if editing
@@ -10763,6 +11017,9 @@ async function saveSource() {
     const existing = srcState.sources.find(s => s.id === srcState.editingId);
     if (existing) source.createdAt = existing.createdAt;
   }
+
+  // Persist folder name so it survives even if all sources are removed from it
+  if (source.folder) await saveSrcFolderList(source.folder);
 
   await browser.runtime.sendMessage({ action: "saveSource", source });
   hideSourceEditor();

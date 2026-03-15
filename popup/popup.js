@@ -102,6 +102,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await checkFeedAvailability();
   await checkMonitorBookmarkStatus();
   await checkTrackingStatus();
+  await initTrawlBadge();
   await initIncognitoBar();
 });
 
@@ -607,6 +608,37 @@ async function checkTrackingStatus() {
 }
 
 // ──────────────────────────────────────────────
+// Trawl Net badge — toggleable pill in status bar
+// ──────────────────────────────────────────────
+async function initTrawlBadge() {
+  try {
+    const { trawlEnabled } = await browser.storage.local.get({ trawlEnabled: false });
+    const badge = document.getElementById("trawl-badge");
+    if (!badge) return;
+    // Always show the badge so user can toggle it (like Track and Private)
+    badge.classList.remove("hidden");
+    if (trawlEnabled) {
+      badge.classList.add("status-trawl-on");
+    }
+    badge.addEventListener("click", async () => {
+      const cur = await browser.storage.local.get({ trawlEnabled: false, trackMyPages: false });
+      const newState = !cur.trawlEnabled;
+      if (newState && !cur.trackMyPages) {
+        // Auto-enable Track My Pages if turning on trawl
+        await browser.storage.local.set({ trawlEnabled: true, trackMyPages: true });
+        // Also show tracking badge
+        const trackBadge = document.getElementById("tracking-badge");
+        if (trackBadge) { trackBadge.classList.remove("hidden"); trackBadge.classList.add("status-track-on"); }
+      } else {
+        await browser.storage.local.set({ trawlEnabled: newState });
+      }
+      badge.classList.toggle("status-trawl-on", newState);
+      showToast(newState ? "Trawl Net enabled — collecting passively" : "Trawl Net disabled", newState ? "success" : "loading");
+    });
+  } catch { /* ignore */ }
+}
+
+// ──────────────────────────────────────────────
 // Private Window button
 // ──────────────────────────────────────────────
 async function initIncognitoBar() {
@@ -779,6 +811,7 @@ function attachEventListeners() {
     "app-chat":     { type: "page", path: "chat/chat.html" },
     "app-terminal": { type: "page", path: "ssh/ssh.html" },
     "app-finance":  { type: "page", path: "finance/finance.html" },
+    "app-trawl":    { type: "page", path: "trawl/trawl.html" },
     "app-results":  { type: "page", path: "results/results.html" },
     // Console tabs
     "con-bookmarks":  { type: "console", hash: "bookmarks" },
@@ -808,6 +841,7 @@ function attachEventListeners() {
     "app-chat":      { label: "Chat",      svg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>' },
     "app-terminal":  { label: "Terminal",  svg: '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>' },
     "app-finance":   { label: "Finance",   svg: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
+    "app-trawl":     { label: "Trawl Net", svg: '<path d="M2 4c4 3 8 3 12 0s8-3 12 0"/><path d="M2 12c4 3 8 3 12 0s8-3 12 0"/><path d="M2 20c4 3 8 3 12 0s8-3 12 0"/>' },
     // Console tabs
     "con-bookmarks": { label: "Bookmarks", svg: '<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>' },
     "con-monitors":  { label: "Monitors",  svg: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>' },
@@ -826,7 +860,7 @@ function attachEventListeners() {
   // Canonical order for picker display: MFTs first, then console tabs
   const POPUP_ALL_IDS = [
     "app-projects", "app-reader", "app-reports", "app-kg", "app-workbench",
-    "app-draft", "app-images", "app-chat", "app-terminal", "app-finance",
+    "app-draft", "app-images", "app-chat", "app-terminal", "app-finance", "app-trawl",
     "con-bookmarks", "con-monitors", "con-feeds", "con-osint", "con-automate",
     "con-redirects", "con-tracker", "con-sources", "con-prompts", "con-providers",
     "con-resources", "con-settings"
@@ -1523,6 +1557,7 @@ function attachEventListeners() {
             tags: ["search-engine"],
             location: "",
             notes: `Custom search engine. Query pattern: ${url}`,
+            folder: "",
           }
         });
       }
@@ -1728,6 +1763,7 @@ function attachEventListeners() {
         tags: [],
         location: "",
         notes: "",
+        folder: "",
       };
     });
     const resp = sources.length === 1

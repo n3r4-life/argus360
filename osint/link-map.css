@@ -930,6 +930,32 @@ body {
   border-color: var(--accent);
 }
 
+.collector-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+.collector-folder-label {
+  font-size: 12px;
+  opacity: 0.7;
+}
+.collector-folder-select {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  padding: 3px 6px;
+  font-size: 11px;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+}
+.collector-folder-select:focus { border-color: var(--accent); }
+
 .collector-search-row {
   display: flex;
   gap: 4px;
@@ -1204,6 +1230,15 @@ body {
   text-overflow: ellipsis;
   flex-shrink: 0;
 }
+
+.folder-import-btn {
+  margin-left: auto;
+  font-size: 9px !important;
+  padding: 1px 8px !important;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+.folder-import-btn:hover { opacity: 1; }
 
 /* Source match badge (shown on link items after X-Ref) */
 .source-badge {

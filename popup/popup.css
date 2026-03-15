@@ -716,6 +716,21 @@ textarea {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
 }
+/* Trawl chip active state (teal accent when trawl is on) */
+.status-chip.status-trawl-on {
+  color: #26a69a;
+  border-color: rgba(38, 166, 154, 0.4);
+  background: rgba(38, 166, 154, 0.08);
+}
+.status-chip.status-trawl-on svg {
+  animation: tracking-pulse 2s ease-in-out infinite;
+}
+/* Trawl chip hover */
+#trawl-badge:hover {
+  color: #26a69a;
+  border-color: #26a69a;
+  background: rgba(38, 166, 154, 0.12);
+}
 /* Private chip hover — purple tint */
 #open-incognito:hover {
   color: #ce93d8;

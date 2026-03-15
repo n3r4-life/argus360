@@ -63,12 +63,10 @@
     <div class="tab-selector-checks" id="tabSelectorChecks"></div>
   </div>
 
-  <div class="ai-search-bar">
-    <svg class="ai-search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-    <input type="text" id="ai-search-input" class="search-input ai-search-input" placeholder='AI Vision Search — describe what to find (e.g. "firetruck", "person wearing red")'>
-    <button id="ai-search-btn" class="btn btn-primary">Search Images</button>
-    <button id="ai-search-clear" class="btn btn-secondary hidden">Clear</button>
-    <span id="ai-search-status" class="ai-search-status"></span>
+  <div class="img-search-bar" id="img-search-bar">
+    <input type="text" id="img-search-input" class="img-search-input" placeholder="Search by filename, alt text, or URL..." spellcheck="false">
+    <button class="img-search-mode" id="img-search-mode" title="Toggle regex mode">RE</button>
+    <span class="img-search-count" id="img-search-count"></span>
   </div>
 
   <div class="display-bar">

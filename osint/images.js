@@ -306,7 +306,7 @@
     // Hide filter/action bars and clear button in standalone mode
     document.querySelector(".stats-bar")?.classList.add("hidden");
     document.querySelector(".filter-bar")?.classList.add("hidden");
-    document.querySelector(".ai-search-bar")?.classList.add("hidden");
+    document.querySelector(".img-search-bar")?.classList.add("hidden");
     document.querySelector(".display-bar")?.classList.add("hidden");
     document.querySelector(".actions-bar")?.classList.add("hidden");
     document.getElementById("refresh-gallery")?.classList.add("hidden");
@@ -487,6 +487,7 @@
   let currentFilter = "all";
   let currentTypeFilter = "all";
   let searchQuery = "";
+  let searchRegexMode = false;
   let currentSizeFilter = "all"; // "all", "small", "medium", "big", "large"
   let listView = false;
   let aiMatchIndices = null; // null = no AI filter active, Set = matched image indices
@@ -1157,8 +1158,14 @@
         }
       }
       if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        if (!img.alt.toLowerCase().includes(q) && !img.src.toLowerCase().includes(q) && !img.filename.toLowerCase().includes(q)) return false;
+        const hay = [img.alt, img.src, img.filename].join(" ");
+        if (searchRegexMode) {
+          try { if (!new RegExp(searchQuery, "i").test(hay)) return false; }
+          catch { return false; }
+        } else {
+          const q = searchQuery.toLowerCase();
+          if (!hay.toLowerCase().includes(q)) return false;
+        }
       }
       if (currentColorFilter !== "all") {
         const colors = imageColors.get(img.src);
@@ -1634,8 +1641,11 @@
     });
   });
 
+  // Floating panel search input syncs with main search bar
   document.getElementById("search-input").addEventListener("input", (e) => {
     searchQuery = e.target.value.trim();
+    const mainInput = document.getElementById("img-search-input");
+    if (mainInput && mainInput.value !== searchQuery) mainInput.value = searchQuery;
     render(); saveSession();
   });
 
@@ -1975,107 +1985,51 @@
     }), 0);
   });
 
-  // ── AI Vision Search ──
+  // ── Main search bar (text / regex) ──
+  const imgSearchInput = document.getElementById("img-search-input");
+  const imgSearchMode = document.getElementById("img-search-mode");
+  const imgSearchBar = document.getElementById("img-search-bar");
+  const imgSearchCount = document.getElementById("img-search-count");
 
-  const aiInput = document.getElementById("ai-search-input");
-  const aiBtn = document.getElementById("ai-search-btn");
-  const aiClear = document.getElementById("ai-search-clear");
-  const aiStatus = document.getElementById("ai-search-status");
-
-  async function runAiSearch() {
-    const query = aiInput.value.trim();
-    if (!query || aiSearching) return;
-
-    aiSearching = true;
-    aiBtn.disabled = true;
-    aiBtn.textContent = "Searching...";
-    aiStatus.className = "ai-search-status active";
-    aiStatus.textContent = "Preparing images...";
-    aiClear.classList.add("hidden");
-
-    const searchId = `ais-${Date.now()}`;
-    // Only send vision-compatible raster images to AI (skip SVG, ICO, unknown)
-    const filtered = getFiltered().filter(img => AI_VISION_TYPES.has(img.typeNorm));
-    const skipped = getFiltered().length - filtered.length;
-
-    if (filtered.length === 0) {
-      aiSearching = false;
-      aiBtn.disabled = false;
-      aiBtn.textContent = "Search Images";
-      aiStatus.className = "ai-search-status error";
-      aiStatus.textContent = "No vision-compatible images (SVG/ICO cannot be analyzed by AI)";
-      return;
-    }
-
-    if (skipped > 0) {
-      aiStatus.textContent = `Preparing ${filtered.length} images (${skipped} SVG/ICO skipped)...`;
-    }
-
-    // Poll for progress updates
-    const progressInterval = setInterval(async () => {
-      try {
-        const key = `ai-search-progress-${searchId}`;
-        const data = (await browser.storage.local.get(key))[key];
-        if (data) {
-          aiStatus.textContent = `Scanning ${data.scanned}/${data.total} images... (${data.matches} matches)`;
+  if (imgSearchInput) {
+    imgSearchInput.addEventListener("input", () => {
+      searchQuery = imgSearchInput.value.trim();
+      // Sync floating panel input
+      const fpInput = document.getElementById("search-input");
+      if (fpInput && fpInput.value !== searchQuery) fpInput.value = searchQuery;
+      // Update count
+      if (imgSearchCount) {
+        if (searchQuery) {
+          const total = images.length;
+          const matched = getFiltered().length;
+          imgSearchCount.textContent = `${matched} / ${total}`;
+        } else {
+          imgSearchCount.textContent = "";
         }
-      } catch {}
-    }, 800);
-
-    // Build a map from filtered index → global images index
-    const filteredGlobalMap = filtered.map(img => images.indexOf(img));
-
-    try {
-      const result = await browser.runtime.sendMessage({
-        action: "aiImageSearch",
-        query,
-        images: filtered,
-        searchId
-      });
-
-      clearInterval(progressInterval);
-
-      if (result.success) {
-        // Map match indices back to global image indices
-        aiMatchIndices = new Set(result.matchIndices.map(i => filteredGlobalMap[i]));
-        aiStatus.className = "ai-search-status active";
-        const skipNote = skipped > 0 ? ` (${skipped} SVG/ICO skipped)` : "";
-        aiStatus.textContent = `Found ${aiMatchIndices.size} match${aiMatchIndices.size !== 1 ? "es" : ""} for "${query}"${skipNote}`;
-        aiClear.classList.remove("hidden");
-
-        // Auto-select matches
-        for (const idx of aiMatchIndices) {
-          if (images[idx]) selected.add(images[idx].src);
-        }
-      } else {
-        aiStatus.className = "ai-search-status error";
-        aiStatus.textContent = result.error || "AI search failed";
       }
-    } catch (e) {
-      clearInterval(progressInterval);
-      aiStatus.className = "ai-search-status error";
-      aiStatus.textContent = e.message || "AI search failed";
-    }
-
-    aiSearching = false;
-    aiBtn.disabled = false;
-    aiBtn.textContent = "Search Images";
-    render(); saveSession();
+      // Validate regex
+      if (searchRegexMode && searchQuery) {
+        try { new RegExp(searchQuery, "i"); imgSearchBar.classList.remove("search-error"); }
+        catch { imgSearchBar.classList.add("search-error"); }
+      } else {
+        imgSearchBar.classList.remove("search-error");
+      }
+      render(); saveSession();
+    });
+  }
+  if (imgSearchMode) {
+    imgSearchMode.addEventListener("click", () => {
+      searchRegexMode = !searchRegexMode;
+      imgSearchMode.classList.toggle("active", searchRegexMode);
+      imgSearchInput.classList.toggle("mono", searchRegexMode);
+      imgSearchInput.placeholder = searchRegexMode
+        ? "regex — e.g. \\.png$  logo|banner  \\d{4}x\\d{4}"
+        : "Search by filename, alt text, or URL...";
+      if (searchQuery) { render(); saveSession(); }
+    });
   }
 
-  aiBtn.addEventListener("click", runAiSearch);
-  aiInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") runAiSearch();
-  });
-
-  aiClear.addEventListener("click", () => {
-    aiMatchIndices = null;
-    aiInput.value = "";
-    aiStatus.textContent = "";
-    aiStatus.className = "ai-search-status";
-    aiClear.classList.add("hidden");
-    render(); saveSession();
-  });
+  // AI Vision Search removed — use the floating chat panel instead
 
   // ── Compare Mode ──
 
@@ -2210,6 +2164,8 @@
       searchQuery = savedSession.searchQuery;
       const searchInput = document.getElementById("search-input");
       if (searchInput) searchInput.value = searchQuery;
+      const mainInput = document.getElementById("img-search-input");
+      if (mainInput) mainInput.value = searchQuery;
     }
     if (savedSession.sortBy && savedSession.sortBy !== "default") {
       sortBy = savedSession.sortBy;
@@ -2330,9 +2286,13 @@
     // Reset color tabs
     document.querySelectorAll("#color-tabs .color-tab").forEach(b => b.classList.remove("active"));
     document.querySelector('#color-tabs .color-tab[data-color="all"]')?.classList.add("active");
-    // Reset search input
+    // Reset search inputs
     const searchInput = document.getElementById("search-input");
     if (searchInput) searchInput.value = "";
+    const mainInput = document.getElementById("img-search-input");
+    if (mainInput) mainInput.value = "";
+    if (imgSearchCount) imgSearchCount.textContent = "";
+    if (imgSearchBar) imgSearchBar.classList.remove("search-error");
     // Reset sort
     const sortSelect = document.getElementById("sort-by");
     if (sortSelect) sortSelect.value = "default";
