@@ -592,49 +592,109 @@ async function checkMonitorBookmarkStatus() {
   } catch (e) { /* ignore */ }
 }
 
+// ──────────────────────────────────────────────
+// Short / long press helper
+// ──────────────────────────────────────────────
+function addShortLongPress(el, onShort, onLong, delay = 900) {
+  let timer = null;
+  let fired = false;
+  const start = () => { fired = false; timer = setTimeout(() => { fired = true; onLong(); }, delay); };
+  const end = (e) => {
+    clearTimeout(timer);
+    timer = null;
+    if (!fired) { e.preventDefault(); onShort(); }
+  };
+  const cancel = () => { clearTimeout(timer); timer = null; };
+  el.addEventListener("mousedown", start);
+  el.addEventListener("touchstart", start, { passive: true });
+  el.addEventListener("mouseup", end);
+  el.addEventListener("touchend", end);
+  el.addEventListener("mouseleave", cancel);
+  el.addEventListener("touchcancel", cancel);
+}
+
 async function checkTrackingStatus() {
   try {
     const { trackMyPages } = await browser.storage.local.get({ trackMyPages: false });
     const badge = document.getElementById("tracking-badge");
     if (!badge) return;
-    if (trackMyPages) {
-      badge.classList.remove("hidden");
-      badge.classList.add("status-track-on");
-      badge.addEventListener("click", () => {
-        browser.tabs.create({ url: browser.runtime.getURL("options/options.html#tracker") });
-      });
-    }
+    badge.classList.remove("hidden");
+    if (trackMyPages) badge.classList.add("status-track-on");
+
+    const openSettings = () => {
+      browser.tabs.create({ url: browser.runtime.getURL("options/options.html#tracker") });
+    };
+    const toggleTracker = async () => {
+      const cur = await browser.storage.local.get({ trackMyPages: false });
+      const newState = !cur.trackMyPages;
+      await browser.storage.local.set({ trackMyPages: newState });
+      badge.classList.toggle("status-track-on", newState);
+      showToast(newState ? "Page tracking enabled" : "Page tracking disabled", newState ? "success" : "loading");
+    };
+    addShortLongPress(badge, toggleTracker, openSettings);
   } catch { /* ignore */ }
 }
 
 // ──────────────────────────────────────────────
-// Trawl Net badge — toggleable pill in status bar
+// Trawl Net badge — short press = start timer / toggle, long press = settings
 // ──────────────────────────────────────────────
 async function initTrawlBadge() {
   try {
-    const { trawlEnabled } = await browser.storage.local.get({ trawlEnabled: false });
+    const s = await browser.storage.local.get({ trawlEnabled: false, trawlExpireAt: null });
     const badge = document.getElementById("trawl-badge");
     if (!badge) return;
-    // Always show the badge so user can toggle it (like Track and Private)
     badge.classList.remove("hidden");
-    if (trawlEnabled) {
-      badge.classList.add("status-trawl-on");
-    }
-    badge.addEventListener("click", async () => {
-      const cur = await browser.storage.local.get({ trawlEnabled: false, trackMyPages: false });
-      const newState = !cur.trawlEnabled;
-      if (newState && !cur.trackMyPages) {
-        // Auto-enable Track My Pages if turning on trawl
-        await browser.storage.local.set({ trawlEnabled: true, trackMyPages: true });
-        // Also show tracking badge
-        const trackBadge = document.getElementById("tracking-badge");
-        if (trackBadge) { trackBadge.classList.remove("hidden"); trackBadge.classList.add("status-track-on"); }
-      } else {
-        await browser.storage.local.set({ trawlEnabled: newState });
+    if (s.trawlEnabled) badge.classList.add("status-trawl-on");
+
+    // Show remaining time if a timer is active
+    if (s.trawlExpireAt && s.trawlEnabled) {
+      const remainMins = Math.ceil((s.trawlExpireAt - Date.now()) / 60000);
+      if (remainMins > 0) {
+        const span = badge.querySelector("span");
+        if (span) span.textContent = "Trawl " + remainMins + "m";
       }
-      badge.classList.toggle("status-trawl-on", newState);
-      showToast(newState ? "Trawl Net enabled — collecting passively" : "Trawl Net disabled", newState ? "success" : "loading");
-    });
+    }
+
+    const openSettings = () => {
+      browser.tabs.create({ url: browser.runtime.getURL("trawl/trawl.html") });
+    };
+
+    const toggleTrawl = async () => {
+      const cur = await browser.storage.local.get({ trawlEnabled: false, trackMyPages: false, trawlDurationEnabled: false, trawlDurationMinutes: 30, trawlExpireAt: null });
+      const newState = !cur.trawlEnabled;
+
+      if (newState) {
+        if (cur.trawlDurationEnabled) {
+          // Start duration timer via background
+          await browser.runtime.sendMessage({ action: "startTrawlTimer", minutes: cur.trawlDurationMinutes });
+          badge.classList.add("status-trawl-on");
+          const remainMins = cur.trawlDurationMinutes;
+          const span = badge.querySelector("span");
+          if (span) span.textContent = "Trawl " + remainMins + "m";
+          showToast("Trawl started — " + remainMins + " min timer", "success");
+        } else {
+          // Normal toggle on
+          if (!cur.trackMyPages) {
+            await browser.storage.local.set({ trawlEnabled: true, trackMyPages: true });
+            const trackBadge = document.getElementById("tracking-badge");
+            if (trackBadge) { trackBadge.classList.remove("hidden"); trackBadge.classList.add("status-track-on"); }
+          } else {
+            await browser.storage.local.set({ trawlEnabled: true });
+          }
+          badge.classList.add("status-trawl-on");
+          showToast("Trawl Net enabled — collecting passively", "success");
+        }
+      } else {
+        // Turn off — also clear any running timer
+        await browser.runtime.sendMessage({ action: "stopTrawlTimer" });
+        badge.classList.remove("status-trawl-on");
+        const span = badge.querySelector("span");
+        if (span) span.textContent = "Trawl";
+        showToast("Trawl Net disabled", "loading");
+      }
+    };
+
+    addShortLongPress(badge, toggleTrawl, openSettings);
   } catch { /* ignore */ }
 }
 

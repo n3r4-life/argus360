@@ -472,6 +472,11 @@ const el = {
   trawlStartHour: document.getElementById("trawl-start-hour"),
   trawlEndHour: document.getElementById("trawl-end-hour"),
   trawlDayChecks: document.getElementById("trawl-day-checks"),
+  trawlDurationEnabled: document.getElementById("trawl-duration-enabled"),
+  trawlDurationPreset: document.getElementById("trawl-duration-preset"),
+  trawlDurationConfig: document.getElementById("trawl-duration-config"),
+  trawlDurationSlider: document.getElementById("trawl-duration-slider"),
+  trawlDurationLabel: document.getElementById("trawl-duration-label"),
   incognitoForceEnabled: document.getElementById("incognito-force-enabled"),
   incognitoAddDomain: document.getElementById("incognito-add-domain"),
   incognitoAddBtn: document.getElementById("incognito-add-btn"),
@@ -1319,6 +1324,8 @@ async function loadAllSettings() {
   el.trawlEnabled.checked = settings.trawlEnabled === true;
   // Trawl schedule
   loadTrawlScheduleUI();
+  // Trawl duration timer
+  loadTrawlDurationUI();
   el.incognitoForceEnabled.checked = settings.incognitoForceEnabled === true;
   renderIncognitoSites(settings.incognitoSites || []);
   el.responseLanguage.value = settings.responseLanguage ?? "auto";
@@ -3999,6 +4006,8 @@ function attachListeners() {
   });
   // Trawl Schedule
   initTrawlScheduleControls();
+  // Trawl Duration Timer
+  initTrawlDurationControls();
   el.incognitoForceEnabled.addEventListener("change", async () => {
     if (el.incognitoForceEnabled.checked) {
       // Request webNavigation permission if needed
@@ -11263,4 +11272,77 @@ function saveTrawlSchedule() {
     days: days.length ? days : [0, 1, 2, 3, 4, 5, 6], // default: all days if none checked
   };
   browser.runtime.sendMessage({ action: "setTrawlSchedule", schedule }).catch(() => {});
+}
+
+// ══════════════════════════════════════════════════════════════
+// Trawl Duration Timer — Phase 4
+// ══════════════════════════════════════════════════════════════
+
+function initTrawlDurationControls() {
+  const { trawlDurationEnabled, trawlDurationPreset, trawlDurationConfig, trawlDurationSlider, trawlDurationLabel } = el;
+
+  function updateDurationLabel(minutes) {
+    const mins = parseInt(minutes, 10);
+    if (mins < 60) {
+      trawlDurationLabel.textContent = mins + " minutes";
+    } else {
+      const h = Math.floor(mins / 60), m = mins % 60;
+      trawlDurationLabel.textContent = h + (m ? "h " + m + "m" : " hour" + (h !== 1 ? "s" : ""));
+    }
+  }
+
+  // Show/hide config panel
+  trawlDurationEnabled.addEventListener("change", () => {
+    trawlDurationConfig.style.display = trawlDurationEnabled.checked ? "block" : "none";
+    saveTrawlDuration();
+  });
+
+  // Preset dropdown → sync slider
+  trawlDurationPreset.addEventListener("change", () => {
+    const val = parseInt(trawlDurationPreset.value, 10);
+    trawlDurationSlider.value = Math.min(360, Math.max(15, val));
+    updateDurationLabel(val);
+    saveTrawlDuration();
+  });
+
+  // Slider → sync preset dropdown when it matches a preset value
+  trawlDurationSlider.addEventListener("input", () => {
+    const val = parseInt(trawlDurationSlider.value, 10);
+    updateDurationLabel(val);
+    const presets = [30, 60, 120, 180, 240, 360];
+    if (presets.includes(val)) trawlDurationPreset.value = val;
+  });
+  trawlDurationSlider.addEventListener("change", saveTrawlDuration);
+}
+
+async function loadTrawlDurationUI() {
+  try {
+    const resp = await browser.runtime.sendMessage({ action: "getTrawlDuration" });
+    if (!resp?.success) return;
+    el.trawlDurationEnabled.checked = resp.enabled === true;
+    el.trawlDurationConfig.style.display = resp.enabled ? "block" : "none";
+    const mins = resp.minutes || 30;
+    // Set preset dropdown (snap to nearest if not exact)
+    const presets = [30, 60, 120, 180, 240, 360];
+    const nearest = presets.reduce((a, b) => Math.abs(b - mins) < Math.abs(a - mins) ? b : a);
+    el.trawlDurationPreset.value = nearest;
+    el.trawlDurationSlider.value = Math.min(360, Math.max(15, mins));
+    const label = el.trawlDurationLabel;
+    if (label) {
+      if (mins < 60) label.textContent = mins + " minutes";
+      else {
+        const h = Math.floor(mins / 60), m = mins % 60;
+        label.textContent = h + (m ? "h " + m + "m" : " hour" + (h !== 1 ? "s" : ""));
+      }
+    }
+  } catch {}
+}
+
+function saveTrawlDuration() {
+  const minutes = parseInt(el.trawlDurationSlider.value, 10) || parseInt(el.trawlDurationPreset.value, 10) || 30;
+  browser.runtime.sendMessage({
+    action: "setTrawlDuration",
+    enabled: el.trawlDurationEnabled.checked,
+    minutes
+  }).catch(() => {});
 }

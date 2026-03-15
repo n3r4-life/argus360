@@ -1894,6 +1894,26 @@ browser.runtime.onMessage.addListener((message, sender) => {
   // Trawl Schedule
   if (message.action === "getTrawlSchedule") return browser.storage.local.get({ trawlSchedule: null }).then(s => ({ success: true, schedule: s.trawlSchedule }));
   if (message.action === "setTrawlSchedule") return browser.storage.local.set({ trawlSchedule: message.schedule }).then(() => ({ success: true }));
+  // Trawl Duration Timer
+  if (message.action === "getTrawlDuration") return browser.storage.local.get({ trawlDurationEnabled: false, trawlDurationMinutes: 30, trawlExpireAt: null }).then(s => ({ success: true, enabled: s.trawlDurationEnabled, minutes: s.trawlDurationMinutes, expireAt: s.trawlExpireAt }));
+  if (message.action === "setTrawlDuration") return browser.storage.local.set({ trawlDurationEnabled: message.enabled, trawlDurationMinutes: message.minutes }).then(() => ({ success: true }));
+  if (message.action === "startTrawlTimer") {
+    const mins = message.minutes || (await browser.storage.local.get({ trawlDurationMinutes: 30 })).trawlDurationMinutes;
+    const expireAt = Date.now() + mins * 60 * 1000;
+    await browser.storage.local.set({ trawlEnabled: true, trackMyPages: true, trawlExpireAt: expireAt });
+    browser.alarms.create("trawl-duration-expire", { when: expireAt });
+    return { success: true, expireAt };
+  }
+  if (message.action === "stopTrawlTimer") {
+    browser.alarms.clear("trawl-duration-expire");
+    await browser.storage.local.set({ trawlEnabled: false, trawlExpireAt: null });
+    return { success: true };
+  }
+  if (message.action === "getTrawlTimerStatus") {
+    const s = await browser.storage.local.get({ trawlExpireAt: null, trawlEnabled: false });
+    const remainingMs = s.trawlExpireAt ? Math.max(0, s.trawlExpireAt - Date.now()) : null;
+    return { success: true, active: !!(s.trawlExpireAt && s.trawlEnabled), expireAt: s.trawlExpireAt, remainingMs };
+  }
   // Trawl → GeoMap
   if (message.action === "buildGeomapFromTrawl") return handleBuildGeomapFromTrawl(message);
   // Trawl → Save session as project
@@ -7149,6 +7169,11 @@ browser.alarms.onAlarm.addListener(async (alarm) => {
 });
 
 // Knowledge Graph inference alarm handler
+browser.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== "trawl-duration-expire") return;
+  await browser.storage.local.set({ trawlEnabled: false, trawlExpireAt: null });
+});
+
 browser.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== "kg-inference") return;
   try {

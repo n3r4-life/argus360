@@ -88,9 +88,9 @@
 
   <!-- View toggle tabs -->
   <nav class="view-tabs">
-    <button class="pill-chip active" data-view="table" title="Sortable data table">Table</button>
+    <button class="pill-chip" data-view="table" title="Sortable data table">Table</button>
     <button class="pill-chip" data-view="timeline" title="Chronological session timeline">Timeline</button>
-    <button class="pill-chip" data-view="cloud" title="Weighted contact cloud">Cloud</button>
+    <button class="pill-chip active" data-view="cloud" title="Weighted contact cloud">Cloud</button>
     <span style="flex:1"></span>
     <button class="pill-chip" id="copy-emails" title="Copy all emails to clipboard">Copy Emails</button>
     <button class="pill-chip" id="copy-phones" title="Copy all phones to clipboard">Copy Phones</button>
@@ -101,9 +101,9 @@
 
   <!-- Main content views -->
   <main>
-    <div id="view-table"></div>
+    <div id="view-table" class="hidden"></div>
     <div id="view-timeline" class="hidden"></div>
-    <div id="view-cloud" class="hidden"></div>
+    <div id="view-cloud"></div>
     <div id="empty-state" class="empty-state hidden">
       <h2>No Trawl Data Yet</h2>
       <p>Enable Trawl Net from the popup toolbar, then browse naturally. Contact data, business info, and metadata will be collected passively from every page you visit.</p>

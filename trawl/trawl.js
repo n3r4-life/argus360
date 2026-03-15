@@ -8,7 +8,7 @@
   let allEntries = [];       // PageTracker entries with trawlData
   let filtered = [];         // after search + date filter
   let domainClusters = {};   // hostname → { entries, score, bestEntry, favicon }
-  let activeView = "table";
+  let activeView = "cloud";
   let regexMode = false;
   let sortCol = "score";
   let sortAsc = false;

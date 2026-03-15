@@ -2450,7 +2450,7 @@
               <span class="hint">Record every page you visit and every Argus action you take — stored in IndexedDB, independent of browser history. Clearing your browser cache or history will NOT delete this data.</span>
             </div>
           </div>
-          <div class="form-row" style="margin-top:8px;">
+          <div class="form-row" style="margin-top:8px;" id="settings-trawl">
             <div class="form-group flex-1">
               <label class="toggle-label">
                 <input type="checkbox" id="trawl-enabled">
@@ -2482,6 +2482,37 @@
                   <label class="toggle-label" style="font-size:11px;"><input type="checkbox" data-day="4"><span>Thu</span></label>
                   <label class="toggle-label" style="font-size:11px;"><input type="checkbox" data-day="5"><span>Fri</span></label>
                   <label class="toggle-label" style="font-size:11px;"><input type="checkbox" data-day="6"><span>Sat</span></label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Trawl Duration Timer -->
+          <div class="form-row" style="margin-top:8px;" id="trawl-duration-row">
+            <div class="form-group flex-1">
+              <div style="display:flex;gap:8px;align-items:center;">
+                <label class="toggle-label">
+                  <input type="checkbox" id="trawl-duration-enabled">
+                  <span>Duration Timer</span>
+                </label>
+                <select id="trawl-duration-preset" class="select-compact" style="width:80px;" title="Preset trawl duration">
+                  <option value="30">30 min</option>
+                  <option value="60">1 hr</option>
+                  <option value="120">2 hr</option>
+                  <option value="180">3 hr</option>
+                  <option value="240">4 hr</option>
+                  <option value="360">6 hr</option>
+                </select>
+              </div>
+              <span class="hint">Short-press the Trawl badge in the popup to start a timed session. Trawl auto-stops when the timer expires.</span>
+              <div id="trawl-duration-config" style="display:none;margin-top:10px;">
+                <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
+                  <span style="font-size:11px;color:var(--text-secondary);white-space:nowrap;">On till off —</span>
+                  <span id="trawl-duration-label" style="font-size:11px;font-weight:600;color:var(--accent);">30 minutes</span>
+                </div>
+                <input type="range" id="trawl-duration-slider" min="15" max="360" step="15" value="30"
+                  style="width:100%;accent-color:var(--accent);cursor:pointer;" title="Drag to set duration">
+                <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-top:2px;">
+                  <span>15m</span><span>1h</span><span>2h</span><span>3h</span><span>4h</span><span>6h</span>
                 </div>
               </div>
             </div>
