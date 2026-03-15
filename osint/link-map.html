@@ -16,10 +16,18 @@
     <div class="header-left">
       <img src="../icons/icon-32.png" alt="" class="header-icon">
       <h1 class="header-title">Link Map</h1>
+      <select id="project-select" class="select-compact header-project-select" title="Active project context for AI chat">
+        <option value="">No project</option>
+      </select>
     </div>
     <div class="header-right">
-      <button id="history-btn" class="btn btn-secondary" title="Browse previous link map scans">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <button id="import-bookmarks-btn" class="pill-chip" title="Import bookmarks HTML file from any browser">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Import
+      </button>
+      <input type="file" id="import-bookmarks-file" accept=".html,.htm" style="display:none">
+      <button id="history-btn" class="pill-chip" title="Browse previous link map scans">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         History
       </button>
       <a id="page-url" class="page-url" href="#" target="_blank" title="Open analyzed page"></a>
@@ -51,8 +59,8 @@
       <span>Cached version from <strong id="cacheDate"></strong></span>
     </div>
     <div class="cache-banner-right">
-      <button class="cache-refresh-btn" id="cacheRefresh" title="Re-scan page and compare changes">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      <button class="pill-chip" id="cacheRefresh" title="Re-scan page and compare changes" style="background:rgba(100,180,255,0.15);color:#64b4ff;border-color:rgba(100,180,255,0.3);">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         Refresh &amp; Compare
       </button>
     </div>
@@ -87,39 +95,59 @@
   </section>
 
   <nav class="filter-tabs">
-    <button class="tab active" data-filter="all">All</button>
-    <button class="tab" data-filter="external">External</button>
-    <button class="tab" data-filter="internal">Internal</button>
-    <button class="tab" data-filter="social">Social</button>
-    <button class="tab" data-filter="emails">Email</button>
-    <button class="tab" data-filter="phones">Phone</button>
-    <button class="tab" data-filter="files">Files</button>
+    <button class="pill-chip active" data-filter="all">All</button>
+    <button class="pill-chip" data-filter="external">External</button>
+    <button class="pill-chip" data-filter="internal">Internal</button>
+    <button class="pill-chip" data-filter="social">Social</button>
+    <button class="pill-chip" data-filter="emails">Email</button>
+    <button class="pill-chip" data-filter="phones">Phone</button>
+    <button class="pill-chip" data-filter="files">Files</button>
+    <span style="width:1px;height:18px;background:var(--border);margin:0 4px;flex-shrink:0"></span>
+    <span class="domain-pill-wrapper" style="position:relative">
+      <button class="pill-chip" id="domains-pill" title="View domain breakdown">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+        Domains <span id="domains-pill-count" style="opacity:0.6"></span>
+      </button>
+      <div class="domain-breakdown hidden" id="domain-breakdown"></div>
+    </span>
+    <button class="pill-chip hidden" id="folders-pill" title="Group links by bookmark folder">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+      Folders
+    </button>
   </nav>
 
   <div class="actions-bar">
     <div class="actions-left">
       <div class="project-picker-wrapper">
-        <button id="add-to-project" class="btn btn-secondary" title="Add all links to a project">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button id="add-to-project" class="pill-chip" title="Add all links to a project">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
           </svg>
           To Project
         </button>
         <div id="project-picker" class="project-picker hidden"></div>
       </div>
-      <button id="export-csv" class="btn btn-secondary" title="Export current view as CSV">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <button id="export-csv" class="pill-chip" title="Export current view as CSV">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
           <polyline points="7 10 12 15 17 10"/>
           <line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
         Export View
       </button>
-      <button id="xref-sources-btn" class="btn btn-secondary" title="Cross-reference all links against your saved sources">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <button id="xref-sources-btn" class="pill-chip" title="Cross-reference all links against your saved sources">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
         X-Ref Sources
+      </button>
+      <button id="collect-all-btn" class="tool-chip" title="Add all visible links to collector">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73L13 2.27a2 2 0 0 0-2 0L4 6.27A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+          <line x1="12" y1="22.08" x2="12" y2="12"/>
+        </svg>
+        Collect All
       </button>
     </div>
   </div>
@@ -127,6 +155,7 @@
   <div class="search-bar">
     <input type="text" id="link-search" class="link-search-input" placeholder="Search links... supports: term1 | term2 &middot; /regex/ &middot; &quot;exact phrase&quot;">
     <button id="search-mode-toggle" class="search-mode-btn" title="Toggle regex mode">RE</button>
+    <button id="search-clear" class="pill-chip" title="Clear search">Clear</button>
     <span id="search-count" class="search-count"></span>
   </div>
 
@@ -136,7 +165,7 @@
     </div>
   </main>
 
-  <div id="argus-chat-container" style="padding:16px 20px;"></div>
+  <div id="argus-chat-container" class="lm-chat-bar"></div>
 
   <!-- ── Collector panel (floating) ── -->
   <button class="collector-tab" id="collectorTab" title="Collector">
@@ -174,7 +203,7 @@
     </div>
     <div class="collector-list" id="collectorList"></div>
     <div class="collector-footer">
-      <button class="collector-export-btn" id="collectorExport" title="Export collected items as CSV">
+      <button class="pill-chip" id="collectorExport" title="Export collected items as CSV">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
           <polyline points="7 10 12 15 17 10"/>
@@ -182,12 +211,26 @@
         </svg>
         Export
       </button>
-      <span class="collector-count" id="collectorCount">0 items</span>
-      <button class="collector-xref-btn" id="collectorXref" title="Cross-reference with sources">
+      <button class="pill-chip" id="collectorXref" title="Cross-reference with sources">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
-        X-Ref Sources
+        X-Ref
+      </button>
+      <span class="collector-count" id="collectorCount">0 items</span>
+    </div>
+    <div class="collector-actions">
+      <button class="tool-chip" id="collectorToMonitors" title="Add collected links as monitored pages">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        + Monitor
+      </button>
+      <button class="tool-chip" id="collectorToSources" title="Add collected items as a source">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        + Source
+      </button>
+      <button class="tool-chip" id="collectorToKG" title="Create Knowledge Graph entities from collected items">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="8" x2="5" y2="16"/><line x1="12" y1="8" x2="19" y2="16"/></svg>
+        + KG Entity
       </button>
     </div>
   </div>

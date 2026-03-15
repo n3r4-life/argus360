@@ -271,6 +271,36 @@ body {
 .status-chip svg { flex-shrink: 0; }
 
 /*
+ * APC pill — Active Project Context toggle
+ * Standard checkbox-label pill used on popup and all chat bars.
+ * Off: muted border text. On: accent fill, white text.
+ */
+.apc-pill {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  user-select: none;
+}
+.apc-pill input[type="checkbox"] { display: none; }
+.apc-pill span {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-muted);
+  background: transparent;
+  transition: all 0.15s;
+}
+.apc-pill input:checked + span {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/*
  * Mode toggles — rounded pill buttons with icon
  */
 .mode-btn {
@@ -334,6 +364,18 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
 }
 .select-compact:hover { border-color: var(--accent); color: var(--text-primary); }
 .select-compact:focus { outline: none; border-color: var(--accent); }
+
+/* Header project selector — sits inline with page title */
+.header-project-select {
+  max-width: 180px;
+  font-size: 11px;
+  padding: 4px 24px 4px 8px;
+  opacity: 0.7;
+  transition: opacity 0.15s, border-color 0.15s;
+}
+.header-project-select:hover,
+.header-project-select:focus { opacity: 1; }
+.header-project-select.has-project { opacity: 1; border-color: var(--accent); color: var(--accent); }
 
 /* ── Floating Panel Standard ──
  *

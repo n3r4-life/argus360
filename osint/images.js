@@ -479,6 +479,11 @@
 
   // State
   const selected = new Set();
+  const visionQueue = new Set();   // up to MAX_VISION images queued for AI vision
+  const MAX_VISION = 5;
+  const SKIP_VISION_TYPES = new Set(["ico"]);
+  const SVG_AS_TEXT_TYPES = new Set(["svg"]);
+  let visionEnabled = false;
   let currentFilter = "all";
   let currentTypeFilter = "all";
   let searchQuery = "";
@@ -492,52 +497,342 @@
   // multi-tab filter uses enabledTabs Set (defined in setup below)
   const imageColors = new Map(); // src → Set of dominant color names
 
-  // Discuss with AI — standard ArgusChat component
+  // ── Project selector (header dropdown) ──
+  let selectedProjectId = null;
+  {
+    const sel = document.getElementById("project-select");
+    if (sel) {
+      try {
+        const [resp, defResp] = await Promise.all([
+          browser.runtime.sendMessage({ action: "getProjects" }),
+          browser.runtime.sendMessage({ action: "getDefaultProject" })
+        ]);
+        const projects = resp?.projects || [];
+        const defaultId = defResp?.defaultProjectId || null;
+        if (!projects.length) { sel.style.display = "none"; }
+        else {
+          function refreshOptions() {
+            sel.innerHTML = '<option value="">No project</option>';
+            for (const p of projects) {
+              const opt = document.createElement("option");
+              opt.value = p.id;
+              let label = "";
+              if (p.id === selectedProjectId) label += "✓ ";
+              label += p.name;
+              if (p.id === defaultId) label += " ★";
+              opt.textContent = label;
+              sel.appendChild(opt);
+            }
+            sel.value = selectedProjectId || "";
+          }
+          selectedProjectId = defaultId || null;
+          sel.classList.toggle("has-project", !!selectedProjectId);
+          refreshOptions();
+
+          sel.addEventListener("change", () => {
+            selectedProjectId = sel.value || null;
+            sel.classList.toggle("has-project", !!sel.value);
+            refreshOptions();
+            // Notify chat block to invalidate cache & refresh
+            if (window._onProjectChange) window._onProjectChange();
+          });
+        }
+      } catch { sel.style.display = "none"; }
+    }
+  }
+
+  // Discuss with AI — four combinable context toggles:
+  // Page (all image metadata), Selected (selected metadata), Upload Images (pixels), Project (digest)
   {
     const typeSummary = Object.entries(typeCounts).map(([t, c]) => `${t.toUpperCase()}: ${c}`).join(", ");
+    let includePage = true;
+    let includeSelected = true;
+    let includeProject = false;
+    let cachedProjectDigest = null;
+
+    async function loadProjectDigest() {
+      if (!selectedProjectId) { cachedProjectDigest = null; return; }
+      try {
+        const resp = await browser.runtime.sendMessage({ action: "getProjects" });
+        const projects = resp?.projects || [];
+        const p = projects.find(pr => pr.id === selectedProjectId);
+        if (!p) { cachedProjectDigest = null; return; }
+        const lines = [`Project: ${p.name}`];
+        if (p.description) lines.push(`  Description: ${p.description}`);
+        if (p.items?.length) {
+          lines.push(`  Items (${p.items.length}):`);
+          p.items.slice(0, 20).forEach(item => {
+            lines.push(`    - [${item.type || 'note'}] ${item.title || item.url || item.summary || '(untitled)'}`);
+          });
+        }
+        cachedProjectDigest = lines.join('\n');
+      } catch {
+        cachedProjectDigest = null;
+      }
+    }
 
     function buildChatContext() {
-      const lines = [
-        `Page: ${pageTitle || pageUrl || "Unknown"}`,
-        `Total images: ${images.length}`,
-        `Types: ${typeSummary}`,
-        `Sources: IMG=${stats?.bySource?.img || 0}, CSS-BG=${stats?.bySource?.["css-bg"] || 0}, Meta=${stats?.bySource?.meta || 0}, Favicon=${stats?.bySource?.favicon || 0}`,
-      ];
-      if (selected.size > 0) {
+      const lines = [];
+      if (includePage) {
+        lines.push(
+          `Page: ${pageTitle || pageUrl || "Unknown"}`,
+          `Total images: ${images.length}`,
+          `Types: ${typeSummary}`,
+          `Sources: IMG=${stats?.bySource?.img || 0}, CSS-BG=${stats?.bySource?.["css-bg"] || 0}, Meta=${stats?.bySource?.meta || 0}, Favicon=${stats?.bySource?.favicon || 0}`,
+        );
+        if (images.length <= 200) {
+          lines.push("\nAll images:");
+          images.forEach((img, i) => {
+            const name = img.filename || img.src?.split("/").pop()?.split("?")[0] || "unknown";
+            lines.push(`${i + 1}. ${name} (${img.typeNorm || "?"}, ${img.width || "?"}x${img.height || "?"}, src: ${img.source || "?"})`);
+          });
+        }
+      }
+      if (includeSelected && selected.size > 0) {
         lines.push(`\nSelected images (${selected.size}):`);
         images.forEach((img) => {
           if (!selected.has(img.src)) return;
           const name = img.filename || img.src?.split("/").pop()?.split("?")[0] || "unknown";
-          lines.push(`  - ${name} (${img.typeNorm || "?"}, ${img.width || "?"}x${img.height || "?"}, src: ${img.source || "?"}, url: ${img.src})`);
-        });
-        lines.push("");
-      }
-      if (images.length <= 200) {
-        lines.push("All images:");
-        images.forEach((img, i) => {
-          const name = img.filename || img.src?.split("/").pop()?.split("?")[0] || "unknown";
-          lines.push(`${i + 1}. ${name} (${img.typeNorm || "?"}, ${img.width || "?"}x${img.height || "?"}, src: ${img.source || "?"})`);
+          const inVQ = visionQueue.has(img.src) ? " [UPLOADING]" : "";
+          lines.push(`  - ${name} (${img.typeNorm || "?"}, ${img.width || "?"}x${img.height || "?"}, src: ${img.source || "?"}, url: ${img.src})${inVQ}`);
         });
       }
+      // Include raw SVG source for any SVGs in the vision queue
+      if (visionEnabled && visionQueue.size > 0) {
+        const svgSrcs = [...visionQueue].filter(src => SVG_AS_TEXT_TYPES.has(images.find(i => i.src === src)?.typeNorm));
+        if (svgSrcs.length > 0) {
+          lines.push("\n--- SVG Source Data (raw XML) ---");
+          lines.push("These SVGs are included as raw markup so you can analyze their structure, paths, and attributes:");
+          for (const src of svgSrcs) {
+            const img = images.find(i => i.src === src);
+            const name = img?.filename || src.split("/").pop()?.split("?")[0] || "unknown.svg";
+            const cached = window._svgSourceCache?.get(src);
+            if (cached) {
+              lines.push(`\n[SVG: ${name}]`);
+              lines.push(cached);
+            } else {
+              lines.push(`\n[SVG: ${name}] (source not yet fetched — will load on send)`);
+            }
+          }
+          lines.push("--- End SVG Data ---");
+        }
+      }
+      if (includeProject && cachedProjectDigest) {
+        lines.push("\n--- Project Context ---");
+        lines.push(cachedProjectDigest);
+      }
+      if (lines.length === 0) lines.push("No context selected. Toggle Page, Selected, or Project to include data.");
       return lines.join("\n");
     }
 
+    // SVG source cache — fetched lazily when SVGs enter the vision queue
+    if (!window._svgSourceCache) window._svgSourceCache = new Map();
+
+    async function fetchSvgSource(src) {
+      if (window._svgSourceCache.has(src)) return;
+      try {
+        const resp = await fetch(src);
+        const text = await resp.text();
+        // Trim to reasonable size (50KB max per SVG)
+        const trimmed = text.length > 50000 ? text.slice(0, 50000) + "\n<!-- ... SVG truncated at 50KB -->" : text;
+        window._svgSourceCache.set(src, trimmed);
+        ArgusChat.updateContext(buildChatContext());
+      } catch {
+        window._svgSourceCache.set(src, `<!-- Failed to fetch SVG from ${src} -->`);
+      }
+    }
+
+    // Toggle a specific image in/out of vision queue
+    function toggleVisionImage(src) {
+      if (visionQueue.has(src)) {
+        visionQueue.delete(src);
+      } else if (visionQueue.size < MAX_VISION && !SKIP_VISION_TYPES.has(images.find(i => i.src === src)?.typeNorm)) {
+        visionQueue.add(src);
+        // If it's an SVG, fetch its source for text context
+        const img = images.find(i => i.src === src);
+        if (img && SVG_AS_TEXT_TYPES.has(img.typeNorm)) {
+          fetchSvgSource(src);
+        }
+      }
+      updateVisionCards();
+      updateVisionCount();
+    }
+    // Expose for card rendering
+    window._toggleVisionImage = toggleVisionImage;
+
+    const container = document.getElementById("argus-chat-container");
+
+    // Init chat first so toggle DOM exists
     ArgusChat.init({
-      container: document.getElementById("argus-chat-container"),
+      container,
       contextType: "Image Grabber",
       contextData: buildChatContext(),
       pageTitle: pageTitle || "",
       getImageUrls: () => {
-        // Return URLs of selected images (skip SVGs and ICOs — not useful for vision)
-        const skipTypes = new Set(["svg", "ico"]);
-        return images
-          .filter(img => selected.has(img.src) && !skipTypes.has(img.typeNorm))
-          .slice(0, 5)
-          .map(img => img.src);
+        if (!visionEnabled || visionQueue.size === 0) return [];
+        // Only return raster images — SVGs go as text context via buildChatContext
+        return [...visionQueue]
+          .filter(src => !SVG_AS_TEXT_TYPES.has(images.find(i => i.src === src)?.typeNorm))
+          .slice(0, MAX_VISION);
       }
     });
 
-    window._refreshChatContext = () => ArgusChat.updateContext(buildChatContext());
+    // Context toggles — appended after chat toggle for inline flex layout
+    const modeRow = document.createElement("div");
+    modeRow.className = "ig-chat-mode-row";
+
+    // Page toggle — all image metadata
+    const pageBtn = document.createElement("button");
+    pageBtn.className = "pill-chip active";
+    pageBtn.innerHTML = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Page';
+    pageBtn.title = "Include all page image metadata as AI context";
+    pageBtn.addEventListener("click", () => {
+      includePage = !includePage;
+      pageBtn.classList.toggle("active", includePage);
+      ArgusChat.updateContext(buildChatContext());
+    });
+    modeRow.appendChild(pageBtn);
+
+    // Selected toggle — selected image metadata
+    const selBtn = document.createElement("button");
+    selBtn.className = "pill-chip active";
+    selBtn.innerHTML = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> <span class="ig-sel-count">0</span> Selected';
+    selBtn.title = "Include selected image metadata as AI context";
+    selBtn.addEventListener("click", () => {
+      includeSelected = !includeSelected;
+      selBtn.classList.toggle("active", includeSelected);
+      ArgusChat.updateContext(buildChatContext());
+    });
+    modeRow.appendChild(selBtn);
+
+    // Upload Images toggle — activates vision queue for actual pixel upload
+    const visionBtn = document.createElement("button");
+    visionBtn.className = "pill-chip";
+    visionBtn.title = `Upload up to ${MAX_VISION} selected images for AI visual analysis`;
+    visionBtn.innerHTML = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Upload Images <span class="ig-vision-count"></span>';
+    visionBtn.addEventListener("click", () => {
+      visionEnabled = !visionEnabled;
+      visionBtn.classList.toggle("active", visionEnabled);
+      if (visionEnabled) {
+        // Auto-enable Page + Selected — images without context is useless
+        if (!includePage) {
+          includePage = true;
+          pageBtn.classList.add("active");
+        }
+        if (!includeSelected) {
+          includeSelected = true;
+          selBtn.classList.add("active");
+        }
+      } else {
+        visionQueue.clear();
+      }
+      updateVisionCards();
+      updateVisionCount();
+      ArgusChat.updateContext(buildChatContext());
+    });
+    modeRow.appendChild(visionBtn);
+
+    // APC pill — same style as popup, loads project digest on first check
+    const apcLabel = document.createElement("label");
+    apcLabel.className = "apc-pill";
+    apcLabel.title = "Add Project Context — include project data in AI conversation";
+    const apcCb = document.createElement("input");
+    apcCb.type = "checkbox";
+    const apcSpan = document.createElement("span");
+    apcSpan.textContent = "APC";
+    apcLabel.appendChild(apcCb);
+    apcLabel.appendChild(apcSpan);
+    apcLabel.addEventListener("click", (e) => e.stopPropagation());
+    apcCb.addEventListener("change", async () => {
+      includeProject = apcCb.checked;
+      if (includeProject && !selectedProjectId) {
+        includeProject = false;
+        apcCb.checked = false;
+        apcLabel.title = "Select a project from the header dropdown first";
+        return;
+      }
+      if (includeProject && !cachedProjectDigest) {
+        apcSpan.textContent = "...";
+        await loadProjectDigest();
+        apcSpan.textContent = "APC";
+        if (!cachedProjectDigest) {
+          includeProject = false;
+          apcCb.checked = false;
+          apcLabel.title = "Could not load project data";
+        }
+      }
+      ArgusChat.updateContext(buildChatContext());
+    });
+    modeRow.appendChild(apcLabel);
+
+    // Wire project dropdown changes to refresh digest
+    window._onProjectChange = async () => {
+      cachedProjectDigest = null;
+      if (includeProject) {
+        await loadProjectDigest();
+        ArgusChat.updateContext(buildChatContext());
+      }
+    };
+
+    container.appendChild(modeRow);
+
+    function updateVisionCount() {
+      selBtn.querySelector(".ig-sel-count").textContent = selected.size;
+      const vcSpan = visionBtn.querySelector(".ig-vision-count");
+      vcSpan.textContent = visionEnabled ? `(${visionQueue.size}/${MAX_VISION})` : "";
+    }
+
+    // Add/remove green "AI" badges on image cards based on visionQueue
+    function updateVisionCards() {
+      document.querySelectorAll(".image-card").forEach(card => {
+        const src = card.dataset.src;
+        const inQueue = visionEnabled && visionQueue.has(src);
+        const canAdd = visionEnabled && selected.has(src) && !visionQueue.has(src)
+          && visionQueue.size < MAX_VISION && !SKIP_VISION_TYPES.has(images.find(i => i.src === src)?.typeNorm);
+        card.classList.toggle("vision-queued", inQueue);
+
+        // Active badge — image will be uploaded to AI (or SVG sent as XML)
+        const imgData = images.find(i => i.src === src);
+        const isSvg = imgData && SVG_AS_TEXT_TYPES.has(imgData.typeNorm);
+        let badge = card.querySelector(".vision-badge");
+        if (inQueue && !badge) {
+          badge = document.createElement("button");
+          badge.className = "vision-badge";
+          badge.innerHTML = isSvg ? '&lt;/&gt; SVG Source' : '&#x2713; Upload';
+          badge.title = isSvg ? "SVG XML will be sent as text to AI — click to remove" : "This image will be uploaded to AI — click to remove";
+          badge.addEventListener("click", (e) => { e.stopPropagation(); toggleVisionImage(src); });
+          card.appendChild(badge);
+        } else if (!inQueue && badge) {
+          badge.remove();
+        }
+
+        // Ghost badge — can be added to upload queue
+        let ghostBadge = card.querySelector(".vision-badge-add");
+        if (canAdd && !ghostBadge) {
+          ghostBadge = document.createElement("button");
+          ghostBadge.className = "vision-badge-add";
+          ghostBadge.textContent = isSvg ? "+ SVG Source" : "+ Upload";
+          ghostBadge.title = isSvg ? "Include raw SVG XML as AI context" : "Upload this image to AI for visual analysis";
+          ghostBadge.addEventListener("click", (e) => { e.stopPropagation(); toggleVisionImage(src); });
+          card.appendChild(ghostBadge);
+        } else if (!canAdd && ghostBadge) {
+          ghostBadge.remove();
+        }
+      });
+    }
+    // Expose for updateSelectedCount
+    window._updateVisionCards = updateVisionCards;
+
+    window._refreshChatContext = () => {
+      // Prune vision queue — remove any images no longer selected
+      for (const src of [...visionQueue]) {
+        if (!selected.has(src)) visionQueue.delete(src);
+      }
+      updateVisionCards();
+      updateVisionCount();
+      ArgusChat.updateContext(buildChatContext());
+    };
+    updateVisionCount();
   }
 
   // ── Session Persistence ──

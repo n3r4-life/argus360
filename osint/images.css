@@ -827,19 +827,113 @@ body {
   flex-wrap: wrap;
 }
 
-/* AI Chat — fixed centered at viewport bottom, panel opens upward */
-#argus-chat-container .argus-chat-panel {
+/* AI Chat — fixed centered at viewport bottom, consistent chat bar pattern */
+.ig-chat-bar {
+  position: fixed;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(22, 33, 62, 0.88);
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+}
+.ig-chat-bar .argus-chat-toggle { flex-shrink: 0; }
+.ig-chat-bar .argus-chat-panel {
   position: absolute;
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
   width: 560px;
   max-width: 90vw;
-  margin-top: 0;
   margin-bottom: 8px;
   max-height: 60vh;
+  border-radius: 8px;
   box-shadow: 0 -4px 24px rgba(0,0,0,0.4);
   z-index: 101;
+}
+/* Context indicator pills + vision toggle inline next to chat toggle */
+.ig-chat-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.ig-chat-mode-row .pill-chip {
+  font-size: 9px;
+  padding: 2px 7px;
+  min-height: 0;
+  gap: 3px;
+  display: inline-flex;
+  align-items: center;
+}
+.ig-chat-mode-row .pill-chip svg { flex-shrink: 0; }
+.ig-vision-count {
+  font-weight: 700;
+  font-size: 9px;
+  color: var(--accent);
+}
+.ig-sel-count {
+  font-weight: 700;
+}
+
+/* Vision queue — green highlight + AI badge on queued image cards */
+.image-card.vision-queued {
+  outline: 2px solid var(--success);
+  outline-offset: -2px;
+}
+.vision-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(76, 175, 80, 0.9);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  z-index: 5;
+  transition: all 0.12s;
+  font-family: inherit;
+  line-height: 1;
+}
+.vision-badge:hover {
+  background: rgba(255, 82, 82, 0.9);
+}
+/* Ghost "+ AI" badge — shown on selected cards that can be added to vision queue */
+.vision-badge-add {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(76, 175, 80, 0.25);
+  color: var(--success);
+  border: 1px dashed rgba(76, 175, 80, 0.5);
+  cursor: pointer;
+  z-index: 5;
+  opacity: 0;
+  transition: all 0.12s;
+  font-family: inherit;
+  line-height: 1;
+}
+.image-card:hover .vision-badge-add { opacity: 1; }
+.vision-badge-add:hover {
+  background: rgba(76, 175, 80, 0.6);
+  color: #fff;
+  border-style: solid;
 }
 
 /* ── Session History Timeline ── */

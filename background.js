@@ -1612,6 +1612,12 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "retypeKGEntities") return KnowledgeGraph.retypeEntities().then(r => ({ success: true, ...r }));
   if (message.action === "clearKG") return ArgusDB.KGNodes.clear().then(() => ArgusDB.KGEdges.clear()).then(() => browser.storage.local.remove("_kg_backfill_done")).then(() => ({ success: true }));
   if (message.action === "reindexKG") return browser.storage.local.remove(["_kg_backfill_done", "_kg_backfill_at"]).then(() => KnowledgeGraph.backfillFromHistory()).then(r => ({ success: true, ...r }));
+  if (message.action === "extractAndUpsert") {
+    const { text, pageUrl, pageTitle } = message;
+    return KnowledgeGraph.extractAndUpsert(text, pageUrl, pageTitle, null)
+      .then(r => ({ success: true, ...(r || {}) }))
+      .catch(e => ({ success: false, error: e.message }));
+  }
   // ── Vault (encryption / passcode lock) ──
   if (message.action === "vaultGetStatus") return ArgusVault.getStatus();
   if (message.action === "vaultSetup") return ArgusVault.setup(message.passcode, message.type);
@@ -3908,7 +3914,13 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
       if (resp.success) {
         const storeKey = `images-${Date.now()}`;
         await browser.storage.local.set({ [storeKey]: { pageUrl: resp.pageUrl, pageTitle: resp.pageTitle, images: resp.images, stats: resp.stats } });
-        browser.tabs.create({ url: browser.runtime.getURL(`osint/images.html?id=${encodeURIComponent(storeKey)}`) });
+        const targetUrl = browser.runtime.getURL(`osint/images.html?id=${encodeURIComponent(storeKey)}`);
+        const existing = (await browser.tabs.query({ url: browser.runtime.getURL('osint/images.html*') }))[0];
+        if (existing) {
+          browser.tabs.update(existing.id, { url: targetUrl, active: true });
+        } else {
+          browser.tabs.create({ url: targetUrl });
+        }
       } else {
         safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus", message: `Image grab failed: ${resp.error}` });
       }
@@ -4081,7 +4093,13 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
       if (result.success) {
         const storeKey = `linkmap-${Date.now()}`;
         await browser.storage.local.set({ [storeKey]: { pageUrl: tab.url, pageTitle: tab.title, links: result.links, stats: result.stats } });
-        browser.tabs.create({ url: browser.runtime.getURL(`osint/link-map.html?id=${encodeURIComponent(storeKey)}`) });
+        const targetUrl = browser.runtime.getURL(`osint/link-map.html?id=${encodeURIComponent(storeKey)}`);
+        const existing = (await browser.tabs.query({ url: browser.runtime.getURL('osint/link-map.html*') }))[0];
+        if (existing) {
+          browser.tabs.update(existing.id, { url: targetUrl, active: true });
+        } else {
+          browser.tabs.create({ url: targetUrl });
+        }
       }
     } catch (err) {
       safeNotify(null, { type: "basic", iconUrl: "icons/icon-96.png", title: "Argus - Error", message: err.message });
@@ -5251,7 +5269,7 @@ async function handleAddMonitor(message) {
       url: message.url,
       title: message.title || message.url,
       intervalMinutes: message.intervalMinutes || 60,
-      enabled: true,
+      enabled: message.enabled !== false,
       createdAt: new Date().toISOString(),
       lastChecked: new Date().toISOString(),
       lastHash: hash,

@@ -276,7 +276,7 @@ async function initContextPanel() {
     for (const proj of projects) {
       const opt = document.createElement("option");
       opt.value = proj.id;
-      opt.textContent = proj.name + (proj.id === defaultId ? " (default)" : "");
+      opt.textContent = proj.name + (proj.id === defaultId ? " ★" : "");
       elements.contextProject.appendChild(opt);
     }
 

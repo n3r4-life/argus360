@@ -2167,6 +2167,18 @@ async function handleExtractImages(message) {
           addImage(img.getAttribute("href") || img.getAttribute("xlink:href"), "", 0, 0, "svg");
         });
 
+        // Fallback: if the page itself IS an image file (direct URL to .svg, .png, .jpg, etc.)
+        if (images.length === 0) {
+          const pageExt = location.pathname.match(/\\.(jpe?g|png|gif|webp|svg|avif|bmp|ico|tiff?)$/i);
+          if (pageExt) {
+            // Direct image file — add the page URL itself
+            const rootSvg = document.querySelector("svg");
+            const w = rootSvg ? (rootSvg.getAttribute("width") || rootSvg.viewBox?.baseVal?.width || 0) : 0;
+            const h = rootSvg ? (rootSvg.getAttribute("height") || rootSvg.viewBox?.baseVal?.height || 0) : 0;
+            addImage(location.href, document.title || "Direct image", parseInt(w) || 0, parseInt(h) || 0, "direct");
+          }
+        }
+
         return {
           images: images,
           pageUrl: location.href,

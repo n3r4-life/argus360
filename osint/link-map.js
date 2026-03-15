@@ -13,6 +13,7 @@
   let diffResult = null;       // { added, removed, unchanged } per category
   let diffView = 'current';    // 'current' or 'changes'
   let oldLinkData = null;      // previous scan data for comparison
+  let groupByFolders = false;  // folder grouping mode (for imported bookmarks)
 
   /* ── Collector state ── */
   let collected = [];          // { type, value, label, url, addedAt }
@@ -55,10 +56,17 @@
     // Bind history popup regardless of whether we have current data
     bindHistory();
 
+    // Always bind collector so the panel works even without link data
+    await loadCollected();
+    bindCollector();
+    await initProjectSelector();
+    handleBookmarkImport();
+
     if (!linkData || !linkData.links) {
-      $('#empty-state').textContent = 'No link data found.';
+      $('#empty-state').textContent = 'No link data found. Select a scan from History, or Import bookmarks.';
       return;
     }
+
 
     // Normalize field names from extraction format
     normalizeLinkData(linkData.links);
@@ -72,7 +80,6 @@
       try { browser.storage.local.remove(storeKey); } catch {}
     }
 
-    await loadCollected();
     await loadSources();
     renderHeader();
     if (isCachedMode) showCacheBanner();
@@ -80,25 +87,225 @@
     renderLinks();
     bindTabs();
     bindActions();
-    bindCollector();
     initChat();
   }
 
-  function initChat() {
+  /* ── Project selector (header dropdown) ── */
+  let selectedProjectId = null;
+
+  async function initProjectSelector() {
+    const sel = $('#project-select');
+    if (!sel) return;
+    const api = typeof browser !== 'undefined' ? browser : chrome;
+    try {
+      const [resp, defResp] = await Promise.all([
+        api.runtime.sendMessage({ action: "getProjects" }),
+        api.runtime.sendMessage({ action: "getDefaultProject" })
+      ]);
+      const projects = resp?.projects || [];
+      const defaultId = defResp?.defaultProjectId || null;
+      if (!projects.length) { sel.style.display = 'none'; return; }
+
+      selectedProjectId = defaultId || null;
+      sel.classList.toggle('has-project', !!selectedProjectId);
+
+      function refreshOptions() {
+        sel.innerHTML = '<option value="">No project</option>';
+        for (const p of projects) {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          let label = '';
+          if (p.id === selectedProjectId) label += '✓ ';
+          label += p.name;
+          if (p.id === defaultId) label += ' ★';
+          opt.textContent = label;
+          sel.appendChild(opt);
+        }
+        sel.value = selectedProjectId || '';
+      }
+      refreshOptions();
+
+      sel.addEventListener('change', () => {
+        selectedProjectId = sel.value || null;
+        sel.classList.toggle('has-project', !!sel.value);
+        refreshOptions();
+        cachedProjectDigest = null; // invalidate cache
+        if (includeLinkProject) {
+          loadProjectDigest().then(() => ArgusChat.updateContext(buildChatContext()));
+        }
+      });
+    } catch { sel.style.display = 'none'; }
+  }
+
+  /* ── Chat context — combinable toggles: Page, Collection, Project ── */
+  let includeLinkPage = true;
+  let includeLinkCollection = true;
+  let includeLinkProject = false;
+  let cachedProjectDigest = null;
+
+  function buildFullPageContext() {
     const links = linkData.links || linkData;
     const parts = [];
-    if (links.external?.length) parts.push(`External links (${links.external.length}):\n` + links.external.slice(0, 50).map(l => `- ${l.url || l.href}`).join("\n"));
-    if (links.internal?.length) parts.push(`Internal links (${links.internal.length}):\n` + links.internal.slice(0, 30).map(l => `- ${l.url || l.href || l.path}`).join("\n"));
-    if (links.social?.length) parts.push(`Social links: ${links.social.map(l => l.url || l.href).join(", ")}`);
-    if (links.emails?.length) parts.push(`Emails: ${links.emails.join(", ")}`);
-    if (links.phones?.length) parts.push(`Phones: ${links.phones.join(", ")}`);
+    const filterLabel = activeFilter === 'all' ? 'All categories' : activeFilter;
+    parts.push(`Page: ${linkData.pageTitle || linkData.pageUrl || 'Unknown'}`);
+    parts.push(`Active filter: ${filterLabel}`);
+    if (searchQuery) parts.push(`Search query: "${searchQuery}"`);
+
+    if (links.external?.length) {
+      parts.push(`External links (${links.external.length}):\n` + links.external.slice(0, 80).map(l => {
+        const url = l.url || l.href || '';
+        const text = l.text && l.text !== url ? ` "${l.text}"` : '';
+        return `- ${url}${text}`;
+      }).join("\n"));
+    }
+    if (links.internal?.length) {
+      parts.push(`Internal links (${links.internal.length}):\n` + links.internal.slice(0, 40).map(l => {
+        const url = l.url || l.href || l.path || '';
+        const text = l.text && l.text !== url ? ` "${l.text}"` : '';
+        return `- ${url}${text}`;
+      }).join("\n"));
+    }
+    if (links.social?.length) {
+      parts.push(`Social links (${links.social.length}):\n` + links.social.map(l => {
+        const url = l.url || l.href || '';
+        const platform = l.platform ? `[${l.platform}] ` : '';
+        return `- ${platform}${url}`;
+      }).join("\n"));
+    }
+    if (links.emails?.length) {
+      parts.push(`Emails (${links.emails.length}): ${links.emails.map(e => typeof e === 'string' ? e : e.address || e.email).join(", ")}`);
+    }
+    if (links.phones?.length) {
+      parts.push(`Phones (${links.phones.length}): ${links.phones.map(p => typeof p === 'string' ? p : p.number || p.phone).join(", ")}`);
+    }
+    if (links.files?.length) {
+      parts.push(`File links (${links.files.length}):\n` + links.files.slice(0, 30).map(f => `- ${f.url || f.href} (${f.extension || '?'})`).join("\n"));
+    }
+    return parts.join("\n\n");
+  }
+
+  function buildCollectionContext() {
+    if (!collected.length) return '(No items collected yet)';
+    const parts = [`Collected items (${collected.length}):`];
+    collected.forEach(c => {
+      parts.push(`- [${c.type}] ${c.value}${c.label && c.label !== c.value ? ' "' + c.label + '"' : ''}${c.url && c.url !== c.value ? ' → ' + c.url : ''}`);
+    });
+    return parts.join("\n");
+  }
+
+  function buildChatContext() {
+    const sections = [];
+    if (includeLinkPage) sections.push(buildFullPageContext());
+    if (includeLinkCollection) sections.push(buildCollectionContext());
+    if (includeLinkProject && cachedProjectDigest) {
+      sections.push("--- Project Context ---\n" + cachedProjectDigest);
+    }
+    if (sections.length === 0) return "No context selected. Toggle Page, Collection, or Project to include data.";
+    return sections.join("\n\n");
+  }
+
+  async function loadProjectDigest() {
+    if (!selectedProjectId) { cachedProjectDigest = null; return; }
+    try {
+      const api = typeof browser !== 'undefined' ? browser : chrome;
+      const resp = await api.runtime.sendMessage({ action: "getProjects" });
+      const projects = resp?.projects || [];
+      const p = projects.find(pr => pr.id === selectedProjectId);
+      if (!p) { cachedProjectDigest = null; return; }
+      const lines = [`Project: ${p.name}`];
+      if (p.description) lines.push(`  Description: ${p.description}`);
+      if (p.items?.length) {
+        lines.push(`  Items (${p.items.length}):`);
+        p.items.slice(0, 20).forEach(item => {
+          lines.push(`    - [${item.type || 'note'}] ${item.title || item.url || item.summary || '(untitled)'}`);
+        });
+      }
+      cachedProjectDigest = lines.join('\n');
+    } catch {
+      cachedProjectDigest = null;
+    }
+  }
+
+  function initChat() {
+    const container = document.getElementById("argus-chat-container");
+
+    // Init chat component first so the toggle DOM exists
     ArgusChat.init({
-      container: document.getElementById("argus-chat-container"),
+      container,
       contextType: "Link Map",
-      contextData: parts.join("\n\n") || "No links found.",
+      contextData: buildChatContext(),
       pageUrl: linkData.pageUrl,
       pageTitle: linkData.pageTitle
     });
+
+    // Combinable context toggle pills — appended after toggle for inline flex
+    const modeRow = document.createElement('div');
+    modeRow.className = 'lm-chat-mode-row';
+
+    // Page toggle
+    const pageBtn = document.createElement('button');
+    pageBtn.className = 'pill-chip active';
+    pageBtn.innerHTML = '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Page';
+    pageBtn.title = "Include all page link data as AI context";
+    pageBtn.addEventListener('click', () => {
+      includeLinkPage = !includeLinkPage;
+      pageBtn.classList.toggle('active', includeLinkPage);
+      ArgusChat.updateContext(buildChatContext());
+    });
+    modeRow.appendChild(pageBtn);
+
+    // Collection toggle
+    const colBtn = document.createElement('button');
+    colBtn.className = 'pill-chip active';
+    colBtn.innerHTML = `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 00-1-1.73L13 2.27a2 2 0 00-2 0L4 6.27A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg> <span class="lm-col-count">${collected.length}</span> Collected`;
+    colBtn.title = "Include collected items as AI context";
+    colBtn.addEventListener('click', () => {
+      includeLinkCollection = !includeLinkCollection;
+      colBtn.classList.toggle('active', includeLinkCollection);
+      ArgusChat.updateContext(buildChatContext());
+    });
+    modeRow.appendChild(colBtn);
+
+    // APC pill — same style as popup, loads project digest on first check
+    const apcLabel = document.createElement('label');
+    apcLabel.className = 'apc-pill';
+    apcLabel.title = 'Add Project Context — include project data in AI conversation';
+    const apcCb = document.createElement('input');
+    apcCb.type = 'checkbox';
+    const apcSpan = document.createElement('span');
+    apcSpan.textContent = 'APC';
+    apcLabel.appendChild(apcCb);
+    apcLabel.appendChild(apcSpan);
+    apcLabel.addEventListener('click', (e) => e.stopPropagation());
+    apcCb.addEventListener('change', async () => {
+      includeLinkProject = apcCb.checked;
+      if (includeLinkProject && !selectedProjectId) {
+        includeLinkProject = false;
+        apcCb.checked = false;
+        apcLabel.title = 'Select a project from the header dropdown first';
+        return;
+      }
+      if (includeLinkProject && !cachedProjectDigest) {
+        apcSpan.textContent = '...';
+        await loadProjectDigest();
+        apcSpan.textContent = 'APC';
+        if (!cachedProjectDigest) {
+          includeLinkProject = false;
+          apcCb.checked = false;
+          apcLabel.title = 'Could not load project data';
+        }
+      }
+      ArgusChat.updateContext(buildChatContext());
+    });
+    modeRow.appendChild(apcLabel);
+
+    container.appendChild(modeRow);
+
+    // Expose context refresh so collector changes update AI context
+    window._refreshChatContext = () => {
+      colBtn.querySelector('.lm-col-count').textContent = collected.length;
+      ArgusChat.updateContext(buildChatContext());
+    };
   }
 
   /* ── Normalize extraction data ── */
@@ -169,14 +376,68 @@
     $('#stat-domains').textContent = domains.size;
     $('#stat-external').textContent = (links.external || []).length;
     $('#stat-internal').textContent = (links.internal || []).length;
+
+    // Build domain breakdown data (domain → count), sorted by frequency
+    const domainCounts = {};
+    (links.external || []).forEach(l => {
+      const d = l.domain || 'unknown';
+      domainCounts[d] = (domainCounts[d] || 0) + 1;
+    });
+    (links.social || []).forEach(l => {
+      try {
+        const d = new URL(l.url).hostname.replace(/^www\./, '');
+        domainCounts[d] = (domainCounts[d] || 0) + 1;
+      } catch {}
+    });
+    const sortedDomains = Object.entries(domainCounts).sort((a, b) => b[1] - a[1]);
+    const maxCount = sortedDomains[0]?.[1] || 1;
+
+    const breakdown = $('#domain-breakdown');
+    if (breakdown) {
+      breakdown.innerHTML = '';
+      for (const [domain, count] of sortedDomains) {
+        const row = document.createElement('div');
+        row.className = 'domain-breakdown-item';
+        row.style.position = 'relative';
+        row.innerHTML = `<span class="domain-breakdown-name">${domain}</span><span class="domain-breakdown-count">${count}</span><span class="domain-breakdown-bar" style="width:${(count / maxCount * 100).toFixed(0)}%"></span>`;
+        row.addEventListener('click', (e) => {
+          e.stopPropagation();
+          // Switch to external tab and filter by this domain
+          const extTab = $('[data-filter="external"]');
+          if (extTab) extTab.click();
+          const searchInput = $('#link-search');
+          if (searchInput) {
+            searchInput.value = domain;
+            searchInput.dispatchEvent(new Event('input'));
+          }
+          breakdown.classList.add('hidden');
+        });
+        breakdown.appendChild(row);
+      }
+
+      // Update pill count
+      const pillCount = $('#domains-pill-count');
+      if (pillCount) pillCount.textContent = `(${sortedDomains.length})`;
+
+      // Toggle on click
+      const pill = $('#domains-pill');
+      if (pill) {
+        pill.addEventListener('click', (e) => {
+          e.stopPropagation();
+          breakdown.classList.toggle('hidden');
+        });
+        // Close on outside click
+        document.addEventListener('click', () => breakdown.classList.add('hidden'));
+      }
+    }
   }
 
   /* ── Tabs ── */
 
   function bindTabs() {
-    $$('.tab').forEach((tab) => {
+    $$('.filter-tabs .pill-chip[data-filter]').forEach((tab) => {
       tab.addEventListener('click', () => {
-        $$('.tab').forEach((t) => t.classList.remove('active'));
+        $$('.filter-tabs .pill-chip[data-filter]').forEach((t) => t.classList.remove('active'));
         tab.classList.add('active');
         activeFilter = tab.dataset.filter;
         renderLinks();
@@ -297,7 +558,10 @@
       header.appendChild(countSpan);
       sectionEl.appendChild(header);
 
-      if (key === 'external') {
+      if (groupByFolders && linkData?.imported) {
+        // Folder grouping mode — group all categories by folder
+        renderFolderGrouped(sectionEl, section.items, key);
+      } else if (key === 'external') {
         renderDomainGrouped(sectionEl, section.items);
       } else if (key === 'internal') {
         renderPlainLinks(sectionEl, section.items);
@@ -362,10 +626,79 @@
       const linksContainer = document.createElement('div');
       linksContainer.className = 'domain-links';
       grouped[domain].forEach((link) => {
-        linksContainer.appendChild(createLinkItem(link.url, link.text, getDiffClass('external', link)));
+        const item = createLinkItem(link.url, link.text, getDiffClass('external', link));
+        if (link.folder) {
+          const folderTag = document.createElement('span');
+          folderTag.className = 'folder-tag';
+          folderTag.textContent = link.folder;
+          folderTag.title = 'Bookmark folder: ' + link.folder;
+          item.appendChild(folderTag);
+        }
+        linksContainer.appendChild(item);
       });
       group.appendChild(linksContainer);
 
+      parent.appendChild(group);
+    });
+  }
+
+  /* ── Folder-grouped rendering (for imported bookmarks) ── */
+
+  function renderFolderGrouped(parent, items, category) {
+    const grouped = {};
+    items.forEach(link => {
+      const folder = link.folder || 'Unsorted';
+      if (!grouped[folder]) grouped[folder] = [];
+      grouped[folder].push(link);
+    });
+
+    const sortedFolders = Object.keys(grouped).sort((a, b) => {
+      // Unsorted last, then alphabetical
+      if (a === 'Unsorted') return 1;
+      if (b === 'Unsorted') return -1;
+      return a.localeCompare(b);
+    });
+
+    sortedFolders.forEach(folder => {
+      const group = document.createElement('div');
+      group.className = 'domain-group';
+
+      const header = document.createElement('div');
+      header.className = 'domain-header';
+      const chevronSpan = document.createElement('span');
+      chevronSpan.className = 'domain-chevron';
+      chevronSpan.textContent = '\u25BC';
+      header.appendChild(chevronSpan);
+
+      const folderIcon = document.createElement('span');
+      folderIcon.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:4px;opacity:0.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>';
+      header.appendChild(folderIcon);
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'domain-name';
+      nameSpan.textContent = folder;
+      header.appendChild(nameSpan);
+      const countSpan = document.createElement('span');
+      countSpan.className = 'domain-count';
+      countSpan.textContent = grouped[folder].length;
+      header.appendChild(countSpan);
+      header.addEventListener('click', () => group.classList.toggle('collapsed'));
+      group.appendChild(header);
+
+      const linksContainer = document.createElement('div');
+      linksContainer.className = 'domain-links';
+      grouped[folder].forEach(link => {
+        const item = createLinkItem(link.url, link.text, getDiffClass(category, link));
+        // Show domain as a tag when in folder view
+        if (link.domain) {
+          const domainTag = document.createElement('span');
+          domainTag.className = 'folder-tag';
+          domainTag.textContent = link.domain;
+          item.appendChild(domainTag);
+        }
+        linksContainer.appendChild(item);
+      });
+      group.appendChild(linksContainer);
       parent.appendChild(group);
     });
   }
@@ -406,7 +739,11 @@
         if (isColl) { newCol.textContent = '\u2713'; newCol.classList.add('collected'); }
         newCol.addEventListener('click', (e) => {
           e.stopPropagation();
-          if (collectItem('social', surl, splatform || stext, surl)) {
+          if (newCol.classList.contains('collected')) {
+            uncollectByValue('social', surl);
+            newCol.textContent = '+ Collect';
+            newCol.classList.remove('collected');
+          } else if (collectItem('social', surl, splatform || stext, surl)) {
             newCol.textContent = '\u2713';
             newCol.classList.add('collected');
           }
@@ -457,7 +794,11 @@
       if (isColl) { colBtn.textContent = '\u2713'; colBtn.classList.add('collected'); }
       colBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (collectItem('email', item.address, '', 'mailto:' + item.address)) {
+        if (colBtn.classList.contains('collected')) {
+          uncollectByValue('email', item.address);
+          colBtn.textContent = '+ Collect';
+          colBtn.classList.remove('collected');
+        } else if (collectItem('email', item.address, '', 'mailto:' + item.address)) {
           colBtn.textContent = '\u2713';
           colBtn.classList.add('collected');
         }
@@ -507,7 +848,11 @@
       if (isColl) { colBtn.textContent = '\u2713'; colBtn.classList.add('collected'); }
       colBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (collectItem('phone', item.number, '', 'tel:' + item.number)) {
+        if (colBtn.classList.contains('collected')) {
+          uncollectByValue('phone', item.number);
+          colBtn.textContent = '+ Collect';
+          colBtn.classList.remove('collected');
+        } else if (collectItem('phone', item.number, '', 'tel:' + item.number)) {
           colBtn.textContent = '\u2713';
           colBtn.classList.add('collected');
         }
@@ -545,7 +890,11 @@
         if (isColl) { newCol.textContent = '\u2713'; newCol.classList.add('collected'); }
         newCol.addEventListener('click', (e) => {
           e.stopPropagation();
-          if (collectItem('file', furl, fext ? fext.toUpperCase() : ftext, furl)) {
+          if (newCol.classList.contains('collected')) {
+            uncollectByValue('file', furl);
+            newCol.textContent = '+ Collect';
+            newCol.classList.remove('collected');
+          } else if (collectItem('file', furl, fext ? fext.toUpperCase() : ftext, furl)) {
             newCol.textContent = '\u2713';
             newCol.classList.add('collected');
           }
@@ -676,7 +1025,11 @@
     if (isCollected) { colBtn.textContent = '\u2713'; colBtn.classList.add('collected'); }
     colBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (collectItem('link', url, text, url)) {
+      if (colBtn.classList.contains('collected')) {
+        uncollectByValue('link', url);
+        colBtn.textContent = '+ Collect';
+        colBtn.classList.remove('collected');
+      } else if (collectItem('link', url, text, url)) {
         colBtn.textContent = '\u2713';
         colBtn.classList.add('collected');
       }
@@ -767,18 +1120,183 @@
 
   /* ── Actions ── */
 
+  /* ── Bookmark Import ── */
+
+  function parseBookmarksHtml(html) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const links = { external: [], internal: [], social: [], emails: [], phones: [], files: [] };
+    const folders = new Map(); // folder path → [links]
+
+    const SOCIAL_DOMAINS = new Set([
+      'twitter.com', 'x.com', 'facebook.com', 'instagram.com', 'linkedin.com',
+      'youtube.com', 'tiktok.com', 'reddit.com', 'github.com', 'mastodon.social',
+      'threads.net', 'pinterest.com', 'tumblr.com', 'discord.com', 'twitch.tv'
+    ]);
+    const FILE_EXTS = new Set(['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', 'rar', 'csv', 'json', 'xml', 'txt']);
+
+    function walk(node, path) {
+      const children = node.children;
+      for (let i = 0; i < children.length; i++) {
+        const el = children[i];
+        if (el.tagName === 'DT') {
+          // Could be a folder (H3) or a link (A)
+          const h3 = el.querySelector(':scope > H3');
+          const a = el.querySelector(':scope > A');
+          const dl = el.querySelector(':scope > DL');
+
+          if (h3 && dl) {
+            // Folder — recurse
+            const folderName = h3.textContent.trim();
+            walk(dl, path ? path + ' / ' + folderName : folderName);
+          } else if (a) {
+            const url = a.getAttribute('HREF') || '';
+            const text = a.textContent.trim();
+            const addDate = a.getAttribute('ADD_DATE');
+            const folder = path || 'Unsorted';
+
+            if (!url || url.startsWith('place:') || url.startsWith('javascript:')) continue;
+
+            // Classify
+            let hostname = '';
+            let ext = '';
+            try {
+              const u = new URL(url);
+              hostname = u.hostname.replace(/^www\./, '');
+              ext = (u.pathname.match(/\.([a-z0-9]+)$/i) || [])[1] || '';
+            } catch { continue; }
+
+            const entry = { url, text, folder, addDate: addDate ? new Date(parseInt(addDate) * 1000).toISOString() : null };
+
+            if (url.startsWith('mailto:')) {
+              links.emails.push({ address: url.replace('mailto:', '').split('?')[0] });
+            } else if (url.startsWith('tel:')) {
+              links.phones.push({ number: url.replace('tel:', '') });
+            } else if (FILE_EXTS.has(ext.toLowerCase())) {
+              links.files.push({ url, text, extension: ext.toLowerCase(), folder });
+            } else if (SOCIAL_DOMAINS.has(hostname)) {
+              links.social.push({ url, text, platform: hostname.split('.')[0], folder });
+            } else {
+              links.external.push({ url, text, folder });
+            }
+
+            // Track by folder
+            if (!folders.has(folder)) folders.set(folder, []);
+            folders.get(folder).push({ url, text });
+          }
+        } else if (el.tagName === 'DL') {
+          walk(el, path);
+        }
+      }
+    }
+
+    walk(doc.body, '');
+    return { links, folders };
+  }
+
+  function handleBookmarkImport() {
+    const fileInput = $('#import-bookmarks-file');
+    const importBtn = $('#import-bookmarks-btn');
+    if (!fileInput || !importBtn) return;
+
+    importBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      fileInput.value = '';
+
+      importBtn.querySelector('svg').style.display = 'none';
+      const origText = importBtn.textContent;
+      importBtn.textContent = 'Parsing...';
+
+      try {
+        const html = await file.text();
+        const { links, folders } = parseBookmarksHtml(html);
+        const totalLinks = Object.values(links).reduce((sum, arr) => sum + arr.length, 0);
+
+        if (totalLinks === 0) {
+          importBtn.textContent = 'No links found';
+          setTimeout(() => { importBtn.innerHTML = origText; }, 2000);
+          return;
+        }
+
+        // Build linkData and render
+        linkData = {
+          pageUrl: `bookmarks://${file.name}`,
+          pageTitle: `Imported: ${file.name} (${totalLinks} bookmarks, ${folders.size} folders)`,
+          links,
+          imported: true,
+          importedAt: new Date().toISOString(),
+          folders: Object.fromEntries(folders)
+        };
+
+        normalizeLinkData(linkData.links);
+        isCachedMode = false;
+        diffResult = null;
+        diffView = 'current';
+        groupByFolders = false;
+
+        renderHeader();
+        renderStats();
+        renderLinks();
+        bindTabs();
+        bindActions();
+        initChat();
+
+        // Show folders pill if we have folder data
+        const foldersPill = $('#folders-pill');
+        if (foldersPill && folders.size > 0) {
+          foldersPill.classList.remove('hidden');
+          foldersPill.onclick = () => {
+            groupByFolders = !groupByFolders;
+            foldersPill.classList.toggle('active', groupByFolders);
+            renderLinks();
+          };
+        }
+
+        // Save to history
+        saveImportToHistory(linkData, totalLinks, folders.size);
+
+        // Clear empty state
+        const emptyState = $('#empty-state');
+        if (emptyState) emptyState.style.display = 'none';
+
+        importBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Import`;
+      } catch (err) {
+        console.error('Bookmark import failed:', err);
+        importBtn.textContent = 'Import failed';
+        setTimeout(() => {
+          importBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Import`;
+        }, 2000);
+      }
+    });
+  }
+
   function bindActions() {
     $('#export-csv').addEventListener('click', exportCSV);
     $('#add-to-project').addEventListener('click', toggleProjectPicker);
+    handleBookmarkImport();
     const xrefBtn = $('#xref-sources-btn');
     if (xrefBtn) xrefBtn.addEventListener('click', crossRefSources);
+    const collectAllBtn = $('#collect-all-btn');
+    if (collectAllBtn) collectAllBtn.addEventListener('click', collectAllVisible);
 
     const searchInput = $('#link-search');
+    const searchClear = $('#search-clear');
     const modeBtn = $('#search-mode-toggle');
     if (searchInput) {
       searchInput.addEventListener('input', () => {
         searchQuery = searchInput.value.trim();
         renderLinks();
+      });
+    }
+    if (searchClear) {
+      searchClear.addEventListener('click', () => {
+        searchInput.value = '';
+        searchQuery = '';
+        renderLinks();
+        searchInput.focus();
       });
     }
     if (modeBtn) {
@@ -977,20 +1495,37 @@
 
     try {
       const api = typeof browser !== 'undefined' ? browser : chrome;
-      // Find the original page tab by URL
       const pageUrl = linkData.pageUrl;
       let tabId = null;
+
       if (pageUrl) {
-        const tabs = await api.tabs.query({ url: pageUrl });
+        // Try matching by URL — use wildcard pattern for better matching
+        let tabs = [];
+        try {
+          const origin = new URL(pageUrl).origin + '/*';
+          tabs = await api.tabs.query({ url: origin });
+          // Narrow to exact match
+          const exact = tabs.find(t => t.url === pageUrl);
+          if (exact) tabs = [exact];
+          else if (tabs.length > 1) tabs = [tabs[0]];
+        } catch {
+          tabs = [];
+        }
+
         if (tabs.length) {
           tabId = tabs[0].id;
         } else {
-          // Open the page in a new tab and wait for it to load
+          // Open page in background tab, wait for load with timeout
           const newTab = await api.tabs.create({ url: pageUrl, active: false });
           tabId = newTab.id;
-          await new Promise(resolve => {
+          await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              api.tabs.onUpdated.removeListener(listener);
+              resolve(); // proceed anyway — page may be partially loaded
+            }, 15000);
             const listener = (tid, info) => {
               if (tid === tabId && info.status === 'complete') {
+                clearTimeout(timeout);
                 api.tabs.onUpdated.removeListener(listener);
                 resolve();
               }
@@ -1017,7 +1552,7 @@
       renderStats();
       renderLinks();
 
-      // Update cache banner
+      // Update button
       if (btn) { btn.textContent = '\u2713 Compared'; btn.disabled = true; }
     } catch (err) {
       console.warn('Refresh failed:', err);
@@ -1115,6 +1650,66 @@
 
   /* ── Collector ── */
 
+  function collectAllVisible() {
+    if (!linkData?.links) return;
+    const links = linkData.links;
+    const q = searchQuery;
+    const matcher = buildMatcher(q);
+    const matchLink = (item) => {
+      if (!matcher) return true;
+      const hay = [item.url, item.href, item.text, item.domain, item.platform,
+                    item.address, item.email, item.number, item.phone, item.extension]
+        .filter(Boolean).join(' ');
+      return matcher(hay);
+    };
+
+    const keys = activeFilter === 'all'
+      ? ['external', 'internal', 'social', 'emails', 'phones', 'files']
+      : [activeFilter];
+
+    let added = 0;
+    for (const key of keys) {
+      const items = (links[key] || []).filter(matchLink);
+      for (const item of items) {
+        let type, value, label, url;
+        if (key === 'emails') {
+          type = 'email'; value = item.address || item.email || ''; label = ''; url = 'mailto:' + value;
+        } else if (key === 'phones') {
+          type = 'phone'; value = item.number || item.phone || ''; label = ''; url = 'tel:' + value;
+        } else if (key === 'social') {
+          type = 'social'; url = item.url || item.href || ''; value = url; label = item.platform || item.text || '';
+        } else if (key === 'files') {
+          type = 'file'; url = item.url || item.href || ''; value = url; label = item.extension || item.text || '';
+        } else {
+          type = 'link'; url = item.url || item.href || ''; value = url; label = item.text || '';
+        }
+        if (value && collectItemSilent(type, value, label, url)) added++;
+      }
+    }
+
+    if (added > 0) {
+      saveCollected();
+      updateCollectorBadge();
+      renderCollector();
+      renderLinks(); // refresh collect-btn states
+      if (window._refreshChatContext) window._refreshChatContext();
+    }
+    showXrefToast(
+      added > 0
+        ? `Added ${added} item${added === 1 ? '' : 's'} to collector.`
+        : 'All visible items are already collected.',
+      added
+    );
+  }
+
+  /** Add to collected array without save/render (for bulk ops) */
+  function collectItemSilent(type, value, label, url) {
+    const key = type + ':' + value;
+    if (collected.some(c => (c.type + ':' + c.value) === key)) return false;
+    collected.push({ type, value, label: label || '', url: url || '', addedAt: Date.now() });
+    return true;
+  }
+
   function collectItem(type, value, label, url) {
     const key = type + ':' + value;
     if (collected.some(c => (c.type + ':' + c.value) === key)) return false;
@@ -1122,6 +1717,7 @@
     saveCollected();
     updateCollectorBadge();
     renderCollector();
+    if (window._refreshChatContext) window._refreshChatContext();
     return true;
   }
 
@@ -1130,6 +1726,14 @@
     saveCollected();
     updateCollectorBadge();
     renderCollector();
+    if (window._refreshChatContext) window._refreshChatContext();
+  }
+
+  function uncollectByValue(type, value) {
+    const idx = collected.findIndex(c => c.type === type && c.value === value);
+    if (idx === -1) return false;
+    removeCollected(idx);
+    return true;
   }
 
   function clearCollected() {
@@ -1137,6 +1741,7 @@
     saveCollected();
     updateCollectorBadge();
     renderCollector();
+    if (window._refreshChatContext) window._refreshChatContext();
   }
 
   function saveCollected() {
@@ -1419,6 +2024,200 @@
     URL.revokeObjectURL(url);
   }
 
+  /* ── Collector → Monitors ── */
+  async function collectorToMonitors() {
+    const linkItems = collected.filter(c => c.type === 'link' || c.type === 'social');
+    if (!linkItems.length) {
+      showXrefToast('No link items to monitor. Collect some links first.', 0);
+      return;
+    }
+
+    // Show picker: which items, enabled or disabled
+    const overlay = document.createElement('div');
+    overlay.className = 'collector-overlay';
+    overlay.innerHTML = `
+      <div class="collector-overlay-box">
+        <div class="collector-overlay-title">Add to Monitors</div>
+        <div class="collector-overlay-subtitle">${linkItems.length} link${linkItems.length === 1 ? '' : 's'} will be added as page monitors</div>
+        <label class="collector-overlay-option">
+          <input type="checkbox" id="monitorEnabled" checked>
+          <span>Enable monitors immediately</span>
+        </label>
+        <label class="collector-overlay-option">
+          <span>Check interval:</span>
+          <select id="monitorInterval" class="select-compact">
+            <option value="30">30 min</option>
+            <option value="60" selected>1 hour</option>
+            <option value="360">6 hours</option>
+            <option value="1440">24 hours</option>
+          </select>
+        </label>
+        <div class="collector-overlay-actions">
+          <button class="pill-chip" id="monitorCancel">Cancel</button>
+          <button class="tool-chip" id="monitorConfirm">+ Add ${linkItems.length} Monitor${linkItems.length === 1 ? '' : 's'}</button>
+        </div>
+      </div>`;
+    $('#collectorPanel').appendChild(overlay);
+
+    overlay.querySelector('#monitorCancel').addEventListener('click', () => overlay.remove());
+    overlay.querySelector('#monitorConfirm').addEventListener('click', async () => {
+      const enabled = overlay.querySelector('#monitorEnabled').checked;
+      const interval = parseInt(overlay.querySelector('#monitorInterval').value, 10);
+      overlay.remove();
+
+      let added = 0, skipped = 0;
+      const api = typeof browser !== 'undefined' ? browser : chrome;
+
+      for (const item of linkItems) {
+        const url = item.url || item.value;
+        if (!url || !url.startsWith('http')) { skipped++; continue; }
+        try {
+          const resp = await api.runtime.sendMessage({
+            action: 'addMonitor',
+            url,
+            title: item.label || item.value || url,
+            intervalMinutes: interval,
+            enabled
+          });
+          if (resp?.success) added++;
+          else skipped++;
+        } catch { skipped++; }
+      }
+
+      showXrefToast(
+        `Added ${added} monitor${added === 1 ? '' : 's'}${skipped ? ` (${skipped} skipped)` : ''}. ${enabled ? 'Monitoring is active.' : 'Monitors paused — enable in Settings.'}`,
+        added
+      );
+    });
+  }
+
+  /* ── Collector → Sources ── */
+  async function collectorToSources() {
+    if (!collected.length) {
+      showXrefToast('No items collected. Collect some items first.', 0);
+      return;
+    }
+
+    const SOURCE_TYPES = [
+      'person', 'organization', 'group', 'handle', 'journalist', 'informant',
+      'target', 'adversary', 'service', 'webservice', 'device', 'academic',
+      'lead', 'entity'
+    ];
+
+    const overlay = document.createElement('div');
+    overlay.className = 'collector-overlay';
+    const typeOpts = SOURCE_TYPES.map(t => `<option value="${t}">${t.charAt(0).toUpperCase() + t.slice(1)}</option>`).join('');
+    overlay.innerHTML = `
+      <div class="collector-overlay-box">
+        <div class="collector-overlay-title">Add to Sources</div>
+        <div class="collector-overlay-subtitle">${collected.length} item${collected.length === 1 ? '' : 's'} will be merged into a new source</div>
+        <label class="collector-overlay-option">
+          <span>Source name:</span>
+          <input type="text" id="sourceNameInput" class="collector-overlay-input" placeholder="e.g. Target Alpha" value="${linkData?.pageTitle || ''}">
+        </label>
+        <label class="collector-overlay-option">
+          <span>Source type:</span>
+          <select id="sourceTypeSelect" class="select-compact">${typeOpts}</select>
+        </label>
+        <div class="collector-overlay-actions">
+          <button class="pill-chip" id="sourceCancel">Cancel</button>
+          <button class="tool-chip" id="sourceConfirm">+ Create Source</button>
+        </div>
+      </div>`;
+    $('#collectorPanel').appendChild(overlay);
+
+    overlay.querySelector('#sourceCancel').addEventListener('click', () => overlay.remove());
+    overlay.querySelector('#sourceConfirm').addEventListener('click', async () => {
+      const name = overlay.querySelector('#sourceNameInput').value.trim();
+      const type = overlay.querySelector('#sourceTypeSelect').value;
+      if (!name) {
+        overlay.querySelector('#sourceNameInput').style.borderColor = 'var(--error)';
+        return;
+      }
+      overlay.remove();
+
+      // Map collector items to source addresses
+      const addrTypeMap = { email: 'email', phone: 'phone', social: 'website', link: 'website', file: 'website' };
+      const addresses = collected.map(c => ({
+        type: addrTypeMap[c.type] || 'website',
+        value: c.url || c.value,
+        label: c.label || c.value || ''
+      })).filter(a => a.value);
+
+      const api = typeof browser !== 'undefined' ? browser : chrome;
+      try {
+        const source = {
+          id: 'src-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+          name,
+          type,
+          aliases: [],
+          addresses,
+          tags: ['link-map', 'collected'],
+          location: '',
+          notes: `Auto-created from Link Map collector (${linkData?.pageUrl || 'unknown page'})`,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+        const resp = await api.runtime.sendMessage({ action: 'saveSource', source });
+        if (resp?.success) {
+          showXrefToast(`Source "${name}" created with ${addresses.length} address${addresses.length === 1 ? '' : 'es'}.`, addresses.length);
+          // Reload sources so x-ref picks up the new one
+          await loadSources();
+          renderCollector();
+        } else {
+          showXrefToast('Failed to create source.', 0);
+        }
+      } catch (e) {
+        showXrefToast('Error creating source: ' + e.message, 0);
+      }
+    });
+  }
+
+  /* ── Collector → KG Entities ── */
+  async function collectorToKG() {
+    if (!collected.length) {
+      showXrefToast('No items collected. Collect some items first.', 0);
+      return;
+    }
+
+    const api = typeof browser !== 'undefined' ? browser : chrome;
+    const btn = $('#collectorToKG');
+    if (btn) { btn.textContent = 'Extracting...'; btn.disabled = true; }
+
+    try {
+      // Build a text corpus from collected items for entity extraction
+      const lines = collected.map(c => {
+        const parts = [c.value];
+        if (c.label && c.label !== c.value) parts.push(c.label);
+        if (c.url && c.url !== c.value) parts.push(c.url);
+        return parts.join(' — ');
+      });
+      const corpus = lines.join('\n');
+
+      const resp = await api.runtime.sendMessage({
+        action: 'extractAndUpsert',
+        text: corpus,
+        pageUrl: linkData?.pageUrl || '',
+        pageTitle: linkData?.pageTitle || 'Link Map Collection'
+      });
+
+      const count = resp?.nodesUpserted || resp?.nodeCount || 0;
+      showXrefToast(
+        count > 0
+          ? `Created/updated ${count} KG entit${count === 1 ? 'y' : 'ies'}. View in Knowledge Graph.`
+          : 'No entities extracted. Try collecting more descriptive items.',
+        count
+      );
+    } catch (e) {
+      showXrefToast('Error creating KG entities: ' + e.message, 0);
+    }
+
+    if (btn) {
+      btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><line x1="12" y1="8" x2="5" y2="16"/><line x1="12" y1="8" x2="19" y2="16"/></svg> + KG Entity`;
+      btn.disabled = false;
+    }
+  }
+
   function bindCollector() {
     const tabBtn = $('#collectorTab');
     const panel = $('#collectorPanel');
@@ -1428,6 +2227,9 @@
     const sortSelect = $('#collectorSort');
     const exportBtn = $('#collectorExport');
     const xrefBtn = $('#collectorXref');
+    const toMonitorsBtn = $('#collectorToMonitors');
+    const toSourcesBtn = $('#collectorToSources');
+    const toKGBtn = $('#collectorToKG');
 
     if (tabBtn) {
       tabBtn.addEventListener('click', () => {
@@ -1440,6 +2242,9 @@
     if (clearBtn) clearBtn.addEventListener('click', clearCollected);
     if (exportBtn) exportBtn.addEventListener('click', exportCollected);
     if (xrefBtn) xrefBtn.addEventListener('click', crossRefSources);
+    if (toMonitorsBtn) toMonitorsBtn.addEventListener('click', collectorToMonitors);
+    if (toSourcesBtn) toSourcesBtn.addEventListener('click', collectorToSources);
+    if (toKGBtn) toKGBtn.addEventListener('click', collectorToKG);
 
     if (searchInput) {
       searchInput.addEventListener('input', () => {
@@ -1621,11 +2426,15 @@
     }
 
     const currentUrl = linkData?.pageUrl || '';
+    function baseUrl(u) {
+      try { const p = new URL(u); return p.origin + p.pathname.replace(/\/+$/, ''); } catch { return u; }
+    }
+    const currentBase = baseUrl(currentUrl);
 
     items.forEach(entry => {
       const el = document.createElement('div');
       el.className = 'lm-history-item';
-      if (entry.pageUrl === currentUrl) el.classList.add('active');
+      if (baseUrl(entry.pageUrl) === currentBase && currentBase) el.classList.add('same-page');
 
       const dt = new Date(entry.timestamp);
       const dateStr = dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
@@ -1679,6 +2488,14 @@
       showCacheBanner();
       renderStats();
       renderLinks();
+
+      // Init or refresh chat — may not exist if page loaded without data
+      if (document.querySelector('.argus-chat-toggle')) {
+        // Chat already exists — just refresh context
+        if (window._refreshChatContext) window._refreshChatContext();
+      } else {
+        initChat();
+      }
 
       // Hide diff banner if visible
       const diffBanner = $('#diffBanner');

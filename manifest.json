@@ -34,7 +34,8 @@
     "https://api.openai.com/*",
     "https://api.anthropic.com/*",
     "https://generativelanguage.googleapis.com/*",
-    "identity"
+    "identity",
+    "downloads"
   ],
 
   "optional_permissions": [
