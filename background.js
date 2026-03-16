@@ -1998,6 +1998,11 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "cloudTestConnection") return CloudProviders[message.providerKey]?.testConnection().catch(e => ({ success: false, error: e.message }));
   if (message.action === "cloudGetStatus") return handleCloudGetStatus();
   if (message.action === "aiGetStatus") return handleAiGetStatus();
+  // ── Intelligence Providers ──
+  if (message.action === "intelGetStatus")    return handleIntelGetStatus();
+  if (message.action === "intelSearch")       return handleIntelSearch(message.provider, message.query, message.options);
+  if (message.action === "intelEnrichEntity") return handleIntelEnrichEntity(message.entityId, message.providers);
+  if (message.action === "intelScreenAll")    return handleIntelScreenAll();
   if (message.action === "cloudSaveChat") return handleCloudSaveChat(message.session);
   if (message.action === "cloudPushFile") return handleCloudPushFile(message.path, message.content, message.providerKey);
   if (message.action === "cloudExportStore") return handleCloudExportStore(message.store, message.providerKey);
