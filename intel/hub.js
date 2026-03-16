@@ -126,5 +126,16 @@
     loadProviderStatus();
     loadActivityFeed();
     initQuickActions();
+
+    // AI Chat
+    if (typeof ArgusChat !== "undefined") {
+      ArgusChat.init({
+        container: document.getElementById("argus-chat-container"),
+        contextType: "Intelligence Hub",
+        contextData: "Intelligence Hub — central dashboard for all intel providers. OpenSanctions and SEC EDGAR are live. Providers: sanctions screening, court records, aviation/maritime tracking, GDELT events, satellite imagery.",
+        pageUrl: window.location.href,
+        pageTitle: "Intelligence Hub — Argus"
+      });
+    }
   });
 })();

@@ -474,7 +474,7 @@ async function pollForResult(id) {
               <button id="ss-select-all" class="btn btn-secondary btn-small">Select All</button>
               <button id="ss-select-none" class="btn btn-secondary btn-small">Select None</button>
               <span id="ss-count" class="ss-count">${data.fetchedSources.length} selected</span>
-              <button id="ss-continue" class="btn btn-primary btn-small" style="margin-left:auto;">Continue</button>
+              <button id="ss-continue" class="pill-chip" style="margin-left:auto;">Continue</button>
             </div>` +
             data.fetchedSources.map(s =>
               `<label class="ss-item">

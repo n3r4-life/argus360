@@ -184,7 +184,7 @@
           <label style="font-size:12px;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;gap:4px;">
             <input type="checkbox" id="grab-select-all" checked> Select All
           </label>
-          <button id="grab-selected-tabs" class="btn btn-primary" style="padding:10px 24px;font-size:14px;">Grab Images</button>
+          <button id="grab-selected-tabs" class="pill-chip" style="padding:10px 24px;font-size:14px;">Grab Images</button>
         </div>
       </div>`;
 

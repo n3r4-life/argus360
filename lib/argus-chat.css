@@ -1,5 +1,18 @@
 /* ── Argus Chat Component ── */
 
+#argus-chat-container {
+  position: fixed;
+  bottom: 12px;
+  left: calc(50% - 600px + 20px); /* 1200px / 2 = 600px, offset 20px from left edge */
+  z-index: 100;
+  padding: 0 !important;
+}
+@media (max-width: 1240px) {
+  #argus-chat-container {
+    left: 20px;
+  }
+}
+
 .argus-chat-toggle {
   display: flex;
   align-items: center;
@@ -8,9 +21,11 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--accent, #e94560);
-  background: var(--bg-secondary, #1a1a2e);
+  background: rgba(22, 33, 62, 0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--border, #2a2a4a);
-  border-radius: 8px;
+  border-radius: 20px;
   cursor: pointer;
   transition: all 0.2s;
   font-family: inherit;
@@ -32,8 +47,14 @@
   border: 1px solid var(--border, #2a2a4a);
   border-radius: 8px;
   background: var(--bg-secondary, #1a1a2e);
-  margin-top: 8px;
   overflow: hidden;
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  width: 520px;
+  max-width: 90vw;
+  margin-bottom: 8px;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
 }
 
 .argus-chat-panel.open {

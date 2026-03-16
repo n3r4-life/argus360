@@ -204,11 +204,16 @@
     "app-finance":  { label: "Finance",  icon: [["line", { x1: "12", y1: "1", x2: "12", y2: "23" }], ["path", { d: "M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" }]], path: "finance/finance.html" },
     "app-results":  { label: "Results",  icon: [["path", { d: "M9 11l3 3L22 4" }], ["path", { d: "M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" }]], path: "results/results.html" },
     "app-link-map": { label: "Link Map", icon: [["circle", { cx: "12", cy: "5", r: "3" }], ["line", { x1: "12", y1: "8", x2: "12", y2: "12" }], ["line", { x1: "12", y1: "12", x2: "6", y2: "18" }], ["line", { x1: "12", y1: "12", x2: "18", y2: "18" }], ["circle", { cx: "6", cy: "19", r: "2" }], ["circle", { cx: "18", cy: "19", r: "2" }]], path: "osint/link-map.html" },
-    "app-trawl":    { label: "Trawl Net", icon: [["path", { d: "M2 4c4 3 8 3 12 0s8-3 12 0" }], ["path", { d: "M2 12c4 3 8 3 12 0s8-3 12 0" }], ["path", { d: "M2 20c4 3 8 3 12 0s8-3 12 0" }]], path: "trawl/trawl.html" }
+    "app-trawl":    { label: "Trawl Net", icon: [["path", { d: "M2 4c4 3 8 3 12 0s8-3 12 0" }], ["path", { d: "M2 12c4 3 8 3 12 0s8-3 12 0" }], ["path", { d: "M2 20c4 3 8 3 12 0s8-3 12 0" }]], path: "trawl/trawl.html" },
+    "app-intel":      { label: "Intel",      icon: [["path", { d: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" }]], path: "intel/hub.html" },
+    "app-compliance": { label: "Compliance", icon: [["path", { d: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" }], ["path", { d: "M9 12l2 2 4-4" }]], path: "intel/compliance.html" },
+    "app-movement":   { label: "Movement",   icon: [["path", { d: "M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.9.3 1.1L11 12l-2 3H6l-1 1 3 2 2 3 1-1v-3l3-2 3.7 7.3c.2.4.7.5 1.1.3l.5-.3c.4-.2.6-.6.5-1.1z" }]], path: "intel/movement.html" },
+    "app-events":     { label: "Events",     icon: [["circle", { cx: "12", cy: "12", r: "10" }], ["polyline", { points: "12 6 12 12 16 14" }]], path: "intel/events.html" },
+    "app-satellite":  { label: "Satellite",  icon: [["circle", { cx: "12", cy: "12", r: "10" }], ["line", { x1: "2", y1: "12", x2: "22", y2: "12" }], ["path", { d: "M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" }]], path: "intel/satellite.html" }
   };
 
   // MFT (tool) tabs — selectable in pickers, can be pinned/visible
-  const ALL_TAB_IDS = ["app-projects", "app-reader", "app-reports", "app-kg", "app-workbench", "app-draft", "app-images", "app-chat", "app-terminal", "app-finance", "app-link-map", "app-trawl"];
+  const ALL_TAB_IDS = ["app-projects", "app-reader", "app-reports", "app-kg", "app-workbench", "app-draft", "app-images", "app-chat", "app-terminal", "app-finance", "app-link-map", "app-trawl", "app-intel", "app-compliance", "app-movement", "app-events", "app-satellite"];
   const DEFAULT_TAB_ORDER = [...ALL_TAB_IDS];
   const DEFAULT_VISIBLE_TABS = ["app-projects", "app-reader", "app-reports", "app-kg", "app-workbench", "app-chat", "app-terminal", "app-trawl"];
   const MAX_VISIBLE_TABS = 8;
@@ -230,14 +235,11 @@
     "/osint/regex": "app-results",
     "/osint/link-map": "app-link-map",
     "/trawl/": "app-trawl",
-    // Intelligence pages (ribbon-icon navigated, not app-tab)
-    "/intel/hub":        "ribbon-intel",
-    "/intel/compliance": "ribbon-intel",
-    "/intel/movement":   "ribbon-intel",
-    "/intel/events":     "ribbon-intel",
-    "/intel/satellite":  "ribbon-intel",
-    "/intel/corporate":  "ribbon-intel",
-    "/intel/blockchain": "ribbon-intel",
+    "/intel/hub":        "app-intel",
+    "/intel/compliance": "app-compliance",
+    "/intel/movement":   "app-movement",
+    "/intel/events":     "app-events",
+    "/intel/satellite":  "app-satellite",
   };
 
   // ── Quick-jump button (⋯) — shows hidden/non-visible MFT tabs ──
@@ -548,7 +550,7 @@
   }
 
   initAppTabs();
-  ribbon.insertAdjacentElement("afterend", appBar);
+  intelStrip.insertAdjacentElement("afterend", appBar);
 
   // ── Single-tab navigation — all Argus pages share the current tab ──
   function navigateTo(urlPath, hash) {

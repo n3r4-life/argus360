@@ -1,28 +1,50 @@
 /* ── Intelligence Pages Shared Styles ── */
 
-.intel-main {
-  max-width: 1100px;
+body {
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 24px 28px 48px;
 }
 
-.intel-header {
-  margin-bottom: 24px;
+.intel-main {
+  padding: 16px 16px 48px;
 }
 
-.intel-page-title {
-  font-size: 22px;
+/* ── Page header bar (matches KG/Projects pattern) ── */
+.intel-page-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  height: 46px;
+  background: var(--bg-secondary, #16213e);
+  border-bottom: 1px solid var(--border, #2a2a4a);
+  flex-shrink: 0;
+}
+.intel-page-header .header-icon {
+  width: 22px;
+  height: 22px;
+  margin-right: 8px;
+  color: var(--text-secondary, #a0a0b0);
+  flex-shrink: 0;
+}
+.intel-page-header .header-title {
+  font-size: 15px;
   font-weight: 700;
-  color: var(--text-primary);
-  margin: 0 0 4px;
+  color: var(--text-primary, #e8e8e8);
+  margin: 0;
+  white-space: nowrap;
+}
+.intel-page-header .header-desc {
+  font-size: 11px;
+  color: var(--text-muted, #6a6a80);
+  margin-left: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.intel-page-header .header-spacer {
+  flex: 1;
 }
 
-.intel-page-desc {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin: 0;
-  line-height: 1.5;
-}
 
 .intel-section {
   margin-bottom: 28px;
@@ -527,9 +549,6 @@
 /* ═══════════════════════════════════════════════
    Full-width pages (Movement, Satellite)
    ═══════════════════════════════════════════════ */
-.intel-main-full {
-  max-width: 1400px;
-}
 
 /* ═══════════════════════════════════════════════
    Movement Page

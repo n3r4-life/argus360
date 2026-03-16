@@ -79,7 +79,7 @@ const TextIt = (() => {
           </div>
           <div class="textit-actions">
             <button class="pill-chip textit-cancel">Cancel</button>
-            <button class="btn btn-sm btn-primary" id="textit-send" disabled>Send SMS</button>
+            <button class="pill-chip" id="textit-send" disabled>Send SMS</button>
           </div>
           <div id="textit-status" class="textit-status hidden"></div>
         </div>

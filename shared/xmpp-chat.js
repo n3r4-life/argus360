@@ -101,7 +101,7 @@ const XmppChat = (() => {
         <div class="xmpp-messages" id="xmpp-messages"></div>
         <div class="xmpp-compose">
           <input type="text" class="xmpp-compose-input" id="xmpp-compose-input" placeholder="Type a message...">
-          <button class="btn btn-sm btn-primary xmpp-compose-send" id="xmpp-compose-send" title="Send">${SEND_ICON}</button>
+          <button class="pill-chip xmpp-compose-send" id="xmpp-compose-send" title="Send">${SEND_ICON}</button>
         </div>
       </div>
       <div class="fp-resize"></div>
@@ -371,7 +371,7 @@ const XmppChat = (() => {
     prompt.className = "xmpp-new-prompt";
     prompt.innerHTML = `
       <input type="text" class="xmpp-new-input" placeholder="Phone number or JID (e.g. +15551234567 or user@server)" id="xmpp-new-jid">
-      <button class="btn btn-sm btn-primary" id="xmpp-new-go">Chat</button>
+      <button class="pill-chip" id="xmpp-new-go">Chat</button>
     `;
 
     const convList = _panel.querySelector("#xmpp-conv-list");
