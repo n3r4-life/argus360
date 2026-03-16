@@ -159,6 +159,12 @@
   ribbon.appendChild(icons);
   document.body.insertBefore(ribbon, document.body.firstChild);
 
+  // ── AI provider sub-strip (below ribbon) ──
+  const aiStrip = document.createElement("div");
+  aiStrip.className = "ribbon-ai-strip";
+  aiStrip.id = "ribbon-ai-strip";
+  document.body.insertBefore(aiStrip, ribbon.nextSibling);
+
   // ── App launcher tab bar (below ribbon) ──
   const appBar = document.createElement("nav");
   appBar.className = "argus-app-tabs";
@@ -658,12 +664,13 @@
     "ribbon-sources":   () => browser.runtime.sendMessage({ action: "getSources" }).then(r => Array.isArray(r?.sources) ? r.sources.length : 0).catch(() => 0)
   };
 
-  const CLOUD_PILL_LABELS = { google: "GDrive", dropbox: "Dropbox", webdav: "WebDAV", s3: "S3", github: "GitHub", gist: "Gist" };
+  const CLOUD_PILL_LABELS = { google: "GDrive", dropbox: "Dropbox", webdav: "WebDAV", s3: "S3", github: "GitHub", gist: "Gist", pastebin: "Pastebin", privatebin: "PrivateBin" };
+  const AI_PILL_LABELS = { xai: "xAI", openai: "GPT", anthropic: "Claude", gemini: "Gemini", custom: "Custom" };
 
   let _ribbonStatusTimer = null;
   function updateRibbonStatus() {
     clearTimeout(_ribbonStatusTimer);
-    _ribbonStatusTimer = setTimeout(_doUpdateRibbonStatus, 80);
+    _ribbonStatusTimer = setTimeout(() => { _doUpdateRibbonStatus(); _doUpdateAiStrip(); }, 80);
   }
 
   async function _doUpdateRibbonStatus() {
@@ -695,6 +702,37 @@
     strip.querySelectorAll("[data-nav]").forEach(btn => {
       btn.addEventListener("click", () => nav(btn.dataset.nav));
     });
+  }
+
+  const AI_STATUS_TIPS = {
+    live:  "last call succeeded",
+    error: "last call failed",
+    idle:  "configured, not yet used"
+  };
+
+  async function _doUpdateAiStrip() {
+    const strip = document.getElementById("ribbon-ai-strip");
+    if (!strip) return;
+    try {
+      const resp = await browser.runtime.sendMessage({ action: "aiGetStatus" });
+      const pills = [];
+      for (const [key, info] of Object.entries(resp?.providers || {})) {
+        const label = AI_PILL_LABELS[key] || key;
+        const isDefault = key === resp.defaultProvider;
+        const cls = isDefault ? "ribbon-ai-pill default" : "ribbon-ai-pill";
+        const tip = `${label}${isDefault ? " (default)" : ""} · ${AI_STATUS_TIPS[info.status] || ""} — click to manage`;
+        pills.push(`<button class="${cls}" data-nav="settings" title="${tip}"><span class="ribbon-ai-dot ${info.status}"></span>${label}</button>`);
+      }
+      const modelTag = resp.defaultModel
+        ? `<span class="ribbon-ai-model">${resp.defaultModel}</span>`
+        : "";
+      strip.innerHTML = pills.length
+        ? `<span class="ribbon-ai-strip-label">AI</span>` + pills.join("") + modelTag
+        : "";
+      strip.querySelectorAll("[data-nav]").forEach(btn => {
+        btn.addEventListener("click", () => nav(btn.dataset.nav));
+      });
+    } catch { /* background not ready */ }
   }
 
   async function updateRibbonBadges() {

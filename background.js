@@ -1997,6 +1997,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "cloudDisconnect") return CloudProviders[message.providerKey]?.disconnect() || Promise.resolve({ success: false });
   if (message.action === "cloudTestConnection") return CloudProviders[message.providerKey]?.testConnection().catch(e => ({ success: false, error: e.message }));
   if (message.action === "cloudGetStatus") return handleCloudGetStatus();
+  if (message.action === "aiGetStatus") return handleAiGetStatus();
   if (message.action === "cloudSaveChat") return handleCloudSaveChat(message.session);
   if (message.action === "cloudPushFile") return handleCloudPushFile(message.path, message.content, message.providerKey);
   if (message.action === "cloudListSessions") return handleCloudListSessions(message.providerKey);
@@ -3166,19 +3167,50 @@ async function handlePasteCreate(message) {
   }
 }
 
+async function handleAiGetStatus() {
+  const data = await browser.storage.local.get({
+    defaultProvider: "xai",
+    providers: {
+      xai: { apiKey: "", model: "grok-4-0709" },
+      openai: { apiKey: "", model: "gpt-4.1" },
+      anthropic: { apiKey: "", model: "claude-sonnet-4-6" },
+      gemini: { apiKey: "", model: "gemini-2.5-flash" },
+      custom: { apiKey: "", model: "", baseUrl: "" }
+    },
+    providerLastUsed: {},
+    providerLastError: {}
+  });
+  const result = {};
+  for (const [key, cfg] of Object.entries(data.providers)) {
+    const configured = key === "custom" ? !!(cfg.baseUrl) : !!(cfg.apiKey);
+    if (!configured) continue;
+    const lastOk  = data.providerLastUsed[key]  || 0;
+    const lastErr = data.providerLastError[key] || 0;
+    let status;
+    if (lastOk === 0 && lastErr === 0) status = "idle";      // configured, never used
+    else if (lastErr > lastOk)         status = "error";     // last attempt failed
+    else                               status = "live";      // last attempt succeeded
+    result[key] = { configured, status, lastOk, lastErr };
+  }
+  const defCfg = data.providers[data.defaultProvider] || {};
+  return { success: true, providers: result, defaultProvider: data.defaultProvider, defaultModel: defCfg.model || "" };
+}
+
 async function handleCloudGetStatus() {
-  const [gConn, dConn, wConn, sConn, ghConn, gistConn] = await Promise.all([
+  const [gConn, dConn, wConn, sConn, ghConn, gistConn, pbConn, privConn] = await Promise.all([
     CloudProviders.google.isConnected(),
     CloudProviders.dropbox.isConnected(),
     CloudProviders.webdav.isConnected(),
     CloudProviders.s3.isConnected(),
     CloudProviders.github.isConnected(),
     CloudProviders.gist.isConnected(),
+    CloudProviders.pastebin.isConnected(),
+    CloudProviders.privatebin.isConnected(),
   ]);
   const { cloudBackupLog = [] } = await browser.storage.local.get({ cloudBackupLog: [] });
   return {
     success: true,
-    providers: { google: gConn, dropbox: dConn, webdav: wConn, s3: sConn, github: ghConn, gist: gistConn },
+    providers: { google: gConn, dropbox: dConn, webdav: wConn, s3: sConn, github: ghConn, gist: gistConn, pastebin: pbConn, privatebin: privConn },
     lastBackup: cloudBackupLog[0] || null,
   };
 }

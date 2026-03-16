@@ -669,3 +669,74 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
 .ribbon-status-dot.amber {
   background: #f59e0b;
 }
+
+/* ── AI provider sub-strip (sits below ribbon / page-header) ── */
+.ribbon-ai-strip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 20px;
+  height: 22px;
+  background: #161626;
+  border-bottom: 1px solid #222240;
+  font-family: var(--font);
+  font-size: 10px;
+  position: sticky;
+  top: 46px;
+  z-index: 998;
+}
+.ribbon-ai-strip-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: #3a3a58;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+.ribbon-ai-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #5a5a78;
+  background: transparent;
+  border: 1px solid #252545;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+  white-space: nowrap;
+  line-height: 1;
+  letter-spacing: 0.3px;
+}
+.ribbon-ai-pill:hover {
+  color: #c0c0d8;
+  border-color: #4a4a6a;
+  background: rgba(255, 255, 255, 0.04);
+}
+.ribbon-ai-pill.default {
+  color: #a78bfa;
+  border-color: rgba(167, 139, 250, 0.35);
+  background: rgba(167, 139, 250, 0.08);
+}
+.ribbon-ai-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #f59e0b; /* idle = amber */
+}
+.ribbon-ai-dot.live  { background: #22c55e; }
+.ribbon-ai-dot.error { background: #f87171; }
+.ribbon-ai-model {
+  font-size: 10px;
+  font-weight: 500;
+  color: #4a4a68;
+  margin-left: 6px;
+  white-space: nowrap;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  letter-spacing: 0.2px;
+}

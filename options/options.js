@@ -9993,17 +9993,19 @@ function initCloudBackup() {
   refreshCloudStatus(); updateConsoleStatusStrip();
 }
 
+const AI_STRIP_LABELS = { xai: "xAI", openai: "GPT", anthropic: "Claude", gemini: "Gemini", custom: "Custom" };
+
 let _statusStripTimer = null;
 function updateConsoleStatusStrip() {
   clearTimeout(_statusStripTimer);
-  _statusStripTimer = setTimeout(_doUpdateConsoleStatusStrip, 80);
+  _statusStripTimer = setTimeout(() => { _doUpdateConsoleStatusStrip(); _doUpdateConsoleAiStrip(); }, 80);
 }
 
 async function _doUpdateConsoleStatusStrip() {
   const strip = document.getElementById("console-status-strip");
   if (!strip) return;
 
-  const LABELS = { google: "GDrive", dropbox: "Dropbox", webdav: "WebDAV", s3: "S3", github: "GitHub", gist: "Gist" };
+  const LABELS = { google: "GDrive", dropbox: "Dropbox", webdav: "WebDAV", s3: "S3", github: "GitHub", gist: "Gist", pastebin: "Pastebin", privatebin: "PrivateBin" };
   const pills = [];
 
   try {
@@ -10028,6 +10030,33 @@ async function _doUpdateConsoleStatusStrip() {
   strip.querySelectorAll("[data-goto]").forEach(btn => {
     btn.addEventListener("click", () => showTab(btn.dataset.goto));
   });
+}
+
+const AI_STATUS_TIPS = { live: "last call succeeded", error: "last call failed", idle: "configured, not yet used" };
+
+async function _doUpdateConsoleAiStrip() {
+  const strip = document.getElementById("console-ai-strip");
+  if (!strip) return;
+  try {
+    const resp = await browser.runtime.sendMessage({ action: "aiGetStatus" });
+    const pills = [];
+    for (const [key, info] of Object.entries(resp?.providers || {})) {
+      const label = AI_STRIP_LABELS[key] || key;
+      const isDefault = key === resp.defaultProvider;
+      const cls = isDefault ? "ribbon-ai-pill default" : "ribbon-ai-pill";
+      const tip = `${label}${isDefault ? " (default)" : ""} · ${AI_STATUS_TIPS[info.status] || ""} — click to manage`;
+      pills.push(`<button class="${cls}" data-goto="settings" title="${tip}"><span class="ribbon-ai-dot ${info.status}"></span>${label}</button>`);
+    }
+    const modelTag = resp.defaultModel
+      ? `<span class="ribbon-ai-model">${resp.defaultModel}</span>`
+      : "";
+    strip.innerHTML = pills.length
+      ? `<span class="ribbon-ai-strip-label">AI</span>` + pills.join("") + modelTag
+      : "";
+    strip.querySelectorAll("[data-goto]").forEach(btn => {
+      btn.addEventListener("click", () => showTab(btn.dataset.goto));
+    });
+  } catch { /* silent */ }
 }
 
 async function refreshCloudStatus() {

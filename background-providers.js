@@ -708,25 +708,50 @@ async function callProviderVision(provider, apiKey, model, systemPrompt, userPro
 // ──────────────────────────────────────────────
 // Provider router
 // ──────────────────────────────────────────────
+async function _recordProviderUse(provider, success) {
+  try {
+    const key = success ? "providerLastUsed" : "providerLastError";
+    const rec = (await browser.storage.local.get({ [key]: {} }))[key];
+    rec[provider] = Date.now();
+    await browser.storage.local.set({ [key]: rec });
+  } catch { /* non-critical */ }
+}
+
 async function callProvider(provider, apiKey, model, messages, opts = {}) {
-  switch (provider) {
-    case "xai": return callXai(apiKey, model, messages, opts);
-    case "openai": return callOpenai(apiKey, model, messages, opts);
-    case "anthropic": return callAnthropic(apiKey, model, messages, opts);
-    case "gemini": return callGemini(apiKey, model, messages, opts);
-    case "custom": return callCustom(apiKey, model, messages, opts);
-    default: throw new Error(`Unknown provider: ${provider}`);
+  let result;
+  try {
+    switch (provider) {
+      case "xai": result = await callXai(apiKey, model, messages, opts); break;
+      case "openai": result = await callOpenai(apiKey, model, messages, opts); break;
+      case "anthropic": result = await callAnthropic(apiKey, model, messages, opts); break;
+      case "gemini": result = await callGemini(apiKey, model, messages, opts); break;
+      case "custom": result = await callCustom(apiKey, model, messages, opts); break;
+      default: throw new Error(`Unknown provider: ${provider}`);
+    }
+    _recordProviderUse(provider, true);
+    return result;
+  } catch (e) {
+    _recordProviderUse(provider, false);
+    throw e;
   }
 }
 
 async function callProviderStream(provider, apiKey, model, messages, opts, onChunk, onThinking) {
-  switch (provider) {
-    case "xai": return callXaiStream(apiKey, model, messages, opts, onChunk, onThinking);
-    case "openai": return callOpenaiStream(apiKey, model, messages, opts, onChunk, onThinking);
-    case "anthropic": return callAnthropicStream(apiKey, model, messages, opts, onChunk, onThinking);
-    case "gemini": return callGeminiStream(apiKey, model, messages, opts, onChunk, onThinking);
-    case "custom": return callCustomStream(apiKey, model, messages, opts, onChunk, onThinking);
-    default: throw new Error(`Unknown provider: ${provider}`);
+  try {
+    let result;
+    switch (provider) {
+      case "xai": result = await callXaiStream(apiKey, model, messages, opts, onChunk, onThinking); break;
+      case "openai": result = await callOpenaiStream(apiKey, model, messages, opts, onChunk, onThinking); break;
+      case "anthropic": result = await callAnthropicStream(apiKey, model, messages, opts, onChunk, onThinking); break;
+      case "gemini": result = await callGeminiStream(apiKey, model, messages, opts, onChunk, onThinking); break;
+      case "custom": result = await callCustomStream(apiKey, model, messages, opts, onChunk, onThinking); break;
+      default: throw new Error(`Unknown provider: ${provider}`);
+    }
+    _recordProviderUse(provider, true);
+    return result;
+  } catch (e) {
+    _recordProviderUse(provider, false);
+    throw e;
   }
 }
 
