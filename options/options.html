@@ -789,6 +789,176 @@
         </div>
       </section>
 
+      <!-- Intelligence Providers -->
+      <section class="card" id="intel-providers">
+        <h2 class="card-title">Intelligence Providers</h2>
+        <div class="card-body">
+          <p class="info-text">Connect OSINT and intelligence data sources. OpenSanctions and SEC EDGAR work without credentials. Others require API keys.</p>
+
+          <div class="provider-tabs">
+            <div id="intel-provider-tab-list" class="tab-list">
+              <button class="tab-btn active" data-iprovider="opensanctions">OpenSanctions</button>
+              <button class="tab-btn" data-iprovider="secedgar">SEC EDGAR</button>
+              <button class="tab-btn" data-iprovider="courtlistener">CourtListener</button>
+              <button class="tab-btn" data-iprovider="opensky">OpenSky</button>
+              <button class="tab-btn" data-iprovider="adsbexchange">ADS-B Exchange</button>
+              <button class="tab-btn" data-iprovider="marinetraffic">MarineTraffic</button>
+              <button class="tab-btn" data-iprovider="gdelt">GDELT</button>
+              <button class="tab-btn" data-iprovider="sentinelhub">Sentinel Hub</button>
+              <button class="tab-btn" data-iprovider="opencorporates">OpenCorporates</button>
+              <button class="tab-btn" data-iprovider="gleif">GLEIF</button>
+              <button class="tab-btn" data-iprovider="blockstream">Blockstream</button>
+              <button class="tab-btn" data-iprovider="broadcastify">Broadcastify</button>
+            </div>
+          </div>
+
+          <div id="intel-provider-config" class="prompt-editor">
+            <!-- OpenSanctions fields (default visible) -->
+            <div id="intel-opensanctions-fields">
+              <div class="form-group">
+                <label for="intel-opensanctions-apikey">API Key <span class="hint">(optional — increases rate limits)</span></label>
+                <input type="text" id="intel-opensanctions-apikey" placeholder="Optional API key for higher rate limits">
+              </div>
+              <p class="info-text" style="margin-top:8px;">OpenSanctions works without an API key. Provides sanctions lists, PEP databases, and entity screening across 30+ datasets.</p>
+              <div class="dp-action-row">
+                <button id="intel-opensanctions-test-btn" class="btn btn-sm btn-primary">Test Connection</button>
+                <span id="intel-opensanctions-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- SEC EDGAR fields -->
+            <div id="intel-secedgar-fields" class="hidden">
+              <p class="info-text">SEC EDGAR requires no credentials. Provides corporate filings, insider transactions, and company facts for all US public companies.</p>
+              <p class="info-text" style="margin-top:4px;font-size:11px;color:var(--text-muted);">All requests include a User-Agent header as required by SEC policy.</p>
+              <div class="dp-action-row">
+                <button id="intel-secedgar-test-btn" class="btn btn-sm btn-primary">Test Connection</button>
+                <span id="intel-secedgar-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- CourtListener fields -->
+            <div id="intel-courtlistener-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-courtlistener-apikey">API Key</label>
+                <input type="text" id="intel-courtlistener-apikey" placeholder="CourtListener API key">
+              </div>
+              <div class="dp-action-row">
+                <button id="intel-courtlistener-test-btn" class="btn btn-sm btn-primary">Test Connection</button>
+                <span id="intel-courtlistener-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- OpenSky fields -->
+            <div id="intel-opensky-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-opensky-apikey">API Key</label>
+                <input type="text" id="intel-opensky-apikey" placeholder="OpenSky Network API key">
+              </div>
+              <div class="dp-action-row">
+                <button id="intel-opensky-test-btn" class="btn btn-sm btn-primary">Test Connection</button>
+                <span id="intel-opensky-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- ADS-B Exchange fields -->
+            <div id="intel-adsbexchange-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-adsbexchange-apikey">API Key</label>
+                <input type="text" id="intel-adsbexchange-apikey" placeholder="ADS-B Exchange API key">
+              </div>
+              <div class="dp-action-row">
+                <button id="intel-adsbexchange-test-btn" class="btn btn-sm btn-primary">Test Connection</button>
+                <span id="intel-adsbexchange-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- MarineTraffic fields -->
+            <div id="intel-marinetraffic-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-marinetraffic-apikey">API Key</label>
+                <input type="text" id="intel-marinetraffic-apikey" placeholder="MarineTraffic API key">
+              </div>
+              <div class="dp-action-row">
+                <button id="intel-marinetraffic-test-btn" class="btn btn-sm btn-primary">Test Connection</button>
+                <span id="intel-marinetraffic-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- GDELT fields -->
+            <div id="intel-gdelt-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-gdelt-apikey">API Key</label>
+                <input type="text" id="intel-gdelt-apikey" placeholder="GDELT API key">
+              </div>
+              <div class="dp-action-row">
+                <button id="intel-gdelt-test-btn" class="btn btn-sm btn-primary">Test Connection</button>
+                <span id="intel-gdelt-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- Sentinel Hub fields -->
+            <div id="intel-sentinelhub-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-sentinelhub-apikey">API Key</label>
+                <input type="text" id="intel-sentinelhub-apikey" placeholder="Sentinel Hub API key">
+              </div>
+              <div class="dp-action-row">
+                <button id="intel-sentinelhub-test-btn" class="btn btn-sm btn-primary">Test Connection</button>
+                <span id="intel-sentinelhub-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- OpenCorporates fields -->
+            <div id="intel-opencorporates-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-opencorporates-apikey">API Key</label>
+                <input type="text" id="intel-opencorporates-apikey" placeholder="OpenCorporates API key">
+              </div>
+              <div class="dp-action-row">
+                <button id="intel-opencorporates-test-btn" class="btn btn-sm btn-primary">Test Connection</button>
+                <span id="intel-opencorporates-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- GLEIF fields -->
+            <div id="intel-gleif-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-gleif-apikey">API Key</label>
+                <input type="text" id="intel-gleif-apikey" placeholder="GLEIF API key">
+              </div>
+              <div class="dp-action-row">
+                <button id="intel-gleif-test-btn" class="btn btn-sm btn-primary">Test Connection</button>
+                <span id="intel-gleif-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- Blockstream fields -->
+            <div id="intel-blockstream-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-blockstream-apikey">API Key</label>
+                <input type="text" id="intel-blockstream-apikey" placeholder="Blockstream API key">
+              </div>
+              <div class="dp-action-row">
+                <button id="intel-blockstream-test-btn" class="btn btn-sm btn-primary">Test Connection</button>
+                <span id="intel-blockstream-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- Broadcastify fields -->
+            <div id="intel-broadcastify-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-broadcastify-apikey">API Key</label>
+                <input type="text" id="intel-broadcastify-apikey" placeholder="Broadcastify API key">
+              </div>
+              <div class="dp-action-row">
+                <button id="intel-broadcastify-test-btn" class="btn btn-sm btn-primary">Test Connection</button>
+                <span id="intel-broadcastify-status" class="dp-status"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Paste Providers -->
       <section class="card">
         <h2 class="card-title">Paste Providers</h2>

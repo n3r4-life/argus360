@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Intelligence Hub - Argus</title>
+  <link rel="stylesheet" href="../shared/argus-std.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../lib/argus-chat.css">
+  <link rel="stylesheet" href="../shared/xmpp-chat.css">
+  <link rel="stylesheet" href="intel.css">
+</head>
+<body>
+  <script src="../shared/ribbon.js"></script>
+
+  <main class="intel-main">
+    <div class="intel-header">
+      <h1 class="intel-page-title">Intelligence Hub</h1>
+      <p class="intel-page-desc">Central dashboard for all intelligence data providers and activity.</p>
+    </div>
+
+    <!-- Provider status grid -->
+    <section class="intel-section">
+      <h2 class="intel-section-title">Provider Status</h2>
+      <div id="intel-provider-grid" class="intel-provider-grid"></div>
+    </section>
+
+    <!-- Domain view cards -->
+    <section class="intel-section">
+      <h2 class="intel-section-title">Intelligence Domains</h2>
+      <div class="intel-domain-cards">
+        <div class="intel-domain-card" data-domain="compliance">
+          <h3>Compliance</h3>
+          <p>Sanctions screening, court records, and regulatory checks.</p>
+          <div class="intel-domain-providers" id="domain-compliance-providers"></div>
+          <a class="intel-domain-link" id="domain-compliance-link" href="compliance.html">Open &rarr;</a>
+        </div>
+        <div class="intel-domain-card" data-domain="movement">
+          <h3>Movement</h3>
+          <p>Aviation tracking, maritime monitoring, and radio feeds.</p>
+          <div class="intel-domain-providers" id="domain-movement-providers"></div>
+          <a class="intel-domain-link" id="domain-movement-link" href="movement.html">Open &rarr;</a>
+        </div>
+        <div class="intel-domain-card" data-domain="events">
+          <h3>Events</h3>
+          <p>Global event monitoring, media analysis, and trend detection.</p>
+          <div class="intel-domain-providers" id="domain-events-providers"></div>
+          <a class="intel-domain-link" id="domain-events-link" href="events.html">Open &rarr;</a>
+        </div>
+        <div class="intel-domain-card" data-domain="satellite">
+          <h3>Satellite</h3>
+          <p>Earth observation imagery, change detection, and geospatial analysis.</p>
+          <div class="intel-domain-providers" id="domain-satellite-providers"></div>
+          <a class="intel-domain-link" id="domain-satellite-link" href="satellite.html">Open &rarr;</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Recent activity feed -->
+    <section class="intel-section">
+      <h2 class="intel-section-title">Recent Activity</h2>
+      <div id="intel-activity-feed" class="intel-activity-feed">
+        <p class="intel-empty">No intelligence activity yet.</p>
+      </div>
+    </section>
+
+    <!-- Quick actions -->
+    <section class="intel-section">
+      <h2 class="intel-section-title">Quick Actions</h2>
+      <div class="intel-quick-actions">
+        <button id="intel-screen-all" class="pill-chip">Screen All Entities</button>
+        <button id="intel-open-kg" class="pill-chip">Open KG</button>
+      </div>
+      <div id="intel-screen-progress" class="intel-screen-progress hidden"></div>
+    </section>
+  </main>
+
+  <div id="argus-chat-container" style="padding:16px 20px;"></div>
+
+  <script src="../lib/purify.min.js"></script>
+  <script src="../lib/marked.min.js"></script>
+  <script src="../shared/text-it.js"></script>
+  <script src="../shared/xmpp-chat.js"></script>
+  <script src="../lib/argus-chat.js"></script>
+  <script src="hub.js"></script>
+  <div id="xmpp-chat-container"></div>
+  <script>
+    if (typeof XmppChat !== "undefined") {
+      XmppChat.init({ container: document.getElementById("xmpp-chat-container"), pageId: "intel-hub" });
+    }
+  </script>
+</body>
+</html>

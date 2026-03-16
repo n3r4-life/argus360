@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Finance Monitor</title>
+  <link rel="stylesheet" href="../shared/argus-std.css">
   <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../lib/argus-chat.css">
+  <link rel="stylesheet" href="../shared/xmpp-chat.css">
   <link rel="stylesheet" href="finance.css">
 </head>
 <body>
@@ -33,8 +36,15 @@
     <button class="btn-sm" id="addItemBtn">+ Add</button>
   </header>
 
-  <!-- Main Content Grid -->
-  <main class="fin-main" id="finMain">
+  <!-- Finance Tab Bar -->
+  <div class="fin-tab-bar" id="finTabBar">
+    <button class="fin-tab active" data-fin-tab="markets">Markets</button>
+    <button class="fin-tab" data-fin-tab="corporate">Corporate</button>
+    <button class="fin-tab" data-fin-tab="blockchain">Blockchain</button>
+  </div>
+
+  <!-- ═══════════════ MARKETS TAB ═══════════════ -->
+  <main class="fin-main fin-tab-panel active" id="finMain" data-fin-panel="markets">
 
     <!-- Watchlist Card -->
     <div class="fin-card full-width" id="watchlistCard">
@@ -166,6 +176,239 @@
 
   </main>
 
+  <!-- ═══════════════ CORPORATE TAB ═══════════════ -->
+  <main class="fin-main fin-tab-panel" data-fin-panel="corporate">
+
+    <!-- Company Search -->
+    <div class="fin-card full-width">
+      <div class="fin-card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        Company Search
+      </div>
+      <div class="fin-card-body">
+        <div class="fin-search-row">
+          <input type="text" id="corpSearchInput" class="fin-search-input" placeholder="Search company name (e.g. Apple, Tesla, Goldman Sachs)...">
+          <button class="fin-btn fin-btn-primary" id="corpSearchBtn">Search</button>
+        </div>
+        <div class="fin-search-provider-row">
+          <button class="fin-provider-pill active" data-corp-provider="secedgar">SEC EDGAR</button>
+          <button class="fin-provider-pill" data-corp-provider="opencorporates">OpenCorporates</button>
+          <button class="fin-provider-pill" data-corp-provider="gleif">GLEIF (LEI)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SEC EDGAR Results -->
+    <div class="fin-card full-width" id="corpEdgarCard">
+      <div class="fin-card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+        SEC Filings
+        <span class="fin-card-badge" id="corpEdgarCount">0</span>
+      </div>
+      <div class="fin-card-body">
+        <div class="fin-corp-company-info hidden" id="corpCompanyInfo">
+          <div class="fin-corp-company-name" id="corpCompanyName"></div>
+          <div class="fin-corp-company-meta" id="corpCompanyMeta"></div>
+        </div>
+        <table class="fin-watchlist" id="corpFilingsTable">
+          <thead>
+            <tr>
+              <th>Form</th>
+              <th>Filed</th>
+              <th>Description</th>
+              <th>Accession</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="corpFilingsBody"></tbody>
+        </table>
+        <div class="fin-empty" id="corpEdgarEmpty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <div>Search for a company to view SEC filings.</div>
+          <div style="margin-top:4px;">10-K annual reports, 10-Q quarterly, 8-K material events, insider transactions.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Insider Transactions -->
+    <div class="fin-card" id="corpInsiderCard">
+      <div class="fin-card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+        Insider Transactions
+        <span class="fin-card-badge" id="corpInsiderCount">0</span>
+      </div>
+      <div class="fin-card-body" id="corpInsiderList">
+        <div class="fin-empty" id="corpInsiderEmpty">
+          <div>Insider buy/sell transactions appear here after company search.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Officers & Directors -->
+    <div class="fin-card" id="corpOfficersCard">
+      <div class="fin-card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+        </svg>
+        Officers &amp; Directors
+      </div>
+      <div class="fin-card-body" id="corpOfficersList">
+        <div class="fin-empty" id="corpOfficersEmpty">
+          <div>Company officers and directors appear here after search.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KG Integration -->
+    <div class="fin-card" id="corpKgCard">
+      <div class="fin-card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/>
+          <circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/>
+          <line x1="9" y1="6" x2="15" y2="6"/><line x1="6" y1="9" x2="6" y2="15"/>
+        </svg>
+        KG Actions
+      </div>
+      <div class="fin-card-body">
+        <div class="fin-kg-actions">
+          <button class="pill-chip" id="corpAddToKg" disabled>Add Company to KG</button>
+          <button class="pill-chip" id="corpAddOfficersToKg" disabled>Add Officers to KG</button>
+          <button class="pill-chip" id="corpScreenSanctions" disabled>Screen Sanctions</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ═══════════════ BLOCKCHAIN TAB ═══════════════ -->
+  <main class="fin-main fin-tab-panel" data-fin-panel="blockchain">
+
+    <!-- Wallet Lookup -->
+    <div class="fin-card full-width">
+      <div class="fin-card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="1" y="4" width="22" height="16" rx="2"/>
+          <line x1="1" y1="10" x2="23" y2="10"/>
+        </svg>
+        Wallet Lookup
+      </div>
+      <div class="fin-card-body">
+        <div class="fin-search-row">
+          <select id="chainSelect" class="fin-chain-select">
+            <option value="btc">Bitcoin</option>
+            <option value="eth">Ethereum</option>
+          </select>
+          <input type="text" id="walletSearchInput" class="fin-search-input" placeholder="Enter wallet address...">
+          <button class="fin-btn fin-btn-primary" id="walletSearchBtn">Lookup</button>
+        </div>
+        <div class="fin-search-provider-row">
+          <button class="fin-provider-pill active" data-chain-provider="blockstream">Blockstream (BTC)</button>
+          <button class="fin-provider-pill" data-chain-provider="etherscan">Etherscan (ETH)</button>
+          <button class="fin-provider-pill" data-chain-provider="blockchair">Blockchair (Multi)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Wallet Balance -->
+    <div class="fin-card full-width" id="chainWalletCard">
+      <div class="fin-card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="1" x2="12" y2="23"/>
+          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+        </svg>
+        Wallet Details
+      </div>
+      <div class="fin-card-body">
+        <div class="fin-wallet-detail hidden" id="chainWalletDetail">
+          <div class="fin-wallet-balance-row">
+            <span class="fin-wallet-balance-label">Balance</span>
+            <span class="fin-wallet-balance-value" id="chainWalletBalance">--</span>
+          </div>
+          <div class="fin-wallet-balance-row">
+            <span class="fin-wallet-balance-label">Total Received</span>
+            <span class="fin-wallet-balance-value" id="chainWalletReceived">--</span>
+          </div>
+          <div class="fin-wallet-balance-row">
+            <span class="fin-wallet-balance-label">Total Sent</span>
+            <span class="fin-wallet-balance-value" id="chainWalletSent">--</span>
+          </div>
+          <div class="fin-wallet-balance-row">
+            <span class="fin-wallet-balance-label">Transactions</span>
+            <span class="fin-wallet-balance-value" id="chainWalletTxCount">--</span>
+          </div>
+        </div>
+        <div class="fin-empty" id="chainWalletEmpty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="1" y="4" width="22" height="16" rx="2"/>
+            <line x1="1" y1="10" x2="23" y2="10"/>
+          </svg>
+          <div>Enter a wallet address above to view balance and transaction history.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transaction History -->
+    <div class="fin-card full-width" id="chainTxCard">
+      <div class="fin-card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+        Recent Transactions
+        <span class="fin-card-badge" id="chainTxCount">0</span>
+      </div>
+      <div class="fin-card-body">
+        <table class="fin-watchlist" id="chainTxTable">
+          <thead>
+            <tr>
+              <th>TXID</th>
+              <th>Date</th>
+              <th>Amount</th>
+              <th>Confirmations</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="chainTxBody"></tbody>
+        </table>
+        <div class="fin-empty" id="chainTxEmpty">
+          <div>Transaction history will appear after wallet lookup.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KG Integration -->
+    <div class="fin-card" id="chainKgCard">
+      <div class="fin-card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/>
+          <circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/>
+          <line x1="9" y1="6" x2="15" y2="6"/><line x1="6" y1="9" x2="6" y2="15"/>
+        </svg>
+        KG Actions
+      </div>
+      <div class="fin-card-body">
+        <div class="fin-kg-actions">
+          <button class="pill-chip" id="chainAddWalletToKg" disabled>Add Wallet to KG</button>
+          <button class="pill-chip" id="chainTraceFlow" disabled>Trace Transaction Flow</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
   <!-- Add Item Modal -->
   <div class="fin-modal-overlay hidden" id="addModal">
     <div class="fin-modal">
@@ -196,6 +439,19 @@
     </div>
   </div>
 
+  <div id="argus-chat-container" style="padding:16px 20px;"></div>
+
+  <script src="../lib/purify.min.js"></script>
+  <script src="../lib/marked.min.js"></script>
+  <script src="../shared/text-it.js"></script>
+  <script src="../shared/xmpp-chat.js"></script>
+  <script src="../lib/argus-chat.js"></script>
   <script src="finance.js"></script>
+  <div id="xmpp-chat-container"></div>
+  <script>
+    if (typeof XmppChat !== "undefined") {
+      XmppChat.init({ container: document.getElementById("xmpp-chat-container"), pageId: "finance" });
+    }
+  </script>
 </body>
 </html>

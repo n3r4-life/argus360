@@ -9,6 +9,26 @@ const KnowledgeGraph = (() => {
   // ── Entity types ──
   const ENTITY_TYPES = ["person", "organization", "location", "date", "event", "other"];
 
+  // ── Intelligence entity types (registered for provider data) ──
+  const INTEL_ENTITY_TYPES = [
+    // Phase 1 — live in this build
+    "filing",               // SEC EDGAR — annual/quarterly/material filings
+    "insider_transaction",  // SEC EDGAR — Form 4 insider buys/sells
+
+    // Registered now, implemented in later phases
+    "court_case",           // CourtListener
+    "vessel",               // MarineTraffic
+    "aircraft",             // OpenSky / ADS-B Exchange
+    "airport",              // OpenSky
+    "port",                 // MarineTraffic
+    "wallet",               // Blockchain explorers
+    "transaction",          // Blockchain explorers
+    "smart_contract",       // Blockchain explorers
+    "global_event",         // GDELT
+    "satellite_image",      // Sentinel Hub
+    "radio_feed",           // Broadcastify / OpenMHZ
+  ];
+
   // ── Relationship types ──
   const RELATION_TYPES = {
     "mentioned-with": { label: "Mentioned with", color: "rgba(160,160,176,0.4)" },
@@ -16,6 +36,11 @@ const KnowledgeGraph = (() => {
     "located-in": { label: "Located in", color: "rgba(76,175,80,0.5)" },
     "invested-in": { label: "Invested in", color: "rgba(255,183,77,0.5)" },
     "worked-at": { label: "Worked at", color: "rgba(100,181,246,0.5)" },
+    // Intelligence layer relationships
+    "filed-by":         { label: "Filed by",         color: "rgba(255,152,0,0.5)" },
+    "insider-of":       { label: "Insider of",       color: "rgba(244,67,54,0.5)" },
+    "sanction-proximity": { label: "Sanctions adjacent", color: "rgba(255,87,34,0.5)" },
+    "corporate-link":   { label: "Corporate link",   color: "rgba(33,150,243,0.5)" },
   };
 
   // ── Name normalization ──
@@ -217,6 +242,7 @@ const KnowledgeGraph = (() => {
     if (t === "date" || t === "time") return "date";
     if (t === "event") return "event";
     if (ENTITY_TYPES.includes(t)) return t;
+    if (INTEL_ENTITY_TYPES.includes(t)) return t;
     return "other";
   }
 
@@ -796,6 +822,79 @@ const KnowledgeGraph = (() => {
           }
         }
       }
+      // ── Intel Rule 1: Sanctions proximity flag ──
+      const allNodes = await ArgusDB.KGNodes.getAll();
+      const sanctionedNodes = allNodes.filter(n => n.sanctioned);
+      for (const sNode of sanctionedNodes) {
+        // Find all edges connected to this sanctioned entity
+        const connectedEdges = allEdges.filter(
+          e => e.sourceId === sNode.id || e.targetId === sNode.id
+        );
+        for (const ce of connectedEdges) {
+          const adjacentId = ce.sourceId === sNode.id ? ce.targetId : ce.sourceId;
+          const adjacent = await ArgusDB.KGNodes.get(adjacentId);
+          if (!adjacent || adjacent.sanctioned) continue;
+          if (adjacent["sanctions-adjacent"]) continue; // already flagged
+          adjacent["sanctions-adjacent"] = true;
+          await ArgusDB.KGNodes.save(adjacent);
+          // Create sanction-proximity edge
+          const proxId = edgeId(sNode.id, adjacentId, "sanction-proximity");
+          const existingProx = await ArgusDB.KGEdges.get(proxId);
+          if (!existingProx) {
+            await ArgusDB.KGEdges.save({
+              id: proxId,
+              sourceId: sNode.id,
+              targetId: adjacentId,
+              relationType: "sanction-proximity",
+              weight: 1,
+              confidence: 0.6,
+              inferred: true,
+              inferenceRule: "sanctions-proximity",
+              source: "opensanctions-inference",
+              firstSeen: Date.now(),
+              updatedAt: Date.now(),
+            });
+            stats.inferred++;
+          }
+        }
+      }
+
+      // ── Intel Rule 2: SEC insider cross-reference ──
+      const insiderEdges = allEdges.filter(e => e.relationType === "insider-of");
+      // Group by person (sourceId)
+      const personOrgs = {};
+      for (const ie of insiderEdges) {
+        if (!personOrgs[ie.sourceId]) personOrgs[ie.sourceId] = [];
+        personOrgs[ie.sourceId].push(ie.targetId);
+      }
+      for (const [personId, orgIds] of Object.entries(personOrgs)) {
+        if (orgIds.length < 2) continue;
+        // Create corporate-link edges between all org pairs
+        for (let i = 0; i < orgIds.length; i++) {
+          for (let j = i + 1; j < orgIds.length; j++) {
+            const linkId = edgeId(orgIds[i], orgIds[j], "corporate-link");
+            const existingLink = await ArgusDB.KGEdges.get(linkId);
+            if (!existingLink) {
+              await ArgusDB.KGEdges.save({
+                id: linkId,
+                sourceId: orgIds[i],
+                targetId: orgIds[j],
+                relationType: "corporate-link",
+                weight: 1,
+                confidence: 0.85,
+                inferred: true,
+                inferenceRule: "sec-insider-crossref",
+                source: "sec-insider",
+                via: personId,
+                firstSeen: Date.now(),
+                updatedAt: Date.now(),
+              });
+              stats.inferred++;
+            }
+          }
+        }
+      }
+
     } catch (e) {
       console.warn("[KG] Inference error:", e);
     }
@@ -1005,6 +1104,7 @@ const KnowledgeGraph = (() => {
   // ── Public API ──
   return {
     ENTITY_TYPES,
+    INTEL_ENTITY_TYPES,
     RELATION_TYPES,
     extractAndUpsert,
     upsertEntity,

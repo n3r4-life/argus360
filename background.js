@@ -3597,6 +3597,167 @@ async function handleCloudLocalBackup() {
   }
 }
 
+// ── Intelligence Provider Handlers ──
+
+async function handleIntelGetStatus() {
+  const meta = IntelProviders.PROVIDER_META;
+  const providers = {};
+  for (const [key, info] of Object.entries(meta)) {
+    const provider = IntelProviders[key];
+    if (!provider) continue;
+    let connected = false;
+    let status = "unconfigured";
+    try {
+      connected = await provider.isConnected();
+      if (connected) status = "connected";
+      else if (info.zeroConfig) status = "connected"; // zero-config always connected
+    } catch { status = "error"; }
+    providers[key] = { configured: connected || info.zeroConfig, status, label: info.label, domain: info.domain };
+  }
+  return { success: true, providers };
+}
+
+async function handleIntelSearch(providerKey, query, options) {
+  try {
+    const provider = IntelProviders[providerKey];
+    if (!provider) return { success: false, error: `Unknown provider: ${providerKey}` };
+    let results;
+    switch (providerKey) {
+      case "opensanctions":
+        results = await provider.search(query, options?.dataset);
+        break;
+      case "secedgar":
+        results = await provider.searchCompany(query);
+        break;
+      default:
+        return { success: false, error: `Provider ${providerKey} search not yet implemented` };
+    }
+    return { success: true, results };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+async function handleIntelEnrichEntity(entityId, providerKeys) {
+  try {
+    const node = await ArgusDB.KGNodes.get(entityId);
+    if (!node) return { success: false, error: "Entity not found" };
+
+    const results = {};
+    const providers = providerKeys || ["opensanctions", "secedgar"];
+
+    for (const key of providers) {
+      try {
+        if (key === "opensanctions") {
+          const matchResult = await IntelProviders.opensanctions.match({
+            schema: node.type === "person" ? "Person" : "Company",
+            properties: { name: [node.displayName] },
+          });
+          results.opensanctions = matchResult;
+
+          // Flag sanctioned entities
+          if (matchResult?.responses?.length > 0) {
+            node.sanctioned = true;
+            node.sanctionData = matchResult.responses.slice(0, 5);
+            await ArgusDB.KGNodes.save(node);
+          }
+          await IntelProviders.logActivity("enrich", `Sanctions check: ${node.displayName}`, entityId);
+        }
+
+        if (key === "secedgar" && node.type === "organization") {
+          const searchResult = await IntelProviders.secedgar.searchCompany(node.displayName);
+          if (searchResult?.hits?.hits?.length > 0) {
+            const hit = searchResult.hits.hits[0];
+            const cik = hit._source?.entity_id || hit._id;
+            if (cik) {
+              const filings = await IntelProviders.secedgar.getFilings(cik);
+              results.secedgar = filings;
+
+              // Create filing entities in KG
+              const recentFilings = filings?.filings?.recent || {};
+              const forms = recentFilings.form || [];
+              const dates = recentFilings.filingDate || [];
+              const accessions = recentFilings.accessionNumber || [];
+              const limit = Math.min(forms.length, 10);
+
+              for (let i = 0; i < limit; i++) {
+                const filingEntity = {
+                  name: `${forms[i]} — ${node.displayName} (${dates[i]})`,
+                  type: "filing",
+                };
+                const filingNode = await KnowledgeGraph.upsertEntity(filingEntity, `sec-edgar:${accessions[i]}`, `SEC Filing`);
+                if (filingNode) {
+                  const eId = KnowledgeGraph.edgeId
+                    ? KnowledgeGraph.edgeId(entityId, filingNode.id, "filed-by")
+                    : `kge-filing-${entityId}-${filingNode.id}`;
+                  await ArgusDB.KGEdges.save({
+                    id: eId,
+                    sourceId: filingNode.id,
+                    targetId: entityId,
+                    relationType: "filed-by",
+                    weight: 1,
+                    confidence: 1.0,
+                    inferred: false,
+                    sourcePages: [`sec-edgar:${accessions[i]}`],
+                    firstSeen: Date.now(),
+                    updatedAt: Date.now(),
+                  });
+                }
+              }
+              await IntelProviders.logActivity("enrich", `SEC filings: ${node.displayName} (${limit} found)`, entityId);
+            }
+          }
+        }
+      } catch (e) {
+        results[key] = { error: e.message };
+      }
+    }
+
+    return { success: true, entityId, results };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+async function handleIntelScreenAll() {
+  try {
+    const allNodes = await ArgusDB.KGNodes.getAll();
+    const persons = allNodes.filter(n => n.type === "person");
+    const orgs = allNodes.filter(n => n.type === "organization");
+    const entitiesToScreen = [...persons, ...orgs];
+
+    let screened = 0;
+    let flagged = 0;
+
+    for (const node of entitiesToScreen) {
+      try {
+        const matchResult = await IntelProviders.opensanctions.match({
+          schema: node.type === "person" ? "Person" : "Company",
+          properties: { name: [node.displayName] },
+        });
+
+        if (matchResult?.responses?.length > 0) {
+          node.sanctioned = true;
+          node.sanctionData = matchResult.responses.slice(0, 5);
+          await ArgusDB.KGNodes.save(node);
+          flagged++;
+        }
+        screened++;
+      } catch { /* skip individual failures */ }
+    }
+
+    // Run sanctions proximity inference
+    if (flagged > 0) {
+      await KnowledgeGraph.runInferenceRules();
+    }
+
+    await IntelProviders.logActivity("screen", `Screened ${screened} entities, ${flagged} flagged`, null);
+    return { success: true, screened, flagged };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
 async function handleCloudLocalRestore(base64Data) {
   try {
     const binary = atob(base64Data);
@@ -7763,50 +7924,75 @@ async function financeRefreshPrices() {
     } catch (e) { console.warn("[Finance] CoinGecko fetch error:", e.message); }
   }
 
-  // ── Fetch stocks/indices/forex/commodities from Yahoo Finance ──
+  // ── Fetch stocks/indices/forex/commodities via Yahoo chart API ──
   if (yahooItems.length) {
-    // Batch into groups of 10
-    const batches = [];
-    for (let i = 0; i < yahooItems.length; i += 10) {
-      batches.push(yahooItems.slice(i, i + 10));
-    }
+    try {
+      const batch = yahooItems;
+        // Fetch each symbol individually (v7 quote endpoint is auth-gated)
+        for (const item of batch) {
+          try {
+            const sym = (() => {
+              const mapper = YAHOO_TYPE_MAP[item.type];
+              return mapper ? mapper(item.symbol) : item.symbol;
+            })();
 
-    for (const batch of batches) {
-      try {
-        const symbols = batch.map(item => {
-          const mapper = YAHOO_TYPE_MAP[item.type];
-          return mapper ? mapper(item.symbol) : item.symbol;
-        });
+            const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1d&interval=1d`;
+            const chartResp = await fetch(chartUrl, {
+              headers: { "User-Agent": "Mozilla/5.0" },
+            });
 
-        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(","))}`;
-        const resp = await fetch(url, {
-          headers: { "User-Agent": "Mozilla/5.0" },
-        });
-
-        if (resp.ok) {
-          const data = await resp.json();
-          const quotes = data?.quoteResponse?.result || [];
-
-          for (let j = 0; j < batch.length; j++) {
-            const item = batch[j];
-            const sym = symbols[j];
-            const quote = quotes.find(q =>
-              q.symbol === sym ||
-              q.symbol === item.symbol ||
-              q.symbol.toUpperCase() === sym.toUpperCase()
-            );
-            if (quote) {
-              item.price = quote.regularMarketPrice || null;
-              item.change = quote.regularMarketChange != null ? parseFloat(quote.regularMarketChange.toFixed(2)) : null;
-              item.changePct = quote.regularMarketChangePercent != null ? parseFloat(quote.regularMarketChangePercent.toFixed(2)) : null;
-              item.volume = quote.regularMarketVolume || null;
-              if (!item.name && quote.shortName) item.name = quote.shortName;
-              item.lastUpdated = new Date().toISOString();
-              updated++;
+            if (chartResp.ok) {
+              const chartData = await chartResp.json();
+              const meta = chartData?.chart?.result?.[0]?.meta;
+              if (meta) {
+                item.price = meta.regularMarketPrice ?? null;
+                const prevClose = meta.chartPreviousClose ?? meta.previousClose;
+                if (item.price != null && prevClose) {
+                  item.change = parseFloat((item.price - prevClose).toFixed(2));
+                  item.changePct = parseFloat(((item.price - prevClose) / prevClose * 100).toFixed(2));
+                }
+                item.volume = meta.regularMarketVolume ?? null;
+                if (!item.name && meta.shortName) item.name = meta.shortName;
+                if (!item.name && meta.longName) item.name = meta.longName;
+                item.lastUpdated = new Date().toISOString();
+                updated++;
+              }
             }
+          } catch (innerErr) {
+            console.warn(`[Finance] Yahoo chart fetch error for ${item.symbol}:`, innerErr.message);
           }
         }
-      } catch (e) { console.warn("[Finance] Yahoo fetch error:", e.message); }
+    } catch (e) { console.warn("[Finance] Yahoo fetch error:", e.message); }
+  }
+
+  // ── Fetch wallet balances ──
+  if (state.wallets?.length) {
+    for (const wallet of state.wallets) {
+      try {
+        if (wallet.chain === "btc") {
+          const resp = await fetch(`https://blockstream.info/api/address/${wallet.address}`);
+          if (resp.ok) {
+            const data = await resp.json();
+            const stats = data.chain_stats || {};
+            const funded = stats.funded_txo_sum || 0;
+            const spent = stats.spent_txo_sum || 0;
+            wallet.balance = ((funded - spent) / 1e8).toFixed(8);
+            wallet.lastUpdated = new Date().toISOString();
+            updated++;
+
+            // Get BTC/USD price for USD value
+            const btcItem = state.watchlist.find(i => i.type === "crypto" && i.symbol.toUpperCase() === "BTC");
+            if (btcItem?.price) {
+              wallet.usdValue = parseFloat((parseFloat(wallet.balance) * btcItem.price).toFixed(2));
+            }
+          }
+        } else if (wallet.chain === "eth") {
+          // Etherscan requires API key — skip if not configured
+          // TODO: wire up when Etherscan provider is implemented
+        }
+      } catch (e) {
+        console.warn(`[Finance] Wallet fetch error for ${wallet.chain}:${wallet.address.slice(0, 12)}:`, e.message);
+      }
     }
   }
 

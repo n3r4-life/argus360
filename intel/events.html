@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Events - Argus Intelligence</title>
+  <link rel="stylesheet" href="../shared/argus-std.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../lib/argus-chat.css">
+  <link rel="stylesheet" href="../shared/xmpp-chat.css">
+  <link rel="stylesheet" href="intel.css">
+</head>
+<body>
+  <script src="../shared/ribbon.js"></script>
+
+  <main class="intel-main">
+    <div class="intel-header">
+      <h1 class="intel-page-title">Events</h1>
+      <p class="intel-page-desc">Global event monitoring via GDELT. Track media coverage volume, sentiment analysis, and emerging trends across 100+ languages.</p>
+    </div>
+
+    <section class="intel-section">
+      <h2 class="intel-section-title">Provider Status</h2>
+      <div id="intel-page-providers" class="intel-page-providers"></div>
+      <div id="intel-not-configured" class="intel-not-configured hidden">
+        Providers not configured. <a href="../options/options.html#intel-providers">Go to Settings</a> to add API keys.
+      </div>
+    </section>
+
+    <!-- Search Bar -->
+    <section class="intel-section">
+      <div class="evt-search-bar">
+        <input type="text" id="evtSearchInput" class="comp-search-input" placeholder="Search entity, topic, or keyword...">
+        <div class="evt-date-range">
+          <input type="date" id="evtDateFrom" class="evt-date-input">
+          <span class="evt-date-sep">to</span>
+          <input type="date" id="evtDateTo" class="evt-date-input">
+        </div>
+        <button class="pill-chip" id="evtSearchBtn">Search</button>
+      </div>
+    </section>
+
+    <!-- Coverage Volume Chart -->
+    <section class="intel-section">
+      <h2 class="intel-section-title">Coverage Volume</h2>
+      <div class="evt-chart-container" id="evtVolumeChart">
+        <div class="evt-chart-placeholder">
+          <div class="evt-chart-bars">
+            <div class="evt-bar" style="height:20%"></div>
+            <div class="evt-bar" style="height:45%"></div>
+            <div class="evt-bar" style="height:30%"></div>
+            <div class="evt-bar" style="height:65%"></div>
+            <div class="evt-bar" style="height:80%"></div>
+            <div class="evt-bar" style="height:55%"></div>
+            <div class="evt-bar" style="height:40%"></div>
+            <div class="evt-bar" style="height:90%"></div>
+            <div class="evt-bar" style="height:70%"></div>
+            <div class="evt-bar" style="height:35%"></div>
+            <div class="evt-bar" style="height:50%"></div>
+            <div class="evt-bar" style="height:25%"></div>
+          </div>
+          <div class="evt-chart-label">Article volume over time — connect GDELT to populate</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sentiment Trend -->
+    <section class="intel-section">
+      <h2 class="intel-section-title">Sentiment Trend</h2>
+      <div class="evt-chart-container" id="evtSentimentChart">
+        <div class="evt-chart-placeholder">
+          <div class="evt-sentiment-line">
+            <svg viewBox="0 0 200 60" preserveAspectRatio="none" style="width:100%;height:50px;">
+              <polyline points="0,30 20,25 40,35 60,20 80,40 100,15 120,30 140,28 160,35 180,22 200,30"
+                fill="none" stroke="var(--accent)" stroke-width="2" opacity="0.3"/>
+              <line x1="0" y1="30" x2="200" y2="30" stroke="var(--text-muted)" stroke-width="0.5" stroke-dasharray="4"/>
+            </svg>
+          </div>
+          <div class="evt-chart-label">Sentiment tone over time — positive (top) / negative (bottom)</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Geographic Coverage -->
+    <section class="intel-section">
+      <h2 class="intel-section-title">Geographic Coverage</h2>
+      <div class="evt-map-placeholder" id="evtGeoMap">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3;">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="2" y1="12" x2="22" y2="12"/>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        </svg>
+        <div style="margin-top:8px;">Geographic heat map showing where topic is covered</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Requires GDELT provider connection</div>
+      </div>
+    </section>
+
+    <!-- Recent Articles -->
+    <section class="intel-section">
+      <div class="comp-results-header">
+        <h2 class="intel-section-title">Recent Articles</h2>
+        <span class="comp-results-count" id="evtArticleCount"></span>
+      </div>
+      <div class="evt-articles" id="evtArticles">
+        <div class="comp-empty" id="evtArticlesEmpty">
+          Search for a topic to see recent media coverage, article volume, and sentiment analysis from GDELT.
+        </div>
+      </div>
+    </section>
+
+    <!-- Actions -->
+    <section class="intel-section">
+      <div class="evt-actions">
+        <button class="pill-chip" id="evtAddEventToKg" disabled>Add Coverage Spike as KG Event</button>
+        <button class="pill-chip" id="evtExport" disabled>Export</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="argus-chat-container" style="padding:16px 20px;"></div>
+
+  <script src="../lib/purify.min.js"></script>
+  <script src="../lib/marked.min.js"></script>
+  <script src="../shared/text-it.js"></script>
+  <script src="../shared/xmpp-chat.js"></script>
+  <script src="../lib/argus-chat.js"></script>
+  <script src="domain-shell.js"></script>
+  <script>IntelDomainShell.init("events", ["gdelt"]);</script>
+  <script src="events.js"></script>
+  <div id="xmpp-chat-container"></div>
+  <script>
+    if (typeof XmppChat !== "undefined") {
+      XmppChat.init({ container: document.getElementById("xmpp-chat-container"), pageId: "intel-events" });
+    }
+  </script>
+</body>
+</html>

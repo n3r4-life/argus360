@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Compliance - Argus Intelligence</title>
+  <link rel="stylesheet" href="../shared/argus-std.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../lib/argus-chat.css">
+  <link rel="stylesheet" href="../shared/xmpp-chat.css">
+  <link rel="stylesheet" href="intel.css">
+</head>
+<body>
+  <script src="../shared/ribbon.js"></script>
+
+  <main class="intel-main">
+    <div class="intel-header">
+      <h1 class="intel-page-title">Compliance</h1>
+      <p class="intel-page-desc">Sanctions screening, PEP checks, court records, and regulatory compliance monitoring. Cross-reference entities against global watchlists and litigation databases.</p>
+    </div>
+
+    <section class="intel-section">
+      <h2 class="intel-section-title">Provider Status</h2>
+      <div id="intel-page-providers" class="intel-page-providers"></div>
+      <div id="intel-not-configured" class="intel-not-configured hidden">
+        Providers not configured. <a href="../options/options.html#intel-providers">Go to Settings</a> to add API keys.
+      </div>
+    </section>
+
+    <!-- Screen All -->
+    <section class="intel-section">
+      <div class="comp-screen-bar">
+        <button class="pill-chip" id="compScreenAll">Screen All KG Entities</button>
+        <span class="comp-screen-status" id="compScreenStatus"></span>
+        <span class="comp-screen-timestamp" id="compScreenTimestamp"></span>
+      </div>
+    </section>
+
+    <!-- Two-column layout -->
+    <div class="comp-columns">
+
+      <!-- LEFT: Sanctions Screening -->
+      <div class="comp-col">
+        <section class="intel-section">
+          <h2 class="intel-section-title">Sanctions Search</h2>
+          <div class="comp-search-row">
+            <input type="text" id="compSanctionsInput" class="comp-search-input" placeholder="Search name, organization, or vessel...">
+            <button class="pill-chip" id="compSanctionsBtn">Search</button>
+          </div>
+          <div class="comp-dataset-row">
+            <select id="compDataset" class="comp-dataset-select">
+              <option value="default">All Datasets</option>
+              <option value="sanctions">Sanctions Only</option>
+              <option value="peps">PEPs Only</option>
+              <option value="crime">Crime</option>
+            </select>
+          </div>
+        </section>
+
+        <!-- Sanctions Results -->
+        <section class="intel-section">
+          <div class="comp-results-header">
+            <h2 class="intel-section-title">Results</h2>
+            <span class="comp-results-count" id="compSanctionsCount"></span>
+          </div>
+          <div id="compSanctionsResults" class="comp-results-list">
+            <div class="comp-empty" id="compSanctionsEmpty">
+              Search a name to check against global sanctions lists, PEP databases, and watchlists across 30+ datasets.
+            </div>
+          </div>
+        </section>
+
+        <!-- Entity Screening Summary -->
+        <section class="intel-section">
+          <h2 class="intel-section-title">KG Screening Summary</h2>
+          <div class="comp-screening-summary" id="compScreeningSummary">
+            <div class="comp-summary-stat">
+              <span class="comp-summary-value" id="compFlaggedCount">0</span>
+              <span class="comp-summary-label">Flagged</span>
+            </div>
+            <div class="comp-summary-stat">
+              <span class="comp-summary-value" id="compCleanCount">0</span>
+              <span class="comp-summary-label">Clean</span>
+            </div>
+            <div class="comp-summary-stat">
+              <span class="comp-summary-value" id="compAdjacentCount">0</span>
+              <span class="comp-summary-label">Adjacent</span>
+            </div>
+          </div>
+          <div id="compFlaggedList" class="comp-flagged-list"></div>
+        </section>
+      </div>
+
+      <!-- RIGHT: Litigation Search -->
+      <div class="comp-col">
+        <section class="intel-section">
+          <h2 class="intel-section-title">Litigation Search</h2>
+          <div class="comp-search-row">
+            <input type="text" id="compLitigationInput" class="comp-search-input" placeholder="Search name or case number...">
+            <button class="pill-chip" id="compLitigationBtn">Search</button>
+          </div>
+        </section>
+
+        <!-- Litigation Results -->
+        <section class="intel-section">
+          <div class="comp-results-header">
+            <h2 class="intel-section-title">Court Records</h2>
+            <span class="comp-results-count" id="compLitigationCount"></span>
+          </div>
+          <div id="compLitigationResults" class="comp-results-list">
+            <div class="comp-empty" id="compLitigationEmpty">
+              Search for court cases and litigation records. <em>Requires CourtListener API key — configure in <a href="../options/options.html#intel-providers" style="color:var(--accent);">Settings</a>.</em>
+            </div>
+          </div>
+        </section>
+
+        <!-- Quick Entity Match -->
+        <section class="intel-section">
+          <h2 class="intel-section-title">Entity Match</h2>
+          <p class="comp-match-desc">Structured entity matching against OpenSanctions. Higher confidence than text search.</p>
+          <div class="comp-match-form">
+            <div class="comp-match-row">
+              <select id="compMatchSchema" class="comp-dataset-select">
+                <option value="Person">Person</option>
+                <option value="Company">Company</option>
+                <option value="Vessel">Vessel</option>
+                <option value="Aircraft">Aircraft</option>
+              </select>
+              <input type="text" id="compMatchName" class="comp-search-input" placeholder="Entity name...">
+            </div>
+            <div class="comp-match-row">
+              <input type="text" id="compMatchCountry" class="comp-search-input" placeholder="Country (optional, e.g. RU, IR, CN)">
+              <input type="text" id="compMatchBirthDate" class="comp-search-input" placeholder="Birth date (optional, YYYY-MM-DD)">
+            </div>
+            <button class="pill-chip" id="compMatchBtn">Match Entity</button>
+          </div>
+          <div id="compMatchResults" class="comp-results-list">
+            <div class="comp-empty" id="compMatchEmpty">
+              Entity match results will appear here.
+            </div>
+          </div>
+        </section>
+      </div>
+
+    </div>
+  </main>
+
+  <div id="argus-chat-container" style="padding:16px 20px;"></div>
+
+  <script src="../lib/purify.min.js"></script>
+  <script src="../lib/marked.min.js"></script>
+  <script src="../shared/text-it.js"></script>
+  <script src="../shared/xmpp-chat.js"></script>
+  <script src="../lib/argus-chat.js"></script>
+  <script src="domain-shell.js"></script>
+  <script>IntelDomainShell.init("compliance", ["opensanctions", "courtlistener"]);</script>
+  <script src="compliance.js"></script>
+  <div id="xmpp-chat-container"></div>
+  <script>
+    if (typeof XmppChat !== "undefined") {
+      XmppChat.init({ container: document.getElementById("xmpp-chat-container"), pageId: "intel-compliance" });
+    }
+  </script>
+</body>
+</html>

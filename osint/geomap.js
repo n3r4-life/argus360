@@ -182,11 +182,18 @@
         '<li><a href="' + escapeAttr(s.url) + '" target="_blank" rel="noopener">' + escapeHtml(s.title || s.url) + '</a></li>'
       ).join('');
 
+      const intelBtns =
+        '<div class="popup-intel-actions" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border,#333);">' +
+        '<button class="pill-chip popup-intel-btn" data-intel-action="screen" data-entity-name="' + escapeAttr(loc.name) + '" style="font-size:10px;padding:2px 8px;">Screen Sanctions</button> ' +
+        '<button class="pill-chip popup-intel-btn" data-intel-action="enrich" data-entity-name="' + escapeAttr(loc.name) + '" style="font-size:10px;padding:2px 8px;">Enrich</button>' +
+        '</div>';
+
       marker.bindPopup(
         '<div class="popup-title">' + escapeHtml(loc.name) + '</div>' +
         '<div class="popup-type">' + escapeHtml(loc.type) + '</div>' +
         '<div class="popup-mentions">' + (loc.mentions || 0) + ' mention' + ((loc.mentions || 0) !== 1 ? 's' : '') + '</div>' +
-        (sourcesHtml ? '<ul class="popup-sources">' + sourcesHtml + '</ul>' : '')
+        (sourcesHtml ? '<ul class="popup-sources">' + sourcesHtml + '</ul>' : '') +
+        intelBtns
       );
 
       marker._argusLocation = loc;
@@ -405,6 +412,53 @@
 
     // Export CSV
     document.getElementById('exportCsv').addEventListener('click', exportCsv);
+
+    // Intel enrichment buttons in marker popups
+    document.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.popup-intel-btn');
+      if (!btn) return;
+      const action = btn.dataset.intelAction;
+      const entityName = btn.dataset.entityName;
+      if (!entityName) return;
+
+      btn.disabled = true;
+      btn.textContent = 'Working...';
+
+      try {
+        if (action === 'screen') {
+          const resp = await browser.runtime.sendMessage({
+            action: 'intelSearch',
+            provider: 'opensanctions',
+            query: entityName,
+            options: {}
+          });
+          btn.textContent = resp?.success
+            ? `${resp.results?.total || 0} results`
+            : 'Error';
+        } else if (action === 'enrich') {
+          // Find matching KG entity
+          const kgResp = await browser.runtime.sendMessage({ action: 'getKGData' });
+          const nodes = kgResp?.nodes || [];
+          const match = nodes.find(n =>
+            n.displayName?.toLowerCase() === entityName.toLowerCase() ||
+            n.canonicalName?.toLowerCase() === entityName.toLowerCase()
+          );
+          if (match) {
+            const resp = await browser.runtime.sendMessage({
+              action: 'intelEnrichEntity',
+              entityId: match.id,
+              providers: ['opensanctions', 'secedgar']
+            });
+            btn.textContent = resp?.success ? 'Enriched!' : 'Error';
+          } else {
+            btn.textContent = 'No KG match';
+          }
+        }
+      } catch (err) {
+        btn.textContent = 'Error';
+      }
+      setTimeout(() => { btn.disabled = false; }, 2000);
+    });
 
     // Handle map resize when panel toggles
     const observer = new MutationObserver(() => {

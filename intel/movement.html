@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Movement - Argus Intelligence</title>
+  <link rel="stylesheet" href="../shared/argus-std.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../lib/argus-chat.css">
+  <link rel="stylesheet" href="../shared/xmpp-chat.css">
+  <link rel="stylesheet" href="intel.css">
+</head>
+<body>
+  <script src="../shared/ribbon.js"></script>
+
+  <main class="intel-main intel-main-full">
+    <div class="intel-header">
+      <h1 class="intel-page-title">Movement</h1>
+      <p class="intel-page-desc">Aviation tracking, maritime vessel monitoring, and radio feed analysis.</p>
+    </div>
+
+    <section class="intel-section">
+      <h2 class="intel-section-title">Provider Status</h2>
+      <div id="intel-page-providers" class="intel-page-providers"></div>
+      <div id="intel-not-configured" class="intel-not-configured hidden">
+        Providers not configured. <a href="../options/options.html#intel-providers">Go to Settings</a> to add API keys.
+      </div>
+    </section>
+
+    <!-- Mode Toggle + Search -->
+    <section class="intel-section">
+      <div class="mvmt-toolbar">
+        <div class="mvmt-mode-toggle">
+          <button class="pill-chip active" id="mvmtModeAviation" data-mode="aviation">Aviation</button>
+          <button class="pill-chip" id="mvmtModeMaritime" data-mode="maritime">Maritime</button>
+          <button class="pill-chip" id="mvmtModeRadio" data-mode="radio">Radio</button>
+        </div>
+        <div class="mvmt-search-row">
+          <input type="text" id="mvmtSearchInput" class="comp-search-input" placeholder="Search tail number, callsign, IMO, MMSI, or vessel name...">
+          <button class="pill-chip" id="mvmtSearchBtn">Search</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Map Area -->
+    <section class="intel-section">
+      <div class="mvmt-map-container" id="mvmtMapContainer">
+        <div class="mvmt-map-placeholder" id="mvmtMapPlaceholder">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3;">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+            <circle cx="12" cy="10" r="3"/>
+          </svg>
+          <div style="margin-top:8px;">Map view requires provider API keys.</div>
+          <div style="margin-top:4px;font-size:11px;color:var(--text-muted);">Configure OpenSky, ADS-B Exchange, or MarineTraffic in Settings to enable live tracking.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Results / Detail Area -->
+    <div class="mvmt-columns">
+      <!-- Search Results -->
+      <div class="mvmt-col">
+        <section class="intel-section">
+          <h2 class="intel-section-title" id="mvmtResultsTitle">Search Results</h2>
+          <div class="mvmt-results" id="mvmtResults">
+            <div class="comp-empty" id="mvmtResultsEmpty">
+              Search for aircraft by tail number or callsign, vessels by IMO/MMSI, or browse radio feeds by location.
+            </div>
+          </div>
+        </section>
+
+        <!-- Watchlist -->
+        <section class="intel-section">
+          <h2 class="intel-section-title">Movement Watchlist</h2>
+          <div class="mvmt-watchlist" id="mvmtWatchlist">
+            <div class="comp-empty">No tracked aircraft or vessels. Use "Watch" on search results to add items here.</div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Detail Sidebar -->
+      <div class="mvmt-col">
+        <section class="intel-section">
+          <h2 class="intel-section-title">Details</h2>
+          <div class="mvmt-detail" id="mvmtDetail">
+            <div class="comp-empty">Select a result to view details.</div>
+          </div>
+        </section>
+
+        <!-- KG Actions -->
+        <section class="intel-section">
+          <h2 class="intel-section-title">KG Actions</h2>
+          <div class="mvmt-kg-actions">
+            <button class="pill-chip" id="mvmtAddToKg" disabled>Add to KG</button>
+            <button class="pill-chip" id="mvmtWatchItem" disabled>Watch</button>
+            <button class="pill-chip" id="mvmtViewHistory" disabled>Flight/Voyage History</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div id="argus-chat-container" style="padding:16px 20px;"></div>
+
+  <script src="../lib/purify.min.js"></script>
+  <script src="../lib/marked.min.js"></script>
+  <script src="../shared/text-it.js"></script>
+  <script src="../shared/xmpp-chat.js"></script>
+  <script src="../lib/argus-chat.js"></script>
+  <script src="domain-shell.js"></script>
+  <script>IntelDomainShell.init("movement", ["opensky", "adsbexchange", "marinetraffic", "broadcastify"]);</script>
+  <script src="movement.js"></script>
+  <div id="xmpp-chat-container"></div>
+  <script>
+    if (typeof XmppChat !== "undefined") {
+      XmppChat.init({ container: document.getElementById("xmpp-chat-container"), pageId: "intel-movement" });
+    }
+  </script>
+</body>
+</html>

@@ -548,6 +548,395 @@
     }
   }
 
+  // ── Tab Switching ──
+  function switchFinTab(tabName) {
+    document.querySelectorAll(".fin-tab").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.finTab === tabName);
+    });
+    document.querySelectorAll(".fin-tab-panel").forEach(panel => {
+      panel.classList.toggle("active", panel.dataset.finPanel === tabName);
+    });
+    // Show/hide Markets-specific header buttons
+    const marketsOnly = ["viewWatchlist", "viewWallets", "viewAlerts", "refreshBtn", "addItemBtn"];
+    for (const id of marketsOnly) {
+      const el = document.getElementById(id);
+      if (el) el.style.display = tabName === "markets" ? "" : "none";
+    }
+    const refreshLabel = document.getElementById("lastRefreshed");
+    if (refreshLabel) refreshLabel.style.display = tabName === "markets" ? "" : "none";
+
+    sessionStorage.setItem("financeActiveTab", tabName);
+    // Refresh AI chat context for new tab
+    if (typeof ArgusChat !== "undefined") {
+      ArgusChat.updateContext(gatherFinanceContext());
+    }
+  }
+
+  document.querySelectorAll(".fin-tab").forEach(btn => {
+    btn.addEventListener("click", () => switchFinTab(btn.dataset.finTab));
+  });
+
+  // ── Corporate Tab Logic ──
+  let corpState = { cik: null, companyName: "", filings: [], officers: [] };
+
+  // Provider pill toggles
+  document.querySelectorAll("[data-corp-provider]").forEach(btn => {
+    btn.addEventListener("click", () => btn.classList.toggle("active"));
+  });
+  document.querySelectorAll("[data-chain-provider]").forEach(btn => {
+    btn.addEventListener("click", () => btn.classList.toggle("active"));
+  });
+
+  document.getElementById("corpSearchBtn")?.addEventListener("click", () => corpSearch());
+  document.getElementById("corpSearchInput")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") corpSearch();
+  });
+
+  async function corpSearch() {
+    const query = document.getElementById("corpSearchInput").value.trim();
+    if (!query) return;
+
+    const btn = document.getElementById("corpSearchBtn");
+    btn.disabled = true;
+    btn.textContent = "Searching...";
+
+    try {
+      // SEC EDGAR search
+      const resp = await browser.runtime.sendMessage({
+        action: "intelSearch", provider: "secedgar", query, options: {}
+      });
+
+      if (resp?.success && resp.results) {
+        const hits = resp.results?.hits?.hits || [];
+        if (hits.length > 0) {
+          const hit = hits[0];
+          const cik = hit._source?.entity_id || hit._id;
+          const name = hit._source?.entity_name || query;
+          corpState.cik = cik;
+          corpState.companyName = name;
+
+          // Show company info
+          const infoEl = document.getElementById("corpCompanyInfo");
+          document.getElementById("corpCompanyName").textContent = name;
+          document.getElementById("corpCompanyMeta").textContent = `CIK: ${cik} · ${hits.length} results`;
+          infoEl.classList.remove("hidden");
+
+          // Fetch full filings
+          await corpLoadFilings(cik);
+
+          // Enable KG buttons
+          document.getElementById("corpAddToKg").disabled = false;
+          document.getElementById("corpScreenSanctions").disabled = false;
+        } else {
+          document.getElementById("corpEdgarEmpty").innerHTML = '<div>No results found for "' + query + '".</div>';
+          document.getElementById("corpEdgarEmpty").style.display = "";
+        }
+      }
+    } catch (e) {
+      console.warn("[Finance Corporate] Search error:", e);
+    }
+
+    btn.disabled = false;
+    btn.textContent = "Search";
+
+    // Refresh AI chat context with corporate data
+    if (typeof ArgusChat !== "undefined") ArgusChat.updateContext(gatherFinanceContext());
+  }
+
+  async function corpLoadFilings(cik) {
+    try {
+      const padded = String(cik).padStart(10, "0");
+      const resp = await fetch(`https://data.sec.gov/submissions/CIK${padded}.json`, {
+        headers: { "User-Agent": "Argus/1.0 contact@example.com" }
+      });
+      if (!resp.ok) throw new Error(`SEC EDGAR: ${resp.status}`);
+      const data = await resp.json();
+
+      // Render filings table
+      const recent = data.filings?.recent || {};
+      const forms = recent.form || [];
+      const dates = recent.filingDate || [];
+      const descriptions = recent.primaryDocDescription || [];
+      const accessions = recent.accessionNumber || [];
+      const body = document.getElementById("corpFilingsBody");
+      const empty = document.getElementById("corpEdgarEmpty");
+      const badge = document.getElementById("corpEdgarCount");
+
+      const limit = Math.min(forms.length, 50);
+      badge.textContent = limit;
+      body.innerHTML = "";
+
+      if (limit === 0) {
+        empty.style.display = "";
+        return;
+      }
+      empty.style.display = "none";
+
+      corpState.filings = [];
+      for (let i = 0; i < limit; i++) {
+        const accNum = (accessions[i] || "").replace(/-/g, "");
+        const filingUrl = `https://www.sec.gov/Archives/edgar/data/${cik}/${accNum}`;
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><span class="fin-type-badge stock">${forms[i]}</span></td>
+          <td>${dates[i] || ""}</td>
+          <td>${descriptions[i] || ""}</td>
+          <td style="font-size:10px;font-family:monospace;">${(accessions[i] || "").slice(0, 18)}</td>
+          <td><a href="${filingUrl}" target="_blank" rel="noopener" style="color:var(--accent);font-size:11px;">View</a></td>
+        `;
+        body.appendChild(tr);
+        corpState.filings.push({ form: forms[i], date: dates[i], desc: descriptions[i], accession: accessions[i] });
+      }
+
+      // Render officers from company data
+      const officers = data.officers || [];
+      const officersList = document.getElementById("corpOfficersList");
+      const officersEmpty = document.getElementById("corpOfficersEmpty");
+
+      if (officers.length > 0) {
+        officersEmpty.style.display = "none";
+        corpState.officers = officers;
+        officersList.innerHTML = officers.map(o => `
+          <div class="fin-officer-row">
+            <span class="fin-officer-name">${o.name || "Unknown"}</span>
+            <span class="fin-officer-title">${o.title || ""}</span>
+          </div>
+        `).join("");
+        document.getElementById("corpAddOfficersToKg").disabled = false;
+      }
+
+      // Render insider transactions (Form 4)
+      const insiderForms = [];
+      for (let i = 0; i < limit; i++) {
+        if (forms[i] === "4" || forms[i] === "4/A") {
+          insiderForms.push({ form: forms[i], date: dates[i], desc: descriptions[i], accession: accessions[i] });
+        }
+      }
+      const insiderList = document.getElementById("corpInsiderList");
+      const insiderEmpty = document.getElementById("corpInsiderEmpty");
+      const insiderBadge = document.getElementById("corpInsiderCount");
+      insiderBadge.textContent = insiderForms.length;
+
+      if (insiderForms.length > 0) {
+        insiderEmpty.style.display = "none";
+        insiderList.innerHTML = insiderForms.slice(0, 20).map(f => `
+          <div class="fin-insider-row">
+            <span class="fin-type-badge stock">Form 4</span>
+            <span class="fin-insider-date">${f.date}</span>
+            <span class="fin-insider-desc">${f.desc || "Insider transaction"}</span>
+          </div>
+        `).join("");
+      }
+
+    } catch (e) {
+      console.warn("[Finance Corporate] Filings error:", e);
+    }
+  }
+
+  // Corporate KG actions
+  document.getElementById("corpAddToKg")?.addEventListener("click", async () => {
+    if (!corpState.companyName) return;
+    try {
+      await browser.runtime.sendMessage({
+        action: "extractAndUpsert",
+        text: corpState.companyName,
+        pageUrl: `sec-edgar:${corpState.cik}`,
+        pageTitle: `SEC EDGAR — ${corpState.companyName}`
+      });
+      document.getElementById("corpAddToKg").textContent = "Added!";
+      setTimeout(() => { document.getElementById("corpAddToKg").textContent = "Add Company to KG"; }, 2000);
+    } catch (e) { console.warn(e); }
+  });
+
+  document.getElementById("corpAddOfficersToKg")?.addEventListener("click", async () => {
+    if (!corpState.officers.length) return;
+    const btn = document.getElementById("corpAddOfficersToKg");
+    btn.disabled = true;
+    btn.textContent = "Adding...";
+    try {
+      for (const officer of corpState.officers) {
+        await browser.runtime.sendMessage({
+          action: "extractAndUpsert",
+          text: `${officer.name} is an officer of ${corpState.companyName}`,
+          pageUrl: `sec-edgar:${corpState.cik}`,
+          pageTitle: `SEC Officers — ${corpState.companyName}`
+        });
+      }
+      btn.textContent = `Added ${corpState.officers.length}!`;
+      setTimeout(() => { btn.textContent = "Add Officers to KG"; btn.disabled = false; }, 2000);
+    } catch (e) { console.warn(e); btn.disabled = false; btn.textContent = "Add Officers to KG"; }
+  });
+
+  document.getElementById("corpScreenSanctions")?.addEventListener("click", async () => {
+    if (!corpState.companyName) return;
+    const btn = document.getElementById("corpScreenSanctions");
+    btn.disabled = true;
+    btn.textContent = "Screening...";
+    try {
+      const resp = await browser.runtime.sendMessage({
+        action: "intelSearch", provider: "opensanctions", query: corpState.companyName, options: {}
+      });
+      const total = resp?.results?.total || 0;
+      btn.textContent = total > 0 ? `${total} matches found` : "Clear";
+      setTimeout(() => { btn.textContent = "Screen Sanctions"; btn.disabled = false; }, 3000);
+    } catch (e) { btn.disabled = false; btn.textContent = "Screen Sanctions"; }
+  });
+
+  // ── Blockchain Tab Logic ──
+  let chainState = { address: "", chain: "btc", balance: null, txs: [] };
+
+  document.getElementById("walletSearchBtn")?.addEventListener("click", () => chainLookup());
+  document.getElementById("walletSearchInput")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") chainLookup();
+  });
+
+  async function chainLookup() {
+    const address = document.getElementById("walletSearchInput").value.trim();
+    const chain = document.getElementById("chainSelect").value;
+    if (!address) return;
+
+    const btn = document.getElementById("walletSearchBtn");
+    btn.disabled = true;
+    btn.textContent = "Looking up...";
+    chainState.address = address;
+    chainState.chain = chain;
+
+    try {
+      if (chain === "btc") {
+        await chainLookupBtc(address);
+      } else if (chain === "eth") {
+        await chainLookupEth(address);
+      }
+      document.getElementById("chainAddWalletToKg").disabled = false;
+    } catch (e) {
+      console.warn("[Finance Blockchain] Lookup error:", e);
+      document.getElementById("chainWalletEmpty").innerHTML = '<div>Error: ' + e.message + '</div>';
+    }
+
+    btn.disabled = false;
+    btn.textContent = "Lookup";
+
+    // Refresh AI chat context with blockchain data
+    if (typeof ArgusChat !== "undefined") ArgusChat.updateContext(gatherFinanceContext());
+  }
+
+  async function chainLookupBtc(address) {
+    // Blockstream API (free, no key needed)
+    const resp = await fetch(`https://blockstream.info/api/address/${address}`);
+    if (!resp.ok) throw new Error(`Blockstream: ${resp.status}`);
+    const data = await resp.json();
+
+    const stats = data.chain_stats || {};
+    const funded = stats.funded_txo_sum || 0;
+    const spent = stats.spent_txo_sum || 0;
+    const balance = funded - spent;
+    const txCount = (stats.funded_txo_count || 0) + (stats.spent_txo_count || 0);
+
+    chainState.balance = { balance, received: funded, sent: spent, txCount };
+
+    // Show wallet detail
+    document.getElementById("chainWalletDetail").classList.remove("hidden");
+    document.getElementById("chainWalletEmpty").style.display = "none";
+    document.getElementById("chainWalletBalance").textContent = `${(balance / 1e8).toFixed(8)} BTC`;
+    document.getElementById("chainWalletReceived").textContent = `${(funded / 1e8).toFixed(8)} BTC`;
+    document.getElementById("chainWalletSent").textContent = `${(spent / 1e8).toFixed(8)} BTC`;
+    document.getElementById("chainWalletTxCount").textContent = txCount;
+
+    // Fetch recent transactions
+    const txResp = await fetch(`https://blockstream.info/api/address/${address}/txs`);
+    if (txResp.ok) {
+      const txs = await txResp.json();
+      chainRenderTxs(txs.slice(0, 25), "btc");
+    }
+  }
+
+  async function chainLookupEth(address) {
+    // Etherscan requires API key — check if configured
+    // For now use a basic placeholder
+    document.getElementById("chainWalletDetail").classList.remove("hidden");
+    document.getElementById("chainWalletEmpty").style.display = "none";
+    document.getElementById("chainWalletBalance").textContent = "Etherscan API key required";
+    document.getElementById("chainWalletReceived").textContent = "--";
+    document.getElementById("chainWalletSent").textContent = "--";
+    document.getElementById("chainWalletTxCount").textContent = "--";
+
+    document.getElementById("chainTxEmpty").style.display = "";
+    document.getElementById("chainTxEmpty").innerHTML = '<div>Configure Etherscan API key in <a href="../options/options.html#intel-providers" style="color:var(--accent);">Settings</a> to view ETH transactions.</div>';
+  }
+
+  function chainRenderTxs(txs, chain) {
+    const body = document.getElementById("chainTxBody");
+    const empty = document.getElementById("chainTxEmpty");
+    const badge = document.getElementById("chainTxCount");
+
+    body.innerHTML = "";
+    badge.textContent = txs.length;
+
+    if (!txs.length) {
+      empty.style.display = "";
+      return;
+    }
+    empty.style.display = "none";
+
+    chainState.txs = txs;
+
+    for (const tx of txs) {
+      const tr = document.createElement("tr");
+      const txid = tx.txid || tx.hash || "";
+      const shortTxid = txid.slice(0, 12) + "..." + txid.slice(-6);
+      const date = tx.status?.block_time
+        ? new Date(tx.status.block_time * 1000).toLocaleDateString()
+        : "Pending";
+      const confirmations = tx.status?.confirmed ? (tx.status.block_height ? "Confirmed" : "1+") : "Unconfirmed";
+
+      // Calculate net amount for this address
+      let amount = 0;
+      if (chain === "btc") {
+        const inputSum = (tx.vin || []).reduce((s, v) => {
+          if (v.prevout?.scriptpubkey_address === chainState.address) return s + (v.prevout.value || 0);
+          return s;
+        }, 0);
+        const outputSum = (tx.vout || []).reduce((s, v) => {
+          if (v.scriptpubkey_address === chainState.address) return s + (v.value || 0);
+          return s;
+        }, 0);
+        amount = (outputSum - inputSum) / 1e8;
+      }
+
+      const amountClass = amount >= 0 ? "fin-ticker-change up" : "fin-ticker-change down";
+      const amountStr = amount >= 0 ? `+${amount.toFixed(8)}` : amount.toFixed(8);
+
+      const explorerUrl = chain === "btc"
+        ? `https://blockstream.info/tx/${txid}`
+        : `https://etherscan.io/tx/${txid}`;
+
+      tr.innerHTML = `
+        <td style="font-size:10px;font-family:monospace;"><a href="${explorerUrl}" target="_blank" rel="noopener" style="color:var(--accent);">${shortTxid}</a></td>
+        <td>${date}</td>
+        <td><span class="${amountClass}">${amountStr} ${chain.toUpperCase()}</span></td>
+        <td>${confirmations}</td>
+        <td><a href="${explorerUrl}" target="_blank" rel="noopener" style="color:var(--text-muted);font-size:11px;">Explorer</a></td>
+      `;
+      body.appendChild(tr);
+    }
+  }
+
+  // Blockchain KG actions
+  document.getElementById("chainAddWalletToKg")?.addEventListener("click", async () => {
+    if (!chainState.address) return;
+    try {
+      await browser.runtime.sendMessage({
+        action: "extractAndUpsert",
+        text: `Wallet ${chainState.address} on ${chainState.chain.toUpperCase()}`,
+        pageUrl: `blockchain:${chainState.chain}:${chainState.address}`,
+        pageTitle: `${chainState.chain.toUpperCase()} Wallet`
+      });
+      const btn = document.getElementById("chainAddWalletToKg");
+      btn.textContent = "Added!";
+      setTimeout(() => { btn.textContent = "Add Wallet to KG"; }, 2000);
+    } catch (e) { console.warn(e); }
+  });
+
   // Listen for storage changes (background refresh updates prices)
   browser.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && changes[STORAGE_KEY]) {
@@ -566,6 +955,77 @@
   await loadState();
   renderAll();
   updateLastRefreshed();
+
+  // Restore active tab from session or hash
+  const savedTab = window.location.hash.replace("#", "") || sessionStorage.getItem("financeActiveTab") || "markets";
+  if (savedTab !== "markets") switchFinTab(savedTab);
+
+  // ── AI Chat ──
+  function initFinanceChat() {
+    if (typeof ArgusChat === "undefined") return;
+    ArgusChat.init({
+      container: document.getElementById("argus-chat-container"),
+      contextType: "Finance",
+      contextData: gatherFinanceContext(),
+      pageUrl: window.location.href,
+      pageTitle: "Finance Monitor"
+    });
+  }
+
+  function gatherFinanceContext() {
+    const activeTab = sessionStorage.getItem("financeActiveTab") || "markets";
+    const lines = [`Active tab: ${activeTab}\n`];
+
+    // Markets data
+    if (state.watchlist.length) {
+      lines.push("== Watchlist ==");
+      for (const item of state.watchlist) {
+        lines.push(`${item.symbol} (${item.type}) — ${item.name || ""} | Price: ${item.price || "?"} | Change: ${item.changePct || "?"}% | Vol: ${item.volume || "?"}`);
+      }
+    }
+    if (state.wallets.length) {
+      lines.push("\n== Wallets ==");
+      for (const w of state.wallets) {
+        lines.push(`${w.chain.toUpperCase()} ${w.address.slice(0,12)}... — ${w.label || ""} | Balance: ${w.balance || "?"} | USD: ${w.usdValue || "?"}`);
+      }
+    }
+    if (state.alerts.length) {
+      lines.push("\n== Alerts ==");
+      for (const a of state.alerts) {
+        lines.push(`${a.symbol} ${a.condition} ${a.threshold} — ${a.enabled ? "Active" : "Disabled"}${a.triggered ? " (TRIGGERED)" : ""}`);
+      }
+    }
+
+    // Corporate data
+    if (corpState.companyName) {
+      lines.push(`\n== Corporate: ${corpState.companyName} (CIK: ${corpState.cik}) ==`);
+      if (corpState.filings.length) {
+        lines.push(`${corpState.filings.length} recent filings:`);
+        for (const f of corpState.filings.slice(0, 15)) {
+          lines.push(`  ${f.form} — ${f.date} — ${f.desc || ""}`);
+        }
+      }
+      if (corpState.officers.length) {
+        lines.push(`Officers: ${corpState.officers.map(o => `${o.name} (${o.title || ""})`).join(", ")}`);
+      }
+    }
+
+    // Blockchain data
+    if (chainState.address) {
+      lines.push(`\n== Blockchain: ${chainState.chain.toUpperCase()} wallet ${chainState.address.slice(0,16)}... ==`);
+      if (chainState.balance) {
+        const b = chainState.balance;
+        lines.push(`Balance: ${b.balance} | Received: ${b.received} | Sent: ${b.sent} | Txs: ${b.txCount}`);
+      }
+      if (chainState.txs.length) {
+        lines.push(`Recent transactions: ${chainState.txs.length}`);
+      }
+    }
+
+    return lines.join("\n");
+  }
+
+  initFinanceChat();
 
   // Auto-refresh on page open (if stale > 2 min)
   if (!state.lastRefreshed || (Date.now() - new Date(state.lastRefreshed).getTime() > 120000)) {

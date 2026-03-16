@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Connection Graph - Argus OSINT</title>
+  <link rel="stylesheet" href="../shared/argus-std.css">
   <link rel="stylesheet" href="graph.css">
   <link rel="stylesheet" href="../lib/argus-chat.css">
   <link rel="stylesheet" href="../shared/ribbon.css">
@@ -108,6 +109,16 @@
       <div class="detail-section">
         <h3>Connected Entities</h3>
         <ul id="detailEdges" class="edge-list"></ul>
+      </div>
+      <div class="detail-section" id="detailIntelSection">
+        <h3>Intelligence</h3>
+        <div class="intel-enrich-status" id="intelEnrichStatus"></div>
+        <div class="intel-enrich-actions" id="intelEnrichActions">
+          <button class="pill-chip intel-enrich-btn" data-provider="opensanctions" title="Screen against sanctions lists">Sanctions</button>
+          <button class="pill-chip intel-enrich-btn" data-provider="secedgar" title="Fetch SEC filings">SEC Filings</button>
+          <button class="pill-chip intel-enrich-btn" data-provider="all" title="Run all providers">Enrich All</button>
+        </div>
+        <div class="intel-enrich-results" id="intelEnrichResults"></div>
       </div>
     </div>
   </aside>

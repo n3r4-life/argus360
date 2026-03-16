@@ -219,6 +219,11 @@ body {
   color: var(--text-primary);
   border-color: var(--text-primary);
 }
+.pill-chip:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
 
 /*
  * Tool chips — accent-tinted pill buttons
@@ -748,3 +753,65 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
   font-family: "SF Mono", "Fira Code", "Consolas", monospace;
   letter-spacing: 0.2px;
 }
+
+/* ── Intel provider sub-strip (sits below AI strip) ── */
+.ribbon-intel-strip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 20px;
+  height: 22px;
+  background: #161626;
+  border-bottom: 1px solid #222240;
+  font-family: var(--font);
+  font-size: 10px;
+  position: sticky;
+  top: 68px; /* ribbon 46px + AI strip 22px */
+  z-index: 997;
+}
+.ribbon-intel-strip:empty {
+  display: none;
+}
+.ribbon-intel-strip-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: #3a3a58;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+.ribbon-intel-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #5a5a78;
+  background: transparent;
+  border: 1px solid #252545;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+  white-space: nowrap;
+  line-height: 1;
+  letter-spacing: 0.3px;
+}
+.ribbon-intel-pill:hover {
+  color: #c0c0d8;
+  border-color: #4a4a6a;
+  background: rgba(255, 255, 255, 0.04);
+}
+.ribbon-intel-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #4a4a68; /* unconfigured = grey */
+}
+.ribbon-intel-dot.live      { background: #22c55e; }
+.ribbon-intel-dot.connected { background: #22c55e; }
+.ribbon-intel-dot.error     { background: #f87171; }
+.ribbon-intel-dot.idle      { background: #f59e0b; }

@@ -368,7 +368,212 @@ body {
 }
 .fin-empty svg { width: 32px; height: 32px; margin-bottom: 8px; opacity: 0.3; }
 
+/* ── Finance Tab Bar ── */
+.fin-tab-bar {
+  display: flex;
+  gap: 4px;
+  padding: 6px 20px;
+  background: #12122a;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.fin-tab {
+  padding: 5px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  letter-spacing: 0.3px;
+}
+.fin-tab:hover {
+  color: var(--text-secondary);
+  border-color: var(--border);
+}
+.fin-tab.active {
+  color: var(--accent);
+  background: rgba(233, 69, 96, 0.1);
+  border-color: var(--accent);
+}
+
+/* ── Tab Panels ── */
+.fin-tab-panel {
+  display: none;
+}
+.fin-tab-panel.active {
+  display: grid;
+}
+
+/* ── Corporate & Blockchain Shared Styles ── */
+.fin-search-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.fin-search-input {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+}
+.fin-search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.fin-search-input::placeholder {
+  color: var(--text-muted);
+}
+.fin-chain-select {
+  padding: 8px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  min-width: 100px;
+}
+.fin-chain-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Provider pill toggles in search rows */
+.fin-search-provider-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.fin-provider-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.fin-provider-pill.active {
+  color: var(--accent);
+  border-color: rgba(233, 69, 96, 0.4);
+  background: rgba(233, 69, 96, 0.08);
+}
+
+/* ── Corporate Tab ── */
+.fin-corp-company-info {
+  padding: 10px 14px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+}
+.fin-corp-company-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.fin-corp-company-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.fin-officer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.fin-officer-row:last-child {
+  border-bottom: none;
+}
+.fin-officer-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.fin-officer-title {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.fin-insider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.fin-insider-row:last-child {
+  border-bottom: none;
+}
+.fin-insider-date {
+  color: var(--text-muted);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.fin-insider-desc {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fin-kg-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Blockchain Tab ── */
+.fin-wallet-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.fin-wallet-balance-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.fin-wallet-balance-row:last-child {
+  border-bottom: none;
+}
+.fin-wallet-balance-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.fin-wallet-balance-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Responsive ── */
 @media (max-width: 900px) {
   .fin-main { grid-template-columns: 1fr; }
+  .fin-search-row { flex-direction: column; }
+  .fin-chain-select { min-width: auto; }
 }

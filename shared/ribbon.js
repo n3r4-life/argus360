@@ -78,6 +78,9 @@
     ["circle", { cx: "11", cy: "11", r: "8" }],
     ["line", { x1: "21", y1: "21", x2: "16.65", y2: "16.65" }]
   ]));
+  icons.appendChild(makeIcon("ribbon-intel", "Intelligence", [
+    ["path", { d: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" }]
+  ]));
   icons.appendChild(makeIcon("ribbon-automate", "Automate", [
     ["circle", { cx: "12", cy: "12", r: "3" }],
     ["path", { d: "M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15 1.65 1.65 0 0 0 3.17 14H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68 1.65 1.65 0 0 0 10 3.17V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" }]
@@ -165,6 +168,12 @@
   aiStrip.id = "ribbon-ai-strip";
   document.body.insertBefore(aiStrip, ribbon.nextSibling);
 
+  // ── Intel provider sub-strip (below AI strip) ──
+  const intelStrip = document.createElement("div");
+  intelStrip.className = "ribbon-intel-strip";
+  intelStrip.id = "ribbon-intel-strip";
+  document.body.insertBefore(intelStrip, aiStrip.nextSibling);
+
   // ── App launcher tab bar (below ribbon) ──
   const appBar = document.createElement("nav");
   appBar.className = "argus-app-tabs";
@@ -220,7 +229,15 @@
     "/results/": "app-results",
     "/osint/regex": "app-results",
     "/osint/link-map": "app-link-map",
-    "/trawl/": "app-trawl"
+    "/trawl/": "app-trawl",
+    // Intelligence pages (ribbon-icon navigated, not app-tab)
+    "/intel/hub":        "ribbon-intel",
+    "/intel/compliance": "ribbon-intel",
+    "/intel/movement":   "ribbon-intel",
+    "/intel/events":     "ribbon-intel",
+    "/intel/satellite":  "ribbon-intel",
+    "/intel/corporate":  "ribbon-intel",
+    "/intel/blockchain": "ribbon-intel",
   };
 
   // ── Quick-jump button (⋯) — shows hidden/non-visible MFT tabs ──
@@ -559,6 +576,7 @@
   document.getElementById("ribbon-monitors").addEventListener("click", () => nav("monitors"));
   document.getElementById("ribbon-feeds").addEventListener("click", () => nav("feeds"));
   document.getElementById("ribbon-osint").addEventListener("click", () => nav("osint"));
+  document.getElementById("ribbon-intel").addEventListener("click", () => navigateTo("intel/hub.html"));
   document.getElementById("ribbon-automate").addEventListener("click", () => nav("automation"));
   document.getElementById("ribbon-redirects").addEventListener("click", () => nav("archive"));
   document.getElementById("ribbon-tracker").addEventListener("click", () => nav("tracker"));
@@ -670,7 +688,7 @@
   let _ribbonStatusTimer = null;
   function updateRibbonStatus() {
     clearTimeout(_ribbonStatusTimer);
-    _ribbonStatusTimer = setTimeout(() => { _doUpdateRibbonStatus(); _doUpdateAiStrip(); }, 80);
+    _ribbonStatusTimer = setTimeout(() => { _doUpdateRibbonStatus(); _doUpdateAiStrip(); _doUpdateIntelStrip(); }, 80);
   }
 
   async function _doUpdateRibbonStatus() {
@@ -737,6 +755,35 @@
         : "";
       strip.innerHTML = pills.length
         ? `<span class="ribbon-ai-strip-label">AI</span>` + pills.join("") + modelTag
+        : "";
+      strip.querySelectorAll("[data-nav]").forEach(btn => {
+        btn.addEventListener("click", () => nav(btn.dataset.nav));
+      });
+    } catch { /* background not ready */ }
+  }
+
+  const INTEL_PILL_LABELS = {
+    opensanctions: "Sanctions", secedgar: "SEC", courtlistener: "Courts",
+    opensky: "OpenSky", adsbexchange: "ADS-B", marinetraffic: "Marine",
+    gdelt: "GDELT", sentinelhub: "Sentinel", opencorporates: "Corps",
+    gleif: "GLEIF", blockstream: "BTC", broadcastify: "Radio",
+  };
+
+  async function _doUpdateIntelStrip() {
+    const strip = document.getElementById("ribbon-intel-strip");
+    if (!strip) return;
+    try {
+      const resp = await browser.runtime.sendMessage({ action: "intelGetStatus" });
+      const pills = [];
+      for (const [key, info] of Object.entries(resp?.providers || {})) {
+        if (!info.configured && info.status !== "connected") continue;
+        const label = INTEL_PILL_LABELS[key] || key;
+        const statusClass = info.status === "connected" ? "live" : info.status === "error" ? "error" : "idle";
+        const tip = `${info.label} · ${info.status} — click to manage`;
+        pills.push(`<button class="ribbon-intel-pill" data-nav="settings" title="${tip}"><span class="ribbon-intel-dot ${statusClass}"></span>${label}</button>`);
+      }
+      strip.innerHTML = pills.length
+        ? `<span class="ribbon-intel-strip-label">INTEL</span>` + pills.join("")
         : "";
       strip.querySelectorAll("[data-nav]").forEach(btn => {
         btn.addEventListener("click", () => nav(btn.dataset.nav));

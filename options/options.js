@@ -3939,6 +3939,87 @@ function attachListeners() {
       pwField.value = "••••••••";
     }
   });
+  // ── Intelligence provider tabs ──
+  const INTEL_PROVIDER_KEYS = ["opensanctions", "secedgar", "courtlistener", "opensky", "adsbexchange", "marinetraffic", "gdelt", "sentinelhub", "opencorporates", "gleif", "blockstream", "broadcastify"];
+
+  document.getElementById("intel-provider-tab-list")?.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.iprovider;
+      document.getElementById("intel-provider-tab-list").querySelectorAll(".tab-btn").forEach(b => {
+        b.classList.toggle("active", b.dataset.iprovider === key);
+      });
+      for (const k of INTEL_PROVIDER_KEYS) {
+        const panel = document.getElementById(`intel-${k}-fields`);
+        if (panel) panel.classList.toggle("hidden", k !== key);
+      }
+    });
+  });
+
+  // Intel provider API key auto-save
+  for (const key of INTEL_PROVIDER_KEYS) {
+    const input = document.getElementById(`intel-${key}-apikey`);
+    if (input) {
+      input.addEventListener("input", () => {
+        browser.runtime.sendMessage({
+          action: "intelSaveConfig",
+          provider: key,
+          config: { apiKey: input.value.trim() }
+        }).catch(() => {});
+      });
+    }
+  }
+
+  // Intel provider test connection buttons
+  for (const key of INTEL_PROVIDER_KEYS) {
+    const testBtn = document.getElementById(`intel-${key}-test-btn`);
+    if (testBtn) {
+      testBtn.addEventListener("click", async () => {
+        const statusEl = document.getElementById(`intel-${key}-status`);
+        statusEl.className = "dp-status";
+        statusEl.textContent = "Testing...";
+        try {
+          let resp;
+          if (key === "opensanctions" || key === "secedgar") {
+            // Direct test via background for live providers
+            resp = await browser.runtime.sendMessage({ action: "intelSearch", provider: key, query: "test", options: {} });
+          } else {
+            resp = { success: false, error: "Provider not yet implemented" };
+          }
+          if (resp?.success) {
+            statusEl.className = "dp-status connected";
+            statusEl.textContent = "Connected!";
+          } else {
+            statusEl.className = "dp-status error";
+            statusEl.textContent = resp?.error || "Connection failed";
+          }
+        } catch (e) {
+          statusEl.className = "dp-status error";
+          statusEl.textContent = e.message;
+        }
+      });
+    }
+  }
+
+  // Load intel provider status on page load
+  browser.runtime.sendMessage({ action: "intelGetStatus" }).then(resp => {
+    if (!resp?.providers) return;
+    for (const [key, info] of Object.entries(resp.providers)) {
+      const statusEl = document.getElementById(`intel-${key}-status`);
+      if (statusEl) {
+        if (info.status === "connected") {
+          statusEl.className = "dp-status connected";
+          statusEl.textContent = "Connected";
+        } else if (info.status === "error") {
+          statusEl.className = "dp-status error";
+          statusEl.textContent = "Error";
+        } else {
+          statusEl.className = "dp-status";
+          statusEl.textContent = "Not configured";
+        }
+      }
+    }
+  }).catch(() => {});
+
   // Paste provider tabs
   document.getElementById("paste-provider-tab-list").querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => selectPasteProviderTab(btn.dataset.pprovider));

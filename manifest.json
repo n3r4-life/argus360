@@ -34,6 +34,10 @@
     "https://api.openai.com/*",
     "https://api.anthropic.com/*",
     "https://generativelanguage.googleapis.com/*",
+    "https://api.opensanctions.org/*",
+    "https://efts.sec.gov/*",
+    "https://data.sec.gov/*",
+    "https://blockstream.info/*",
     "identity",
     "downloads"
   ],
@@ -52,6 +56,7 @@
       "lib/pdf.min.js",
       "lib/fflate.min.js",
       "lib/cloud-providers.js",
+      "lib/intelligence-providers.js",
       "lib/cloud-backup.js",
       "lib/argus-vault.js",
       "lib/xmpp-client.js",

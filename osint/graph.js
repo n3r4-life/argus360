@@ -788,7 +788,146 @@
       srcSection.classList.add('hidden');
     }
 
+    // ──── INTELLIGENCE ENRICHMENT SECTION ────
+    const intelSection = document.getElementById('detailIntelSection');
+    const intelStatus = document.getElementById('intelEnrichStatus');
+    const intelResults = document.getElementById('intelEnrichResults');
+    const intelActions = document.getElementById('intelEnrichActions');
+
+    if (intelSection) {
+      // Show sanctions/adjacent flags if present
+      const flags = [];
+      if (node.sanctioned) flags.push('<span class="intel-flag sanctioned">SANCTIONED</span>');
+      if (node['sanctions-adjacent']) flags.push('<span class="intel-flag adjacent">SANCTIONS-ADJACENT</span>');
+      intelStatus.innerHTML = flags.length ? flags.join(' ') : '';
+
+      // Clear previous results
+      intelResults.innerHTML = '';
+
+      // Show SEC Filings button only for organizations
+      const secBtn = intelActions.querySelector('[data-provider="secedgar"]');
+      if (secBtn) secBtn.style.display = (node.type === 'organization') ? '' : 'none';
+
+      // Re-wire enrichment buttons for this node
+      intelActions.querySelectorAll('.intel-enrich-btn').forEach(btn => {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+
+        newBtn.addEventListener('click', async () => {
+          const provider = newBtn.dataset.provider;
+          newBtn.disabled = true;
+          newBtn.textContent = 'Working...';
+          const origText = provider === 'opensanctions' ? 'Sanctions' :
+                           provider === 'secedgar' ? 'SEC Filings' : 'Enrich All';
+
+          try {
+            if (provider === 'all') {
+              const providers = ['opensanctions'];
+              if (node.type === 'organization') providers.push('secedgar');
+
+              const resp = await browser.runtime.sendMessage({
+                action: 'intelEnrichEntity',
+                entityId: node.id,
+                providers
+              });
+              renderIntelResults(resp, node);
+            } else if (provider === 'opensanctions') {
+              const resp = await browser.runtime.sendMessage({
+                action: 'intelSearch',
+                provider: 'opensanctions',
+                query: node.label,
+                options: {}
+              });
+              renderSanctionsResults(resp, node);
+            } else if (provider === 'secedgar') {
+              const resp = await browser.runtime.sendMessage({
+                action: 'intelEnrichEntity',
+                entityId: node.id,
+                providers: ['secedgar']
+              });
+              renderIntelResults(resp, node);
+            }
+          } catch (err) {
+            intelResults.innerHTML = `<div class="intel-enrich-error">Error: ${escHtml(err.message)}</div>`;
+          }
+
+          newBtn.disabled = false;
+          newBtn.textContent = origText;
+        });
+      });
+    }
+
     sidebar.classList.add('open');
+  }
+
+  function renderSanctionsResults(resp, node) {
+    const container = document.getElementById('intelEnrichResults');
+    if (!resp?.success) {
+      container.innerHTML = `<div class="intel-enrich-error">Error: ${escHtml(resp?.error || 'Unknown')}</div>`;
+      return;
+    }
+    const results = resp.results?.results || [];
+    const total = resp.results?.total || 0;
+
+    if (!results.length) {
+      container.innerHTML = '<div class="intel-enrich-clean">No sanctions matches found.</div>';
+      return;
+    }
+
+    container.innerHTML = `<div class="intel-enrich-count">${total} match${total !== 1 ? 'es' : ''}</div>` +
+      results.slice(0, 5).map(r => {
+        const name = (r.properties?.name || [r.caption || '?'])[0];
+        const datasets = (r.datasets || []).join(', ');
+        const score = r.score != null ? Math.round(r.score * 100) + '%' : '';
+        return `<div class="intel-enrich-hit">
+          <span class="intel-flag sanctioned">MATCH</span>
+          <span class="intel-hit-name">${escHtml(name)}</span>
+          ${score ? `<span class="intel-hit-score">${score}</span>` : ''}
+          <div class="intel-hit-datasets">${escHtml(datasets)}</div>
+        </div>`;
+      }).join('');
+  }
+
+  function renderIntelResults(resp, node) {
+    const container = document.getElementById('intelEnrichResults');
+    if (!resp?.success) {
+      container.innerHTML = `<div class="intel-enrich-error">Error: ${escHtml(resp?.error || 'Unknown')}</div>`;
+      return;
+    }
+
+    const parts = [];
+
+    // Sanctions results
+    if (resp.results?.opensanctions) {
+      const os = resp.results.opensanctions;
+      if (os.responses?.length > 0) {
+        parts.push(`<div class="intel-enrich-hit"><span class="intel-flag sanctioned">SANCTIONED</span> ${os.responses.length} match(es)</div>`);
+      } else if (os.error) {
+        parts.push(`<div class="intel-enrich-error">${escHtml(os.error)}</div>`);
+      } else {
+        parts.push('<div class="intel-enrich-clean">Sanctions: Clear</div>');
+      }
+    }
+
+    // SEC results
+    if (resp.results?.secedgar) {
+      const sec = resp.results.secedgar;
+      if (sec.error) {
+        parts.push(`<div class="intel-enrich-error">SEC: ${escHtml(sec.error)}</div>`);
+      } else {
+        const filingCount = sec.filings?.recent?.form?.length || 0;
+        const name = sec.name || node.label;
+        parts.push(`<div class="intel-enrich-filing"><span class="intel-flag filing">SEC</span> ${filingCount} filing${filingCount !== 1 ? 's' : ''} found for ${escHtml(name)}</div>`);
+      }
+    }
+
+    container.innerHTML = parts.length ? parts.join('') : '<div class="intel-enrich-clean">No intelligence data returned.</div>';
+
+    // Refresh the status flags since enrichment may have flagged the entity
+    const intelStatus = document.getElementById('intelEnrichStatus');
+    if (resp.results?.opensanctions?.responses?.length > 0) {
+      intelStatus.innerHTML = '<span class="intel-flag sanctioned">SANCTIONED</span>';
+    }
   }
 
   function escHtml(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }

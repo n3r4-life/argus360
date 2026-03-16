@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Satellite - Argus Intelligence</title>
+  <link rel="stylesheet" href="../shared/argus-std.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../lib/argus-chat.css">
+  <link rel="stylesheet" href="../shared/xmpp-chat.css">
+  <link rel="stylesheet" href="intel.css">
+</head>
+<body>
+  <script src="../shared/ribbon.js"></script>
+
+  <main class="intel-main intel-main-full">
+    <div class="intel-header">
+      <h1 class="intel-page-title">Satellite</h1>
+      <p class="intel-page-desc">Earth observation imagery from Sentinel Hub. Compare satellite images across dates, detect changes, and overlay geospatial intelligence.</p>
+    </div>
+
+    <section class="intel-section">
+      <h2 class="intel-section-title">Provider Status</h2>
+      <div id="intel-page-providers" class="intel-page-providers"></div>
+      <div id="intel-not-configured" class="intel-not-configured hidden">
+        Providers not configured. <a href="../options/options.html#intel-providers">Go to Settings</a> to add API keys.
+      </div>
+    </section>
+
+    <!-- Location Search -->
+    <section class="intel-section">
+      <div class="sat-search-bar">
+        <input type="text" id="satSearchInput" class="comp-search-input" placeholder="Search address, coordinates, or KG location entity...">
+        <button class="pill-chip" id="satLoadBtn">Load</button>
+      </div>
+    </section>
+
+    <!-- Date Selectors -->
+    <section class="intel-section">
+      <div class="sat-date-bar">
+        <div class="sat-date-group">
+          <label class="sat-date-label">Date A</label>
+          <input type="date" id="satDateA" class="evt-date-input">
+        </div>
+        <div class="sat-date-group">
+          <label class="sat-date-label">Date B</label>
+          <input type="date" id="satDateB" class="evt-date-input">
+        </div>
+        <button class="pill-chip" id="satCompareBtn" disabled>Compare</button>
+      </div>
+    </section>
+
+    <!-- Dual Image Viewer -->
+    <div class="sat-viewer">
+      <div class="sat-panel" id="satPanelA">
+        <div class="sat-panel-header">
+          <span class="sat-panel-title">Image A</span>
+          <span class="sat-panel-date" id="satPanelADate">—</span>
+          <span class="sat-panel-meta" id="satPanelAMeta"></span>
+        </div>
+        <div class="sat-panel-image" id="satImageA">
+          <div class="sat-placeholder">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3;">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            <div>Satellite imagery will appear here</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Requires Sentinel Hub API key</div>
+          </div>
+        </div>
+      </div>
+      <div class="sat-divider"></div>
+      <div class="sat-panel" id="satPanelB">
+        <div class="sat-panel-header">
+          <span class="sat-panel-title">Image B</span>
+          <span class="sat-panel-date" id="satPanelBDate">—</span>
+          <span class="sat-panel-meta" id="satPanelBMeta"></span>
+        </div>
+        <div class="sat-panel-image" id="satImageB">
+          <div class="sat-placeholder">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3;">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            <div>Comparison image will appear here</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Change Detection + Actions -->
+    <section class="intel-section">
+      <div class="sat-actions-bar">
+        <label class="sat-toggle">
+          <input type="checkbox" id="satChangeDetection">
+          <span>Change Detection Overlay</span>
+        </label>
+        <div class="sat-actions">
+          <button class="pill-chip" id="satSaveToKg" disabled>Save Comparison to KG</button>
+          <button class="pill-chip" id="satExport" disabled>Export Images</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="argus-chat-container" style="padding:16px 20px;"></div>
+
+  <script src="../lib/purify.min.js"></script>
+  <script src="../lib/marked.min.js"></script>
+  <script src="../shared/text-it.js"></script>
+  <script src="../shared/xmpp-chat.js"></script>
+  <script src="../lib/argus-chat.js"></script>
+  <script src="domain-shell.js"></script>
+  <script>IntelDomainShell.init("satellite", ["sentinelhub"]);</script>
+  <script src="satellite.js"></script>
+  <div id="xmpp-chat-container"></div>
+  <script>
+    if (typeof XmppChat !== "undefined") {
+      XmppChat.init({ container: document.getElementById("xmpp-chat-container"), pageId: "intel-satellite" });
+    }
+  </script>
+</body>
+</html>
