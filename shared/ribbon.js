@@ -49,6 +49,12 @@
 
   ribbon.appendChild(left);
 
+  // Centre: live connection status pills
+  const statusStrip = document.createElement("div");
+  statusStrip.className = "ribbon-status";
+  statusStrip.id = "ribbon-status";
+  ribbon.appendChild(statusStrip);
+
   // Right side: console-tab icon buttons (same as console page header)
   const icons = document.createElement("nav");
   icons.className = "ribbon-icons";
@@ -652,6 +658,46 @@
     "ribbon-sources":   () => browser.runtime.sendMessage({ action: "getSources" }).then(r => Array.isArray(r?.sources) ? r.sources.length : 0).catch(() => 0)
   };
 
+  const CLOUD_PILL_LABELS = { google: "GDrive", dropbox: "Dropbox", webdav: "WebDAV", s3: "S3", github: "GitHub" };
+
+  async function updateRibbonStatus() {
+    const strip = document.getElementById("ribbon-status");
+    if (!strip) return;
+    strip.innerHTML = "";
+
+    // Cloud providers
+    try {
+      const resp = await browser.runtime.sendMessage({ action: "cloudGetStatus" });
+      const providers = resp?.providers || {};
+      for (const [key, connected] of Object.entries(providers)) {
+        if (!connected) continue;
+        const label = CLOUD_PILL_LABELS[key] || key;
+        const pill = document.createElement("button");
+        pill.className = "ribbon-status-pill";
+        pill.title = `${label} connected — click to manage`;
+        pill.innerHTML = `<span class="ribbon-status-dot"></span>${label}`;
+        pill.addEventListener("click", () => nav("settings"));
+        strip.appendChild(pill);
+      }
+    } catch { /* background not ready */ }
+
+    // XMPP
+    try {
+      const xmpp = await browser.runtime.sendMessage({ action: "xmppGetStatus" });
+      if (xmpp?.configured) {
+        const label = xmpp.jid ? xmpp.jid.split("@")[0] : "XMPP";
+        const pill = document.createElement("button");
+        pill.className = "ribbon-status-pill";
+        const dotClass = xmpp.connected ? "ribbon-status-dot" : "ribbon-status-dot amber";
+        const statusText = xmpp.connected ? "live" : "idle";
+        pill.title = `XMPP ${statusText}${xmpp.jid ? " · " + xmpp.jid : ""} — click to manage`;
+        pill.innerHTML = `<span class="${dotClass}"></span>${label}`;
+        pill.addEventListener("click", () => nav("settings"));
+        strip.appendChild(pill);
+      }
+    } catch { /* background not ready */ }
+  }
+
   async function updateRibbonBadges() {
     for (const [iconId, fetchCount] of Object.entries(badgeMap)) {
       try {
@@ -674,10 +720,12 @@
   }
 
   updateRibbonBadges();
+  updateRibbonStatus();
 
   // Refresh on data changes
   browser.runtime.onMessage.addListener((msg) => {
     if (msg.type === "argusDataChanged") updateRibbonBadges();
+    if (msg.type === "argusDataChanged" || msg.type === "argusConnectionChanged") updateRibbonStatus();
   });
 
   // Sync tab state when storage changes (e.g. from another page/tab)

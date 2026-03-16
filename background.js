@@ -2859,6 +2859,7 @@ async function handleXmppGetStatus() {
   const cfg = await getXmppConfig();
   return {
     configured: cfg.configured,
+    jid: cfg.jid || "",
     connected: !!(_xmppWs && _xmppWs.readyState === WebSocket.OPEN && _xmppAuth)
   };
 }

@@ -591,6 +591,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderMonitors();
   attachListeners();
   updateReasoningControls();
+  updateConsoleStatusStrip();
   loadVersion();
   initMainTabs();
   initHelpExtLinks();
@@ -9817,7 +9818,7 @@ function initCloudBackup() {
   });
 
   // Show connected providers summary
-  refreshCloudStatus();
+  refreshCloudStatus(); updateConsoleStatusStrip();
   // Update default provider info on Settings tab
   updateDefaultProviderStatus();
 
@@ -9836,7 +9837,7 @@ function initCloudBackup() {
       statusEl.textContent = "Backup failed: " + (resp?.error || "unknown");
       statusEl.style.color = "var(--error)";
     }
-    refreshCloudStatus();
+    refreshCloudStatus(); updateConsoleStatusStrip();
   });
 
   // Download Local Backup
@@ -9989,7 +9990,41 @@ function initCloudBackup() {
   chatSyncIntervalSel.addEventListener("change", saveChatSyncSettings);
   chatSyncClearCb.addEventListener("change", saveChatSyncSettings);
 
-  refreshCloudStatus();
+  refreshCloudStatus(); updateConsoleStatusStrip();
+}
+
+async function updateConsoleStatusStrip() {
+  const strip = document.getElementById("console-status-strip");
+  if (!strip) return;
+  strip.innerHTML = "";
+
+  const LABELS = { google: "GDrive", dropbox: "Dropbox", webdav: "WebDAV", s3: "S3", github: "GitHub" };
+
+  try {
+    const resp = await browser.runtime.sendMessage({ action: "cloudGetStatus" });
+    for (const [key, connected] of Object.entries(resp?.providers || {})) {
+      if (!connected) continue;
+      const pill = document.createElement("button");
+      pill.className = "ribbon-status-pill";
+      pill.title = `${LABELS[key] || key} connected — click to manage`;
+      pill.innerHTML = `<span class="ribbon-status-dot"></span>${LABELS[key] || key}`;
+      pill.addEventListener("click", () => showTab("settings"));
+      strip.appendChild(pill);
+    }
+  } catch { /* silent */ }
+
+  try {
+    const xmpp = await browser.runtime.sendMessage({ action: "xmppGetStatus" });
+    if (xmpp?.configured) {
+      const label = xmpp.jid ? xmpp.jid.split("@")[0] : "XMPP";
+      const pill = document.createElement("button");
+      pill.className = "ribbon-status-pill";
+      pill.title = `XMPP ${xmpp.connected ? "live" : "idle"}${xmpp.jid ? " · " + xmpp.jid : ""} — click to manage`;
+      pill.innerHTML = `<span class="ribbon-status-dot${xmpp.connected ? "" : " amber"}"></span>${label}`;
+      pill.addEventListener("click", () => showTab("settings"));
+      strip.appendChild(pill);
+    }
+  } catch { /* silent */ }
 }
 
 async function refreshCloudStatus() {

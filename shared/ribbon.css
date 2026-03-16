@@ -100,6 +100,11 @@
   flex-shrink: 0;
 }
 
+/* ── Live connection status strip (pill styles live in argus-std.css) ── */
+.argus-ribbon .ribbon-status {
+  padding: 0 8px 0 16px;
+}
+
 /* ── App launcher tabs (below ribbon) ── */
 @keyframes appTabsFadeIn {
   from { opacity: 0; transform: translateY(4px); }
