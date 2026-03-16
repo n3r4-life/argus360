@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Argus Console</title>
+  <link rel="stylesheet" href="../shared/argus-std.css">
   <link rel="stylesheet" href="options.css">
   <link rel="stylesheet" href="../lib/argus-chat.css">
   <link rel="stylesheet" href="../lib/email-share.css">
@@ -241,6 +242,7 @@
             <p class="home-ticker-msg">Argus Panoptes had a hundred eyes. This extension has yours covered.</p>
           </div>
           <button id="ticker-egg-btn" class="ticker-egg-btn" title="Customize ticker">&#9881;</button>
+          <div id="home-chat-messages" class="home-chat-messages"></div>
         </div>
         <div id="ticker-mode-picker" class="ticker-mode-picker hidden">
           <button class="ticker-mode-btn" data-mode="default" title="Normal">Normal</button>
@@ -253,10 +255,16 @@
 
         <div class="home-section">
           <div class="home-nav-cat-row">
-            <button class="search-cat-chip" data-nav-cat="all">All</button>
-            <button class="search-cat-chip active" data-nav-cat="research">Research</button>
-            <button class="search-cat-chip" data-nav-cat="monitoring">Monitoring</button>
-            <button class="search-cat-chip" data-nav-cat="config">Config</button>
+            <button class="search-cat-chip active" data-nav-cat="research" id="home-nav-btn-1">Research</button>
+            <button class="search-cat-chip" data-nav-cat="monitoring" id="home-nav-btn-2">Monitoring</button>
+            <button class="search-cat-chip" data-nav-cat="config" id="home-nav-btn-3">Config</button>
+            <button class="search-cat-chip" id="home-chat-btn">Chat</button>
+          </div>
+          <div class="home-chat-input-row">
+            <textarea id="home-chat-input" class="home-chat-textarea" placeholder="Ask anything..." rows="1"></textarea>
+            <button id="home-chat-send" class="home-chat-send-btn" title="Send">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </button>
           </div>
           <div class="home-icon-guide">
             <div class="home-icon-item" data-goto="bookmarks" data-nav-cat="research">
@@ -320,13 +328,13 @@
     <!-- ═══════════════════════════════════════════ -->
     <div class="tab-panel" data-panel="providers">
 
-      <!-- Default Provider -->
+      <!-- Defaults (AI + Cloud + Paste) -->
       <section class="card">
-        <h2 class="card-title">Default Provider</h2>
+        <h2 class="card-title">Defaults</h2>
         <div class="card-body">
-          <div class="form-row">
+          <div class="form-row" style="gap:16px;">
             <div class="form-group flex-1">
-              <label for="default-provider">Use by default when analyzing pages</label>
+              <label for="default-provider">AI Provider</label>
               <select id="default-provider">
                 <option value="xai">xAI (Grok)</option>
                 <option value="openai">OpenAI</option>
@@ -334,13 +342,129 @@
                 <option value="gemini">Google (Gemini)</option>
                 <option value="custom">Custom (OpenAI-compatible)</option>
               </select>
+              <span class="hint">Used by default when analyzing pages</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="default-cloud-provider">Cloud Storage</label>
+              <select id="default-cloud-provider">
+                <option value="all">All connected</option>
+                <option value="google">Google Drive</option>
+                <option value="dropbox">Dropbox</option>
+                <option value="webdav">WebDAV</option>
+                <option value="s3">S3</option>
+              </select>
+              <span class="hint">Used by "Save to Cloud" and backup actions</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="default-paste-provider">Paste Service</label>
+              <select id="default-paste-provider">
+                <option value="">None</option>
+                <option value="gist">GitHub Gist</option>
+                <option value="pastebin">Pastebin</option>
+                <option value="privatebin">PrivateBin</option>
+              </select>
+              <span class="hint">Used by "Paste to Service" automation steps</span>
+            </div>
+          </div>
+          <div id="default-provider-status" style="font-size:11px;color:var(--text-muted);margin-top:6px;"></div>
+        </div>
+      </section>
+
+      <!-- AI Settings -->
+      <section class="card" id="providers-ai-settings">
+        <h2 class="card-title">AI Settings</h2>
+        <div class="card-body">
+          <!-- Sub-row A: limits + language + badge -->
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="max-tokens">Max Response Tokens</label>
+              <input type="number" id="max-tokens" value="2048" min="256" max="16384" step="256">
+              <span class="hint">256 – 16,384</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="max-input-chars">Max Input Characters</label>
+              <input type="number" id="max-input-chars" value="100000" min="1000" max="500000" step="1000">
+              <span class="hint">How much page text to send</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="temperature">Temperature</label>
+              <div class="range-row">
+                <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.3">
+                <span id="temp-value" class="range-value">0.3</span>
+              </div>
+              <span class="hint">Lower = focused, higher = creative</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="response-language">Response Language</label>
+              <select id="response-language">
+                <option value="auto">Auto-detect</option>
+                <option value="English">English</option>
+                <option value="Spanish">Spanish</option>
+                <option value="French">French</option>
+                <option value="German">German</option>
+                <option value="Portuguese">Portuguese</option>
+                <option value="Italian">Italian</option>
+                <option value="Dutch">Dutch</option>
+                <option value="Russian">Russian</option>
+                <option value="Japanese">Japanese</option>
+                <option value="Korean">Korean</option>
+                <option value="Chinese (Simplified)">Chinese (Simplified)</option>
+                <option value="Chinese (Traditional)">Chinese (Traditional)</option>
+                <option value="Arabic">Arabic</option>
+                <option value="Hindi">Hindi</option>
+                <option value="Turkish">Turkish</option>
+                <option value="Polish">Polish</option>
+                <option value="Ukrainian">Ukrainian</option>
+                <option value="Vietnamese">Vietnamese</option>
+                <option value="Thai">Thai</option>
+                <option value="Indonesian">Indonesian</option>
+                <option value="Swedish">Swedish</option>
+                <option value="Czech">Czech</option>
+                <option value="Romanian">Romanian</option>
+                <option value="Hungarian">Hungarian</option>
+                <option value="Greek">Greek</option>
+                <option value="Hebrew">Hebrew</option>
+                <option value="Filipino">Filipino</option>
+              </select>
+            </div>
+            <div class="form-group" style="justify-content:flex-end;">
+              <label class="toggle-label">
+                <input type="checkbox" id="show-badge" checked>
+                <span>Show badge on toolbar icon</span>
+              </label>
+            </div>
+          </div>
+          <!-- Sub-row B: thinking + reasoning -->
+          <div class="form-row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+            <div class="form-group flex-1">
+              <label class="toggle-label">
+                <input type="checkbox" id="extended-thinking-enabled">
+                <span>Extended Thinking</span>
+              </label>
+              <span class="hint" style="margin-top:4px;">Claude uses native thinking output — OpenAI &amp; Grok get a visible REASONING block</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="thinking-budget">Thinking Budget (tokens)</label>
+              <input type="number" id="thinking-budget" value="10000" min="1000" max="100000" step="1000">
+              <span class="hint" id="thinking-budget-hint">Claude only — OpenAI/Grok ignore this value</span>
+            </div>
+            <div class="form-group flex-1" id="openai-reasoning-card">
+              <label for="openai-reasoning-effort">Reasoning Effort
+                <span class="badge" style="margin-left:6px;">o-series</span>
+              </label>
+              <select id="openai-reasoning-effort">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+              <span class="hint" id="openai-reasoning-hint">OpenAI o3/o4-mini when Extended Thinking is on</span>
             </div>
           </div>
         </div>
       </section>
 
       <!-- Provider API Keys & Models -->
-      <section class="card">
+      <section class="card" id="providers-api-keys">
         <h2 class="card-title">AI Providers</h2>
         <div class="card-body">
           <p class="info-text">Configure API keys for each provider you want to use. You can switch between providers when analyzing pages.</p>
@@ -748,96 +872,6 @@
         </div>
       </section>
 
-      <!-- Default Providers -->
-      <section class="card">
-        <h2 class="card-title">Default Providers</h2>
-        <div class="card-body">
-          <p class="info-text">When multiple services are connected, these defaults are used by automations and quick actions.</p>
-          <div class="form-row" style="gap:16px;">
-            <div class="form-group flex-1">
-              <label for="default-cloud-provider">Default Cloud Storage</label>
-              <select id="default-cloud-provider">
-                <option value="all">All connected</option>
-                <option value="google">Google Drive</option>
-                <option value="dropbox">Dropbox</option>
-                <option value="webdav">WebDAV</option>
-                <option value="s3">S3</option>
-              </select>
-              <span class="hint">Used by "Save to Cloud" automation steps and backup actions</span>
-            </div>
-            <div class="form-group flex-1">
-              <label for="default-paste-provider">Default Paste Service</label>
-              <select id="default-paste-provider">
-                <option value="">None</option>
-                <option value="gist">GitHub Gist</option>
-                <option value="pastebin">Pastebin</option>
-                <option value="privatebin">PrivateBin</option>
-              </select>
-              <span class="hint">Used by "Paste to Service" automation steps</span>
-            </div>
-          </div>
-          <div id="default-provider-status" style="font-size:11px;color:var(--text-muted);margin-top:6px;"></div>
-        </div>
-      </section>
-
-      <!-- Default Project -->
-      <section class="card">
-        <h2 class="card-title">Default Project</h2>
-        <div class="card-body">
-          <p class="info-text">Set the global default project. Monitors, bookmarks, and analyses route here unless overridden per-feature below.</p>
-          <div class="form-row" style="gap:16px;">
-            <div class="form-group flex-1">
-              <label for="settings-default-project">Global Default</label>
-              <select id="settings-default-project">
-                <option value="">No project</option>
-              </select>
-              <span class="hint">Same as "Set as Default" on the Projects tab</span>
-            </div>
-            <div class="form-group flex-1">
-              <label for="settings-monitor-project">Monitor Override</label>
-              <select id="settings-monitor-project">
-                <option value="">Use global default</option>
-              </select>
-              <span class="hint">All new monitors use this project instead of global default</span>
-            </div>
-            <div class="form-group flex-1">
-              <label for="settings-bookmark-project">Bookmark Override</label>
-              <select id="settings-bookmark-project">
-                <option value="">Use global default</option>
-              </select>
-              <span class="hint">All bookmarks use this project instead of global default</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Backup Schedule -->
-      <section class="card">
-        <h2 class="card-title">Backup Schedule</h2>
-        <div class="card-body">
-          <div class="form-row" style="align-items:center;gap:12px;">
-            <label class="toggle-label" style="margin:0;">
-              <input type="checkbox" id="backup-enabled">
-              <span>Enable automatic backups</span>
-            </label>
-            <select id="backup-interval" style="max-width:160px;">
-              <option value="360">Every 6 hours</option>
-              <option value="720">Every 12 hours</option>
-              <option value="1440" selected>Every 24 hours</option>
-              <option value="2880">Every 48 hours</option>
-              <option value="10080">Weekly</option>
-            </select>
-          </div>
-          <div class="form-row" style="margin-top:10px;align-items:center;gap:12px;">
-            <button id="backup-now" class="btn btn-sm btn-primary">Backup Now</button>
-            <label class="toggle-label" style="margin:0;">
-              <input type="checkbox" id="backup-all-providers" checked>
-              <span>Backup to all connected providers</span>
-            </label>
-          </div>
-          <div id="backup-status" class="dp-status" style="margin-top:8px;"></div>
-        </div>
-      </section>
 
     </div>
 
@@ -1631,6 +1665,20 @@
             <label for="proj-modal-color">Color</label>
             <input type="color" id="proj-modal-color" value="#e94560" style="width:40px;height:30px;border:none;cursor:pointer;">
           </div>
+          <div class="form-group" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+            <label class="toggle-label small">
+              <input type="checkbox" id="proj-modal-cloud-sync">
+              <span>Sync project to cloud (BYOC)</span>
+            </label>
+            <select id="proj-modal-cloud-provider" style="display:none;margin-top:6px;width:100%;font-size:12px;">
+              <option value="">Choose provider…</option>
+              <option value="google">Google Drive</option>
+              <option value="dropbox">Dropbox</option>
+              <option value="github">GitHub</option>
+              <option value="s3">S3</option>
+              <option value="webdav">WebDAV</option>
+            </select>
+          </div>
           <div style="display:flex;gap:8px;margin-top:12px;">
             <button id="proj-modal-save" class="btn btn-secondary btn-sm">Save</button>
             <button id="proj-modal-cancel" class="btn btn-secondary btn-sm">Cancel</button>
@@ -2374,99 +2422,108 @@
 
       <div class="settings-grid">
 
-      <!-- General Settings -->
+      <!-- ── Row 1: Quick jumps to Providers tab ── -->
+      <section class="card settings-wide" style="padding:14px 18px;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <button class="pill-chip" data-goto-tab="providers" data-goto-anchor="providers-ai-settings">AI &amp; Prompts</button>
+          <button class="pill-chip" data-goto-tab="providers" data-goto-anchor="providers-api-keys">API &amp; Cloud Keys</button>
+          <button class="pill-chip" data-goto-tab="providers" data-goto-anchor="providers-ai-settings">Default Language</button>
+          <span style="flex:1;"></span>
+          <button id="set-argus-homepage" class="pill-chip">Set as Homepage</button>
+        </div>
+      </section>
+
+      <!-- ── Row 1b: Default Project (full width) ── -->
       <section class="card settings-wide">
-        <h2 class="card-title">General Settings</h2>
+        <h2 class="card-title">Default Project</h2>
         <div class="card-body">
+          <p class="info-text">Set the global default project. Monitors, bookmarks, and analyses route here unless overridden per-feature below.</p>
+          <div class="form-row" style="gap:16px;">
+            <div class="form-group flex-1">
+              <label for="settings-default-project">Global Default</label>
+              <select id="settings-default-project">
+                <option value="">No project</option>
+              </select>
+              <span class="hint">Same as "Set as Default" on the Projects tab</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="settings-monitor-project">Monitor Override</label>
+              <select id="settings-monitor-project">
+                <option value="">Use global default</option>
+              </select>
+              <span class="hint">All new monitors use this project instead of global default</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="settings-bookmark-project">Bookmark Override</label>
+              <select id="settings-bookmark-project">
+                <option value="">Use global default</option>
+              </select>
+              <span class="hint">All bookmarks use this project instead of global default</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Row 2: Privacy / Tracking / History ── -->
+
+      <!-- Forced Private Sites -->
+      <section class="card settings-third">
+        <h2 class="card-title">Forced Private Sites
+          <span class="badge">Privacy</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Domains listed here auto-redirect to a private window. Requires the <strong>webNavigation</strong> permission.</p>
           <div class="form-row">
             <div class="form-group flex-1">
-              <label for="max-tokens">Max Response Tokens</label>
-              <input type="number" id="max-tokens" value="2048" min="256" max="16384" step="256">
-              <span class="hint">256 - 16,384</span>
-            </div>
-            <div class="form-group flex-1">
-              <label for="max-input-chars">Max Input Characters</label>
-              <input type="number" id="max-input-chars" value="100000" min="1000" max="500000" step="1000">
-              <span class="hint">How much page text to send</span>
-            </div>
-            <div class="form-group flex-1">
-              <label for="temperature">Temperature</label>
-              <div class="range-row">
-                <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.3">
-                <span id="temp-value" class="range-value">0.3</span>
-              </div>
-              <span class="hint">Lower = more focused, higher = more creative</span>
-            </div>
-          </div>
-          <div class="form-row" style="margin-top:8px;">
-            <div class="form-group flex-1">
-              <label for="response-language">Response Language</label>
-              <select id="response-language">
-                <option value="auto">Auto-detect (browser language)</option>
-                <option value="English">English (default)</option>
-                <option value="Spanish">Spanish</option>
-                <option value="French">French</option>
-                <option value="German">German</option>
-                <option value="Portuguese">Portuguese</option>
-                <option value="Italian">Italian</option>
-                <option value="Dutch">Dutch</option>
-                <option value="Russian">Russian</option>
-                <option value="Japanese">Japanese</option>
-                <option value="Korean">Korean</option>
-                <option value="Chinese (Simplified)">Chinese (Simplified)</option>
-                <option value="Chinese (Traditional)">Chinese (Traditional)</option>
-                <option value="Arabic">Arabic</option>
-                <option value="Hindi">Hindi</option>
-                <option value="Turkish">Turkish</option>
-                <option value="Polish">Polish</option>
-                <option value="Ukrainian">Ukrainian</option>
-                <option value="Vietnamese">Vietnamese</option>
-                <option value="Thai">Thai</option>
-                <option value="Indonesian">Indonesian</option>
-                <option value="Swedish">Swedish</option>
-                <option value="Czech">Czech</option>
-                <option value="Romanian">Romanian</option>
-                <option value="Hungarian">Hungarian</option>
-                <option value="Greek">Greek</option>
-                <option value="Hebrew">Hebrew</option>
-                <option value="Filipino">Filipino</option>
-              </select>
-              <span class="hint">Language for AI responses — "Auto" uses your browser's language setting</span>
-            </div>
-            <div class="form-group flex-1">
               <label class="toggle-label">
-                <input type="checkbox" id="show-badge" checked>
-                <span>Show badge count on toolbar icon</span>
+                <input type="checkbox" id="incognito-force-enabled">
+                <span>Enable forced-private mode</span>
               </label>
-              <span class="hint">Show unread monitor change count on the Argus icon</span>
             </div>
           </div>
-          <div class="form-row" style="margin-top:8px;">
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <div style="display:flex;gap:6px;margin-bottom:8px;">
+                <input type="text" id="incognito-add-domain" placeholder="e.g. cia.gov" style="flex:1;font-size:13px;padding:8px;">
+                <button id="incognito-add-btn" class="btn btn-secondary" style="width:auto;padding:8px 16px;font-size:13px;">Add</button>
+              </div>
+              <div id="incognito-sites-list" class="incognito-sites-list"></div>
+              <span class="hint" style="margin-top:6px;">No http/www — e.g. <code>cia.gov</code>. Subdomains matched automatically.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Trawl & Tracking -->
+      <section class="card settings-third" id="settings-trawl">
+        <h2 class="card-title">Trawl &amp; Tracking</h2>
+        <div class="card-body">
+          <div class="form-row">
             <div class="form-group flex-1">
               <label class="toggle-label">
                 <input type="checkbox" id="track-my-pages">
                 <span>Track My Pages</span>
               </label>
-              <span class="hint">Record every page you visit and every Argus action you take — stored in IndexedDB, independent of browser history. Clearing your browser cache or history will NOT delete this data.</span>
+              <span class="hint">Record every page visit and Argus action — IndexedDB, independent of browser history.</span>
             </div>
           </div>
-          <div class="form-row" style="margin-top:8px;" id="settings-trawl">
+          <div class="form-row">
             <div class="form-group flex-1">
               <label class="toggle-label">
                 <input type="checkbox" id="trawl-enabled">
                 <span>Trawl Net</span>
               </label>
-              <span class="hint">Passively extract contact data, business info, and metadata from every page you visit. Emails, phones, addresses, JSON-LD business data, and social links are collected silently and stored on Page Tracker entries. Requires Track My Pages. Respects your forced-private domain list.</span>
+              <span class="hint">Passively extract emails, phones, addresses, and business info from every page. Requires Track My Pages.</span>
             </div>
           </div>
           <!-- Trawl Schedule -->
-          <div class="form-row" style="margin-top:8px;" id="trawl-schedule-row">
+          <div class="form-row" id="trawl-schedule-row">
             <div class="form-group flex-1">
               <label class="toggle-label">
                 <input type="checkbox" id="trawl-schedule-enabled">
                 <span>Schedule Trawling</span>
               </label>
-              <span class="hint">Only trawl during specific hours and days. When disabled, trawl runs whenever enabled.</span>
+              <span class="hint">Only trawl during specific hours and days.</span>
               <div id="trawl-schedule-config" style="display:none;margin-top:8px;">
                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
                   <label style="font-size:11px;color:var(--text-secondary);">From</label>
@@ -2475,26 +2532,26 @@
                   <select id="trawl-end-hour" class="select-compact" style="width:70px;"></select>
                 </div>
                 <div style="display:flex;gap:4px;flex-wrap:wrap;" id="trawl-day-checks">
-                  <label class="toggle-label" style="font-size:11px;"><input type="checkbox" data-day="0"><span>Sun</span></label>
-                  <label class="toggle-label" style="font-size:11px;"><input type="checkbox" data-day="1"><span>Mon</span></label>
-                  <label class="toggle-label" style="font-size:11px;"><input type="checkbox" data-day="2"><span>Tue</span></label>
-                  <label class="toggle-label" style="font-size:11px;"><input type="checkbox" data-day="3"><span>Wed</span></label>
-                  <label class="toggle-label" style="font-size:11px;"><input type="checkbox" data-day="4"><span>Thu</span></label>
-                  <label class="toggle-label" style="font-size:11px;"><input type="checkbox" data-day="5"><span>Fri</span></label>
-                  <label class="toggle-label" style="font-size:11px;"><input type="checkbox" data-day="6"><span>Sat</span></label>
+                  <button class="pill-chip" data-day="0">Sun</button>
+                  <button class="pill-chip" data-day="1">Mon</button>
+                  <button class="pill-chip" data-day="2">Tue</button>
+                  <button class="pill-chip" data-day="3">Wed</button>
+                  <button class="pill-chip" data-day="4">Thu</button>
+                  <button class="pill-chip" data-day="5">Fri</button>
+                  <button class="pill-chip" data-day="6">Sat</button>
                 </div>
               </div>
             </div>
           </div>
           <!-- Trawl Duration Timer -->
-          <div class="form-row" style="margin-top:8px;" id="trawl-duration-row">
+          <div class="form-row" id="trawl-duration-row">
             <div class="form-group flex-1">
               <div style="display:flex;gap:8px;align-items:center;">
                 <label class="toggle-label">
                   <input type="checkbox" id="trawl-duration-enabled">
                   <span>Duration Timer</span>
                 </label>
-                <select id="trawl-duration-preset" class="select-compact" style="width:80px;" title="Preset trawl duration">
+                <select id="trawl-duration-preset" class="select-compact" style="width:76px;" title="Preset trawl duration">
                   <option value="30">30 min</option>
                   <option value="60">1 hr</option>
                   <option value="120">2 hr</option>
@@ -2503,7 +2560,7 @@
                   <option value="360">6 hr</option>
                 </select>
               </div>
-              <span class="hint">Short-press the Trawl badge in the popup to start a timed session. Trawl auto-stops when the timer expires.</span>
+              <span class="hint">Short-press Trawl badge to start a timed session.</span>
               <div id="trawl-duration-config" style="display:none;margin-top:10px;">
                 <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
                   <span style="font-size:11px;color:var(--text-secondary);white-space:nowrap;">On till off —</span>
@@ -2520,86 +2577,188 @@
         </div>
       </section>
 
-      <!-- Forced Private / Incognito Sites -->
-      <section class="card settings-half">
-        <h2 class="card-title">Forced Private Sites
-          <span class="badge">Privacy</span>
-        </h2>
+      <!-- Reports -->
+      <section class="card settings-third">
+        <h2 class="card-title">Reports</h2>
         <div class="card-body">
-          <p class="info-text">Domains listed here will automatically open in a private/incognito window. When you navigate to a matching site, Argus will redirect it to a private window and close the original tab. Requires the <strong>webNavigation</strong> permission.</p>
-          <div class="form-row" style="margin-bottom:8px;">
+          <div class="form-row">
             <div class="form-group flex-1">
-              <label class="toggle-label">
-                <input type="checkbox" id="incognito-force-enabled">
-                <span>Enable forced-private mode</span>
-              </label>
-              <span class="hint">When enabled, navigating to any domain below will automatically redirect to a private window.</span>
+              <label for="max-history">Max Report Entries</label>
+              <input type="number" id="max-history" value="200" min="10" max="1000" step="10">
             </div>
           </div>
           <div class="form-row">
             <div class="form-group flex-1">
-              <div style="display:flex;gap:6px;margin-bottom:8px;">
-                <input type="text" id="incognito-add-domain" placeholder="e.g. cia.gov" style="flex:1;font-size:13px;padding:8px;">
-                <button id="incognito-add-btn" class="btn btn-secondary" style="width:auto;padding:8px 16px;font-size:13px;">Add</button>
-              </div>
-              <div id="incognito-sites-list" class="incognito-sites-list"></div>
-              <span class="hint" style="margin-top:6px;">Add domains without http/www (e.g. <code>cia.gov</code>, <code>fbi.gov</code>). Subdomains are matched automatically.</span>
+              <button id="open-history" class="pill-chip">View Reports</button>
+            </div>
+            <div class="form-group flex-1">
+              <button id="clear-history" class="pill-chip" style="color:var(--error);">Clear All</button>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- Extended Thinking -->
-      <section class="card settings-half">
-        <h2 class="card-title">Extended Thinking
-          <span class="badge">Claude + OpenAI + Grok</span>
-        </h2>
+      <!-- ── Row 3: Backup / Import-Export / Security ── -->
+
+      <!-- Backup & Restore -->
+      <section class="card settings-third">
+        <h2 class="card-title">Backup &amp; Restore</h2>
         <div class="card-body">
-          <p class="info-text">Enable extended thinking across supported providers. Claude uses native thinking output, while OpenAI and Grok are prompted to include a visible REASONING section before the final answer.</p>
-          <div class="form-row">
+          <p class="info-text">Back up to cloud or download locally. Configure providers on the <a href="#" id="cloud-goto-providers" style="color:var(--accent);">Providers tab</a>.</p>
+          <div id="cloud-connected-summary" style="font-size:12px;color:var(--text-muted);margin-bottom:8px;"></div>
+          <div id="settings-default-providers" style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;padding:8px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;display:none;">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent);margin-bottom:4px;">Default Providers</div>
+            <div id="settings-default-cloud" style="margin-bottom:2px;"></div>
+            <div id="settings-default-paste"></div>
+            <div style="margin-top:4px;"><a href="#" id="settings-goto-defaults" style="font-size:11px;color:var(--accent);">Change defaults on Providers tab</a></div>
+          </div>
+          <div class="form-row" style="align-items:center;">
             <div class="form-group flex-1">
-              <label class="toggle-label">
-                <input type="checkbox" id="extended-thinking-enabled">
-                <span>Enable Extended Thinking</span>
+              <label class="toggle-label small">
+                <input type="checkbox" id="cloud-backup-enabled">
+                <span>Auto-backup</span>
               </label>
             </div>
-            <div class="form-group flex-1">
-              <label for="thinking-budget">Thinking Budget (tokens)</label>
-              <input type="number" id="thinking-budget" value="10000" min="1000" max="100000" step="1000">
-              <span class="hint" id="thinking-budget-hint">Claude native thinking token budget (OpenAI and Grok ignore this value)</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- OpenAI Reasoning -->
-      <section class="card settings-half" id="openai-reasoning-card">
-        <h2 class="card-title">OpenAI Reasoning
-          <span class="badge">o-series</span>
-        </h2>
-        <div class="card-body">
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label for="openai-reasoning-effort">Reasoning Effort</label>
-              <select id="openai-reasoning-effort">
-                <option value="low">Low</option>
-                <option value="medium" selected>Medium</option>
-                <option value="high">High</option>
+            <div class="form-group">
+              <select id="cloud-backup-interval">
+                <option value="6">Every 6 hrs</option>
+                <option value="12">Every 12 hrs</option>
+                <option value="24" selected>Every 24 hrs</option>
+                <option value="48">Every 48 hrs</option>
+                <option value="168">Weekly</option>
               </select>
-              <span class="hint" id="openai-reasoning-hint">Used when default provider is OpenAI, Extended Thinking is enabled, and model is o3/o3-mini/o4-mini.</span>
             </div>
           </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
+            <button id="cloud-backup-now" class="pill-chip">Backup Now</button>
+            <button id="cloud-backup-local" class="pill-chip">Download Local</button>
+            <label class="pill-chip" style="cursor:pointer;">Restore from File <input type="file" id="cloud-restore-file" accept=".zip" style="display:none;"></label>
+          </div>
+          <div id="cloud-backup-status" style="font-size:12px;color:var(--text-muted);margin-top:4px;"></div>
+          <div id="cloud-last-backup" style="font-size:11px;color:var(--text-muted);margin-top:2px;"></div>
+          <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
+            <label style="font-size:12px;font-weight:600;color:var(--text-secondary);">Cloud Sync</label>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
+              <label class="toggle-label small">
+                <input type="checkbox" id="cloud-sync-metadata" checked>
+                <span>Bookmark metadata to GitHub</span>
+              </label>
+              <label class="toggle-label small">
+                <input type="checkbox" id="cloud-sync-snapshots" checked>
+                <span>Page snapshots to cloud drives</span>
+              </label>
+              <label class="toggle-label small">
+                <input type="checkbox" id="cloud-sync-pdfs" checked>
+                <span>PDFs to cloud drives</span>
+              </label>
+            </div>
+          </div>
+          <!-- Chat Session Sync -->
+          <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
+            <label style="font-size:12px;font-weight:600;color:var(--text-secondary);">Chat Session Sync</label>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">
+              <label class="toggle-label small">
+                <input type="checkbox" id="chat-sync-enabled">
+                <span>Auto-sync chat sessions to cloud</span>
+              </label>
+              <div id="chat-sync-config" style="display:none;flex-direction:column;gap:5px;padding-left:2px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <label style="font-size:11px;color:var(--text-muted);white-space:nowrap;min-width:52px;">Provider</label>
+                  <select id="chat-sync-provider" style="flex:1;font-size:12px;">
+                    <option value="all">All connected</option>
+                    <option value="google">Google Drive</option>
+                    <option value="dropbox">Dropbox</option>
+                    <option value="webdav">WebDAV</option>
+                    <option value="s3">S3</option>
+                    <option value="github">GitHub</option>
+                  </select>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <label style="font-size:11px;color:var(--text-muted);white-space:nowrap;min-width:52px;">Sync every</label>
+                  <select id="chat-sync-interval" style="flex:1;font-size:12px;">
+                    <option value="1">Every response</option>
+                    <option value="5" selected>Every 5 exchanges</option>
+                    <option value="10">Every 10 exchanges</option>
+                    <option value="25">Every 25 exchanges</option>
+                    <option value="0">Manual only</option>
+                  </select>
+                </div>
+                <label class="toggle-label small">
+                  <input type="checkbox" id="chat-sync-clear-local">
+                  <span>Clear local history after sync</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <!-- Local Backup Schedule -->
+          <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
+            <label style="font-size:12px;font-weight:600;color:var(--text-secondary);">Local Backup</label>
+            <div class="form-row" style="align-items:center;gap:12px;margin-top:6px;">
+              <label class="toggle-label small">
+                <input type="checkbox" id="backup-enabled">
+                <span>Auto-schedule</span>
+              </label>
+              <select id="backup-interval" style="max-width:140px;">
+                <option value="360">Every 6 hours</option>
+                <option value="720">Every 12 hours</option>
+                <option value="1440" selected>Every 24 hours</option>
+                <option value="2880">Every 48 hours</option>
+                <option value="10080">Weekly</option>
+              </select>
+            </div>
+            <div class="form-row" style="margin-top:8px;align-items:center;gap:10px;">
+              <button id="backup-now" class="pill-chip">Backup Now</button>
+              <label class="toggle-label small">
+                <input type="checkbox" id="backup-all-providers" checked>
+                <span>All providers</span>
+              </label>
+            </div>
+            <div id="backup-status" class="dp-status" style="margin-top:6px;font-size:11px;"></div>
+          </div>
+
+          <div id="cloud-restore-section" class="hidden" style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
+            <label style="font-size:12px;font-weight:600;color:var(--text-secondary);">Restore from Cloud</label>
+            <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap;">
+              <select id="cloud-restore-provider" class="btn btn-secondary btn-sm">
+                <option value="">Select provider...</option>
+                <option value="google">Google Drive</option>
+                <option value="dropbox">Dropbox</option>
+                <option value="webdav">WebDAV</option>
+                <option value="s3">S3</option>
+                <option value="github">GitHub</option>
+              </select>
+              <button id="cloud-restore-list" class="btn btn-secondary btn-sm">List Backups</button>
+            </div>
+            <select id="cloud-restore-select" class="hidden" style="margin-top:6px;width:100%;font-size:12px;"></select>
+            <button id="cloud-restore-go" class="btn btn-accent btn-sm hidden" style="margin-top:6px;">Restore Selected</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Import / Export -->
+      <section class="card settings-third">
+        <h2 class="card-title">Import / Export</h2>
+        <div class="card-body">
+          <p class="info-text">Export settings, API keys, custom presets, and auto-analyze rules as JSON. Import to restore.</p>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <button id="export-settings" class="pill-chip">Export Settings</button>
+            </div>
+            <div class="form-group flex-1">
+              <button id="import-settings" class="pill-chip">Import Settings</button>
+              <input type="file" id="import-file" accept=".json" class="hidden">
+            </div>
+          </div>
+          <span id="import-export-status" class="prompt-status"></span>
         </div>
       </section>
 
       <!-- Security / Vault -->
-      <section class="card settings-half">
+      <section class="card settings-third">
         <h2 class="card-title">Security</h2>
         <div class="card-body">
-          <p class="info-text">Protect your data with a passcode or password. When enabled, Argus locks on browser restart and encrypts sensitive data (API keys, SSH sessions, cloud credentials) at rest.</p>
-
+          <p class="info-text">Passcode-protect Argus. Locks on browser restart and encrypts API keys, SSH sessions, and cloud credentials at rest.</p>
           <div id="vault-setup-section">
-            <!-- Shown when vault is NOT configured -->
             <div id="vault-not-configured">
               <div class="form-row">
                 <div class="form-group flex-1">
@@ -2623,13 +2782,11 @@
               </div>
               <div class="form-row">
                 <div class="form-group flex-1">
-                  <button id="vault-enable-btn" class="btn btn-primary">Enable Encryption</button>
+                  <button id="vault-enable-btn" class="pill-chip">Enable Encryption</button>
                 </div>
               </div>
               <span id="vault-setup-status" class="prompt-status"></span>
             </div>
-
-            <!-- Shown when vault IS configured -->
             <div id="vault-configured" class="hidden">
               <div class="form-row" style="align-items:center;">
                 <div class="form-group flex-1">
@@ -2654,154 +2811,16 @@
         </div>
       </section>
 
-      <!-- Import / Export -->
-      <section class="card settings-half">
-        <h2 class="card-title">Import / Export</h2>
-        <div class="card-body">
-          <p class="info-text">Export your settings, API keys, custom presets, and auto-analyze rules as a JSON file. Import to restore.</p>
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <button id="export-settings" class="btn btn-secondary">Export Settings</button>
-            </div>
-            <div class="form-group flex-1">
-              <button id="import-settings" class="btn btn-secondary">Import Settings</button>
-              <input type="file" id="import-file" accept=".json" class="hidden">
-            </div>
-          </div>
-          <span id="import-export-status" class="prompt-status"></span>
-        </div>
-      </section>
-
-      <!-- Startup / Homepage -->
-      <section class="card settings-half">
-        <h2 class="card-title">Startup</h2>
-        <div class="card-body">
-          <p class="info-text">Set Argus as your browser homepage. Opens all Argus pages as tabs when Firefox starts — Console, KG, Chat, Workbench, Reports, Draft Pad, and Reader.</p>
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <button id="set-argus-homepage" class="btn btn-secondary">Set Argus as Homepage</button>
-              <span class="hint">Copies Argus page URLs and opens Firefox homepage settings. Paste into the Custom URLs field.</span>
-            </div>
-          </div>
-          <span id="homepage-status" class="prompt-status"></span>
-        </div>
-      </section>
-
-      <!-- Reports Settings -->
-      <section class="card settings-half">
-        <h2 class="card-title">Reports</h2>
-        <div class="card-body">
-          <div class="form-row">
-            <div class="form-group flex-1">
-              <label for="max-history">Max Report Entries</label>
-              <input type="number" id="max-history" value="200" min="10" max="1000" step="10">
-            </div>
-            <div class="form-group flex-1">
-              <button id="open-history" class="btn btn-secondary">View Reports</button>
-            </div>
-            <div class="form-group flex-1">
-              <button id="clear-history" class="btn btn-secondary" style="color:var(--error);">Clear All Reports</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Cloud Backup -->
-      <section class="card settings-wide">
-        <h2 class="card-title">Backup &amp; Restore</h2>
-        <div class="card-body">
-          <p class="info-text">Back up all Argus data to connected cloud providers or download locally. Configure providers on the <a href="#" id="cloud-goto-providers" style="color:var(--accent);">Providers tab</a>.</p>
-
-          <!-- Connected providers summary -->
-          <div id="cloud-connected-summary" style="font-size:12px;color:var(--text-muted);margin-bottom:10px;"></div>
-
-          <!-- Default provider info (read-only, configured on Providers tab) -->
-          <div id="settings-default-providers" style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;padding:8px 10px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;display:none;">
-            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent);margin-bottom:4px;">Default Providers</div>
-            <div id="settings-default-cloud" style="margin-bottom:2px;"></div>
-            <div id="settings-default-paste"></div>
-            <div style="margin-top:4px;"><a href="#" id="settings-goto-defaults" style="font-size:11px;color:var(--accent);">Change defaults on Providers tab</a></div>
-          </div>
-
-          <!-- Backup Schedule -->
-          <div class="form-row" style="align-items:center;">
-            <div class="form-group flex-1">
-              <label style="display:flex;align-items:center;gap:8px;">
-                <input type="checkbox" id="cloud-backup-enabled">
-                Auto-backup on schedule
-              </label>
-            </div>
-            <div class="form-group">
-              <select id="cloud-backup-interval">
-                <option value="6">Every 6 hours</option>
-                <option value="12">Every 12 hours</option>
-                <option value="24" selected>Every 24 hours</option>
-                <option value="48">Every 48 hours</option>
-                <option value="168">Weekly</option>
-              </select>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <button id="cloud-backup-now" class="btn btn-accent btn-sm">Backup Now</button>
-            <button id="cloud-backup-local" class="btn btn-secondary btn-sm">Download Local Backup</button>
-            <label class="btn btn-secondary btn-sm" style="cursor:pointer;">Restore from File <input type="file" id="cloud-restore-file" accept=".zip" style="display:none;"></label>
-          </div>
-          <div id="cloud-backup-status" style="font-size:12px;color:var(--text-muted);margin-top:6px;"></div>
-          <div id="cloud-last-backup" style="font-size:11px;color:var(--text-muted);margin-top:4px;"></div>
-
-          <!-- Cloud Sync Options -->
-          <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
-            <label style="font-size:12px;font-weight:600;color:var(--text-secondary);">Cloud Sync Options</label>
-            <p class="info-text" style="margin:4px 0 8px;">Choose what gets synced when using "Sync to Cloud" from the Bookmarks toolbar.</p>
-            <div style="display:flex;flex-direction:column;gap:6px;">
-              <label style="display:flex;align-items:center;gap:8px;font-size:13px;">
-                <input type="checkbox" id="cloud-sync-metadata" checked>
-                Bookmark metadata to GitHub (folders, tags, summaries — diffable JSON)
-              </label>
-              <label style="display:flex;align-items:center;gap:8px;font-size:13px;">
-                <input type="checkbox" id="cloud-sync-snapshots" checked>
-                Page snapshots to cloud drives (HTML + screenshots from OPFS)
-              </label>
-              <label style="display:flex;align-items:center;gap:8px;font-size:13px;">
-                <input type="checkbox" id="cloud-sync-pdfs" checked>
-                PDF files to cloud drives (fetches and uploads bookmarked PDFs)
-              </label>
-            </div>
-          </div>
-
-          <!-- Restore from Cloud -->
-          <div id="cloud-restore-section" class="hidden" style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;">
-            <label style="font-size:12px;font-weight:600;color:var(--text-secondary);">Restore from Cloud</label>
-            <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
-              <select id="cloud-restore-provider" class="btn btn-secondary btn-sm">
-                <option value="">Select provider...</option>
-                <option value="google">Google Drive</option>
-                <option value="dropbox">Dropbox</option>
-                <option value="webdav">WebDAV</option>
-                <option value="s3">S3</option>
-                <option value="github">GitHub</option>
-              </select>
-              <button id="cloud-restore-list" class="btn btn-secondary btn-sm">List Backups</button>
-            </div>
-            <select id="cloud-restore-select" class="hidden" style="margin-top:6px;width:100%;font-size:12px;"></select>
-            <button id="cloud-restore-go" class="btn btn-accent btn-sm hidden" style="margin-top:6px;">Restore Selected Backup</button>
-          </div>
-        </div>
-      </section>
-
-      <!-- Storage Management -->
+      <!-- ── Row 4: Storage Management (full width) ── -->
       <section class="card settings-wide" id="storage-management">
         <h2 class="card-title">Storage Management</h2>
         <div class="card-body">
-          <p class="info-text">Manage browser storage used by Argus. Purge old data to free up space.</p>
           <div class="form-row">
             <div class="form-group flex-1">
               <label>Storage Usage</label>
               <span id="storage-usage-display" style="font-size:13px;color:var(--text-secondary);">Calculating...</span>
               <div id="storage-breakdown" style="margin-top:8px;font-size:11px;color:var(--text-secondary);display:none;"></div>
             </div>
-          </div>
-          <div class="form-row">
             <div class="form-group flex-1">
               <label for="purge-history-age">Purge Reports Older Than</label>
               <div style="display:flex;gap:8px;align-items:center;">
@@ -2810,11 +2829,9 @@
                   <option value="60">60 days</option>
                   <option value="90">90 days</option>
                 </select>
-                <button id="purge-history-btn" class="btn btn-secondary" style="color:var(--error);">Purge Reports</button>
+                <button id="purge-history-btn" class="pill-chip" style="color:var(--error);">Purge Reports</button>
               </div>
             </div>
-          </div>
-          <div class="form-row">
             <div class="form-group flex-1">
               <label for="purge-snapshots-keep">Keep Last N Snapshots Per Monitor</label>
               <div style="display:flex;gap:8px;align-items:center;">
@@ -2824,54 +2841,51 @@
                   <option value="20">20 snapshots</option>
                   <option value="50">50 snapshots</option>
                 </select>
-                <button id="purge-snapshots-btn" class="btn btn-secondary" style="color:var(--error);">Purge Snapshots</button>
+                <button id="purge-snapshots-btn" class="pill-chip" style="color:var(--error);">Purge Snapshots</button>
               </div>
             </div>
-          </div>
-          <div class="form-row">
             <div class="form-group flex-1">
-              <label>Purge All Cached Results</label>
-              <p class="info-text" style="margin:0 0 6px;">Removes all temporary result keys (analysis results, tech stack, metadata, link map, WHOIS).</p>
-              <button id="purge-cached-btn" class="btn btn-secondary" style="color:var(--error);">Purge All Cached Data</button>
+              <label>Cached Results</label>
+              <span class="hint">Analysis results, tech stack, metadata, link map, WHOIS.</span>
+              <button id="purge-cached-btn" class="pill-chip" style="color:var(--error);margin-top:6px;">Purge All Cached</button>
             </div>
-          </div>
-          <div class="form-row">
             <div class="form-group flex-1">
-              <label>Purge Snapshot Files</label>
-              <p class="info-text" style="margin:0 0 6px;">Deletes all HTML and screenshot files stored for monitor snapshots. Keeps snapshot metadata (timestamps, hashes).</p>
-              <button id="purge-opfs-btn" class="btn btn-secondary" style="color:var(--error);">Purge All Snapshot Files</button>
+              <label>Snapshot Files</label>
+              <span class="hint">HTML and screenshots for monitor snapshots. Metadata kept.</span>
+              <button id="purge-opfs-btn" class="pill-chip" style="color:var(--error);margin-top:6px;">Purge Snapshot Files</button>
             </div>
           </div>
           <span id="storage-purge-status" class="save-indicator hidden" style="color:var(--success);">Done</span>
-          <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
-          <label style="font-weight:600;">Email Contacts</label>
-          <p class="info-text" style="margin:0 0 6px;">Saved contacts for the Email Share feature. Add contacts here or they'll be saved automatically when you email someone.</p>
-          <div style="display:flex;gap:6px;margin-bottom:8px;">
-            <input type="text" id="contact-name-input" class="input" placeholder="Name (optional)" style="width:120px;font-size:12px;padding:6px 8px;">
-            <input type="email" id="contact-email-input" class="input" placeholder="email@example.com" style="flex:1;font-size:12px;padding:6px 8px;">
-            <button id="add-contact-btn" class="btn btn-secondary" style="font-size:12px;padding:6px 12px;">Add</button>
-          </div>
-          <div id="contacts-list" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
-
           <hr id="settings-wipe" style="border:none;border-top:1px solid var(--border);margin:16px 0;">
           <label style="color:var(--error);font-weight:600;">Wipe Everything</label>
-          <p class="info-text" style="margin:0 0 6px;">Permanently deletes all Argus data: projects, bookmarks, monitors, feeds, history, knowledge graph, snapshots, settings, and cached results. This cannot be undone. Use before uninstalling to leave no traces.</p>
-          <button id="wipe-everything-btn" class="btn btn-secondary" style="color:var(--error);border-color:var(--error);">Wipe Everything</button>
+          <p class="info-text" style="margin:4px 0 8px;">Permanently deletes all Argus data — projects, bookmarks, monitors, feeds, history, knowledge graph, snapshots, settings, and cached results. Cannot be undone.</p>
+          <button id="wipe-everything-btn" class="pill-chip" style="color:var(--error);">Wipe Everything</button>
           <div id="wipe-confirm" class="hidden" style="margin-top:8px;padding:10px;border:1px solid var(--error);border-radius:6px;background:var(--bg-secondary);">
-            <p style="margin:0 0 8px;color:var(--error);font-weight:600;">Are you sure? This will permanently delete ALL Argus data.</p>
+            <p style="margin:0 0 8px;color:var(--error);font-weight:600;">Are you sure? This permanently deletes ALL Argus data.</p>
             <div style="display:flex;gap:8px;">
-              <button id="wipe-confirm-yes" class="btn btn-secondary" style="color:var(--error);border-color:var(--error);">Yes, Wipe Everything</button>
-              <button id="wipe-confirm-no" class="btn btn-secondary">Cancel</button>
+              <button id="wipe-confirm-yes" class="pill-chip" style="color:var(--error);">Yes, Wipe Everything</button>
+              <button id="wipe-confirm-no" class="pill-chip">Cancel</button>
             </div>
           </div>
         </div>
       </section>
 
+      <!-- ── Row 5: Startup / Keyboard Shortcuts / About ── -->
+
+      <!-- Startup -->
+      <section class="card settings-third">
+        <h2 class="card-title">Startup</h2>
+        <div class="card-body">
+          <p class="info-text">Set Argus as your browser homepage. Opens Console, KG, Chat, Workbench, Reports, Draft Pad, and Reader on start.</p>
+          <span class="hint">Opens Firefox homepage settings — paste the copied URLs into Custom URLs.</span>
+          <span id="homepage-status" class="prompt-status"></span>
+        </div>
+      </section>
+
       <!-- Keyboard Shortcuts -->
-      <section class="card settings-half">
+      <section class="card settings-third">
         <h2 class="card-title">Keyboard Shortcuts</h2>
         <div class="card-body">
-          <p class="info-text">These shortcuts are configurable via Firefox's extension shortcut settings.</p>
           <div class="shortcuts-list">
             <div class="shortcut-item">
               <span class="shortcut-key">Ctrl+Shift+G</span>
@@ -2879,30 +2893,57 @@
             </div>
             <div class="shortcut-item">
               <span class="shortcut-key">Ctrl+Shift+S</span>
-              <span>Quick Summary of current page</span>
+              <span>Quick Summary</span>
             </div>
             <div class="shortcut-item">
               <span class="shortcut-key">Ctrl+Shift+A</span>
-              <span>Analyze selected text</span>
+              <span>Analyze selection</span>
             </div>
           </div>
-          <p class="info-text" style="margin-top:12px;">To customize shortcuts, go to <strong>about:addons</strong> &rarr; Gear icon &rarr; <strong>Manage Extension Shortcuts</strong>.</p>
+          <p class="info-text" style="margin-top:12px;">Customize at <strong>about:addons</strong> → Gear → <strong>Manage Extension Shortcuts</strong>.</p>
         </div>
       </section>
 
-
       <!-- About -->
-      <section class="card settings-half">
+      <section class="card settings-third">
         <h2 class="card-title">About</h2>
         <div class="card-body">
-          <p class="info-text">
-            Argus is an AI-powered web analysis toolkit with OSINT capabilities. Supports Grok, OpenAI, Claude, Gemini, and any OpenAI-compatible endpoint. Features streaming responses, custom editable prompts, multi-provider comparison, page monitoring, RSS feeds, smart bookmarks, project-based investigations, entity extraction, knowledge graph, source-aware pipelines, project dashboards with auto-digests, and more. Your API keys are stored locally and never shared.
-          </p>
+          <p class="info-text">AI-powered web analysis with OSINT capabilities. Supports Grok, OpenAI, Claude, Gemini, and any OpenAI-compatible endpoint. API keys stored locally, never shared.</p>
           <div class="about-meta">
             <span>Version <strong id="version-number"></strong></span>
           </div>
         </div>
       </section>
+
+      <!-- ── Row 6: Home Screen Navigation ── -->
+      <section class="card settings-third">
+        <h2 class="card-title">Home Nav Buttons</h2>
+        <div class="card-body">
+          <span class="hint" style="display:block;margin-bottom:10px;">Configure where each button navigates in chat mode.</span>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div class="form-row" style="gap:6px;align-items:center;">
+              <span style="width:20px;font-size:11px;color:var(--text-muted);">1</span>
+              <select id="home-nav-dest-1" style="flex:1;font-size:11px;"></select>
+            </div>
+            <div class="form-row" style="gap:6px;align-items:center;">
+              <span style="width:20px;font-size:11px;color:var(--text-muted);">2</span>
+              <select id="home-nav-dest-2" style="flex:1;font-size:11px;"></select>
+            </div>
+            <div class="form-row" style="gap:6px;align-items:center;">
+              <span style="width:20px;font-size:11px;color:var(--text-muted);">3</span>
+              <select id="home-nav-dest-3" style="flex:1;font-size:11px;"></select>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- hidden inputs kept for JS compatibility -->
+      <div style="display:none;">
+        <input type="text" id="contact-name-input">
+        <input type="email" id="contact-email-input">
+        <button id="add-contact-btn"></button>
+        <div id="contacts-list"></div>
+      </div>
 
       </div><!-- /.settings-grid -->
 
@@ -2911,8 +2952,12 @@
     <!-- Help tab removed — documentation lives at GitHub README -->
   </div>
 
+  <script src="../lib/marked.min.js"></script>
+  <script src="../lib/purify.min.js"></script>
   <script src="../lib/storage-db.js"></script>
   <script src="../lib/email-share.js"></script>
+  <script src="../shared/text-it.js"></script>
+  <script src="../shared/cloud-sync.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

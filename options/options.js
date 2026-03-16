@@ -4444,17 +4444,7 @@ function attachListeners() {
 
   // ── Set Argus as Homepage ──
   document.getElementById("set-argus-homepage")?.addEventListener("click", async () => {
-    const pages = [
-      "options/options.html",
-      "osint/graph.html",
-      "chat/chat.html",
-      "workbench/workbench.html",
-      "history/history.html",
-      "reporting/reporting.html",
-      "feeds/feeds.html"
-    ];
-    const urls = pages.map(p => browser.runtime.getURL(p));
-    const homepageStr = urls.join("|");
+    const homepageStr = browser.runtime.getURL("options/options.html") + "#home";
     await navigator.clipboard.writeText(homepageStr);
     const statusEl = document.getElementById("homepage-status");
     if (statusEl) {
@@ -6187,7 +6177,6 @@ function initMainTabs() {
   const appNavMap = {
     "open-projects-nav": null, // handled separately — navigates to #projects on this page
     "open-kg-nav": "osint/graph.html?mode=global",
-    "open-chat-nav": "chat/chat.html",
     "open-workbench-nav": "workbench/workbench.html",
     "open-history-nav": "history/history.html",
     "open-draft-nav": "reporting/reporting.html",
@@ -6215,6 +6204,98 @@ function initMainTabs() {
       });
     }
   }
+
+  // Chat nav button → switch to home tab and activate inline chat
+  document.getElementById("open-chat-nav")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const navTabs = document.querySelectorAll(".nav-tab[data-tab]");
+    const navPanels = document.querySelectorAll(".tab-panel[data-panel]");
+    switchMainTab("home", navTabs, navPanels);
+    window.location.hash = "home";
+    setTimeout(() => {
+      const chatBtn = document.getElementById("home-chat-btn");
+      const homeLanding = document.querySelector(".home-landing");
+      if (chatBtn && homeLanding && !homeLanding.classList.contains("chat-mode")) {
+        chatBtn.click();
+      }
+      document.getElementById("home-chat-input")?.focus();
+    }, 80);
+  });
+
+  // ── Home Nav Button config ──
+  const HOME_NAV_DEST_OPTIONS = [
+    { label: "── Tabs ──", value: "", disabled: true },
+    { label: "Home",       value: "tab:home" },
+    { label: "Bookmarks",  value: "tab:bookmarks" },
+    { label: "Projects",   value: "tab:projects" },
+    { label: "Sources",    value: "tab:sources" },
+    { label: "Prompts",    value: "tab:prompts" },
+    { label: "── Pages ──", value: "", disabled: true },
+    { label: "Feed Reader",  value: "page:feeds/feeds.html" },
+    { label: "Reports",      value: "page:history/history.html" },
+    { label: "KG Graph",     value: "page:osint/graph.html?mode=global" },
+    { label: "Workbench",    value: "page:workbench/workbench.html" },
+    { label: "Publisher",    value: "page:reporting/reporting.html" },
+    { label: "Finance",      value: "page:finance/finance.html" },
+    { label: "Images",       value: "page:osint/images.html" },
+    { label: "Trawl",        value: "page:trawl/trawl.html" },
+    { label: "SSH Terminal", value: "page:ssh/ssh.html" },
+  ];
+
+  const HOME_NAV_DEFAULTS = [
+    { dest: "tab:projects" },
+    { dest: "page:feeds/feeds.html" },
+    { dest: "tab:prompts" },
+  ];
+
+  function buildHomeNavSelects() {
+    [1, 2, 3].forEach(i => {
+      const sel = document.getElementById(`home-nav-dest-${i}`);
+      if (!sel) return;
+      sel.innerHTML = HOME_NAV_DEST_OPTIONS.map(o =>
+        `<option value="${o.value}"${o.disabled ? " disabled" : ""}>${o.label}</option>`
+      ).join("");
+    });
+  }
+
+  function getDestLabel(dest) {
+    return HOME_NAV_DEST_OPTIONS.find(o => o.value === dest)?.label || dest;
+  }
+
+  async function loadHomeNavConfig() {
+    buildHomeNavSelects();
+    const { homeNavBtns } = await browser.storage.local.get({ homeNavBtns: HOME_NAV_DEFAULTS });
+    const cfg = (Array.isArray(homeNavBtns) && homeNavBtns.length === 3) ? homeNavBtns : HOME_NAV_DEFAULTS;
+    cfg.forEach((btn, idx) => {
+      const i = idx + 1;
+      const destEl = document.getElementById(`home-nav-dest-${i}`);
+      const navBtn = document.getElementById(`home-nav-btn-${i}`);
+      if (destEl) destEl.value = btn.dest;
+      // Store dest label for chat mode; landing mode always shows fixed category name from HTML
+      if (navBtn) navBtn.dataset.chatLabel = getDestLabel(btn.dest);
+    });
+  }
+
+  function saveHomeNavConfig() {
+    const cfg = [1, 2, 3].map(i => ({
+      dest: document.getElementById(`home-nav-dest-${i}`)?.value || HOME_NAV_DEFAULTS[i - 1].dest,
+    }));
+    browser.storage.local.set({ homeNavBtns: cfg });
+    // Update chat label cache; if currently in chat mode, refresh visible text too
+    const inChatMode = document.querySelector(".home-landing")?.classList.contains("chat-mode");
+    cfg.forEach((btn, idx) => {
+      const navBtn = document.getElementById(`home-nav-btn-${idx + 1}`);
+      if (!navBtn) return;
+      navBtn.dataset.chatLabel = getDestLabel(btn.dest);
+      if (inChatMode) navBtn.textContent = navBtn.dataset.chatLabel;
+    });
+  }
+
+  [1, 2, 3].forEach(i => {
+    document.getElementById(`home-nav-dest-${i}`)?.addEventListener("change", saveHomeNavConfig);
+  });
+
+  loadHomeNavConfig();
 
   // Console tab label mapping (same as ribbon.js)
   const CONSOLE_ENTRY_LABELS = {
@@ -6615,12 +6696,41 @@ function initMainTabs() {
   // ── Home nav category filter ──
   document.querySelectorAll("[data-nav-cat].search-cat-chip").forEach(btn => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll("[data-nav-cat].search-cat-chip").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
       const cat = btn.dataset.navCat;
-      document.querySelectorAll(".home-icon-item[data-nav-cat]").forEach(item => {
-        item.style.display = (cat === "all" || item.dataset.navCat === cat) ? "" : "none";
-      });
+      const inChatMode = document.querySelector(".home-landing")?.classList.contains("chat-mode");
+      const navTabs = document.querySelectorAll(".nav-tab[data-tab]");
+      const navPanels = document.querySelectorAll(".tab-panel[data-panel]");
+
+      if (inChatMode) {
+        // Look up stored destination for buttons 1-3
+        const catMap = { research: 1, monitoring: 2, config: 3 };
+        const btnIdx = catMap[cat];
+        if (btnIdx) {
+          browser.storage.local.get({ homeNavBtns: HOME_NAV_DEFAULTS }).then(({ homeNavBtns }) => {
+            const cfg = (Array.isArray(homeNavBtns) && homeNavBtns.length === 3) ? homeNavBtns : HOME_NAV_DEFAULTS;
+            const dest = cfg[btnIdx - 1]?.dest || "";
+            if (dest.startsWith("tab:")) {
+              const tab = dest.slice(4);
+              if (tab === "home") {
+                setHomeChatMode(false);
+              } else {
+                switchMainTab(tab, navTabs, navPanels);
+                window.location.hash = tab;
+              }
+            } else if (dest.startsWith("page:")) {
+              focusOrCreatePage(dest.slice(5));
+            }
+          });
+          return;
+        }
+      } else {
+        // In landing mode: filter the icon grid
+        document.querySelectorAll("[data-nav-cat].search-cat-chip").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        document.querySelectorAll(".home-icon-item[data-nav-cat]").forEach(item => {
+          item.style.display = (cat === "all" || item.dataset.navCat === cat) ? "" : "none";
+        });
+      }
     });
   });
 
@@ -6875,6 +6985,468 @@ function initMainTabs() {
     document.querySelectorAll(".ticker-mode-btn").forEach(b => {
       b.classList.toggle("active", b.dataset.mode === mode);
     });
+  }
+
+  // ── Home inline chat ──
+  const homeLanding   = document.querySelector(".home-landing");
+  const chatBtn       = document.getElementById("home-chat-btn");
+  const chatMessages  = document.getElementById("home-chat-messages");
+  const chatInput     = document.getElementById("home-chat-input");
+  const chatSend      = document.getElementById("home-chat-send");
+
+  if (chatBtn && homeLanding) {
+    let chatConversationId = null;
+    let chatSending = false;
+    let chatSessionMessages = []; // { type:'user'|'ai', text:string } — used for cloud sync
+    let chatExchangeCount = 0;   // increments each time an AI response completes
+
+    const CHAT_SESSION_KEY = "argus-home-chat-session";
+
+    function reattachCopyBtns(container) {
+      container.querySelectorAll("pre").forEach(pre => {
+        const btn = pre.querySelector(".hc-copy-btn");
+        if (!btn) return;
+        btn.addEventListener("click", () => {
+          const code = pre.querySelector("code");
+          navigator.clipboard.writeText(code ? code.textContent : pre.textContent).then(() => {
+            btn.textContent = "Copied!";
+            setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+          });
+        });
+      });
+    }
+
+    function buildHomeChatTranscript() {
+      const lines = [];
+      chatMessages.querySelectorAll(".hc-msg").forEach(msg => {
+        const isUser = msg.classList.contains("hc-msg-user");
+        const bubble = msg.querySelector(".hc-bubble:not(.streaming)");
+        if (bubble) lines.push((isUser ? "User" : "Assistant") + ": " + bubble.textContent.trim());
+      });
+      return lines.join("\n\n");
+    }
+
+    async function saveHomeChatSession() {
+      const msgs = [];
+      chatMessages.querySelectorAll(".hc-msg").forEach(msg => {
+        const isUser = msg.classList.contains("hc-msg-user");
+        const bubble = msg.querySelector(".hc-bubble:not(.streaming)");
+        if (bubble) msgs.push({ type: isUser ? "user" : "ai", html: bubble.innerHTML });
+      });
+      await browser.storage.local.set({ [CHAT_SESSION_KEY]: { conversationId: chatConversationId, messages: msgs } });
+    }
+
+    async function restoreHomeChatSession() {
+      try {
+        const stored = await browser.storage.local.get(CHAT_SESSION_KEY);
+        const session = stored[CHAT_SESSION_KEY];
+        if (!session?.messages?.length) return;
+        chatConversationId = session.conversationId || null;
+        for (const msg of session.messages) {
+          const wrapper = document.createElement("div");
+          wrapper.className = `hc-msg hc-msg-${msg.type}`;
+          const bubble = document.createElement("div");
+          bubble.className = "hc-bubble";
+          bubble.innerHTML = msg.html;
+          if (msg.type === "ai") reattachCopyBtns(bubble);
+          wrapper.appendChild(bubble);
+          chatMessages.appendChild(wrapper);
+        }
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      } catch (e) {
+        console.warn("[Argus] Failed to restore home chat session:", e);
+      }
+    }
+
+    async function syncHomeChatToCloud(providerOverride) {
+      if (!chatSessionMessages.length) return false;
+      if (typeof CloudSync === "undefined") return false;
+      try {
+        const md = chatSessionMessages
+          .map(m => `**${m.type === "user" ? "User" : "Assistant"}:** ${m.text}`)
+          .join("\n\n");
+        const path = `chat/${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}.md`;
+        const result = providerOverride
+          ? await CloudSync.pushFile(path, md, providerOverride)
+          : await CloudSync.saveChat({
+              title: "Argus Chat — " + new Date().toLocaleDateString(),
+              source: "argus-home",
+              conversationId: chatConversationId,
+              messages: chatSessionMessages,
+            });
+        return result?.success || false;
+      } catch { return false; }
+    }
+
+    async function autoSyncHomeChatIfEnabled() {
+      try {
+        const { chatSyncEnabled, chatSyncProvider, chatSyncClearLocal } =
+          await browser.storage.local.get({ chatSyncEnabled: false, chatSyncProvider: "all", chatSyncClearLocal: false });
+        if (!chatSyncEnabled) return;
+        const provider = chatSyncProvider === "all" ? undefined : chatSyncProvider;
+        const ok = await syncHomeChatToCloud(provider);
+        if (ok && chatSyncClearLocal) {
+          chatSessionMessages = [];
+          chatConversationId = null;
+          chatExchangeCount = 0;
+          chatMessages.innerHTML = "";
+          browser.storage.local.remove(CHAT_SESSION_KEY);
+        }
+      } catch { /* silent */ }
+    }
+
+    function setHomeChatMode(entering) {
+      if (!entering && chatSessionMessages.length) autoSyncHomeChatIfEnabled();
+      homeLanding.classList.toggle("chat-mode", entering);
+      chatBtn.classList.toggle("active", entering);
+      chatBtn.textContent = entering ? "Home" : "Chat";
+      // In chat mode show destination labels; in landing mode restore fixed category names
+      [1, 2, 3].forEach(i => {
+        const btn = document.getElementById(`home-nav-btn-${i}`);
+        if (!btn) return;
+        if (entering) {
+          btn.textContent = btn.dataset.chatLabel || btn.textContent;
+        } else {
+          const cat = btn.dataset.navCat || "";
+          btn.textContent = cat.charAt(0).toUpperCase() + cat.slice(1);
+        }
+      });
+      if (entering) chatInput?.focus();
+    }
+
+    chatBtn.addEventListener("click", () => {
+      setHomeChatMode(!homeLanding.classList.contains("chat-mode"));
+    });
+
+    async function sendHomeChatMessage() {
+      if (chatSending) return;
+      const question = chatInput.value.trim();
+      if (!question) return;
+
+      chatSending = true;
+      chatSend.disabled = true;
+      chatInput.value = "";
+
+      // User bubble
+      const userMsg = document.createElement("div");
+      userMsg.className = "hc-msg hc-msg-user";
+      userMsg.innerHTML = `<div class="hc-bubble">${question.replace(/</g,"&lt;")}</div>`;
+      chatMessages.appendChild(userMsg);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+      chatSessionMessages.push({ type: "user", text: question });
+      saveHomeChatSession();
+
+      // AI bubble (streaming placeholder)
+      const aiMsg = document.createElement("div");
+      aiMsg.className = "hc-msg hc-msg-ai";
+      const aiBubble = document.createElement("div");
+      aiBubble.className = "hc-bubble streaming";
+      aiBubble.textContent = "Thinking…";
+      aiMsg.appendChild(aiBubble);
+      chatMessages.appendChild(aiMsg);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+
+      try {
+        let response;
+        if (!chatConversationId) {
+          response = await browser.runtime.sendMessage({
+            action: "startConversation",
+            contextType: "General",
+            contextData: "",
+            pageUrl: "",
+            pageTitle: "Argus Home",
+            question
+          });
+        } else {
+          response = await browser.runtime.sendMessage({
+            action: "followUp",
+            resultId: chatConversationId,
+            question
+          });
+          // Background SW may have restarted and lost the in-memory conversation — rebuild silently
+          if (!response?.success) {
+            chatConversationId = null;
+            response = await browser.runtime.sendMessage({
+              action: "startConversation",
+              contextType: "Chat History",
+              contextData: buildHomeChatTranscript(),
+              pageUrl: "",
+              pageTitle: "Argus Home",
+              question
+            });
+          }
+        }
+
+        if (!response?.success) {
+          aiBubble.classList.remove("streaming");
+          aiBubble.textContent = response?.error || "No response from background. Check that an API key is configured on the Providers tab.";
+          aiBubble.style.color = "var(--error)";
+        } else {
+          if (response.conversationId) chatConversationId = response.conversationId;
+          const aiContent = await pollHomeChatResult(response.followupResultId, aiBubble);
+          if (aiContent != null) {
+            chatSessionMessages.push({ type: "ai", text: aiContent });
+            chatExchangeCount++;
+            aiMsg.appendChild(buildHomeChatActionBar(aiContent));
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            // Auto-sync if interval reached
+            browser.storage.local.get({ chatSyncEnabled: false, chatSyncInterval: 5 }).then(({ chatSyncEnabled, chatSyncInterval }) => {
+              if (chatSyncEnabled && chatSyncInterval > 0 && chatExchangeCount % chatSyncInterval === 0) {
+                autoSyncHomeChatIfEnabled();
+              }
+            });
+          }
+        }
+      } catch (err) {
+        aiBubble.classList.remove("streaming");
+        aiBubble.textContent = err.message;
+        aiBubble.style.color = "var(--error)";
+      }
+
+      saveHomeChatSession();
+      chatSend.disabled = false;
+      chatSending = false;
+    }
+
+    function renderHomeChatMd(content, bubble, isStreaming) {
+      if (typeof marked === "undefined" || typeof DOMPurify === "undefined") {
+        bubble.textContent = isStreaming ? content + "▍" : content;
+        return;
+      }
+      const html = DOMPurify.sanitize(marked.parse(content || ""));
+      bubble.innerHTML = html;
+      // Add copy buttons to code blocks
+      bubble.querySelectorAll("pre").forEach(pre => {
+        if (pre.querySelector(".hc-copy-btn")) return;
+        const btn = document.createElement("button");
+        btn.className = "hc-copy-btn";
+        btn.textContent = "Copy";
+        btn.addEventListener("click", () => {
+          const code = pre.querySelector("code");
+          navigator.clipboard.writeText(code ? code.textContent : pre.textContent).then(() => {
+            btn.textContent = "Copied!";
+            setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+          });
+        });
+        pre.appendChild(btn);
+      });
+      // Append streaming cursor as a text node after all content
+      if (isStreaming) {
+        const cursor = document.createTextNode("▍");
+        bubble.appendChild(cursor);
+      }
+    }
+
+    async function pollHomeChatResult(resultId, bubble) {
+      const INTERVAL = 300;
+      const MAX = 1000;
+      for (let i = 0; i < MAX; i++) {
+        await new Promise(r => setTimeout(r, INTERVAL));
+        try {
+          const stored = await browser.storage.local.get(resultId);
+          const data = stored[resultId];
+          if (!data) continue;
+
+          if (data.status === "streaming" && data.content) {
+            renderHomeChatMd(data.content, bubble, true);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            continue;
+          }
+          if (data.status === "done") {
+            bubble.classList.remove("streaming");
+            renderHomeChatMd(data.content || "", bubble, false);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            browser.storage.local.remove(resultId);
+            return data.content || "";
+          }
+          if (data.status === "error") {
+            bubble.classList.remove("streaming");
+            bubble.textContent = data.error || "Error.";
+            bubble.style.color = "var(--error)";
+            browser.storage.local.remove(resultId);
+            return null;
+          }
+        } catch { /* keep polling */ }
+      }
+      bubble.classList.remove("streaming");
+      bubble.textContent = "Timed out.";
+      return null;
+    }
+
+    function buildHomeChatActionBar(content) {
+      const bar = document.createElement("div");
+      bar.className = "argus-chat-actions";
+      bar.style.cssText = "margin-top:6px;justify-content:flex-start;";
+
+      // X
+      const xBtn = document.createElement("button");
+      xBtn.className = "pill-chip";
+      xBtn.title = "Share on X";
+      xBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>`;
+      xBtn.addEventListener("click", () => {
+        const snippet = content.slice(0, 250).replace(/\n/g, " ");
+        window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(snippet + (content.length > 250 ? "…" : "") + "\n\nvia Argus")}`, "_blank");
+      });
+      bar.appendChild(xBtn);
+
+      // Paste (Gist / PrivateBin)
+      const pasteBtn = document.createElement("button");
+      pasteBtn.className = "pill-chip";
+      pasteBtn.title = "Paste to Gist or PrivateBin";
+      pasteBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg> Paste`;
+      pasteBtn.addEventListener("click", () => {
+        const existing = bar.querySelector(".argus-chat-project-picker");
+        if (existing) { existing.remove(); return; }
+        const picker = document.createElement("div");
+        picker.className = "argus-chat-project-picker";
+        for (const [key, label] of [["gist", "GitHub Gist"], ["privatebin", "PrivateBin"]]) {
+          const opt = document.createElement("button");
+          opt.className = "argus-chat-project-option";
+          opt.textContent = label;
+          opt.addEventListener("click", async () => {
+            opt.textContent = "Uploading…";
+            try {
+              await browser.runtime.sendMessage({ action: "pasteCreate", providerKey: key, title: "Argus Chat", content, files: null });
+              opt.textContent = "Done!";
+            } catch { opt.textContent = "Error"; }
+            setTimeout(() => picker.remove(), 1500);
+          });
+          picker.appendChild(opt);
+        }
+        bar.appendChild(picker);
+        const dismiss = (e) => { if (!picker.contains(e.target) && e.target !== pasteBtn) { picker.remove(); document.removeEventListener("click", dismiss); } };
+        setTimeout(() => document.addEventListener("click", dismiss), 0);
+      });
+      bar.appendChild(pasteBtn);
+
+      // Text-It
+      const textItBtn = document.createElement("button");
+      textItBtn.className = "pill-chip";
+      textItBtn.title = "Send via Text-It";
+      textItBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg> Text-It`;
+      textItBtn.addEventListener("click", () => {
+        if (typeof TextIt !== "undefined") TextIt.open(content);
+      });
+      bar.appendChild(textItBtn);
+
+      // Save to Project
+      const projBtn = document.createElement("button");
+      projBtn.className = "pill-chip";
+      projBtn.title = "Save to project";
+      projBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Project`;
+      projBtn.addEventListener("click", async () => {
+        const existing = bar.querySelector(".hc-proj-picker");
+        if (existing) { existing.remove(); return; }
+        const resp = await browser.runtime.sendMessage({ action: "getProjects" });
+        if (!resp?.success || !resp.projects.length) {
+          projBtn.textContent = "No projects";
+          setTimeout(() => { projBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Project`; }, 1500);
+          return;
+        }
+        const picker = document.createElement("div");
+        picker.className = "argus-chat-project-picker hc-proj-picker";
+        for (const proj of resp.projects) {
+          const opt = document.createElement("button");
+          opt.className = "argus-chat-project-option";
+          const dot = document.createElement("span");
+          dot.style.cssText = `width:8px;height:8px;border-radius:50%;background:${proj.color || "#e94560"};display:inline-block;margin-right:6px;`;
+          opt.appendChild(dot);
+          opt.appendChild(document.createTextNode(proj.name));
+          opt.addEventListener("click", async () => {
+            await browser.runtime.sendMessage({
+              action: "addProjectItem",
+              projectId: proj.id,
+              item: { type: "note", title: "Chat — " + new Date().toLocaleDateString(), notes: content, url: "", tags: ["chat"] }
+            });
+            picker.remove();
+            projBtn.textContent = "Saved!";
+            setTimeout(() => { projBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Project`; }, 1500);
+          });
+          picker.appendChild(opt);
+        }
+        bar.style.position = "relative";
+        bar.appendChild(picker);
+        const dismiss = (e) => { if (!picker.contains(e.target) && e.target !== projBtn) { picker.remove(); document.removeEventListener("click", dismiss); } };
+        setTimeout(() => document.addEventListener("click", dismiss), 0);
+      });
+      bar.appendChild(projBtn);
+
+      // Sync Convo — saves full conversation to a chosen cloud provider
+      const CLOUD_SVG = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>`;
+      const syncBtn = document.createElement("button");
+      syncBtn.className = "pill-chip";
+      syncBtn.title = "Sync full conversation to cloud";
+      syncBtn.innerHTML = `${CLOUD_SVG} Sync Convo`;
+      syncBtn.addEventListener("click", async () => {
+        const existing = bar.querySelector(".hc-cloud-picker");
+        if (existing) { existing.remove(); return; }
+
+        syncBtn.textContent = "…";
+        const status = typeof CloudSync !== "undefined" ? await CloudSync.getStatus() : null;
+        syncBtn.innerHTML = `${CLOUD_SVG} Sync Convo`;
+
+        const providers = status?.providers || {};
+        const connected = Object.entries(providers).filter(([, v]) => v);
+        const picker = document.createElement("div");
+        picker.className = "argus-chat-project-picker hc-cloud-picker";
+
+        if (!connected.length) {
+          const msg = document.createElement("div");
+          msg.style.cssText = "padding:6px 10px;font-size:11px;opacity:.7;";
+          msg.textContent = "No cloud providers connected. Configure in Settings → Cloud.";
+          picker.appendChild(msg);
+        } else {
+          const LABELS = { google: "Google Drive", dropbox: "Dropbox", webdav: "WebDAV", s3: "S3", github: "GitHub" };
+          // "All" option
+          const allOpt = document.createElement("button");
+          allOpt.className = "argus-chat-project-option";
+          allOpt.textContent = "All connected";
+          allOpt.addEventListener("click", async () => {
+            allOpt.textContent = "Syncing…";
+            const ok = await syncHomeChatToCloud();
+            allOpt.textContent = ok ? "Synced!" : "Error";
+            setTimeout(() => picker.remove(), 1500);
+          });
+          picker.appendChild(allOpt);
+          // Per-provider options
+          for (const [key] of connected) {
+            const opt = document.createElement("button");
+            opt.className = "argus-chat-project-option";
+            opt.textContent = LABELS[key] || key;
+            opt.addEventListener("click", async () => {
+              opt.textContent = "Syncing…";
+              const ok = await syncHomeChatToCloud(key);
+              opt.textContent = ok ? "Synced!" : "Error";
+              setTimeout(() => picker.remove(), 1500);
+            });
+            picker.appendChild(opt);
+          }
+        }
+
+        bar.style.position = "relative";
+        bar.appendChild(picker);
+        const dismiss = (e) => { if (!picker.contains(e.target) && e.target !== syncBtn) { picker.remove(); document.removeEventListener("click", dismiss); } };
+        setTimeout(() => document.addEventListener("click", dismiss), 0);
+      });
+      bar.appendChild(syncBtn);
+
+      return bar;
+    }
+
+    chatSend?.addEventListener("click", sendHomeChatMessage);
+    chatInput?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendHomeChatMessage(); }
+    });
+    // Auto-resize textarea
+    chatInput?.addEventListener("input", () => {
+      chatInput.style.height = "auto";
+      chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + "px";
+    });
+
+    restoreHomeChatSession();
+
+    // Auto-sync to cloud on page unload (best-effort)
+    window.addEventListener("beforeunload", () => autoSyncHomeChatIfEnabled());
   }
 }
 
@@ -7748,8 +8320,14 @@ function initProjects() {
   projEl.modalName = document.getElementById("proj-modal-name");
   projEl.modalDesc = document.getElementById("proj-modal-desc");
   projEl.modalColor = document.getElementById("proj-modal-color");
+  projEl.modalCloudSync = document.getElementById("proj-modal-cloud-sync");
+  projEl.modalCloudProvider = document.getElementById("proj-modal-cloud-provider");
   projEl.itemModal = document.getElementById("proj-item-modal");
   projEl.itemNotes = document.getElementById("proj-item-notes");
+
+  projEl.modalCloudSync.addEventListener("change", () => {
+    projEl.modalCloudProvider.style.display = projEl.modalCloudSync.checked ? "block" : "none";
+  });
 
   document.getElementById("proj-new").addEventListener("click", () => projOpenModal());
   document.getElementById("proj-refresh").addEventListener("click", () => projLoadProjects());
@@ -8583,6 +9161,10 @@ function projOpenModal(existing) {
   projEl.modalName.value = existing ? existing.name : "";
   projEl.modalDesc.value = existing ? (existing.description || "") : "";
   projEl.modalColor.value = existing ? (existing.color || "#e94560") : "#e94560";
+  const hasCloud = !!(existing?.cloudProvider);
+  projEl.modalCloudSync.checked = hasCloud;
+  projEl.modalCloudProvider.value = existing?.cloudProvider || "";
+  projEl.modalCloudProvider.style.display = hasCloud ? "block" : "none";
   projEl.modal.classList.remove("hidden");
   projEl.modalName.focus();
 }
@@ -8591,20 +9173,26 @@ async function projSaveModal() {
   const name = projEl.modalName.value.trim();
   if (!name) return;
 
+  const cloudProvider = projEl.modalCloudSync.checked
+    ? (projEl.modalCloudProvider.value || null)
+    : null;
+
   if (projState.editingProjectId) {
     await browser.runtime.sendMessage({
       action: "updateProject",
       projectId: projState.editingProjectId,
       name,
       description: projEl.modalDesc.value.trim(),
-      color: projEl.modalColor.value
+      color: projEl.modalColor.value,
+      cloudProvider,
     });
   } else {
     const resp = await browser.runtime.sendMessage({
       action: "createProject",
       name,
       description: projEl.modalDesc.value.trim(),
-      color: projEl.modalColor.value
+      color: projEl.modalColor.value,
+      cloudProvider,
     });
     if (resp && resp.success) {
       projState.activeProjectId = resp.project.id;
@@ -9213,6 +9801,21 @@ function initCloudBackup() {
     });
   }
 
+  // Settings tab jump links → Providers tab
+  document.querySelectorAll("[data-goto-tab]").forEach(el => {
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      const tab = el.dataset.gotoTab;
+      const anchor = el.dataset.gotoAnchor;
+      document.querySelector(`.nav-tab[data-tab="${tab}"]`)?.click();
+      if (anchor) {
+        setTimeout(() => {
+          document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 80);
+      }
+    });
+  });
+
   // Show connected providers summary
   refreshCloudStatus();
   // Update default provider info on Settings tab
@@ -9353,6 +9956,38 @@ function initCloudBackup() {
   syncMetaCb.addEventListener("change", saveSyncOpts);
   syncSnapCb.addEventListener("change", saveSyncOpts);
   syncPdfCb.addEventListener("change", saveSyncOpts);
+
+  // Chat session sync settings
+  const chatSyncEnabledCb   = document.getElementById("chat-sync-enabled");
+  const chatSyncProviderSel = document.getElementById("chat-sync-provider");
+  const chatSyncIntervalSel = document.getElementById("chat-sync-interval");
+  const chatSyncClearCb     = document.getElementById("chat-sync-clear-local");
+  const chatSyncConfigEl    = document.getElementById("chat-sync-config");
+
+  browser.storage.local.get({
+    chatSyncEnabled: false, chatSyncProvider: "all", chatSyncInterval: 5, chatSyncClearLocal: false
+  }).then(d => {
+    chatSyncEnabledCb.checked   = d.chatSyncEnabled;
+    chatSyncProviderSel.value   = d.chatSyncProvider;
+    chatSyncIntervalSel.value   = String(d.chatSyncInterval);
+    chatSyncClearCb.checked     = d.chatSyncClearLocal;
+    chatSyncConfigEl.style.display = d.chatSyncEnabled ? "flex" : "none";
+  });
+
+  const saveChatSyncSettings = () => browser.storage.local.set({
+    chatSyncEnabled:   chatSyncEnabledCb.checked,
+    chatSyncProvider:  chatSyncProviderSel.value,
+    chatSyncInterval:  parseInt(chatSyncIntervalSel.value, 10),
+    chatSyncClearLocal: chatSyncClearCb.checked,
+  });
+
+  chatSyncEnabledCb.addEventListener("change", () => {
+    chatSyncConfigEl.style.display = chatSyncEnabledCb.checked ? "flex" : "none";
+    saveChatSyncSettings();
+  });
+  chatSyncProviderSel.addEventListener("change", saveChatSyncSettings);
+  chatSyncIntervalSel.addEventListener("change", saveChatSyncSettings);
+  chatSyncClearCb.addEventListener("change", saveChatSyncSettings);
 
   refreshCloudStatus();
 }
@@ -9970,7 +10605,7 @@ async function purgeStorageEntry(store) {
     monitors: () => ArgusDB.Monitors.clear(),
     feeds: () => ArgusDB.Feeds.clear(),
     watchlist: () => ArgusDB.Watchlist.clear(),
-    chatSessions: () => ArgusDB.ChatSessions.clear(),
+    chatSessions: () => { ArgusDB.ChatSessions.clear(); browser.storage.local.remove("argus-home-chat-session"); },
     drafts: () => ArgusDB.Drafts.clear(),
     pageTracker: () => ArgusDB.PageTracker.clear(),
     sources: () => ArgusDB.Sources.clear(),
@@ -11238,8 +11873,11 @@ function initTrawlScheduleControls() {
 
   el.trawlStartHour.addEventListener("change", saveTrawlSchedule);
   el.trawlEndHour.addEventListener("change", saveTrawlSchedule);
-  el.trawlDayChecks.querySelectorAll("input[data-day]").forEach(cb => {
-    cb.addEventListener("change", saveTrawlSchedule);
+  el.trawlDayChecks.querySelectorAll("button[data-day]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      btn.classList.toggle("active");
+      saveTrawlSchedule();
+    });
   });
 }
 
@@ -11253,8 +11891,8 @@ async function loadTrawlScheduleUI() {
     if (sched.startHour !== undefined) el.trawlStartHour.value = sched.startHour;
     if (sched.endHour !== undefined) el.trawlEndHour.value = sched.endHour;
     if (sched.days) {
-      el.trawlDayChecks.querySelectorAll("input[data-day]").forEach(cb => {
-        cb.checked = sched.days.includes(parseInt(cb.dataset.day, 10));
+      el.trawlDayChecks.querySelectorAll("button[data-day]").forEach(btn => {
+        btn.classList.toggle("active", sched.days.includes(parseInt(btn.dataset.day, 10)));
       });
     }
   } catch {}
@@ -11262,8 +11900,8 @@ async function loadTrawlScheduleUI() {
 
 function saveTrawlSchedule() {
   const days = [];
-  el.trawlDayChecks.querySelectorAll("input[data-day]:checked").forEach(cb => {
-    days.push(parseInt(cb.dataset.day, 10));
+  el.trawlDayChecks.querySelectorAll("button[data-day].active").forEach(btn => {
+    days.push(parseInt(btn.dataset.day, 10));
   });
   const schedule = {
     enabled: el.trawlScheduleEnabled.checked,

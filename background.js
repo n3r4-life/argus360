@@ -1898,21 +1898,23 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "getTrawlDuration") return browser.storage.local.get({ trawlDurationEnabled: false, trawlDurationMinutes: 30, trawlExpireAt: null }).then(s => ({ success: true, enabled: s.trawlDurationEnabled, minutes: s.trawlDurationMinutes, expireAt: s.trawlExpireAt }));
   if (message.action === "setTrawlDuration") return browser.storage.local.set({ trawlDurationEnabled: message.enabled, trawlDurationMinutes: message.minutes }).then(() => ({ success: true }));
   if (message.action === "startTrawlTimer") {
-    const mins = message.minutes || (await browser.storage.local.get({ trawlDurationMinutes: 30 })).trawlDurationMinutes;
-    const expireAt = Date.now() + mins * 60 * 1000;
-    await browser.storage.local.set({ trawlEnabled: true, trackMyPages: true, trawlExpireAt: expireAt });
-    browser.alarms.create("trawl-duration-expire", { when: expireAt });
-    return { success: true, expireAt };
+    return (async () => {
+      const mins = message.minutes || (await browser.storage.local.get({ trawlDurationMinutes: 30 })).trawlDurationMinutes;
+      const expireAt = Date.now() + mins * 60 * 1000;
+      await browser.storage.local.set({ trawlEnabled: true, trackMyPages: true, trawlExpireAt: expireAt });
+      browser.alarms.create("trawl-duration-expire", { when: expireAt });
+      return { success: true, expireAt };
+    })();
   }
   if (message.action === "stopTrawlTimer") {
     browser.alarms.clear("trawl-duration-expire");
-    await browser.storage.local.set({ trawlEnabled: false, trawlExpireAt: null });
-    return { success: true };
+    return browser.storage.local.set({ trawlEnabled: false, trawlExpireAt: null }).then(() => ({ success: true }));
   }
   if (message.action === "getTrawlTimerStatus") {
-    const s = await browser.storage.local.get({ trawlExpireAt: null, trawlEnabled: false });
-    const remainingMs = s.trawlExpireAt ? Math.max(0, s.trawlExpireAt - Date.now()) : null;
-    return { success: true, active: !!(s.trawlExpireAt && s.trawlEnabled), expireAt: s.trawlExpireAt, remainingMs };
+    return browser.storage.local.get({ trawlExpireAt: null, trawlEnabled: false }).then(s => {
+      const remainingMs = s.trawlExpireAt ? Math.max(0, s.trawlExpireAt - Date.now()) : null;
+      return { success: true, active: !!(s.trawlExpireAt && s.trawlEnabled), expireAt: s.trawlExpireAt, remainingMs };
+    });
   }
   // Trawl → GeoMap
   if (message.action === "buildGeomapFromTrawl") return handleBuildGeomapFromTrawl(message);
@@ -1995,6 +1997,9 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "cloudDisconnect") return CloudProviders[message.providerKey]?.disconnect() || Promise.resolve({ success: false });
   if (message.action === "cloudTestConnection") return CloudProviders[message.providerKey]?.testConnection().catch(e => ({ success: false, error: e.message }));
   if (message.action === "cloudGetStatus") return handleCloudGetStatus();
+  if (message.action === "cloudSaveChat") return handleCloudSaveChat(message.session);
+  if (message.action === "cloudPushFile") return handleCloudPushFile(message.path, message.content, message.providerKey);
+  if (message.action === "cloudListSessions") return handleCloudListSessions(message.providerKey);
   if (message.action === "cloudLocalBackup") return handleCloudLocalBackup();
   if (message.action === "cloudLocalRestore") return handleCloudLocalRestore(message.data);
   if (message.action === "cloudGetRedirectURL") {
@@ -2710,6 +2715,86 @@ async function handleCloudBackupNow() {
   } catch (e) {
     console.error("[Argus] Backup failed:", e);
     return { success: false, error: e.message };
+  }
+}
+
+// ── Cloud Chat Sync Handlers ──
+
+function _buildChatMarkdown(session) {
+  const ts = new Date().toISOString();
+  const lines = [
+    "---",
+    `title: "${(session.title || "Argus Chat").replace(/"/g, "'")}"`,
+    `source: ${session.source || "argus"}`,
+    `conversationId: ${session.conversationId || ""}`,
+    `exported: ${ts}`,
+    "---",
+    "",
+  ];
+  for (const msg of (session.messages || [])) {
+    lines.push(`**${msg.type === "user" ? "User" : "Assistant"}:** ${msg.text}`);
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+
+async function handleCloudSaveChat(session) {
+  const md = _buildChatMarkdown(session);
+  const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const filename = `chat/${ts}.md`;
+  const blob = new Blob([md], { type: "text/markdown" });
+
+  const keys = ["google", "dropbox", "webdav", "s3", "github"];
+  const results = [];
+  for (const key of keys) {
+    const provider = CloudProviders[key];
+    if (!provider || !await provider.isConnected()) continue;
+    try {
+      await provider.upload(blob, filename);
+      results.push({ provider: key, success: true });
+    } catch (e) {
+      results.push({ provider: key, success: false, error: e.message });
+    }
+  }
+  return { success: results.some(r => r.success), results };
+}
+
+async function handleCloudPushFile(path, content, providerKey) {
+  const blob = new Blob([content], { type: "text/plain" });
+  if (providerKey) {
+    const provider = CloudProviders[providerKey];
+    if (!provider) return { success: false, error: `Unknown provider: ${providerKey}` };
+    try {
+      await provider.upload(blob, path);
+      return { success: true, provider: providerKey };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+  const keys = ["google", "dropbox", "webdav", "s3", "github"];
+  const results = [];
+  for (const key of keys) {
+    const provider = CloudProviders[key];
+    if (!provider || !await provider.isConnected()) continue;
+    try {
+      await provider.upload(blob, path);
+      results.push({ provider: key, success: true });
+    } catch (e) {
+      results.push({ provider: key, success: false, error: e.message });
+    }
+  }
+  return { success: results.some(r => r.success), results };
+}
+
+async function handleCloudListSessions(providerKey) {
+  try {
+    const provider = CloudProviders[providerKey];
+    if (!provider) return { success: false, files: [], error: `Unknown provider: ${providerKey}` };
+    const all = await provider.list();
+    const sessions = all.filter(f => f.name && (f.name.endsWith(".md") || f.name.includes("chat")));
+    return { success: true, files: sessions };
+  } catch (e) {
+    return { success: false, files: [], error: e.message };
   }
 }
 
@@ -4303,11 +4388,12 @@ async function handleReAnalyze(message) {
 }
 
 // ──────────────────────────────────────────────
-// Single-tab navigation — find any Argus tab and reuse it, or create one
+// Per-page tab navigation — reuse the tab already showing this page, or open a new one
 // ──────────────────────────────────────────────
 async function openArgusPage(url) {
-  const extOrigin = browser.runtime.getURL("");
-  const existing = await browser.tabs.query({ url: extOrigin + "*" });
+  // Strip query/hash to match on the page path only
+  const pagePath = url.split("?")[0].split("#")[0];
+  const existing = await browser.tabs.query({ url: pagePath + "*" });
   if (existing.length > 0) {
     await browser.tabs.update(existing[0].id, { active: true, url });
     await browser.windows.update(existing[0].windowId, { focused: true });
@@ -7397,6 +7483,19 @@ async function handleGetProjects() {
   return { success: true, projects };
 }
 
+async function _pushProjectToCloud(project) {
+  try {
+    const provider = CloudProviders[project.cloudProvider];
+    if (!provider || !await provider.isConnected()) return;
+    const json = JSON.stringify(project, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    await provider.upload(blob, `projects/${project.id}.json`);
+    console.log(`[Argus] Project "${project.name}" synced to ${project.cloudProvider}`);
+  } catch (e) {
+    console.warn(`[Argus] Project cloud sync failed for "${project.name}":`, e.message);
+  }
+}
+
 async function handleCreateProject(message) {
   const project = {
     id: genId("proj"),
@@ -7404,11 +7503,13 @@ async function handleCreateProject(message) {
     description: message.description || "",
     starred: false,
     color: message.color || "#e94560",
+    cloudProvider: message.cloudProvider || null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     items: []
   };
   await ArgusDB.Projects.save(project);
+  if (project.cloudProvider) _pushProjectToCloud(project);
   createContextMenus(); // Rebuild so new project appears in right-click menu
   notifyDataChanged("projects");
   return { success: true, project };
@@ -7421,8 +7522,10 @@ async function handleUpdateProject(message) {
   if (message.description !== undefined) proj.description = message.description;
   if (message.starred !== undefined) proj.starred = message.starred;
   if (message.color !== undefined) proj.color = message.color;
+  if (message.cloudProvider !== undefined) proj.cloudProvider = message.cloudProvider || null;
   proj.updatedAt = new Date().toISOString();
   await ArgusDB.Projects.save(proj);
+  if (proj.cloudProvider) _pushProjectToCloud(proj);
   createContextMenus(); // Rebuild so renamed project updates in right-click menu
   notifyDataChanged("projects");
   return { success: true, project: proj };
@@ -7454,6 +7557,7 @@ async function handleAddProjectItem(message) {
   proj.items.unshift(item);
   proj.updatedAt = new Date().toISOString();
   await ArgusDB.Projects.save(proj);
+  if (proj.cloudProvider) _pushProjectToCloud(proj);
   notifyDataChanged("projects");
   return { success: true, item };
 }
@@ -7470,6 +7574,7 @@ async function handleUpdateProjectItem(message) {
   if (message.analysisPreset !== undefined) item.analysisPreset = message.analysisPreset;
   proj.updatedAt = new Date().toISOString();
   await ArgusDB.Projects.save(proj);
+  if (proj.cloudProvider) _pushProjectToCloud(proj);
   return { success: true, item };
 }
 
