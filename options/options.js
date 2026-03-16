@@ -598,6 +598,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   initWatchlist();
   initStorageManagement();
   initCloudBackup();
+  initUserProfile();
 
   // Refresh buttons on data tabs
   document.getElementById("bm-refresh")?.addEventListener("click", () => {
@@ -1443,6 +1444,7 @@ function selectDataProviderTab(key) {
 function loadDataProviderFields() {
   const g = dataProviders.gdrive || {};
   document.getElementById("dp-gdrive-client-id").value = g.clientId || "";
+  document.getElementById("dp-gdrive-folder").value = g.defaultFolder || "";
   updateDpConnectState("gdrive", g);
 
   // Show redirect URI for Google Drive (identity API only available in background)
@@ -1528,6 +1530,7 @@ function saveDataProviderField(key) {
   switch (key) {
     case "gdrive":
       dp.clientId = document.getElementById("dp-gdrive-client-id").value.trim();
+      dp.defaultFolder = document.getElementById("dp-gdrive-folder").value.trim();
       break;
     case "dropbox":
       dp.appKey = document.getElementById("dp-dropbox-app-key").value.trim();
@@ -3880,7 +3883,7 @@ function attachListeners() {
     btn.addEventListener("click", () => selectDataProviderTab(btn.dataset.dprovider));
   });
   // Data provider field inputs — auto-save on change
-  for (const id of ["dp-gdrive-client-id", "dp-dropbox-app-key", "dp-webdav-url", "dp-webdav-user", "dp-webdav-pass",
+  for (const id of ["dp-gdrive-client-id", "dp-gdrive-folder", "dp-dropbox-app-key", "dp-webdav-url", "dp-webdav-user", "dp-webdav-pass",
     "dp-s3-endpoint", "dp-s3-bucket", "dp-s3-access-key", "dp-s3-secret-key", "dp-s3-region",
     "dp-github-pat", "dp-github-repo", "dp-github-branch",
     "dp-xmpp-server", "dp-xmpp-jid", "dp-xmpp-gateway", "dp-xmpp-country"]) {
@@ -10026,6 +10029,15 @@ async function _doUpdateConsoleStatusStrip() {
     }
   } catch { /* silent */ }
 
+  try {
+    const pr = await browser.runtime.sendMessage({ action: "profileGetState" });
+    if (pr?.profile?.username) {
+      const u = pr.profile.username;
+      const syncTip = pr.profile.lastSync ? `Last sync ${pr.profile.lastSync.slice(0,10)}` : "Never synced";
+      pills.push(`<button class="ribbon-status-pill ribbon-user-pill" data-goto="settings" title="${u} · ${syncTip} — click to manage"><span class="ribbon-status-dot"></span>${u}</button>`);
+    }
+  } catch { /* silent */ }
+
   strip.innerHTML = pills.join("");
   strip.querySelectorAll("[data-goto]").forEach(btn => {
     btn.addEventListener("click", () => showTab(btn.dataset.goto));
@@ -10084,6 +10096,147 @@ async function refreshCloudStatus() {
   }
 }
 
+// ════════════════════════════════════════════
+// User Profile / Multi-user
+// ════════════════════════════════════════════
+
+function _profileFmtDate(iso) {
+  if (!iso) return "never";
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2, "0");
+  const yr = String(d.getFullYear()).slice(2);
+  return `${yr}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function updateProfileUI(profile) {
+  const loggedOut = document.getElementById("profile-logged-out");
+  const loggedIn  = document.getElementById("profile-logged-in");
+  if (!loggedOut || !loggedIn) return;
+
+  if (profile) {
+    loggedOut.style.display = "none";
+    loggedIn.style.display  = "";
+    const initial = (profile.username || "?")[0].toUpperCase();
+    document.getElementById("profile-avatar").textContent        = initial;
+    document.getElementById("profile-display-name").textContent  = profile.username;
+    document.getElementById("profile-last-sync").textContent     = _profileFmtDate(profile.lastSync);
+  } else {
+    loggedOut.style.display = "";
+    loggedIn.style.display  = "none";
+  }
+  // Always refresh ribbon + console strip
+  updateConsoleStatusStrip();
+}
+
+function initUserProfile() {
+  // Filter provider selector to only connected providers
+  (async () => {
+    try {
+      const resp = await browser.runtime.sendMessage({ action: "cloudGetStatus" });
+      const sel = document.getElementById("profile-cloud-provider");
+      if (!sel) return;
+      for (const opt of sel.options) {
+        if (opt.value && !resp?.providers?.[opt.value]) {
+          opt.disabled = true;
+          opt.textContent += " (not connected)";
+        }
+      }
+    } catch { /* */ }
+
+    // Restore logged-in state if active
+    const resp = await browser.runtime.sendMessage({ action: "profileGetState" });
+    updateProfileUI(resp?.profile || null);
+  })();
+
+  // Login
+  document.getElementById("profile-login-btn")?.addEventListener("click", async () => {
+    const username  = document.getElementById("profile-username").value.trim();
+    const passcode  = document.getElementById("profile-passcode").value;
+    const provider  = document.getElementById("profile-cloud-provider").value;
+    const statusEl  = document.getElementById("profile-login-status");
+
+    if (!username || !passcode || !provider) {
+      statusEl.textContent = "Fill in all fields.";
+      statusEl.style.color = "var(--error)";
+      return;
+    }
+
+    statusEl.textContent = "Signing in…";
+    statusEl.style.color = "var(--text-muted)";
+    const btn = document.getElementById("profile-login-btn");
+    btn.disabled = true;
+
+    try {
+      const r = await browser.runtime.sendMessage({ action: "profileLogin", username, passcode, cloudProvider: provider });
+      if (r?.success) {
+        statusEl.textContent = r.isNew ? "New profile created. Welcome!" : `Restored from last sync.`;
+        statusEl.style.color = "var(--success)";
+        document.getElementById("profile-passcode").value = "";
+        const stateResp = await browser.runtime.sendMessage({ action: "profileGetState" });
+        updateProfileUI(stateResp?.profile || null);
+      } else {
+        statusEl.textContent = r?.error || "Sign in failed.";
+        statusEl.style.color = "var(--error)";
+      }
+    } catch (e) {
+      statusEl.textContent = e.message;
+      statusEl.style.color = "var(--error)";
+    }
+    btn.disabled = false;
+  });
+
+  // Sync Now
+  document.getElementById("profile-sync-btn")?.addEventListener("click", async () => {
+    const statusEl = document.getElementById("profile-sync-status");
+    const btn = document.getElementById("profile-sync-btn");
+    btn.textContent = "Syncing…";
+    btn.disabled = true;
+    statusEl.textContent = "";
+    try {
+      const r = await browser.runtime.sendMessage({ action: "profileSyncAll" });
+      if (r?.success) {
+        statusEl.textContent = `Synced ${Object.keys(r.stores || {}).length} stores · ${_profileFmtDate(r.syncedAt)}`;
+        statusEl.style.color = "var(--success)";
+        document.getElementById("profile-last-sync").textContent = _profileFmtDate(r.syncedAt);
+        updateConsoleStatusStrip();
+      } else {
+        statusEl.textContent = r?.error || "Sync failed.";
+        statusEl.style.color = "var(--error)";
+      }
+    } catch (e) {
+      statusEl.textContent = e.message;
+      statusEl.style.color = "var(--error)";
+    }
+    btn.textContent = "Sync Now";
+    btn.disabled = false;
+  });
+
+  // Sign Out
+  document.getElementById("profile-logout-btn")?.addEventListener("click", async () => {
+    const syncFirst = !document.getElementById("profile-clear-on-logout")?.checked;
+    const confirmMsg = syncFirst
+      ? "Sync to cloud then sign out?"
+      : "Sign out without syncing? Any unsynced changes will stay local.";
+    if (!confirm(confirmMsg)) return;
+
+    const btn = document.getElementById("profile-logout-btn");
+    btn.textContent = syncFirst ? "Syncing…" : "Signing out…";
+    btn.disabled = true;
+
+    try {
+      await browser.runtime.sendMessage({ action: "profileLogout", syncFirst });
+      updateProfileUI(null);
+    } catch (e) {
+      const statusEl = document.getElementById("profile-sync-status");
+      statusEl.textContent = e.message;
+      statusEl.style.color = "var(--error)";
+    }
+    btn.textContent = "Sign Out";
+    btn.disabled = false;
+  });
+
+}
+
 function initStorageManagement() {
   updateStorageUsage();
 
@@ -10122,24 +10275,84 @@ function initStorageManagement() {
     renderContacts();
   });
 
-  // Wipe Everything
-  const wipeBtn = document.getElementById("wipe-everything-btn");
-  const wipeConfirm = document.getElementById("wipe-confirm");
-  wipeBtn.addEventListener("click", () => wipeConfirm.classList.remove("hidden"));
-  document.getElementById("wipe-confirm-no").addEventListener("click", () => wipeConfirm.classList.add("hidden"));
-  document.getElementById("wipe-confirm-yes").addEventListener("click", async () => {
-    wipeBtn.disabled = true;
-    wipeConfirm.classList.add("hidden");
-    showPurgeStatus("Wiping all data...");
-    const resp = await browser.runtime.sendMessage({ action: "wipeEverything" });
-    if (resp && resp.success) {
-      showPurgeStatus("All Argus data has been permanently deleted.");
-      setTimeout(() => location.reload(), 2000);
+  // Wipe Everything — PIN-gated multi-level
+  const wipeBtn    = document.getElementById("wipe-everything-btn");
+  const wipePanel  = document.getElementById("wipe-panel");
+  const wipePinStep  = document.getElementById("wipe-pin-step");
+  const wipeOptStep  = document.getElementById("wipe-options-step");
+  const wipeStatus   = document.getElementById("wipe-status");
+
+  function _closeWipePanel() {
+    wipePanel.classList.add("hidden");
+    wipePinStep.classList.add("hidden");
+    wipeOptStep.classList.add("hidden");
+    wipeStatus.textContent = "";
+    const pinInput = document.getElementById("wipe-pin-input");
+    if (pinInput) pinInput.value = "";
+    document.getElementById("wipe-pin-error").textContent = "";
+    wipeBtn.disabled = false;
+  }
+
+  async function _runWipe(mode) {
+    wipeOptStep.classList.add("hidden");
+    wipeStatus.textContent = "Syncing to cloud…";
+    // Small delay so the user sees the status message
+    await new Promise(r => setTimeout(r, 400));
+    wipeStatus.textContent = "Wiping…";
+    const resp = await browser.runtime.sendMessage({ action: "wipeEverything", mode });
+    if (resp?.success) {
+      wipeStatus.textContent = mode === "user" ? "Your data has been wiped." : "Everything has been wiped.";
+      setTimeout(() => location.reload(), 1800);
     } else {
-      showPurgeStatus("Wipe failed: " + (resp?.error || "unknown error"));
+      wipeStatus.textContent = "Wipe failed: " + (resp?.error || "unknown error");
       wipeBtn.disabled = false;
     }
+  }
+
+  wipeBtn.addEventListener("click", async () => {
+    wipePanel.classList.remove("hidden");
+    wipePinStep.classList.add("hidden");
+    wipeOptStep.classList.add("hidden");
+    wipeStatus.textContent = "";
+    const vaultStatus = await browser.runtime.sendMessage({ action: "vaultGetStatus" });
+    if (vaultStatus?.enabled) {
+      wipePinStep.classList.remove("hidden");
+      document.getElementById("wipe-pin-input")?.focus();
+    } else {
+      wipeOptStep.classList.remove("hidden");
+    }
   });
+
+  document.getElementById("wipe-pin-confirm").addEventListener("click", async () => {
+    const pinInput = document.getElementById("wipe-pin-input");
+    const pinErr   = document.getElementById("wipe-pin-error");
+    const pin = pinInput.value.trim();
+    if (!pin) { pinErr.textContent = "Enter your PIN."; return; }
+    pinErr.textContent = "";
+    try {
+      const r = await browser.runtime.sendMessage({ action: "vaultUnlock", passcode: pin });
+      if (r?.success) {
+        wipePinStep.classList.add("hidden");
+        wipeOptStep.classList.remove("hidden");
+      } else {
+        pinErr.textContent = "Incorrect PIN.";
+        pinInput.value = "";
+        pinInput.focus();
+      }
+    } catch (e) {
+      pinErr.textContent = e.message || "Unlock failed.";
+    }
+  });
+
+  document.getElementById("wipe-pin-input").addEventListener("keydown", e => {
+    if (e.key === "Enter") document.getElementById("wipe-pin-confirm").click();
+  });
+
+  document.getElementById("wipe-cancel-btn").addEventListener("click", _closeWipePanel);
+  document.getElementById("wipe-cancel-btn2").addEventListener("click", _closeWipePanel);
+
+  document.getElementById("wipe-user-btn").addEventListener("click", () => _runWipe("user"));
+  document.getElementById("wipe-all-btn").addEventListener("click", () => _runWipe("all"));
 
   // Knowledge Graph
   document.getElementById("kg-open-graph").addEventListener("click", () => {
@@ -10448,12 +10661,21 @@ function fmtBytes(b) {
   return (b / 1048576).toFixed(1) + " MB";
 }
 
-async function updateStorageUsage() {
+let _storageUsageTimer = null;
+function updateStorageUsage() {
+  clearTimeout(_storageUsageTimer);
+  _storageUsageTimer = setTimeout(_doUpdateStorageUsage, 80);
+}
+
+async function _doUpdateStorageUsage() {
   const display = document.getElementById("storage-usage-display");
   const breakdown = document.getElementById("storage-breakdown");
   try {
-    // browser.storage.local — settings + ephemeral result keys
-    const all = await browser.storage.local.get(null);
+    // Fetch all async data first — no DOM writes until everything is ready
+    const [all, { storeSyncLog = {} }] = await Promise.all([
+      browser.storage.local.get(null),
+      browser.storage.local.get({ storeSyncLog: {} })
+    ]);
     const localBytes = new Blob([JSON.stringify(all)]).size;
 
     // Categorize storage.local keys
@@ -10593,28 +10815,116 @@ async function updateStorageUsage() {
         });
       }
 
-      // Full breakdown — all entries, sorted by size, with color dots + delete buttons
+      // Full breakdown — all entries, sorted by size, with color dots + sync + save + delete buttons
       homeBreakdown.innerHTML = "";
       homeBreakdown.style.display = allEntries.length ? "block" : "none";
 
+      const syncableStores = new Set(["history","snapshots","changes","projects","bookmarks","monitors","feeds","feedEntries","chatSessions","drafts","pageTracker","sources","watchlist","kgNodes","kgEdges","_settings","_cached","_conversations"]);
+
+      function fmtSyncDate(iso) {
+        if (!iso) return "";
+        const d = new Date(iso);
+        const pad = n => String(n).padStart(2, "0");
+        const yr = String(d.getFullYear()).slice(2);
+        return `${yr}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      }
+
+      async function syncStore(store, label, btn, tsSpan) {
+        btn.textContent = "…";
+        btn.disabled = true;
+        try {
+          const r = await browser.runtime.sendMessage({ action: "cloudExportStore", store });
+          if (r?.success) {
+            btn.textContent = "Synced";
+            btn.style.color = "var(--success)";
+            btn.style.borderColor = "var(--success)";
+            if (tsSpan) tsSpan.textContent = fmtSyncDate(new Date().toISOString());
+          } else {
+            btn.textContent = "Failed";
+            btn.style.color = "var(--error)";
+          }
+        } catch {
+          btn.textContent = "Err";
+          btn.style.color = "var(--error)";
+        }
+        setTimeout(() => { btn.textContent = "Sync"; btn.disabled = false; btn.style.color = ""; btn.style.borderColor = ""; }, 3000);
+      }
+
+      async function saveStoreLocally(store, btn) {
+        btn.textContent = "…";
+        btn.disabled = true;
+        try {
+          const r = await browser.runtime.sendMessage({ action: "exportStoreData", store });
+          if (!r?.success) throw new Error(r?.error || "Failed");
+          const blob = new Blob([r.json], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url; a.download = r.filename; a.click();
+          URL.revokeObjectURL(url);
+          btn.textContent = "Saved ✓";
+          btn.style.color = "var(--success)";
+        } catch {
+          btn.textContent = "Err";
+          btn.style.color = "var(--error)";
+        }
+        setTimeout(() => { btn.textContent = "Save"; btn.disabled = false; btn.style.color = ""; }, 2500);
+      }
+
+      const BTN = "background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);cursor:pointer;padding:1px 6px;font-size:10px;flex-shrink:0;transition:all 0.15s;font-family:inherit;";
+
+      const syncBtns = [];
       allEntries.forEach(e => {
         const row = document.createElement("div");
-        row.style.cssText = "display:flex;align-items:center;gap:6px;padding:2px 0;";
+        row.style.cssText = "display:flex;align-items:center;gap:4px;padding:2px 0;";
 
+        // Left: dot + label (takes all remaining space)
         const dot = document.createElement("span");
         dot.style.cssText = `display:inline-block;width:8px;height:8px;border-radius:50%;background:${e.color};flex-shrink:0;`;
         row.appendChild(dot);
 
         const text = document.createElement("span");
-        text.style.cssText = "flex:1;min-width:0;";
+        text.style.cssText = "flex:1;min-width:0;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
         const detailStr = e.detail ? ` <span style="opacity:0.5">(${e.detail})</span>` : "";
         text.innerHTML = `${e.label}: <strong>${fmtBytes(e.bytes)}</strong>${detailStr}`;
         row.appendChild(text);
 
-        // Add delete button (skip settings — not clearable)
+        // Right: timestamp + action buttons — always right-aligned
+        if (syncableStores.has(e.store)) {
+          const tsSpan = document.createElement("span");
+          tsSpan.style.cssText = "font-family:'SF Mono','Fira Code',Consolas,monospace;font-size:9px;color:#3a3a58;white-space:nowrap;flex-shrink:0;width:86px;text-align:right;";
+          const lastSync = storeSyncLog[e.store];
+          tsSpan.textContent = lastSync ? fmtSyncDate(lastSync) : "";
+          row.appendChild(tsSpan);
+
+          const sync = document.createElement("button");
+          sync.style.cssText = BTN;
+          sync.textContent = "Sync";
+          sync.title = `Export ${e.label} to cloud`;
+          sync.addEventListener("mouseenter", () => { sync.style.color = "#a78bfa"; sync.style.borderColor = "#a78bfa"; });
+          sync.addEventListener("mouseleave", () => { if (!sync.disabled) { sync.style.color = ""; sync.style.borderColor = ""; } });
+          sync.addEventListener("click", () => syncStore(e.store, e.label, sync, tsSpan));
+          syncBtns.push({ store: e.store, label: e.label, btn: sync, tsSpan });
+          row.appendChild(sync);
+
+          const save = document.createElement("button");
+          save.style.cssText = BTN;
+          save.textContent = "Save";
+          save.title = `Download ${e.label} as JSON file`;
+          save.addEventListener("mouseenter", () => { save.style.color = "#60a5fa"; save.style.borderColor = "#60a5fa"; });
+          save.addEventListener("mouseleave", () => { if (!save.disabled) { save.style.color = ""; save.style.borderColor = ""; } });
+          save.addEventListener("click", () => saveStoreLocally(e.store, save));
+          row.appendChild(save);
+        } else {
+          // Reserve same space so Clear button stays column-aligned on non-syncable rows
+          const spacer = document.createElement("span");
+          spacer.style.cssText = "flex-shrink:0;width:calc(86px + 2 * (32px + 4px));";
+          row.appendChild(spacer);
+        }
+
+        // Clear button (skip settings — not clearable)
         if (e.store && e.store !== "_settings") {
           const del = document.createElement("button");
-          del.style.cssText = "background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-muted);cursor:pointer;padding:1px 6px;font-size:10px;flex-shrink:0;transition:all 0.15s;";
+          del.style.cssText = BTN;
           del.textContent = "Clear";
           del.title = `Clear all ${e.label}`;
           del.addEventListener("mouseenter", () => { del.style.color = "var(--error)"; del.style.borderColor = "var(--error)"; });
@@ -10638,6 +10948,34 @@ async function updateStorageUsage() {
 
         homeBreakdown.appendChild(row);
       });
+
+      // Wire Sync All + Save All buttons
+      const syncAllBtn = document.getElementById("home-storage-sync-all");
+      const saveAllBtn = document.getElementById("home-storage-save-all");
+      if (syncAllBtn) {
+        syncAllBtn.style.display = syncBtns.length ? "" : "none";
+        syncAllBtn.onclick = async () => {
+          syncAllBtn.textContent = "Syncing…";
+          syncAllBtn.disabled = true;
+          for (const { store, label, btn, tsSpan } of syncBtns) {
+            await syncStore(store, label, btn, tsSpan);
+          }
+          syncAllBtn.textContent = "Done";
+          setTimeout(() => { syncAllBtn.textContent = "Sync All"; syncAllBtn.disabled = false; }, 3000);
+        };
+      }
+      if (saveAllBtn) {
+        saveAllBtn.style.display = syncBtns.length ? "" : "none";
+        saveAllBtn.onclick = async () => {
+          saveAllBtn.textContent = "Saving…";
+          saveAllBtn.disabled = true;
+          for (const { store, btn: saveBtn } of syncBtns) {
+            await saveStoreLocally(store, saveBtn);
+          }
+          saveAllBtn.textContent = "Done";
+          setTimeout(() => { saveAllBtn.textContent = "Save All"; saveAllBtn.disabled = false; }, 2500);
+        };
+      }
 
       // Tier subtotal line
       if (tierSummary.length) {

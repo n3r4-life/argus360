@@ -1986,7 +1986,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "initIncognitoForce") {
     return initIncognitoForce().then(ok => ({ success: ok }));
   }
-  if (message.action === "wipeEverything") return handleWipeEverything();
+  if (message.action === "wipeEverything") return handleWipeEverything(message.mode);
   if (message.action === "buildProjectSkeleton") return handleBuildProjectSkeleton(message.projectId);
   // Cloud Backup
   if (message.action === "cloudCreateBackup") return CloudBackup.createBackup().then(r => ({ success: true, filename: r.filename, size: r.blob.size, manifest: r.manifest }));
@@ -2000,6 +2000,13 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "aiGetStatus") return handleAiGetStatus();
   if (message.action === "cloudSaveChat") return handleCloudSaveChat(message.session);
   if (message.action === "cloudPushFile") return handleCloudPushFile(message.path, message.content, message.providerKey);
+  if (message.action === "cloudExportStore") return handleCloudExportStore(message.store, message.providerKey);
+  if (message.action === "exportStoreData") return handleExportStoreData(message.store);
+  if (message.action === "importStoreData") return handleImportStoreData(message.store, message.json);
+  if (message.action === "profileGetState") return handleProfileGetState();
+  if (message.action === "profileLogin") return handleProfileLogin(message.username, message.passcode, message.cloudProvider);
+  if (message.action === "profileLogout") return handleProfileLogout(message.syncFirst);
+  if (message.action === "profileSyncAll") return handleProfileSyncAll();
   if (message.action === "cloudListSessions") return handleCloudListSessions(message.providerKey);
   if (message.action === "cloudLocalBackup") return handleCloudLocalBackup();
   if (message.action === "cloudLocalRestore") return handleCloudLocalRestore(message.data);
@@ -2181,16 +2188,23 @@ async function handleClearHistory() {
   return { success: true };
 }
 
-async function handleWipeEverything() {
-  console.log("[Argus] Wiping all data...");
+async function handleWipeEverything(mode = "all") {
+  console.log(`[Argus] Wiping data (mode: ${mode})...`);
   try {
-    // Clear all IndexedDB stores
+    // Auto cloud-sync before wiping — fire and forget, never block the wipe
+    if (_activeProfileKey) {
+      try { await handleProfileSyncAll(); } catch {}
+    } else {
+      try { await handleCloudBackupNow(); } catch {}
+    }
+
+    // Clear all IndexedDB user data
     await Promise.all([
       ArgusDB.History.clear(),
       ArgusDB.Bookmarks.clear(),
       ArgusDB.Projects.clear(),
       ArgusDB.Monitors.clear(),
-      ArgusDB.Feeds.clear(), // also clears feedEntries
+      ArgusDB.Feeds.clear(),
       ArgusDB.Changes.clear(),
       ArgusDB.Watchlist.clear(),
       ArgusDB.KGNodes.clear(),
@@ -2200,9 +2214,22 @@ async function handleWipeEverything() {
     ]);
     // Clear OPFS snapshots
     await OpfsStorage.deleteAll();
-    // Clear all browser.storage.local
-    await browser.storage.local.clear();
-    console.log("[Argus] All data wiped successfully");
+
+    if (mode === "user") {
+      // Preserve API keys + provider config + vault — remove everything else
+      const all = await browser.storage.local.get(null);
+      const removeKeys = Object.keys(all).filter(k =>
+        k !== "dataProviders" && k !== "vaultConfig" && !k.startsWith("_vault_")
+      );
+      if (removeKeys.length) await browser.storage.local.remove(removeKeys);
+    } else {
+      // Full factory reset
+      await browser.storage.local.clear();
+    }
+
+    _activeProfileKey = null;
+    _activeProfileUser = null;
+    console.log("[Argus] Wipe complete");
     return { success: true };
   } catch (e) {
     console.error("[Argus] Wipe failed:", e);
@@ -2760,13 +2787,350 @@ async function handleCloudSaveChat(session) {
   return { success: results.some(r => r.success), results };
 }
 
+const STORE_IDB_MAP = {
+  history:      () => ArgusDB.History.getAll(),
+  snapshots:    () => ArgusDB.Snapshots.getAll(),
+  changes:      () => ArgusDB.Changes.getAll(),
+  projects:     () => ArgusDB.Projects.getAll(),
+  bookmarks:    () => ArgusDB.Bookmarks.getAll(),
+  monitors:     () => ArgusDB.Monitors.getAll(),
+  feeds:        () => ArgusDB.Feeds.getAll(),
+  feedEntries:  () => ArgusDB.FeedEntries.getAll(),
+  chatSessions: () => ArgusDB.ChatSessions.getAll(),
+  drafts:       () => ArgusDB.Drafts.getAll(),
+  pageTracker:  () => ArgusDB.PageTracker.getAll(),
+  sources:      () => ArgusDB.Sources.getAll(),
+  watchlist:    () => ArgusDB.Watchlist?.getAll?.() || Promise.resolve([]),
+  kgNodes:      () => ArgusDB.KGNodes?.getAll?.()   || Promise.resolve([]),
+  kgEdges:      () => ArgusDB.KGEdges?.getAll?.()   || Promise.resolve([]),
+};
+
+// storage.local category filters (mirrors updateStorageUsage categorisation)
+const _EPHEM_PREFIXES = ["tl-result-", "proj-view-", "techstack-", "metadata-", "linkmap-", "whois-", "result-"];
+const _CONV_PREFIXES  = ["conv-", "chat-", "followup-", "ai-"];
+
+async function _fetchLocalStoreData(store) {
+  const all = await browser.storage.local.get(null);
+  const entries = {};
+  for (const [k, v] of Object.entries(all)) {
+    const isEphem = _EPHEM_PREFIXES.some(p => k.startsWith(p)) || k.endsWith("-pipeline");
+    const isConv  = _CONV_PREFIXES.some(p => k.startsWith(p));
+    if (store === "_cached"        &&  isEphem)            entries[k] = v;
+    else if (store === "_conversations" &&  isConv)        entries[k] = v;
+    else if (store === "_settings" && !isEphem && !isConv) entries[k] = v;
+  }
+  return entries;
+}
+
+async function _fetchStoreJson(store) {
+  const now = new Date().toISOString();
+  const ts  = now.replace(/[:.]/g, "-").slice(0, 19);
+
+  if (store.startsWith("_")) {
+    const data = await _fetchLocalStoreData(store);
+    const json = JSON.stringify({ store, exportedAt: now, data }, null, 2);
+    return { json, filename: `argus-${store.slice(1)}-${ts}.json`, count: Object.keys(data).length };
+  }
+
+  const fetcher = STORE_IDB_MAP[store];
+  if (!fetcher) throw new Error(`Unknown store: ${store}`);
+  const data = await fetcher();
+  const json = JSON.stringify({ store, exportedAt: now, count: data.length, data }, null, 2);
+  return { json, filename: `argus-${store}-${ts}.json`, count: data.length };
+}
+
+async function handleCloudExportStore(store, providerKey) {
+  try {
+    const { json, filename } = await _fetchStoreJson(store);
+    const path = `exports/${filename}`;
+    const result = await handleCloudPushFile(path, json, providerKey);
+    if (result?.success) {
+      const { storeSyncLog } = await browser.storage.local.get({ storeSyncLog: {} });
+      storeSyncLog[store] = new Date().toISOString();
+      await browser.storage.local.set({ storeSyncLog });
+    }
+    return result;
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+async function handleExportStoreData(store) {
+  try {
+    const { json, filename, count } = await _fetchStoreJson(store);
+    return { success: true, json, filename, count };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+// ── Store import (upsert into IDB or storage.local) ──
+const STORE_IDB_NAMES = new Set(Object.keys(STORE_IDB_MAP));
+
+async function handleImportStoreData(store, json) {
+  try {
+    const payload = JSON.parse(json);
+    if (STORE_IDB_NAMES.has(store)) {
+      const records = Array.isArray(payload.data) ? payload.data : payload;
+      await ArgusDB.putMany(store, records);
+      return { success: true, count: records.length };
+    }
+    if (store.startsWith("_")) {
+      const data = typeof payload.data === "object" ? payload.data : payload;
+      await browser.storage.local.set(data);
+      return { success: true, count: Object.keys(data).length };
+    }
+    return { success: false, error: `Unknown store: ${store}` };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+// ════════════════════════════════════════════
+// Profile / Multi-user system
+// ════════════════════════════════════════════
+
+const PROFILE_SYNC_STORES = ["history","projects","bookmarks","monitors","feeds","feedEntries",
+  "chatSessions","drafts","pageTracker","sources","changes","_settings","_conversations"];
+
+async function _profileDeriveKey(passcode, saltB64) {
+  const enc = new TextEncoder();
+  const salt = saltB64
+    ? Uint8Array.from(atob(saltB64), c => c.charCodeAt(0))
+    : crypto.getRandomValues(new Uint8Array(16));
+  const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(passcode), "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false, ["encrypt", "decrypt"]
+  );
+  const saltB64Out = btoa(String.fromCharCode(...salt));
+  return { key, saltB64: saltB64Out };
+}
+
+async function _profileEncrypt(key, plaintext) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const enc = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(plaintext));
+  return { iv: btoa(String.fromCharCode(...iv)), ct: btoa(String.fromCharCode(...new Uint8Array(enc))) };
+}
+
+async function _profileDecrypt(key, ivB64, ctB64) {
+  const iv = Uint8Array.from(atob(ivB64), c => c.charCodeAt(0));
+  const ct = Uint8Array.from(atob(ctB64), c => c.charCodeAt(0));
+  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
+  return new TextDecoder().decode(plain);
+}
+
+async function _profilePath(username) {
+  return `profiles/${encodeURIComponent(username)}/sync-state.json`;
+}
+
+async function _profileStorePath(username, store) {
+  return `profiles/${encodeURIComponent(username)}/stores/${store}.enc`;
+}
+
+async function handleProfileGetState() {
+  const { argusProfile } = await browser.storage.local.get({ argusProfile: null });
+  return { success: true, profile: argusProfile };
+}
+
+async function handleProfileLogin(username, passcode, cloudProvider) {
+  if (!username || !passcode) return { success: false, error: "Username and passcode required" };
+  if (!cloudProvider) return { success: false, error: "Select a cloud provider" };
+
+  const provider = CloudProviders[cloudProvider];
+  if (!provider || !await provider.isConnected()) {
+    return { success: false, error: `${cloudProvider} is not connected — set it up in Providers first` };
+  }
+
+  try {
+    const manifestPath = await _profilePath(username);
+    let manifest = null;
+    let profileKey = null;
+    let saltB64 = null;
+
+    // Try to fetch existing profile from cloud
+    try {
+      const files = await provider.list();
+      const found = files.find(f => f.path === manifestPath || f.name === "sync-state.json");
+      if (found) {
+        const raw = await provider.download(found.id || found.path);
+        const manifestJson = typeof raw === "string" ? raw : await raw.text();
+        const outer = JSON.parse(manifestJson);
+        // Derive key using stored salt
+        const derived = await _profileDeriveKey(passcode, outer.salt);
+        profileKey = derived.key;
+        saltB64 = outer.salt;
+        // Verify passcode by decrypting the verify blob
+        const verifyText = await _profileDecrypt(profileKey, outer.verify.iv, outer.verify.ct);
+        if (verifyText !== `argus-profile:${username}`) {
+          return { success: false, error: "Incorrect passcode" };
+        }
+        manifest = outer;
+      }
+    } catch (e) {
+      if (e.message?.includes("Incorrect passcode")) throw e;
+      // Not found = new profile, continue
+    }
+
+    if (!manifest) {
+      // First login — create new profile
+      const derived = await _profileDeriveKey(passcode, null);
+      profileKey = derived.key;
+      saltB64 = derived.saltB64;
+      const verify = await _profileEncrypt(profileKey, `argus-profile:${username}`);
+      manifest = {
+        version: 1,
+        username,
+        salt: saltB64,
+        verify,
+        createdAt: new Date().toISOString(),
+        lastSync: null,
+        stores: {}
+      };
+    } else {
+      // Restore stores from cloud
+      const storeManifest = manifest.stores || {};
+      for (const store of PROFILE_SYNC_STORES) {
+        if (!storeManifest[store]?.syncedAt) continue;
+        try {
+          const storePath = await _profileStorePath(username, store);
+          const files = await provider.list();
+          const f = files.find(fi => fi.path === storePath || fi.name === `${store}.enc`);
+          if (!f) continue;
+          const raw = await provider.download(f.id || f.path);
+          const encJson = typeof raw === "string" ? raw : await raw.text();
+          const enc = JSON.parse(encJson);
+          const plainJson = await _profileDecrypt(profileKey, enc.iv, enc.ct);
+          await handleImportStoreData(store, plainJson);
+        } catch (e) {
+          console.warn(`[Profile] Failed to restore store ${store}:`, e.message);
+        }
+      }
+    }
+
+    // Persist profile session
+    const session = {
+      username,
+      cloudProvider,
+      loggedInAt: new Date().toISOString(),
+      lastSync: manifest.lastSync,
+      dirty: false,
+      salt: saltB64
+    };
+    await browser.storage.local.set({ argusProfile: session, _profileKey: { salt: saltB64 } });
+    // Store passcode-derived key salt for re-derivation — actual key stays in memory
+    _activeProfileKey = profileKey;
+    _activeProfileUser = username;
+
+    return { success: true, username, isNew: !manifest.lastSync };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+// In-memory profile key (cleared on extension restart — user must re-login)
+let _activeProfileKey = null;
+let _activeProfileUser = null;
+
+async function _getActiveProfileKey(passcode) {
+  if (_activeProfileKey) return _activeProfileKey;
+  if (!passcode) return null;
+  const { argusProfile } = await browser.storage.local.get({ argusProfile: null });
+  if (!argusProfile?.salt) return null;
+  const { key } = await _profileDeriveKey(passcode, argusProfile.salt);
+  _activeProfileKey = key;
+  return key;
+}
+
+async function handleProfileSyncAll(passcode) {
+  const { argusProfile } = await browser.storage.local.get({ argusProfile: null });
+  if (!argusProfile) return { success: false, error: "Not logged in" };
+
+  const key = await _getActiveProfileKey(passcode);
+  if (!key) return { success: false, error: "Profile key not available — re-enter passcode" };
+
+  const provider = CloudProviders[argusProfile.cloudProvider];
+  if (!provider || !await provider.isConnected()) {
+    return { success: false, error: "Cloud provider not connected" };
+  }
+
+  const { username } = argusProfile;
+  const storeResults = {};
+  const syncedAt = new Date().toISOString();
+
+  for (const store of PROFILE_SYNC_STORES) {
+    try {
+      const { json } = await _fetchStoreJson(store);
+      const enc = await _profileEncrypt(key, json);
+      const encJson = JSON.stringify(enc);
+      const storePath = await _profileStorePath(username, store);
+      const blob = new Blob([encJson], { type: "application/json" });
+      await provider.upload(blob, storePath);
+      storeResults[store] = { syncedAt, success: true };
+    } catch (e) {
+      storeResults[store] = { success: false, error: e.message };
+    }
+  }
+
+  // Write manifest
+  const { _profileKey: pkMeta } = await browser.storage.local.get({ _profileKey: {} });
+  const verify = await _profileEncrypt(key, `argus-profile:${username}`);
+  const manifest = {
+    version: 1, username,
+    salt: pkMeta?.salt || argusProfile.salt,
+    verify,
+    createdAt: argusProfile.loggedInAt,
+    lastSync: syncedAt,
+    stores: storeResults
+  };
+  const manifestBlob = new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" });
+  await provider.upload(manifestBlob, await _profilePath(username));
+
+  // Update local session
+  const updated = { ...argusProfile, lastSync: syncedAt, dirty: false };
+  await browser.storage.local.set({ argusProfile: updated });
+
+  return { success: true, syncedAt, stores: storeResults };
+}
+
+async function handleProfileLogout(syncFirst = true) {
+  const { argusProfile } = await browser.storage.local.get({ argusProfile: null });
+  if (!argusProfile) return { success: true }; // already logged out
+
+  if (syncFirst && _activeProfileKey) {
+    try { await handleProfileSyncAll(); } catch { /* sync failed — still log out */ }
+  }
+
+  _activeProfileKey = null;
+  _activeProfileUser = null;
+  await browser.storage.local.remove(["argusProfile", "_profileKey"]);
+  return { success: true };
+}
+
+async function _gdriveFolder() {
+  try {
+    const { dataProviders } = await browser.storage.local.get({ dataProviders: {} });
+    return (dataProviders?.gdrive?.defaultFolder || "").trim();
+  } catch { return ""; }
+}
+
+function _applyGdriveFolder(path, folder) {
+  if (!folder) return path;
+  const f = folder.replace(/\/+$/, "");
+  return `${f}/${path}`;
+}
+
 async function handleCloudPushFile(path, content, providerKey) {
+  const gFolder = await _gdriveFolder();
   const blob = new Blob([content], { type: "text/plain" });
   if (providerKey) {
     const provider = CloudProviders[providerKey];
     if (!provider) return { success: false, error: `Unknown provider: ${providerKey}` };
+    const finalPath = providerKey === "google" ? _applyGdriveFolder(path, gFolder) : path;
     try {
-      await provider.upload(blob, path);
+      await provider.upload(blob, finalPath);
       return { success: true, provider: providerKey };
     } catch (e) {
       return { success: false, error: e.message };
@@ -2777,8 +3141,9 @@ async function handleCloudPushFile(path, content, providerKey) {
   for (const key of keys) {
     const provider = CloudProviders[key];
     if (!provider || !await provider.isConnected()) continue;
+    const finalPath = key === "google" ? _applyGdriveFolder(path, gFolder) : path;
     try {
-      await provider.upload(blob, path);
+      await provider.upload(blob, finalPath);
       results.push({ provider: key, success: true });
     } catch (e) {
       results.push({ provider: key, success: false, error: e.message });

@@ -317,6 +317,8 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
             <span>Storage Usage</span>
             <span id="home-storage-total" class="home-storage-total">...</span>
+            <button id="home-storage-save-all" class="tool-chip" style="display:none;margin-left:auto;font-size:10px;padding:2px 8px;" title="Download all data stores as JSON files">Save All</button>
+            <button id="home-storage-sync-all" class="tool-chip" style="display:none;font-size:10px;padding:2px 8px;" title="Sync all data stores to cloud">Sync All</button>
           </div>
           <div id="home-storage-bar" class="home-storage-bar"></div>
           <div id="home-storage-breakdown" class="home-storage-breakdown"></div>
@@ -569,6 +571,11 @@
                 <button id="dp-gdrive-connect" class="btn btn-sm btn-primary">Connect</button>
                 <button id="dp-gdrive-disconnect" class="btn btn-sm btn-secondary hidden">Disconnect</button>
                 <span id="dp-gdrive-status" class="dp-status"></span>
+              </div>
+              <div class="form-group" id="dp-gdrive-folder-section" style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">
+                <label for="dp-gdrive-folder">Default Upload Folder</label>
+                <input type="text" id="dp-gdrive-folder" placeholder="e.g. exports  or  projects/argus">
+                <span class="hint">Subfolder inside your Argus Drive root. Leave blank to upload directly into Argus/.</span>
               </div>
             </div>
 
@@ -2430,12 +2437,73 @@
           <button class="pill-chip" data-goto-tab="providers" data-goto-anchor="providers-ai-settings">AI &amp; Prompts</button>
           <button class="pill-chip" data-goto-tab="providers" data-goto-anchor="providers-api-keys">API &amp; Cloud Keys</button>
           <button class="pill-chip" data-goto-tab="providers" data-goto-anchor="providers-ai-settings">Default Language</button>
+          <button class="pill-chip" data-goto-tab="providers" data-goto-anchor="dp-gdrive-folder-section">Cloud Folder</button>
           <span style="flex:1;"></span>
           <button id="set-argus-homepage" class="pill-chip">Set as Homepage</button>
         </div>
       </section>
 
-      <!-- ── Row 1b: Default Project (full width) ── -->
+      <!-- ── Row 1b: User Profile / Multi-user ── -->
+      <section class="card settings-wide" id="profile-card">
+        <h2 class="card-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          User Profile
+        </h2>
+        <div class="card-body">
+          <!-- Logged-out state -->
+          <div id="profile-logged-out">
+            <p class="info-text">Sign in with a username and passcode to sync your data across devices via your connected cloud provider. Your data is encrypted before it leaves this device.</p>
+            <div class="form-row" style="gap:8px;flex-wrap:wrap;align-items:flex-end;">
+              <div class="form-group" style="min-width:140px;flex:1;">
+                <label for="profile-username">Username</label>
+                <input type="text" id="profile-username" placeholder="e.g. alice" autocomplete="username">
+              </div>
+              <div class="form-group" style="min-width:140px;flex:1;">
+                <label for="profile-passcode">Passcode</label>
+                <input type="password" id="profile-passcode" placeholder="Your passcode" autocomplete="current-password">
+              </div>
+              <div class="form-group" style="min-width:130px;flex:1;">
+                <label for="profile-cloud-provider">Cloud Provider</label>
+                <select id="profile-cloud-provider">
+                  <option value="">— select —</option>
+                  <option value="google">Google Drive</option>
+                  <option value="dropbox">Dropbox</option>
+                  <option value="webdav">WebDAV</option>
+                  <option value="s3">S3</option>
+                  <option value="github">GitHub</option>
+                </select>
+              </div>
+              <div class="form-group" style="flex-shrink:0;">
+                <label>&nbsp;</label>
+                <button id="profile-login-btn" class="btn btn-primary btn-sm">Sign In</button>
+              </div>
+            </div>
+            <div id="profile-login-status" class="dp-status" style="margin-top:4px;"></div>
+          </div>
+          <!-- Logged-in state -->
+          <div id="profile-logged-in" style="display:none;">
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="width:32px;height:32px;border-radius:50%;background:var(--bg-card);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:var(--accent);" id="profile-avatar">?</span>
+                <div>
+                  <div style="font-weight:600;font-size:13px;color:var(--text-primary);" id="profile-display-name">—</div>
+                  <div style="font-size:11px;color:var(--text-muted);">Last sync: <span id="profile-last-sync">never</span></div>
+                </div>
+              </div>
+              <div style="display:flex;gap:6px;margin-left:auto;flex-wrap:wrap;">
+                <button id="profile-sync-btn" class="btn btn-sm btn-secondary">Sync Now</button>
+<button id="profile-logout-btn" class="btn btn-sm btn-secondary" style="color:var(--error);border-color:var(--error);">Sign Out</button>
+              </div>
+            </div>
+            <div id="profile-sync-status" class="dp-status" style="margin-top:6px;"></div>
+            <div style="margin-top:8px;font-size:11px;color:var(--text-muted);">
+              <label class="toggle-label small"><input type="checkbox" id="profile-clear-on-logout"><span>Clear local data on sign out</span></label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Row 1c: Default Project (full width) ── -->
       <section class="card settings-wide">
         <h2 class="card-title">Default Project</h2>
         <div class="card-body">
@@ -2862,12 +2930,35 @@
           <label style="color:var(--error);font-weight:600;">Wipe Everything</label>
           <p class="info-text" style="margin:4px 0 8px;">Permanently deletes all Argus data — projects, bookmarks, monitors, feeds, history, knowledge graph, snapshots, settings, and cached results. Cannot be undone.</p>
           <button id="wipe-everything-btn" class="pill-chip" style="color:var(--error);">Wipe Everything</button>
-          <div id="wipe-confirm" class="hidden" style="margin-top:8px;padding:10px;border:1px solid var(--error);border-radius:6px;background:var(--bg-secondary);">
-            <p style="margin:0 0 8px;color:var(--error);font-weight:600;">Are you sure? This permanently deletes ALL Argus data.</p>
-            <div style="display:flex;gap:8px;">
-              <button id="wipe-confirm-yes" class="pill-chip" style="color:var(--error);">Yes, Wipe Everything</button>
-              <button id="wipe-confirm-no" class="pill-chip">Cancel</button>
+          <div id="wipe-panel" class="hidden" style="margin-top:8px;padding:10px;border:1px solid var(--error);border-radius:6px;background:var(--bg-secondary);">
+            <!-- Step 1: vault PIN gate -->
+            <div id="wipe-pin-step" class="hidden">
+              <p style="margin:0 0 8px;color:var(--error);font-weight:600;">Enter your vault PIN to unlock wipe options.</p>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <input type="password" id="wipe-pin-input" class="form-input" style="width:140px;" placeholder="PIN / Passcode" autocomplete="off">
+                <button id="wipe-pin-confirm" class="pill-chip" style="color:var(--error);">Unlock</button>
+                <button id="wipe-cancel-btn" class="pill-chip">Cancel</button>
+              </div>
+              <div id="wipe-pin-error" style="margin-top:6px;font-size:11px;color:var(--error);min-height:14px;"></div>
             </div>
+            <!-- Step 2: wipe level options -->
+            <div id="wipe-options-step" class="hidden">
+              <p style="margin:0 0 10px;font-size:11px;color:var(--text-muted);">Cloud backup runs automatically before wiping if configured.</p>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="padding:8px 10px;border:1px solid var(--border);border-radius:4px;">
+                  <div style="font-size:12px;font-weight:600;margin-bottom:3px;">Wipe My Data</div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">Removes all user content — history, bookmarks, projects, monitors, KG, chats, profile. Keeps your API keys and provider settings.</div>
+                  <button id="wipe-user-btn" class="pill-chip" style="color:var(--warning,#f59e0b);">Wipe My Data</button>
+                </div>
+                <div style="padding:8px 10px;border:1px solid var(--error);border-radius:4px;">
+                  <div style="font-size:12px;font-weight:600;color:var(--error);margin-bottom:3px;">Wipe Everything</div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">Full factory reset — removes all data including API keys, provider config, and vault. Argus will be completely blank.</div>
+                  <button id="wipe-all-btn" class="pill-chip" style="color:var(--error);">Wipe Everything</button>
+                </div>
+              </div>
+              <button id="wipe-cancel-btn2" class="pill-chip" style="margin-top:8px;">Cancel</button>
+            </div>
+            <div id="wipe-status" style="margin-top:6px;font-size:11px;color:var(--text-muted);min-height:14px;"></div>
           </div>
         </div>
       </section>

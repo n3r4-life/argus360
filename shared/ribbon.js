@@ -698,6 +698,15 @@
       }
     } catch { /* background not ready */ }
 
+    try {
+      const pr = await browser.runtime.sendMessage({ action: "profileGetState" });
+      if (pr?.profile?.username) {
+        const u = pr.profile.username;
+        const syncTip = pr.profile.lastSync ? `Last sync ${pr.profile.lastSync.slice(0,10)}` : "Never synced";
+        pills.push(`<button class="ribbon-status-pill ribbon-user-pill" data-nav="settings" title="${u} · ${syncTip} — click to manage"><span class="ribbon-status-dot"></span>${u}</button>`);
+      }
+    } catch { /* background not ready */ }
+
     strip.innerHTML = pills.join("");
     strip.querySelectorAll("[data-nav]").forEach(btn => {
       btn.addEventListener("click", () => nav(btn.dataset.nav));
