@@ -9,3 +9,7 @@ argus-settings.json
 image-archive/
 proposals/
 
+# Third-party vendored libraries — excluded to reduce repo size during development.
+# These are unmodified downloads. See lib/VENDOR_LIBS.md for versions and sources.
+lib/vendor/
+

@@ -53,8 +53,8 @@
     "scripts": [
       "lib/storage-db.js",
       "lib/opfs-storage.js",
-      "lib/pdf.min.js",
-      "lib/fflate.min.js",
+      "lib/vendor/pdf.min.js",
+      "lib/vendor/fflate.min.js",
       "lib/cloud-providers.js",
       "lib/intelligence-providers.js",
       "lib/cloud-backup.js",
@@ -78,7 +78,7 @@
   },
 
   "web_accessible_resources": [
-    "lib/pdf.worker.min.js",
+    "lib/vendor/pdf.worker.min.js",
     "data/resources.json",
     "shared/lock-screen.css"
   ],

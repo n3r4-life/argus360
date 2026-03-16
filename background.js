@@ -974,7 +974,7 @@ async function extractFrameContent(tabId, frameId) {
 // PDF.js worker setup
 // ──────────────────────────────────────────────
 if (typeof pdfjsLib !== "undefined") {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = browser.runtime.getURL("lib/pdf.worker.min.js");
+  pdfjsLib.GlobalWorkerOptions.workerSrc = browser.runtime.getURL("lib/vendor/pdf.worker.min.js");
 }
 
 // Extract a human-readable summary from analysis content (handles entity JSON)
