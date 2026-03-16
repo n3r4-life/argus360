@@ -7,3 +7,5 @@ node_modules/
 .local-archive/
 argus-settings.json
 image-archive/
+proposals/
+
