@@ -3167,17 +3167,18 @@ async function handlePasteCreate(message) {
 }
 
 async function handleCloudGetStatus() {
-  const [gConn, dConn, wConn, sConn, ghConn] = await Promise.all([
+  const [gConn, dConn, wConn, sConn, ghConn, gistConn] = await Promise.all([
     CloudProviders.google.isConnected(),
     CloudProviders.dropbox.isConnected(),
     CloudProviders.webdav.isConnected(),
     CloudProviders.s3.isConnected(),
     CloudProviders.github.isConnected(),
+    CloudProviders.gist.isConnected(),
   ]);
   const { cloudBackupLog = [] } = await browser.storage.local.get({ cloudBackupLog: [] });
   return {
     success: true,
-    providers: { google: gConn, dropbox: dConn, webdav: wConn, s3: sConn, github: ghConn },
+    providers: { google: gConn, dropbox: dConn, webdav: wConn, s3: sConn, github: ghConn, gist: gistConn },
     lastBackup: cloudBackupLog[0] || null,
   };
 }

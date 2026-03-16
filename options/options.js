@@ -9993,23 +9993,24 @@ function initCloudBackup() {
   refreshCloudStatus(); updateConsoleStatusStrip();
 }
 
-async function updateConsoleStatusStrip() {
+let _statusStripTimer = null;
+function updateConsoleStatusStrip() {
+  clearTimeout(_statusStripTimer);
+  _statusStripTimer = setTimeout(_doUpdateConsoleStatusStrip, 80);
+}
+
+async function _doUpdateConsoleStatusStrip() {
   const strip = document.getElementById("console-status-strip");
   if (!strip) return;
-  strip.innerHTML = "";
 
-  const LABELS = { google: "GDrive", dropbox: "Dropbox", webdav: "WebDAV", s3: "S3", github: "GitHub" };
+  const LABELS = { google: "GDrive", dropbox: "Dropbox", webdav: "WebDAV", s3: "S3", github: "GitHub", gist: "Gist" };
+  const pills = [];
 
   try {
     const resp = await browser.runtime.sendMessage({ action: "cloudGetStatus" });
     for (const [key, connected] of Object.entries(resp?.providers || {})) {
       if (!connected) continue;
-      const pill = document.createElement("button");
-      pill.className = "ribbon-status-pill";
-      pill.title = `${LABELS[key] || key} connected — click to manage`;
-      pill.innerHTML = `<span class="ribbon-status-dot"></span>${LABELS[key] || key}`;
-      pill.addEventListener("click", () => showTab("settings"));
-      strip.appendChild(pill);
+      pills.push(`<button class="ribbon-status-pill" data-goto="settings" title="${LABELS[key] || key} connected — click to manage"><span class="ribbon-status-dot"></span>${LABELS[key] || key}</button>`);
     }
   } catch { /* silent */ }
 
@@ -10017,14 +10018,16 @@ async function updateConsoleStatusStrip() {
     const xmpp = await browser.runtime.sendMessage({ action: "xmppGetStatus" });
     if (xmpp?.configured) {
       const label = xmpp.jid ? xmpp.jid.split("@")[0] : "XMPP";
-      const pill = document.createElement("button");
-      pill.className = "ribbon-status-pill";
-      pill.title = `XMPP ${xmpp.connected ? "live" : "idle"}${xmpp.jid ? " · " + xmpp.jid : ""} — click to manage`;
-      pill.innerHTML = `<span class="ribbon-status-dot${xmpp.connected ? "" : " amber"}"></span>${label}`;
-      pill.addEventListener("click", () => showTab("settings"));
-      strip.appendChild(pill);
+      const dot = xmpp.connected ? "" : " amber";
+      const tip = `XMPP ${xmpp.connected ? "live" : "idle"}${xmpp.jid ? " · " + xmpp.jid : ""} — click to manage`;
+      pills.push(`<button class="ribbon-status-pill" data-goto="settings" title="${tip}"><span class="ribbon-status-dot${dot}"></span>${label}</button>`);
     }
   } catch { /* silent */ }
+
+  strip.innerHTML = pills.join("");
+  strip.querySelectorAll("[data-goto]").forEach(btn => {
+    btn.addEventListener("click", () => showTab(btn.dataset.goto));
+  });
 }
 
 async function refreshCloudStatus() {

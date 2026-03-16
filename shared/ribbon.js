@@ -658,44 +658,43 @@
     "ribbon-sources":   () => browser.runtime.sendMessage({ action: "getSources" }).then(r => Array.isArray(r?.sources) ? r.sources.length : 0).catch(() => 0)
   };
 
-  const CLOUD_PILL_LABELS = { google: "GDrive", dropbox: "Dropbox", webdav: "WebDAV", s3: "S3", github: "GitHub" };
+  const CLOUD_PILL_LABELS = { google: "GDrive", dropbox: "Dropbox", webdav: "WebDAV", s3: "S3", github: "GitHub", gist: "Gist" };
 
-  async function updateRibbonStatus() {
+  let _ribbonStatusTimer = null;
+  function updateRibbonStatus() {
+    clearTimeout(_ribbonStatusTimer);
+    _ribbonStatusTimer = setTimeout(_doUpdateRibbonStatus, 80);
+  }
+
+  async function _doUpdateRibbonStatus() {
     const strip = document.getElementById("ribbon-status");
     if (!strip) return;
-    strip.innerHTML = "";
 
-    // Cloud providers
+    const pills = [];
+
     try {
       const resp = await browser.runtime.sendMessage({ action: "cloudGetStatus" });
-      const providers = resp?.providers || {};
-      for (const [key, connected] of Object.entries(providers)) {
+      for (const [key, connected] of Object.entries(resp?.providers || {})) {
         if (!connected) continue;
         const label = CLOUD_PILL_LABELS[key] || key;
-        const pill = document.createElement("button");
-        pill.className = "ribbon-status-pill";
-        pill.title = `${label} connected — click to manage`;
-        pill.innerHTML = `<span class="ribbon-status-dot"></span>${label}`;
-        pill.addEventListener("click", () => nav("settings"));
-        strip.appendChild(pill);
+        pills.push(`<button class="ribbon-status-pill" data-nav="settings" title="${label} connected — click to manage"><span class="ribbon-status-dot"></span>${label}</button>`);
       }
     } catch { /* background not ready */ }
 
-    // XMPP
     try {
       const xmpp = await browser.runtime.sendMessage({ action: "xmppGetStatus" });
       if (xmpp?.configured) {
         const label = xmpp.jid ? xmpp.jid.split("@")[0] : "XMPP";
-        const pill = document.createElement("button");
-        pill.className = "ribbon-status-pill";
-        const dotClass = xmpp.connected ? "ribbon-status-dot" : "ribbon-status-dot amber";
-        const statusText = xmpp.connected ? "live" : "idle";
-        pill.title = `XMPP ${statusText}${xmpp.jid ? " · " + xmpp.jid : ""} — click to manage`;
-        pill.innerHTML = `<span class="${dotClass}"></span>${label}`;
-        pill.addEventListener("click", () => nav("settings"));
-        strip.appendChild(pill);
+        const dot = xmpp.connected ? "ribbon-status-dot" : "ribbon-status-dot amber";
+        const tip = `XMPP ${xmpp.connected ? "live" : "idle"}${xmpp.jid ? " · " + xmpp.jid : ""} — click to manage`;
+        pills.push(`<button class="ribbon-status-pill" data-nav="settings" title="${tip}"><span class="${dot}"></span>${label}</button>`);
       }
     } catch { /* background not ready */ }
+
+    strip.innerHTML = pills.join("");
+    strip.querySelectorAll("[data-nav]").forEach(btn => {
+      btn.addEventListener("click", () => nav(btn.dataset.nav));
+    });
   }
 
   async function updateRibbonBadges() {
