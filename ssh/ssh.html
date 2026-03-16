@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Terminal — Argus</title>
   <link rel="stylesheet" href="ssh.css">
+  <link rel="stylesheet" href="../shared/argus-std.css">
   <link rel="stylesheet" href="../shared/ribbon.css">
   <link rel="stylesheet" href="../lib/vendor/xterm.css">
 </head>
@@ -22,6 +23,9 @@
   </header>
 
   <!-- Main: full-width terminal area -->
+  <!-- Background watermark -->
+  <svg style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:320px;height:320px;opacity:0.07;pointer-events:none;z-index:0;color:#6a6a80;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.5"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+
   <main class="ssh-main">
     <div id="terminal" class="ssh-terminal"></div>
     <div id="terminal-placeholder" class="ssh-placeholder">

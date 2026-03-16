@@ -58,6 +58,21 @@ body {
   line-height: 1.5;
 }
 
+/* ── Argus background emblem (shows on every page) ── */
+body::before {
+  content: "";
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80vh;
+  height: 80vh;
+  background: url("../argus-bg.png") center / contain no-repeat;
+  opacity: 0.12;
+  pointer-events: none;
+  z-index: 0;
+}
+
 /* ── Buttons ── */
 /*
  * BUTTON HIERARCHY — DO NOT DEVIATE

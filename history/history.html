@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Reports - Argus</title>
   <link rel="stylesheet" href="history.css">
+  <link rel="stylesheet" href="../shared/argus-std.css">
   <link rel="stylesheet" href="../shared/ribbon.css">
 </head>
 <body>
@@ -20,6 +21,9 @@
       <button id="clear-monitor-changes" class="btn btn-secondary btn-small" style="display:none;">Clear All</button>
     </div>
   </header>
+
+  <!-- Background watermark -->
+  <svg style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:320px;height:320px;opacity:0.07;pointer-events:none;z-index:0;color:#6a6a80;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
 
   <div class="history-tabs">
     <button class="history-tab active" data-tab="feed">Project Feed</button>
