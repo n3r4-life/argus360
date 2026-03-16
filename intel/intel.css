@@ -700,8 +700,53 @@ body {
   font-size: 13px;
   text-align: center;
 }
-.evt-articles { display: flex; flex-direction: column; gap: 6px; }
+.evt-articles { display: flex; flex-direction: column; gap: 4px; }
 .evt-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Article cards */
+.evt-article {
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.evt-article-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-decoration: none;
+  line-height: 1.4;
+}
+.evt-article-title:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.evt-article-meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+.evt-article-source {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.evt-article-country,
+.evt-article-lang {
+  background: var(--bg-primary);
+  padding: 0 5px;
+  border-radius: 3px;
+}
+.evt-chart-dates {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  padding: 0 2px;
+}
 
 /* ═══════════════════════════════════════════════
    Satellite Page

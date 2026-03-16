@@ -378,9 +378,72 @@
         return;
       }
 
-      // When CourtListener is implemented, the search call will go here
-      empty.style.display = "";
-      empty.textContent = "CourtListener integration coming soon.";
+      // Search CourtListener
+      const btn = document.getElementById("compLitigationBtn");
+      btn.disabled = true;
+      btn.textContent = "Searching...";
+      btn.style.opacity = "1";
+      btn.style.color = "var(--accent)";
+
+      const searchResp = await browser.runtime.sendMessage({
+        action: "intelSearch", provider: "courtlistener", query, options: { pageSize: 20 }
+      });
+
+      btn.disabled = false;
+      btn.textContent = "Search";
+      btn.style.opacity = "";
+      btn.style.color = "";
+
+      if (searchResp?.success && searchResp.results) {
+        const results = searchResp.results.results || [];
+        const total = searchResp.results.count || 0;
+        const countEl = document.getElementById("compLitigationCount");
+        countEl.textContent = `${total} result${total !== 1 ? "s" : ""}`;
+
+        if (!results.length) {
+          empty.style.display = "";
+          empty.textContent = "No court records found.";
+        } else {
+          empty.style.display = "none";
+          container.innerHTML = results.map((r, i) => {
+            const name = r.caseName || r.caseNameFull || "Untitled";
+            const court = r.court || "";
+            const date = r.dateFiled || "";
+            const citations = (r.citation || []).join(", ");
+            const citeCount = r.citeCount || 0;
+            const url = r.absolute_url ? `https://www.courtlistener.com${r.absolute_url}` : "#";
+            const snippet = r.snippet || "";
+
+            return `<div class="comp-result-card">
+              <div class="comp-result-header">
+                <span class="comp-result-name"><a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="color:var(--text-primary);text-decoration:none;">${escapeHtml(name)}</a></span>
+                ${citeCount > 0 ? `<span class="comp-result-score">${citeCount} cites</span>` : ""}
+              </div>
+              <div class="comp-result-datasets">${escapeHtml(court)} ${date ? "· " + escapeHtml(date) : ""} ${citations ? "· " + escapeHtml(citations) : ""}</div>
+              ${snippet ? `<div class="comp-result-details" style="margin-top:4px;font-size:11px;color:var(--text-secondary);">${snippet}</div>` : ""}
+              <div class="comp-result-actions">
+                <button class="pill-chip comp-lit-kg-btn" data-name="${escapeAttr(name)}" data-url="${escapeAttr(url)}">Add to KG</button>
+              </div>
+            </div>`;
+          }).join("");
+
+          container.querySelectorAll(".comp-lit-kg-btn").forEach(btn => {
+            btn.addEventListener("click", async () => {
+              await browser.runtime.sendMessage({
+                action: "extractAndUpsert",
+                text: btn.dataset.name,
+                pageUrl: btn.dataset.url,
+                pageTitle: `CourtListener — ${btn.dataset.name}`
+              });
+              btn.textContent = "Added!";
+              setTimeout(() => { btn.textContent = "Add to KG"; }, 2000);
+            });
+          });
+        }
+      } else {
+        empty.style.display = "";
+        empty.textContent = `Error: ${searchResp?.error || "Search failed"}`;
+      }
     } catch (e) {
       empty.style.display = "";
       empty.textContent = `Error: ${e.message}`;

@@ -3980,7 +3980,9 @@ function attachListeners() {
         try {
           let resp;
           if (key === "opensanctions" || key === "secedgar") {
-            // Direct test via background for live providers
+            // Test via background — all live providers support intelSearch
+            resp = await browser.runtime.sendMessage({ action: "intelSearch", provider: key, query: "test", options: {} });
+          } else if (["courtlistener", "opensky", "opencorporates", "gleif", "gdelt"].includes(key)) {
             resp = await browser.runtime.sendMessage({ action: "intelSearch", provider: key, query: "test", options: {} });
           } else {
             resp = { success: false, error: "Provider not yet implemented" };
@@ -4016,6 +4018,17 @@ function attachListeners() {
           statusEl.className = "dp-status";
           statusEl.textContent = "Not configured";
         }
+      }
+    }
+  }).catch(() => {});
+
+  // Load saved intel provider API keys into fields
+  browser.storage.local.get({ argusIntelProviders: {} }).then(data => {
+    const cfg = data.argusIntelProviders || {};
+    for (const key of INTEL_PROVIDER_KEYS) {
+      const input = document.getElementById(`intel-${key}-apikey`);
+      if (input && cfg[key]?.apiKey) {
+        input.value = cfg[key].apiKey;
       }
     }
   }).catch(() => {});

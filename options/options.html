@@ -817,7 +817,7 @@
             <div id="intel-opensanctions-fields">
               <div class="form-group">
                 <label for="intel-opensanctions-apikey">API Key <span class="hint">(optional — increases rate limits)</span></label>
-                <input type="text" id="intel-opensanctions-apikey" placeholder="Optional API key for higher rate limits">
+                <div class="input-row"><input type="password" id="intel-opensanctions-apikey" placeholder="Optional API key for higher rate limits"><button class="icon-btn intel-eye-toggle" data-target="intel-opensanctions-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
               </div>
               <p class="info-text" style="margin-top:8px;">OpenSanctions works without an API key. Provides sanctions lists, PEP databases, and entity screening across 30+ datasets.</p>
               <div class="dp-action-row">
@@ -840,7 +840,7 @@
             <div id="intel-courtlistener-fields" class="hidden">
               <div class="form-group">
                 <label for="intel-courtlistener-apikey">API Key</label>
-                <input type="text" id="intel-courtlistener-apikey" placeholder="CourtListener API key">
+                <div class="input-row"><input type="password" id="intel-courtlistener-apikey" placeholder="CourtListener API key"><button class="icon-btn intel-eye-toggle" data-target="intel-courtlistener-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
               </div>
               <div class="dp-action-row">
                 <button id="intel-courtlistener-test-btn" class="pill-chip">Test Connection</button>
@@ -851,8 +851,25 @@
             <!-- OpenSky fields -->
             <div id="intel-opensky-fields" class="hidden">
               <div class="form-group">
-                <label for="intel-opensky-apikey">API Key</label>
-                <input type="text" id="intel-opensky-apikey" placeholder="OpenSky Network API key">
+                <label>Client Credentials (OAuth2)</label>
+                <div class="dp-action-row" style="margin-bottom:8px;">
+                  <button id="intel-opensky-load-json" class="pill-chip">Load credentials.json</button>
+                  <input type="file" id="intel-opensky-file" accept=".json" style="display:none;">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="intel-opensky-clientid">Client ID</label>
+                <div class="input-row">
+                  <input type="password" id="intel-opensky-clientid" placeholder="e.g. myuser-api-client">
+                  <button class="icon-btn intel-eye-toggle" data-target="intel-opensky-clientid" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="intel-opensky-clientsecret">Client Secret</label>
+                <div class="input-row">
+                  <input type="password" id="intel-opensky-clientsecret" placeholder="Client secret from credentials.json">
+                  <button class="icon-btn intel-eye-toggle" data-target="intel-opensky-clientsecret" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                </div>
               </div>
               <div class="dp-action-row">
                 <button id="intel-opensky-test-btn" class="pill-chip">Test Connection</button>
@@ -864,7 +881,7 @@
             <div id="intel-adsbexchange-fields" class="hidden">
               <div class="form-group">
                 <label for="intel-adsbexchange-apikey">API Key</label>
-                <input type="text" id="intel-adsbexchange-apikey" placeholder="ADS-B Exchange API key">
+                <div class="input-row"><input type="password" id="intel-adsbexchange-apikey" placeholder="ADS-B Exchange API key"><button class="icon-btn intel-eye-toggle" data-target="intel-adsbexchange-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
               </div>
               <div class="dp-action-row">
                 <button id="intel-adsbexchange-test-btn" class="pill-chip">Test Connection</button>
@@ -876,7 +893,7 @@
             <div id="intel-marinetraffic-fields" class="hidden">
               <div class="form-group">
                 <label for="intel-marinetraffic-apikey">API Key</label>
-                <input type="text" id="intel-marinetraffic-apikey" placeholder="MarineTraffic API key">
+                <div class="input-row"><input type="password" id="intel-marinetraffic-apikey" placeholder="MarineTraffic API key"><button class="icon-btn intel-eye-toggle" data-target="intel-marinetraffic-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
               </div>
               <div class="dp-action-row">
                 <button id="intel-marinetraffic-test-btn" class="pill-chip">Test Connection</button>
@@ -888,7 +905,7 @@
             <div id="intel-gdelt-fields" class="hidden">
               <div class="form-group">
                 <label for="intel-gdelt-apikey">API Key</label>
-                <input type="text" id="intel-gdelt-apikey" placeholder="GDELT API key">
+                <div class="input-row"><input type="password" id="intel-gdelt-apikey" placeholder="GDELT API key"><button class="icon-btn intel-eye-toggle" data-target="intel-gdelt-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
               </div>
               <div class="dp-action-row">
                 <button id="intel-gdelt-test-btn" class="pill-chip">Test Connection</button>
@@ -900,7 +917,7 @@
             <div id="intel-sentinelhub-fields" class="hidden">
               <div class="form-group">
                 <label for="intel-sentinelhub-apikey">API Key</label>
-                <input type="text" id="intel-sentinelhub-apikey" placeholder="Sentinel Hub API key">
+                <div class="input-row"><input type="password" id="intel-sentinelhub-apikey" placeholder="Sentinel Hub API key"><button class="icon-btn intel-eye-toggle" data-target="intel-sentinelhub-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
               </div>
               <div class="dp-action-row">
                 <button id="intel-sentinelhub-test-btn" class="pill-chip">Test Connection</button>
@@ -912,7 +929,7 @@
             <div id="intel-opencorporates-fields" class="hidden">
               <div class="form-group">
                 <label for="intel-opencorporates-apikey">API Key</label>
-                <input type="text" id="intel-opencorporates-apikey" placeholder="OpenCorporates API key">
+                <div class="input-row"><input type="password" id="intel-opencorporates-apikey" placeholder="OpenCorporates API key"><button class="icon-btn intel-eye-toggle" data-target="intel-opencorporates-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
               </div>
               <div class="dp-action-row">
                 <button id="intel-opencorporates-test-btn" class="pill-chip">Test Connection</button>
@@ -924,7 +941,7 @@
             <div id="intel-gleif-fields" class="hidden">
               <div class="form-group">
                 <label for="intel-gleif-apikey">API Key</label>
-                <input type="text" id="intel-gleif-apikey" placeholder="GLEIF API key">
+                <div class="input-row"><input type="password" id="intel-gleif-apikey" placeholder="GLEIF API key"><button class="icon-btn intel-eye-toggle" data-target="intel-gleif-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
               </div>
               <div class="dp-action-row">
                 <button id="intel-gleif-test-btn" class="pill-chip">Test Connection</button>
@@ -936,7 +953,7 @@
             <div id="intel-blockstream-fields" class="hidden">
               <div class="form-group">
                 <label for="intel-blockstream-apikey">API Key</label>
-                <input type="text" id="intel-blockstream-apikey" placeholder="Blockstream API key">
+                <div class="input-row"><input type="password" id="intel-blockstream-apikey" placeholder="Blockstream API key"><button class="icon-btn intel-eye-toggle" data-target="intel-blockstream-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
               </div>
               <div class="dp-action-row">
                 <button id="intel-blockstream-test-btn" class="pill-chip">Test Connection</button>
@@ -948,7 +965,7 @@
             <div id="intel-broadcastify-fields" class="hidden">
               <div class="form-group">
                 <label for="intel-broadcastify-apikey">API Key</label>
-                <input type="text" id="intel-broadcastify-apikey" placeholder="Broadcastify API key">
+                <div class="input-row"><input type="password" id="intel-broadcastify-apikey" placeholder="Broadcastify API key"><button class="icon-btn intel-eye-toggle" data-target="intel-broadcastify-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
               </div>
               <div class="dp-action-row">
                 <button id="intel-broadcastify-test-btn" class="pill-chip">Test Connection</button>

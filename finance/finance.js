@@ -636,6 +636,37 @@
       console.warn("[Finance Corporate] Search error:", e);
     }
 
+    // Also search active provider pills
+    const activeProviders = [...document.querySelectorAll("[data-corp-provider].active")].map(b => b.dataset.corpProvider);
+
+    if (activeProviders.includes("opencorporates")) {
+      try {
+        const ocResp = await browser.runtime.sendMessage({
+          action: "intelSearch", provider: "opencorporates", query, options: {}
+        });
+        if (ocResp?.success && ocResp.results?.results?.companies?.length) {
+          const companies = ocResp.results.results.companies;
+          corpState.openCorpResults = companies;
+          const meta = document.getElementById("corpCompanyMeta");
+          if (meta) meta.textContent += ` · OpenCorp: ${companies.length} matches`;
+        }
+      } catch (e) { console.warn("[Finance] OpenCorporates error:", e); }
+    }
+
+    if (activeProviders.includes("gleif")) {
+      try {
+        const gleifResp = await browser.runtime.sendMessage({
+          action: "intelSearch", provider: "gleif", query, options: {}
+        });
+        if (gleifResp?.success && gleifResp.results?.data?.length) {
+          const leis = gleifResp.results.data;
+          corpState.gleifResults = leis;
+          const meta = document.getElementById("corpCompanyMeta");
+          if (meta) meta.textContent += ` · GLEIF: ${leis.length} LEI${leis.length !== 1 ? "s" : ""}`;
+        }
+      } catch (e) { console.warn("[Finance] GLEIF error:", e); }
+    }
+
     btn.disabled = false;
     btn.textContent = "Search";
 

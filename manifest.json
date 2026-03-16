@@ -38,6 +38,11 @@
     "https://efts.sec.gov/*",
     "https://data.sec.gov/*",
     "https://blockstream.info/*",
+    "https://api.gdeltproject.org/*",
+    "https://opensky-network.org/*",
+    "https://www.courtlistener.com/*",
+    "https://api.opencorporates.com/*",
+    "https://api.gleif.org/*",
     "identity",
     "downloads"
   ],

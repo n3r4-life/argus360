@@ -1999,10 +1999,14 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "cloudGetStatus") return handleCloudGetStatus();
   if (message.action === "aiGetStatus") return handleAiGetStatus();
   // ── Intelligence Providers ──
+  if (message.action === "intelSaveConfig")    return IntelProviders.saveProviderConfig(message.provider, message.config).then(() => ({ success: true }));
   if (message.action === "intelGetStatus")    return handleIntelGetStatus();
   if (message.action === "intelSearch")       return handleIntelSearch(message.provider, message.query, message.options);
   if (message.action === "intelEnrichEntity") return handleIntelEnrichEntity(message.entityId, message.providers);
   if (message.action === "intelScreenAll")    return handleIntelScreenAll();
+  if (message.action === "gdeltTimeline")     return IntelProviders.gdelt.getTimelineVolume(message.query, message.options).then(r => ({ success: true, data: r })).catch(e => ({ success: false, error: e.message }));
+  if (message.action === "gdeltTone")         return IntelProviders.gdelt.getTimelineTone(message.query, message.options).then(r => ({ success: true, data: r })).catch(e => ({ success: false, error: e.message }));
+  if (message.action === "gdeltGeo")          return IntelProviders.gdelt.getGeo(message.query, message.options).then(r => ({ success: true, data: r })).catch(e => ({ success: false, error: e.message }));
   if (message.action === "cloudSaveChat") return handleCloudSaveChat(message.session);
   if (message.action === "cloudPushFile") return handleCloudPushFile(message.path, message.content, message.providerKey);
   if (message.action === "cloudExportStore") return handleCloudExportStore(message.store, message.providerKey);
@@ -3628,6 +3632,21 @@ async function handleIntelSearch(providerKey, query, options) {
         break;
       case "secedgar":
         results = await provider.searchCompany(query);
+        break;
+      case "gdelt":
+        results = await provider.searchArticles(query, options);
+        break;
+      case "opensky":
+        results = await provider.getLiveStates(options);
+        break;
+      case "courtlistener":
+        results = await provider.searchOpinions(query, options);
+        break;
+      case "opencorporates":
+        results = await provider.searchCompanies(query, options);
+        break;
+      case "gleif":
+        results = await provider.searchByName(query, options);
         break;
       default:
         return { success: false, error: `Provider ${providerKey} search not yet implemented` };
