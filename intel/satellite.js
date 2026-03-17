@@ -2,6 +2,7 @@
   'use strict';
 
   let map = null;
+  let baseTileLayer = null;
   let imageLayerA = null;
   let imageLayerB = null;
   let layerA = 'trueColor';
@@ -9,15 +10,21 @@
   let resolutionA = 1024;
   let resolutionB = 1024;
   let defaultResolution = 1024;
+  let maxCloudCoverage = 40;
+  let dateWindowDays = 7;
+  let brightnessFactor = 2.5;
   let dualMode = false;
   let bboxB = null; // separate bbox for location B in dual mode
 
-  const EVALSCRIPTS = {
-    trueColor: `//VERSION=3\nfunction setup(){return{input:["B02","B03","B04"],output:{bands:3}}}\nfunction evaluatePixel(s){return[2.5*s.B04,2.5*s.B03,2.5*s.B02]}`,
-    falseColor: `//VERSION=3\nfunction setup(){return{input:["B03","B04","B08"],output:{bands:3}}}\nfunction evaluatePixel(s){return[2.5*s.B08,2.5*s.B04,2.5*s.B03]}`,
-    ndvi: `//VERSION=3\nfunction setup(){return{input:["B04","B08"],output:{bands:3}}}\nfunction evaluatePixel(s){var v=(s.B08-s.B04)/(s.B08+s.B04);return v<0?[1,0,0]:v<0.3?[1,0.5+v,0]:[0,0.5+v*0.5,0]}`,
-    moisture: `//VERSION=3\nfunction setup(){return{input:["B8A","B11"],output:{bands:3}}}\nfunction evaluatePixel(s){var v=(s.B8A-s.B11)/(s.B8A+s.B11);return v<0?[0.8,0.2,0]:v<0.3?[1,1,0]:[0,0.3+v*0.7,1]}`,
-  };
+  function getEvalscripts() {
+    const g = brightnessFactor.toFixed(1);
+    return {
+      trueColor: `//VERSION=3\nfunction setup(){return{input:["B02","B03","B04"],output:{bands:3}}}\nfunction evaluatePixel(s){return[${g}*s.B04,${g}*s.B03,${g}*s.B02]}`,
+      falseColor: `//VERSION=3\nfunction setup(){return{input:["B03","B04","B08"],output:{bands:3}}}\nfunction evaluatePixel(s){return[${g}*s.B08,${g}*s.B04,${g}*s.B03]}`,
+      ndvi: `//VERSION=3\nfunction setup(){return{input:["B04","B08"],output:{bands:3}}}\nfunction evaluatePixel(s){var v=(s.B08-s.B04)/(s.B08+s.B04);return v<0?[1,0,0]:v<0.3?[1,0.5+v,0]:[0,0.5+v*0.5,0]}`,
+      moisture: `//VERSION=3\nfunction setup(){return{input:["B8A","B11"],output:{bands:3}}}\nfunction evaluatePixel(s){var v=(s.B8A-s.B11)/(s.B8A+s.B11);return v<0?[0.8,0.2,0]:v<0.3?[1,1,0]:[0,0.3+v*0.7,1]}`,
+    };
+  }
   let currentLocation = '';
   let pins = [];
   let pinMarkers = [];
@@ -34,7 +41,7 @@
     if (map) return;
     map = L.map('satMap', { center: [34.05, -118.25], zoom: 12 });
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    baseTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; OSM &copy; CARTO',
       subdomains: 'abcd',
       maxZoom: 19,
@@ -75,6 +82,8 @@
         const lat = parseFloat(results[0].lat);
         const lon = parseFloat(results[0].lon);
         map.setView([lat, lon], 14);
+        // Auto-load imagery after jumping to location
+        try { await loadImagery(); } catch { /* silent */ }
       } else {
         document.getElementById('satImageryStatus').textContent = 'Location not found';
       }
@@ -100,6 +109,16 @@
       document.querySelectorAll('.sat-layer-btn-b').forEach(b => b.classList.toggle('active', b === btn));
       if (imageLayerB && map) await reloadSingleImage('B');
     });
+  });
+
+  // ── Today buttons ──
+  document.getElementById('satTodayA')?.addEventListener('click', () => {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    document.getElementById('satDateA').value = yesterday.toISOString().slice(0, 10);
+  });
+  document.getElementById('satTodayB')?.addEventListener('click', () => {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    document.getElementById('satDateB').value = yesterday.toISOString().slice(0, 10);
   });
 
   // ── Dual mode toggle ──
@@ -211,8 +230,8 @@
 
       // Load both images in parallel with their respective layers + resolutions
       const [respA, respB] = await Promise.all([
-        fetchSatImage(bbox, dateA, EVALSCRIPTS[layerA], resolutionA),
-        fetchSatImage(bboxForB, dateB, EVALSCRIPTS[layerB], resolutionB),
+        fetchSatImage(bbox, dateA, getEvalscripts()[layerA], resolutionA),
+        fetchSatImage(bboxForB, dateB, getEvalscripts()[layerB], resolutionB),
       ]);
 
       // Remove old overlays
@@ -234,6 +253,14 @@
       // Add Image B on top (user controls opacity to compare)
       if (respB?.success && respB.imageUrl) {
         imageLayerB = L.imageOverlay(respB.imageUrl, imageBounds, { opacity: 0 }).addTo(map);
+      }
+
+      // After imagery loads, hide basemap and bring to front as optional overlay
+      if (baseTileLayer) {
+        baseTileLayer.setOpacity(0);
+        baseTileLayer.bringToFront();
+        document.getElementById('satBasemapSlider').value = 0;
+        document.getElementById('satBasemapVal').textContent = '0%';
       }
 
       // Enable actions
@@ -263,8 +290,8 @@
 
   async function fetchSatImage(bbox, date, evalscript, resolution) {
     const targetDate = new Date(date);
-    const rangeStart = new Date(targetDate.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const rangeEnd = new Date(targetDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const rangeStart = new Date(targetDate.getTime() - dateWindowDays * 24 * 60 * 60 * 1000);
+    const rangeEnd = new Date(targetDate.getTime() + dateWindowDays * 24 * 60 * 60 * 1000);
 
     const maxDim = resolution || defaultResolution;
     const bboxWidth = bbox[2] - bbox[0];
@@ -278,7 +305,7 @@
       bbox,
       dateFrom: rangeStart.toISOString(),
       dateTo: rangeEnd.toISOString(),
-      options: { width, height, maxCloudCoverage: 40, evalscript }
+      options: { width, height, maxCloudCoverage, evalscript }
     });
   }
 
@@ -299,7 +326,7 @@
 
     try {
       console.log('[Satellite] fetching image, date:', date, 'layer:', layer, 'res:', res);
-      const resp = await fetchSatImage(bbox, date, EVALSCRIPTS[layer], res);
+      const resp = await fetchSatImage(bbox, date, getEvalscripts()[layer], res);
       console.log('[Satellite] image response:', resp?.success, resp?.error);
       if (resp?.success && resp.imageUrl) {
         // In dual mode, Image B renders at the SAME map position (for overlay comparison)
@@ -519,55 +546,56 @@
     applyEnhanceFilters();
   });
 
-  // ── On-map controls (resolution + reset) ──
-  function setupMapControls() {
-    if (!map || typeof L === 'undefined') return;
-
-    const ControlPanel = L.Control.extend({
-      options: { position: 'topright' },
-      onAdd: function () {
-        const div = L.DomUtil.create('div', 'sat-map-controls');
-        div.innerHTML = `
-          <div class="sat-map-ctrl-row">
-            <span class="sat-map-ctrl-label">A:</span>
-            <select class="sat-map-ctrl-select" id="satResA">
-              <option value="512">512px</option>
-              <option value="1024" selected>1024px</option>
-              <option value="2048">2048px</option>
-            </select>
-          </div>
-          <div class="sat-map-ctrl-row">
-            <span class="sat-map-ctrl-label">B:</span>
-            <select class="sat-map-ctrl-select" id="satResB">
-              <option value="512">512px</option>
-              <option value="1024" selected>1024px</option>
-              <option value="2048">2048px</option>
-            </select>
-          </div>
-          <button class="sat-map-ctrl-btn" id="satResetZoom">Reset 100%</button>
-        `;
-        L.DomEvent.disableClickPropagation(div);
-        return div;
-      },
+  // ── Floating panel controls ──
+  function setupPanelControls() {
+    // Toolbar toggle
+    document.getElementById('satToolbarToggle')?.addEventListener('click', () => {
+      document.getElementById('satToolbar').classList.toggle('hidden');
+    });
+    document.getElementById('satToolbarClose')?.addEventListener('click', () => {
+      document.getElementById('satToolbar').classList.add('hidden');
     });
 
-    map.addControl(new ControlPanel());
+    // Reveal toolbar with fade-in
+    setTimeout(() => {
+      document.getElementById('satToolbar')?.classList.replace('panel-deferred', 'panel-revealed');
+    }, 300);
 
-    // Set saved resolution values
-    const resAEl = document.getElementById('satResA');
-    const resBEl = document.getElementById('satResB');
-    if (resAEl) resAEl.value = resolutionA;
-    if (resBEl) resBEl.value = resolutionB;
-
-    resAEl?.addEventListener('change', () => {
-      resolutionA = parseInt(resAEl.value);
+    // Resolution dropdowns
+    document.getElementById('satResA')?.addEventListener('change', (e) => {
+      resolutionA = parseInt(e.target.value);
     });
-    resBEl?.addEventListener('change', () => {
-      resolutionB = parseInt(resBEl.value);
+    document.getElementById('satResB')?.addEventListener('change', (e) => {
+      resolutionB = parseInt(e.target.value);
     });
 
-    document.getElementById('satResetZoom')?.addEventListener('click', () => {
-      map.setZoom(12);
+    // Cloud coverage slider
+    document.getElementById('satCloudSlider')?.addEventListener('input', (e) => {
+      maxCloudCoverage = parseInt(e.target.value);
+      document.getElementById('satCloudVal').textContent = `≤${maxCloudCoverage}%`;
+    });
+
+    // Date window slider
+    document.getElementById('satDateWindow')?.addEventListener('input', (e) => {
+      dateWindowDays = parseInt(e.target.value);
+      document.getElementById('satDateWindowVal').textContent = `±${dateWindowDays}d`;
+    });
+
+    // Brightness slider
+    document.getElementById('satBrightness')?.addEventListener('input', (e) => {
+      brightnessFactor = parseInt(e.target.value) / 10;
+      document.getElementById('satBrightnessVal').textContent = `${brightnessFactor.toFixed(1)}x`;
+    });
+
+    // Basemap opacity slider
+    document.getElementById('satBasemapSlider')?.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value);
+      if (baseTileLayer) {
+        baseTileLayer.setOpacity(val / 100);
+        // When imagery is loaded, bring basemap to front so it overlays
+        if (imageLayerA || imageLayerB) baseTileLayer.bringToFront();
+      }
+      document.getElementById('satBasemapVal').textContent = val + '%';
     });
   }
 
@@ -829,11 +857,10 @@
     }
 
     setupMapPinning();
-    setupMapControls();
+    setupPanelControls();
     try { await loadPins(); } catch (e) { console.warn('[Satellite] Pin load error:', e); }
 
-    // Auto-load imagery for default view (silent fail if no credentials)
-    try { await loadImagery(); } catch { /* no sentinel hub credentials — that's fine */ }
+    // Don't auto-load imagery — wait for user to search
 
     if (typeof ArgusChat !== 'undefined') {
       ArgusChat.init({

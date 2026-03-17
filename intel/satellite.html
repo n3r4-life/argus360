@@ -13,6 +13,7 @@
 </head>
 <body>
   <script src="../shared/ribbon.js"></script>
+  <script src="../shared/panel-state.js"></script>
 
   <header class="intel-page-header">
     <svg class="header-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
@@ -20,129 +21,193 @@
     <span class="header-desc">Earth observation imagery. Pan/zoom the map, pick dates, load Sentinel-2 imagery.</span>
     <span class="header-spacer"></span>
   </header>
-  <main class="intel-main">
-    <svg class="intel-watermark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
 
-    <!-- Controls -->
-    <section class="intel-section">
-      <div class="sat-controls">
-        <div class="sat-top-row">
-          <div class="sat-search-bar">
-            <input type="text" id="satSearchInput" class="comp-search-input" placeholder="Jump to location...">
-            <button class="pill-chip" id="satJumpBtn">Go</button>
-          </div>
-          <label class="pill-toggle mode-pill sat-dual-toggle" id="satDualToggle" title="Compare two different locations">
-            <span class="mode-pill-label mode-pill-left">Single</span>
-            <input type="checkbox" id="satDualCheck">
-            <span class="pill-track" style="--pill-color:var(--accent)"><span class="pill-knob"></span></span>
-            <span class="mode-pill-label mode-pill-right">Dual Overlay</span>
-          </label>
-          <div class="sat-search-bar sat-search-b disabled" id="satSearchBarB">
-            <input type="text" id="satSearchInputB" class="comp-search-input" placeholder="Location B..." disabled>
-            <button class="pill-chip" id="satJumpBtnB" disabled>Go</button>
-          </div>
-          <div class="sat-actions">
-            <button class="pill-chip" id="satSaveToKg" disabled>Save to KG</button>
-            <button class="pill-chip" id="satCaptureView" disabled>Capture View</button>
-            <button class="pill-chip" id="satClearPins">Clear Pins</button>
-          </div>
-        </div>
-        <div class="sat-band-date-bar">
-          <span class="sat-enhance-label">A Band:</span>
-          <button class="pill-chip sat-layer-btn-a active" data-layer="trueColor">True Color</button>
-          <button class="pill-chip sat-layer-btn-a" data-layer="falseColor">False Color</button>
+  <!-- Search bar (below header, above map) -->
+  <div class="sat-search-strip">
+    <input type="text" id="satSearchInput" class="sat-fp-input" placeholder="Jump to location...">
+    <button class="pill-chip" id="satJumpBtn">Go</button>
+    <label class="pill-toggle mode-pill" title="Compare two different locations">
+      <span class="mode-pill-label mode-pill-left">Single</span>
+      <input type="checkbox" id="satDualCheck">
+      <span class="pill-track" style="--pill-color:var(--accent)"><span class="pill-knob"></span></span>
+      <span class="mode-pill-label mode-pill-right">Dual Overlay</span>
+    </label>
+    <div class="sat-search-b disabled" id="satSearchBarB" style="display:flex;gap:4px;align-items:center;">
+      <input type="text" id="satSearchInputB" class="sat-fp-input" placeholder="Location B..." disabled>
+      <button class="pill-chip" id="satJumpBtnB" disabled>Go</button>
+    </div>
+  </div>
+
+  <!-- Map (full content area) -->
+  <main class="sat-map-main">
+    <svg class="intel-watermark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+    <div id="satMap" style="width:100%;height:100%;"></div>
+    <div class="sat-map-info">
+      <span id="satMapCenter">—</span>
+      <span id="satMapZoom">—</span>
+      <span id="satImageryStatus">No imagery loaded</span>
+    </div>
+  </main>
+
+  <!-- ═══ Floating Toolbar Panel ═══ -->
+  <div class="fp sat-toolbar-panel panel-deferred" id="satToolbar" data-panel-id="sat-toolbar">
+    <div class="fp-header">
+      <span class="fp-title">Imagery Controls</span>
+      <button class="fp-close" id="satToolbarClose">&times;</button>
+    </div>
+    <div class="fp-body">
+
+      <!-- Image A controls -->
+      <div class="sat-fp-section">
+        <div class="sat-fp-label">Image A</div>
+        <div class="sat-fp-row">
+          <button class="pill-chip sat-layer-btn-a active" data-layer="trueColor">TC</button>
+          <button class="pill-chip sat-layer-btn-a" data-layer="falseColor">FC</button>
           <button class="pill-chip sat-layer-btn-a" data-layer="ndvi">NDVI</button>
-          <button class="pill-chip sat-layer-btn-a" data-layer="moisture">Moisture</button>
-          <input type="date" id="satDateA" class="evt-date-input">
-          <button class="pill-chip sat-today-btn" id="satTodayA" title="Set to yesterday">Today</button>
-          <button class="pill-chip sat-center-btn" id="satLoadImagery">Refresh Imagery</button>
-          <button class="pill-chip sat-today-btn" id="satTodayB" title="Set to yesterday">Today</button>
-          <input type="date" id="satDateB" class="evt-date-input">
-          <button class="pill-chip sat-layer-btn-b active" data-layer="trueColor">True Color</button>
-          <button class="pill-chip sat-layer-btn-b" data-layer="falseColor">False Color</button>
-          <button class="pill-chip sat-layer-btn-b" data-layer="ndvi">NDVI</button>
-          <button class="pill-chip sat-layer-btn-b" data-layer="moisture">Moisture</button>
-          <span class="sat-enhance-label">:B Band</span>
+          <button class="pill-chip sat-layer-btn-a" data-layer="moisture">Moist</button>
+          <input type="date" id="satDateA" class="sat-fp-date">
+          <button class="pill-chip sat-fp-today" id="satTodayA">Today</button>
+        </div>
+        <div class="sat-fp-row">
+          <span class="sat-fp-sublabel">Enhance:</span>
+          <button class="pill-chip sat-enhance-btn-a active" data-enhance="none">Norm</button>
+          <button class="pill-chip sat-enhance-btn-a" data-enhance="invert">Inv</button>
+          <button class="pill-chip sat-enhance-btn-a" data-enhance="grayscale">B/W</button>
+          <button class="pill-chip sat-enhance-btn-a" data-enhance="contrast">Hi-C</button>
+          <button class="pill-chip sat-enhance-btn-a" data-enhance="saturate">Sat</button>
+          <button class="pill-chip sat-enhance-btn-a" data-enhance="edge">Edge</button>
+          <button class="pill-chip sat-enhance-btn-a" data-enhance="block">Block</button>
         </div>
       </div>
-    </section>
 
-    <!-- Overlay controls (above map) -->
-    <section class="intel-section" id="satOverlaySection">
-      <div class="sat-overlay-controls">
-        <label class="pill-toggle mode-pill sat-opacity-mode-toggle" title="Balance: A+B=100%. Independent: A and B each 0-100%">
-          <span class="mode-pill-label mode-pill-left">Balance</span>
-          <input type="checkbox" id="satOpacityMode">
-          <span class="pill-track" style="--pill-color:var(--accent)"><span class="pill-knob"></span></span>
-          <span class="mode-pill-label mode-pill-right">Independent</span>
-        </label>
+      <div class="sat-fp-divider"></div>
+
+      <!-- Center actions -->
+      <div class="sat-fp-section" style="align-items:center;">
+        <div class="sat-fp-row" style="justify-content:center;gap:8px;">
+          <button class="pill-chip sat-center-btn" id="satLoadImagery">Refresh Imagery</button>
+          <button class="pill-chip sat-center-btn" id="satSwapBtnEnhance">⇄ Swap A/B</button>
+        </div>
+      </div>
+
+      <div class="sat-fp-divider"></div>
+
+      <!-- Image B controls -->
+      <div class="sat-fp-section">
+        <div class="sat-fp-label">Image B</div>
+        <div class="sat-fp-row">
+          <button class="pill-chip sat-layer-btn-b active" data-layer="trueColor">TC</button>
+          <button class="pill-chip sat-layer-btn-b" data-layer="falseColor">FC</button>
+          <button class="pill-chip sat-layer-btn-b" data-layer="ndvi">NDVI</button>
+          <button class="pill-chip sat-layer-btn-b" data-layer="moisture">Moist</button>
+          <input type="date" id="satDateB" class="sat-fp-date">
+          <button class="pill-chip sat-fp-today" id="satTodayB">Today</button>
+        </div>
+        <div class="sat-fp-row">
+          <span class="sat-fp-sublabel">Enhance:</span>
+          <button class="pill-chip sat-enhance-btn-b active" data-enhance="none">Norm</button>
+          <button class="pill-chip sat-enhance-btn-b" data-enhance="invert">Inv</button>
+          <button class="pill-chip sat-enhance-btn-b" data-enhance="grayscale">B/W</button>
+          <button class="pill-chip sat-enhance-btn-b" data-enhance="contrast">Hi-C</button>
+          <button class="pill-chip sat-enhance-btn-b" data-enhance="saturate">Sat</button>
+          <button class="pill-chip sat-enhance-btn-b" data-enhance="edge">Edge</button>
+          <button class="pill-chip sat-enhance-btn-b" data-enhance="block">Block</button>
+        </div>
+      </div>
+
+      <div class="sat-fp-divider"></div>
+
+      <!-- Opacity -->
+      <div class="sat-fp-section">
+        <div class="sat-fp-row" style="justify-content:center;">
+          <label class="pill-toggle mode-pill" title="Balance: A+B=100%. Independent: each 0-100%">
+            <span class="mode-pill-label mode-pill-left">Balance</span>
+            <input type="checkbox" id="satOpacityMode">
+            <span class="pill-track" style="--pill-color:var(--accent)"><span class="pill-knob"></span></span>
+            <span class="mode-pill-label mode-pill-right">Independent</span>
+          </label>
+        </div>
         <div id="satBalanceSlider">
-          <div class="sat-overlay-row">
-            <span class="sat-overlay-label">A</span>
+          <div class="sat-fp-row">
+            <span class="sat-fp-sublabel">A</span>
             <input type="range" id="satOpacitySlider" min="0" max="100" value="0" class="sat-opacity-slider">
-            <span class="sat-overlay-label">B</span>
+            <span class="sat-fp-sublabel">B</span>
           </div>
           <div class="sat-opacity-value" id="satOpacityValue">Image A (100%)</div>
         </div>
         <div id="satIndependentSliders" style="display:none;">
-          <div class="sat-overlay-row">
-            <span class="sat-overlay-label">A</span>
+          <div class="sat-fp-row">
+            <span class="sat-fp-sublabel">A</span>
             <input type="range" id="satOpacityA" min="0" max="100" value="100" class="sat-opacity-slider">
             <span class="sat-opacity-val-sm" id="satOpacityAVal">100%</span>
           </div>
-          <div class="sat-overlay-row">
-            <span class="sat-overlay-label">B</span>
+          <div class="sat-fp-row">
+            <span class="sat-fp-sublabel">B</span>
             <input type="range" id="satOpacityB" min="0" max="100" value="50" class="sat-opacity-slider">
             <span class="sat-opacity-val-sm" id="satOpacityBVal">50%</span>
           </div>
         </div>
       </div>
-      <div class="sat-enhance-bar">
-        <div class="sat-enhance-group">
-          <span class="sat-enhance-label">Image A:</span>
-          <button class="pill-chip sat-enhance-btn-a active" data-enhance="none">Normal</button>
-          <button class="pill-chip sat-enhance-btn-a" data-enhance="invert">Invert</button>
-          <button class="pill-chip sat-enhance-btn-a" data-enhance="grayscale">B/W</button>
-          <button class="pill-chip sat-enhance-btn-a" data-enhance="contrast">Hi-Contrast</button>
-          <button class="pill-chip sat-enhance-btn-a" data-enhance="saturate">Saturate</button>
-          <button class="pill-chip sat-enhance-btn-a" data-enhance="edge">Edge</button>
-          <button class="pill-chip sat-enhance-btn-a" data-enhance="block">Block</button>
+
+      <div class="sat-fp-divider"></div>
+
+      <!-- Settings -->
+      <div class="sat-fp-section">
+        <div class="sat-fp-label">Settings</div>
+        <div class="sat-fp-row">
+          <span class="sat-fp-sublabel">Clouds:</span>
+          <input type="range" id="satCloudSlider" min="0" max="100" value="40" class="sat-opacity-slider">
+          <span class="sat-opacity-val-sm" id="satCloudVal">≤40%</span>
         </div>
-        <button class="pill-chip sat-center-btn" id="satSwapBtnEnhance">⇄ Swap A/B</button>
-        <div class="sat-enhance-group">
-          <span class="sat-enhance-label">Image B:</span>
-          <button class="pill-chip sat-enhance-btn-b active" data-enhance="none">Normal</button>
-          <button class="pill-chip sat-enhance-btn-b" data-enhance="invert">Invert</button>
-          <button class="pill-chip sat-enhance-btn-b" data-enhance="grayscale">B/W</button>
-          <button class="pill-chip sat-enhance-btn-b" data-enhance="contrast">Hi-Contrast</button>
-          <button class="pill-chip sat-enhance-btn-b" data-enhance="saturate">Saturate</button>
-          <button class="pill-chip sat-enhance-btn-b" data-enhance="edge">Edge</button>
-          <button class="pill-chip sat-enhance-btn-b" data-enhance="block">Block</button>
+        <div class="sat-fp-row">
+          <span class="sat-fp-sublabel">±Days:</span>
+          <input type="range" id="satDateWindow" min="1" max="30" value="7" class="sat-opacity-slider">
+          <span class="sat-opacity-val-sm" id="satDateWindowVal">±7d</span>
+        </div>
+        <div class="sat-fp-row">
+          <span class="sat-fp-sublabel">Bright:</span>
+          <input type="range" id="satBrightness" min="10" max="50" value="25" class="sat-opacity-slider">
+          <span class="sat-opacity-val-sm" id="satBrightnessVal">2.5x</span>
+        </div>
+        <div class="sat-fp-row">
+          <span class="sat-fp-sublabel">A res:</span>
+          <select class="sat-fp-select" id="satResA"><option value="512">512</option><option value="1024" selected>1024</option><option value="2048">2048</option></select>
+          <span class="sat-fp-sublabel">B res:</span>
+          <select class="sat-fp-select" id="satResB"><option value="512">512</option><option value="1024" selected>1024</option><option value="2048">2048</option></select>
+        </div>
+        <div class="sat-fp-row">
+          <span class="sat-fp-sublabel">Basemap:</span>
+          <input type="range" id="satBasemapSlider" min="0" max="100" value="100" class="sat-opacity-slider">
+          <span class="sat-opacity-val-sm" id="satBasemapVal">100%</span>
         </div>
       </div>
-    </section>
 
-    <!-- Map -->
-    <section class="intel-section">
-      <div class="sat-map-container" id="satMapContainer">
-        <div id="satMap" style="width:100%;height:100%;"></div>
+      <div class="sat-fp-divider"></div>
+
+      <!-- Actions -->
+      <div class="sat-fp-section">
+        <div class="sat-fp-row">
+          <button class="pill-chip" id="satSaveToKg" disabled>Save to KG</button>
+          <button class="pill-chip" id="satCaptureView" disabled>Capture</button>
+          <button class="pill-chip" id="satClearPins">Clear Pins</button>
+        </div>
       </div>
-      <div class="sat-map-info">
-        <span id="satMapCenter">—</span>
-        <span id="satMapZoom">—</span>
-        <span id="satImageryStatus">No imagery loaded</span>
-      </div>
-    </section>
 
-  </main>
+    </div>
+  </div>
 
-  <!-- Coordinate display (fixed, follows cursor context) -->
+  <!-- Toolbar toggle button -->
+  <button class="edge-tab edge-tab-right" id="satToolbarToggle" title="Imagery Controls" style="top:120px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15 1.65 1.65 0 0 0 3.17 14H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68 1.65 1.65 0 0 0 10 3.17V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
+
+  <!-- Coordinate display -->
   <div class="sat-coord-display" id="satCoordDisplay">
     <span id="satCoordLat">—</span>, <span id="satCoordLon">—</span>
     <span class="sat-coord-hint">Click to pin</span>
   </div>
 
-  <!-- Floating pin collection panel -->
+  <!-- Pin collection panel -->
   <div class="fp sat-pins-panel hidden" id="satPinsPanel" data-panel-id="sat-pins">
     <div class="fp-header">
       <span class="fp-title">Pinned Locations</span>
@@ -155,7 +220,7 @@
       <button class="pill-chip" id="satPinsToKg">All to KG</button>
     </div>
   </div>
-  <button class="edge-tab edge-tab-right sat-pins-toggle" id="satPinsToggle" title="Pinned Locations">
+  <button class="edge-tab edge-tab-right" id="satPinsToggle" title="Pinned Locations" style="top:160px;">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
     <span id="satPinsToggleCount"></span>
   </button>
@@ -169,7 +234,6 @@
   <script src="../shared/xmpp-chat.js"></script>
   <script src="../lib/argus-chat.js"></script>
   <script src="domain-shell.js"></script>
-  <script>IntelDomainShell.init("satellite", ["sentinelhub"]);</script>
   <script src="satellite.js"></script>
   <div id="xmpp-chat-container"></div>
   <script>

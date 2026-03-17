@@ -33,8 +33,20 @@ Every API key unlocks a new capability. Start with one. Add more as you need the
 | Wayback Machine | Historical page archives | Free |
 | Archive.is | Paywall bypass | Free |
 | RDAP / Google DNS | Whois and DNS lookups | Free |
+| OpenSanctions | Sanctions, PEP, and watchlist screening | Free |
+| SEC EDGAR | Corporate filings, insider transactions | Free |
+| GDELT | Global media coverage, sentiment analysis | Free |
+| GLEIF | Legal Entity Identifier (LEI) lookup | Free |
+| OpenSky Network | Live aircraft positions (ADS-B) | Free tier |
+| FlightAware AeroAPI | Flight tracking, history, routes | Free tier |
+| hexdb.io | Aircraft registration → ICAO24 hex lookup | Free |
+| CourtListener | Court records, case law, dockets | Free |
+| OpenCorporates | Global company registry search | Free tier |
+| Copernicus / Sentinel Hub | Satellite imagery (Sentinel-2) | Free tier |
+| VesselFinder | Live vessel positions, AIS data | Paid |
+| FAA Aircraft Registry | N-number to Mode-S code resolution | Free |
 
-That's 15+ eyes from free services alone. Argus doesn't need infrastructure because it plugs into everyone else's.
+That's 25+ eyes from free services alone. Argus doesn't need infrastructure because it plugs into everyone else's.
 
 ---
 
@@ -73,6 +85,91 @@ Argus isn't one tool — it's the tool that becomes what you need:
 - **Paywall bypass** — automatic archive.is redirect for configurable site lists
 
 Watch your patterns, watch others' patterns. Argus is the extension that becomes what you need.
+
+---
+
+## Intelligence Layer
+
+Argus connects to real-world data sources — sanctions lists, corporate filings, court records, aircraft transponders, vessel tracking, satellite imagery, and global media. Each source is a provider. Configure an API key and another eye opens.
+
+### Compliance
+
+Screen people and organizations against global sanctions lists and PEP databases. OpenSanctions covers 30+ datasets including OFAC, UN, EU consolidated lists. Search by name, match entities with confidence scores, screen your entire Knowledge Graph with one click.
+
+CourtListener integration adds litigation search — case law, dockets, and court opinions across US federal and state courts.
+
+Flagged entities get a red SANCTIONED badge in the KG. Connected entities get an amber SANCTIONS-ADJACENT flag. The inference engine automatically maps these relationships.
+
+### Movement — Aviation
+
+Search aircraft by tail number (N707JT), ICAO24 hex code (a2d2cc), or callsign. Argus resolves tail numbers to hex codes via hexdb.io and the FAA Aircraft Registry, then queries OpenSky for live transponder data.
+
+Results show: callsign, ICAO24 hex, country, aircraft category (Heavy/Light/Rotorcraft/UAV), altitude, speed, heading, vertical rate, squawk code, and position — all plotted on a Leaflet map with rotated aircraft icons.
+
+FlightAware AeroAPI adds flight routing (origin → destination), operator, flight status, progress percentage, departure/arrival times, and historical flight data going back to 2011.
+
+The detail panel shows manufacturer, type, owner, and links to FAA Registry ↗, FlightAware ↗, and ADS-B Exchange ↗. Search history persists across sessions. Aircraft can be added to the KG as entities or added to a Movement Watchlist.
+
+### Movement — Maritime
+
+Search vessels by name, 9-digit MMSI, or 7-digit IMO number. VesselFinder API (optional, paid) returns live position, speed, course, destination, ETA, draught, dimensions, and flag state.
+
+Without an API key, Argus provides direct links to MarineTraffic ↗, VesselFinder ↗, and MyShipTracking ↗ for free web-based tracking.
+
+### Events — GDELT
+
+Search any topic across global media. GDELT monitors news sources in 100+ languages. Argus fires three queries in parallel:
+
+- **Article search** — clickable cards with title, source domain, country, language, date
+- **Volume timeline** — SVG bar chart showing article counts over time
+- **Sentiment timeline** — SVG line chart showing positive/negative tone over time
+
+Results are exportable as CSV. Coverage spikes can be saved to the KG as `global_event` entities.
+
+### Satellite — Copernicus / Sentinel Hub
+
+Browse the planet with 10-meter resolution Sentinel-2 imagery on a Leaflet map.
+
+- **Jump to location** — geocode any address, city, or coordinates via Nominatim
+- **Dual date comparison** — pick Date A and Date B, load imagery for both
+- **Opacity slider** — Balance mode (A + B = 100%) or Independent mode (A and B each 0-100%)
+- **Band selection** — True Color, False Color (vegetation), NDVI, Moisture — independently per image
+- **Enhancement filters** — Normal, Invert, B/W, Hi-Contrast, Saturate, Edge Detect, Block — independently per image
+- **Dual Overlay mode** — compare two different locations side-by-side on the same viewport
+- **Swap A/B** — full swap of images, dates, search inputs, bands, and enhancements
+- **Pin collection** — click the map to pin locations with labels and notes, export as CSV or add to KG
+- **Resolution control** — 512px (fast), 1024px (default), 2048px (high) — independently per image
+- **Settings** — default location, zoom, and resolution configurable in the console Settings tab
+
+Requires OAuth2 client credentials from the Copernicus Data Space Ecosystem dashboard.
+
+### Corporate & Financial Intelligence
+
+The Finance page has three tabs:
+
+- **Markets** — watchlist for stocks, crypto, forex, commodities with live prices (Yahoo Finance), wallet monitoring (Blockstream), price alerts, and market sentiment
+- **Corporate** — SEC EDGAR company search with filings table, insider transactions, officers list. Toggle OpenCorporates and GLEIF (LEI) for additional corporate registry data
+- **Blockchain** — BTC wallet lookup via Blockstream with balance, transaction history. ETH support via Etherscan (when configured)
+
+### KG Enrichment
+
+Click any entity in the Knowledge Graph and the sidebar shows an Intelligence section with:
+
+- **Sanctions** button — screen against OpenSanctions
+- **SEC Filings** button — fetch filings for organizations
+- **Enrich All** — run all applicable providers
+
+Results render inline: match scores, dataset sources, filing counts. Sanctioned entities get flagged and the inference engine creates `sanction-proximity` edges to connected entities.
+
+### Intel Strip
+
+The ribbon strip below the AI provider strip shows all connected intelligence providers at a glance, grouped by domain:
+
+```
+INTEL ●Sanctions ●SEC ●GLEIF | ●OpenSky ●FlightAware | ●GDELT | ●Sentinel
+```
+
+Green dot = connected. One place to see everything. Click any pill to jump to Settings.
 
 ---
 

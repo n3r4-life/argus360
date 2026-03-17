@@ -859,17 +859,110 @@ body {
 /* ═══════════════════════════════════════════════
    Satellite Page
    ═══════════════════════════════════════════════ */
-.sat-controls {
+/* Satellite search strip */
+.sat-search-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.sat-search-strip .sat-fp-input {
+  flex: 1;
+  min-width: 150px;
+}
+
+/* Satellite full-height map */
+.sat-map-main {
+  position: relative;
+  height: calc(100vh - 120px);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Floating toolbar panel */
+.sat-toolbar-panel {
+  width: 340px;
+  max-height: calc(100vh - 140px);
+  right: 20px;
+  top: 120px;
+}
+.sat-fp-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
-.sat-top-row {
+.sat-fp-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 3px;
+  flex-wrap: wrap;
 }
+.sat-fp-row .pill-chip {
+  font-size: 8px !important;
+  padding: 2px 5px !important;
+}
+.sat-fp-input {
+  flex: 1;
+  padding: 5px 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-family: inherit;
+  outline: none;
+  min-width: 0;
+}
+.sat-fp-input:focus { border-color: var(--accent); }
+.sat-fp-input::placeholder { color: var(--text-muted); }
+.sat-fp-date {
+  padding: 3px 5px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 10px;
+  font-family: inherit;
+  max-width: 110px;
+}
+.sat-fp-date:focus { border-color: var(--accent); }
+.sat-fp-select {
+  padding: 2px 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 9px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.sat-fp-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+.sat-fp-sublabel {
+  font-size: 8px;
+  font-weight: 600;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.sat-fp-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+.sat-fp-today {
+  font-size: 7px !important;
+  padding: 1px 4px !important;
+}
+
 .sat-search-bar {
   display: flex;
   gap: 8px;
@@ -1069,6 +1162,52 @@ body {
 .sat-map-ctrl-btn:hover {
   color: var(--text-primary);
   border-color: var(--accent);
+}
+.sat-map-ctrl-title {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.sat-map-ctrl-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+.sat-map-ctrl-slider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.sat-map-ctrl-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+}
+.sat-map-ctrl-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+}
+.sat-map-ctrl-val {
+  font-size: 9px;
+  color: var(--text-secondary);
+  min-width: 30px;
+  text-align: right;
+  font-family: monospace;
 }
 
 .sat-map-info {
