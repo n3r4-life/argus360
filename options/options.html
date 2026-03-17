@@ -811,6 +811,7 @@
               <button class="tab-btn" data-iprovider="broadcastify">Broadcastify</button>
               <button class="tab-btn" data-iprovider="vesselfinder">VesselFinder</button>
               <button class="tab-btn" data-iprovider="flightaware">FlightAware</button>
+              <button class="tab-btn" data-iprovider="wigle">WiGLE</button>
             </div>
           </div>
 
@@ -818,10 +819,10 @@
             <!-- OpenSanctions fields (default visible) -->
             <div id="intel-opensanctions-fields">
               <div class="form-group">
-                <label for="intel-opensanctions-apikey">API Key <span class="hint">(optional — increases rate limits)</span></label>
+                <label for="intel-opensanctions-apikey">API Key <span class="hint">(required — free at opensanctions.org/api/)</span></label>
                 <div class="input-row"><input type="password" id="intel-opensanctions-apikey" placeholder="Optional API key for higher rate limits"><button class="icon-btn intel-eye-toggle" data-target="intel-opensanctions-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
               </div>
-              <p class="info-text" style="margin-top:8px;">OpenSanctions works without an API key. Provides sanctions lists, PEP databases, and entity screening across 30+ datasets.</p>
+              <p class="info-text" style="margin-top:8px;">A free API key is required. Get one at <a href="https://www.opensanctions.org/api/" target="_blank" style="color:var(--accent);">opensanctions.org/api/ ↗</a>. Provides sanctions lists, PEP databases, and entity screening across 30+ datasets.</p>
               <div class="dp-action-row">
                 <button id="intel-opensanctions-test-btn" class="pill-chip">Test Connection</button>
                 <span id="intel-opensanctions-status" class="dp-status"></span>
@@ -841,9 +842,10 @@
             <!-- CourtListener fields -->
             <div id="intel-courtlistener-fields" class="hidden">
               <div class="form-group">
-                <label for="intel-courtlistener-apikey">API Key</label>
+                <label for="intel-courtlistener-apikey">API Key <span class="hint">(free — courtlistener.com/sign-in/)</span></label>
                 <div class="input-row"><input type="password" id="intel-courtlistener-apikey" placeholder="CourtListener API key"><button class="icon-btn intel-eye-toggle" data-target="intel-courtlistener-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
               </div>
+              <p class="info-text" style="margin-top:8px;">Free account required. Sign up at <a href="https://www.courtlistener.com/sign-in/" target="_blank" style="color:var(--accent);">courtlistener.com/sign-in/ ↗</a>, then get your token at <a href="https://www.courtlistener.com/profile/api-token/" target="_blank" style="color:var(--accent);">courtlistener.com/profile/api-token/ ↗</a>. Searches US federal and state court opinions, dockets, and citations.</p>
               <div class="dp-action-row">
                 <button id="intel-courtlistener-test-btn" class="pill-chip">Test Connection</button>
                 <span id="intel-courtlistener-status" class="dp-status"></span>
@@ -981,9 +983,14 @@
 
             <!-- Broadcastify fields -->
             <div id="intel-broadcastify-fields" class="hidden">
+              <p class="dp-desc">
+                Login to <a href="https://www.radioreference.com/account/premium" target="_blank" rel="noopener">RadioReference.com</a>
+                → Account → Premium Subscription → copy your <strong>Service Key</strong>.
+                Your $30/yr premium subscription unlocks the SOAP API used for county-level feed lookup.
+              </p>
               <div class="form-group">
-                <label for="intel-broadcastify-apikey">API Key</label>
-                <div class="input-row"><input type="password" id="intel-broadcastify-apikey" placeholder="Broadcastify API key"><button class="icon-btn intel-eye-toggle" data-target="intel-broadcastify-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+                <label for="intel-broadcastify-apikey">Service Key</label>
+                <div class="input-row"><input type="password" id="intel-broadcastify-apikey" placeholder="RadioReference service key"><button class="icon-btn intel-eye-toggle" data-target="intel-broadcastify-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
               </div>
               <div class="dp-action-row">
                 <button id="intel-broadcastify-test-btn" class="pill-chip">Test Connection</button>
@@ -1014,6 +1021,23 @@
               <div class="dp-action-row">
                 <button id="intel-vesselfinder-test-btn" class="pill-chip">Test Connection</button>
                 <span id="intel-vesselfinder-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- WiGLE fields -->
+            <div id="intel-wigle-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-wigle-apiname">API Name</label>
+                <div class="input-row"><input type="text" id="intel-wigle-apiname" placeholder="e.g. AID91a7b0e60c075b54d…"></div>
+              </div>
+              <div class="form-group" style="margin-top:8px;">
+                <label for="intel-wigle-apikey">API Token</label>
+                <div class="input-row"><input type="password" id="intel-wigle-apikey" placeholder="WiGLE API Token"><button class="icon-btn intel-eye-toggle" data-target="intel-wigle-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">WiGLE maps WiFi, Bluetooth, and cellular networks by location. Create a free account at <a href="https://wigle.net" target="_blank" style="color:var(--accent);">wigle.net ↗</a>, then go to <strong>Profile → API Token</strong> and copy your <em>API Name</em> (starts with AID) and <em>API Token</em>. Used to overlay detected wireless networks on the satellite and geomap views.</p>
+              <div class="dp-action-row">
+                <button id="intel-wigle-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-wigle-status" class="dp-status"></span>
               </div>
             </div>
           </div>

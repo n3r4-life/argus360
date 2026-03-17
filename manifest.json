@@ -48,6 +48,8 @@
     "https://www.itu.int/*",
     "https://api.vesselfinder.com/*",
     "https://aeroapi.flightaware.com/*",
+    "https://api.wigle.net/*",
+    "https://api.radioreference.com/*",
     "https://identity.dataspace.copernicus.eu/*",
     "https://sh.dataspace.copernicus.eu/*",
     "https://nominatim.openstreetmap.org/*",
@@ -114,15 +116,15 @@
 
   "commands": {
     "_execute_browser_action": {
-      "suggested_key": { "default": "Ctrl+Shift+G" },
+      "suggested_key": { "default": "Alt+G" },
       "description": "Open Argus"
     },
     "quick-summary": {
-      "suggested_key": { "default": "Ctrl+Shift+S" },
-      "description": "Quick Summary of current page"
+      "suggested_key": { "default": "Alt+Q" },
+      "description": "Quick question"
     },
     "quick-selection": {
-      "suggested_key": { "default": "Ctrl+Shift+A" },
+      "suggested_key": { "default": "Alt+S" },
       "description": "Analyze selected text"
     }
   }

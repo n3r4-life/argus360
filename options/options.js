@@ -3940,7 +3940,7 @@ function attachListeners() {
     }
   });
   // ── Intelligence provider tabs ──
-  const INTEL_PROVIDER_KEYS = ["opensanctions", "secedgar", "courtlistener", "opensky", "adsbexchange", "marinetraffic", "gdelt", "sentinelhub", "opencorporates", "gleif", "blockstream", "broadcastify", "vesselfinder", "flightaware"];
+  const INTEL_PROVIDER_KEYS = ["opensanctions", "secedgar", "courtlistener", "opensky", "adsbexchange", "marinetraffic", "gdelt", "sentinelhub", "opencorporates", "gleif", "blockstream", "broadcastify", "vesselfinder", "flightaware", "wigle"];
 
   document.getElementById("intel-provider-tab-list")?.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -3964,6 +3964,9 @@ function attachListeners() {
           action: "intelSaveConfig",
           provider: key,
           config: { apiKey: input.value.trim() }
+        }).then(() => {
+          // Notify ribbon on all open pages to refresh their intel strip
+          browser.runtime.sendMessage({ type: "argusConnectionChanged" }).catch(() => {});
         }).catch(() => {});
       });
     }
@@ -3982,7 +3985,7 @@ function attachListeners() {
           if (key === "opensanctions" || key === "secedgar") {
             // Test via background — all live providers support intelSearch
             resp = await browser.runtime.sendMessage({ action: "intelSearch", provider: key, query: "test", options: {} });
-          } else if (["courtlistener", "opensky", "opencorporates", "gleif", "gdelt", "flightaware", "vesselfinder", "sentinelhub"].includes(key)) {
+          } else if (["courtlistener", "opensky", "opencorporates", "gleif", "gdelt", "flightaware", "vesselfinder", "sentinelhub", "wigle"].includes(key)) {
             resp = await browser.runtime.sendMessage({ action: "intelSearch", provider: key, query: "test", options: {} });
           } else {
             resp = { success: false, error: "Provider not yet implemented" };
@@ -4066,6 +4069,21 @@ function attachListeners() {
         action: "intelSaveConfig",
         provider: "opensky",
         config: { clientId, clientSecret, connected: !!(clientId && clientSecret) }
+      }).catch(() => {});
+    });
+  }
+
+  // WiGLE two-field save (API Name + API Token → encoded at runtime)
+  for (const fieldId of ["intel-wigle-apiname", "intel-wigle-apikey"]) {
+    document.getElementById(fieldId)?.addEventListener("input", () => {
+      const apiName = document.getElementById("intel-wigle-apiname").value.trim();
+      const apiKey  = document.getElementById("intel-wigle-apikey").value.trim();
+      browser.runtime.sendMessage({
+        action: "intelSaveConfig",
+        provider: "wigle",
+        config: { apiName, apiKey, connected: !!(apiName && apiKey) }
+      }).then(() => {
+        browser.runtime.sendMessage({ type: "argusConnectionChanged" }).catch(() => {});
       }).catch(() => {});
     });
   }
@@ -4157,6 +4175,15 @@ function attachListeners() {
     if (cfg.opensky?.clientSecret) {
       const cs = document.getElementById("intel-opensky-clientsecret");
       if (cs) cs.value = cfg.opensky.clientSecret;
+    }
+    // WiGLE uses apiName + apiKey
+    if (cfg.wigle?.apiName) {
+      const an = document.getElementById("intel-wigle-apiname");
+      if (an) an.value = cfg.wigle.apiName;
+    }
+    if (cfg.wigle?.apiKey) {
+      const ak = document.getElementById("intel-wigle-apikey");
+      if (ak) ak.value = cfg.wigle.apiKey;
     }
   }).catch(() => {});
 

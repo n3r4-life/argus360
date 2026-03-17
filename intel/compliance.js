@@ -53,14 +53,15 @@
     countEl.textContent = `${total} result${total !== 1 ? "s" : ""}`;
 
     if (!results.length) {
-      container.innerHTML = "";
+      container.querySelectorAll(".comp-result-card").forEach(el => el.remove());
       empty.style.display = "";
       empty.textContent = "No sanctions matches found.";
       return;
     }
     empty.style.display = "none";
+    container.querySelectorAll(".comp-result-card").forEach(el => el.remove());
 
-    container.innerHTML = results.map((r, i) => {
+    const cards = results.map((r, i) => {
       const props = r.properties || {};
       const name = (props.name || [r.caption || "Unknown"])[0];
       const schema = r.schema || "Entity";
@@ -92,6 +93,7 @@
         </div>
       `;
     }).join("");
+    container.insertAdjacentHTML("beforeend", cards);
 
     // Wire action buttons
     container.querySelectorAll(".comp-add-kg-btn").forEach(btn => {
@@ -192,7 +194,13 @@
       try {
         matchResp = await fetch("https://api.opensanctions.org/match/default", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(await browser.storage.local.get({ argusIntelProviders: {} })
+              .then(d => d.argusIntelProviders?.opensanctions?.apiKey
+                ? { "Authorization": `ApiKey ${d.argusIntelProviders.opensanctions.apiKey}` }
+                : {})),
+          },
           body: JSON.stringify(entity),
         });
         if (matchResp.ok) {
@@ -367,23 +375,15 @@
     const container = document.getElementById("compLitigationResults");
     const empty = document.getElementById("compLitigationEmpty");
 
-    // Check if CourtListener is configured
+    // Clear previous result cards (preserve the empty div — it lives inside the container)
+    container.querySelectorAll(".comp-result-card, .comp-error").forEach(el => el.remove());
+    empty.style.display = "none";
+    document.getElementById("compLitigationCount").textContent = "";
+
+    const btn = document.getElementById("compLitigationBtn");
     try {
-      const resp = await browser.runtime.sendMessage({ action: "intelGetStatus" });
-      const cl = resp?.providers?.courtlistener;
-
-      if (!cl || cl.status !== "connected") {
-        empty.style.display = "";
-        empty.innerHTML = `CourtListener is not configured. <a href="../options/options.html#intel-providers" style="color:var(--accent);">Add your API key</a> to search court records.`;
-        return;
-      }
-
-      // Search CourtListener
-      const btn = document.getElementById("compLitigationBtn");
       btn.disabled = true;
       btn.textContent = "Searching...";
-      btn.style.opacity = "1";
-      btn.style.color = "var(--accent)";
 
       const searchResp = await browser.runtime.sendMessage({
         action: "intelSearch", provider: "courtlistener", query, options: { pageSize: 20 }
@@ -391,8 +391,6 @@
 
       btn.disabled = false;
       btn.textContent = "Search";
-      btn.style.opacity = "";
-      btn.style.color = "";
 
       if (searchResp?.success && searchResp.results) {
         const results = searchResp.results.results || [];
@@ -405,7 +403,7 @@
           empty.textContent = "No court records found.";
         } else {
           empty.style.display = "none";
-          container.innerHTML = results.map((r, i) => {
+          const cards = results.map((r, i) => {
             const name = r.caseName || r.caseNameFull || "Untitled";
             const court = r.court || "";
             const date = r.dateFiled || "";
@@ -426,6 +424,7 @@
               </div>
             </div>`;
           }).join("");
+          container.insertAdjacentHTML("beforeend", cards);
 
           container.querySelectorAll(".comp-lit-kg-btn").forEach(btn => {
             btn.addEventListener("click", async () => {
@@ -445,8 +444,12 @@
         empty.textContent = `Error: ${searchResp?.error || "Search failed"}`;
       }
     } catch (e) {
+      btn.disabled = false;
+      btn.textContent = "Search";
       empty.style.display = "";
-      empty.textContent = `Error: ${e.message}`;
+      empty.innerHTML = e.message.includes("API key") || e.message.includes("not configured")
+        ? `CourtListener API key not configured. <a href="../options/options.html#intel-providers" style="color:var(--accent);">Add your key in Settings ↗</a>`
+        : `Error: ${escapeHtml(e.message)}`;
     }
   }
 
@@ -515,6 +518,20 @@
 
     // Load KG screening summary
     await loadScreeningSummary();
+
+    // Update litigation placeholder based on CourtListener config status
+    try {
+      const statusResp = await browser.runtime.sendMessage({ action: "intelGetStatus" });
+      const cl = statusResp?.providers?.courtlistener;
+      const litEmpty = document.getElementById("compLitigationEmpty");
+      if (litEmpty) {
+        if (cl?.configured) {
+          litEmpty.textContent = "Search for court cases, opinions, and dockets. Enter a name or case number above.";
+        } else {
+          litEmpty.innerHTML = `CourtListener API key not configured. Get a free token at <a href="https://www.courtlistener.com/profile/api-token/" target="_blank" style="color:var(--accent);">courtlistener.com ↗</a>, then add it in <a href="../options/options.html" style="color:var(--accent);">Settings → Providers</a>.`;
+        }
+      }
+    } catch { /* background not ready */ }
 
     // Init AI chat
     if (typeof ArgusChat !== "undefined") {

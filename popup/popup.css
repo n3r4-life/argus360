@@ -737,6 +737,16 @@ textarea {
   border-color: #ce93d8;
   background: rgba(206, 147, 216, 0.1);
 }
+/* Reader mode chip active state */
+#reader-mode-btn.reader-active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+#reader-mode-btn.reader-active:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
 /* Forced-private indicator */
 .status-forced {
   display: inline-flex;

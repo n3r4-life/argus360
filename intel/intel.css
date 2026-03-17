@@ -297,6 +297,16 @@ body {
   margin-left: auto;
 }
 
+/* Full-width screening summary bar (above columns) */
+.comp-screening-bar {
+  margin: 0 0 12px 0;
+}
+.comp-screening-bar .comp-screening-summary {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 6px;
+}
+
 /* Two-column layout */
 .comp-columns {
   display: grid;

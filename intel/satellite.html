@@ -315,6 +315,18 @@
     <span id="satPinsToggleCount"></span>
   </button>
 
+  <!-- WiFi overlay toggle (WiGLE) -->
+  <button class="edge-tab edge-tab-right" id="satWifiToggle" title="WiFi Networks (WiGLE)" style="top:200px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>
+    <span id="satWifiCount"></span>
+  </button>
+
+  <!-- Radio overlay toggle (Broadcastify) -->
+  <button class="edge-tab edge-tab-right" id="satRadioToggle" title="Radio Feeds (Broadcastify)" style="top:240px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="16" width="20" height="6" rx="1"/><path d="M6 16V8"/><path d="M18 16V8"/><line x1="2" y1="8" x2="22" y2="8"/><path d="M6 8 L12 3 L18 8"/></svg>
+    <span id="satRadioCount"></span>
+  </button>
+
   <div id="argus-chat-container" style="padding:16px 20px;"></div>
 
   <script src="../lib/vendor/leaflet.js"></script>

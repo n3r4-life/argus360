@@ -207,7 +207,7 @@
     "app-trawl":    { label: "Trawl Net", icon: [["path", { d: "M2 4c4 3 8 3 12 0s8-3 12 0" }], ["path", { d: "M2 12c4 3 8 3 12 0s8-3 12 0" }], ["path", { d: "M2 20c4 3 8 3 12 0s8-3 12 0" }]], path: "trawl/trawl.html" },
     "app-intel":      { label: "Intel",      icon: [["path", { d: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" }]], path: "intel/hub.html" },
     "app-compliance": { label: "Compliance", icon: [["path", { d: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" }], ["path", { d: "M9 12l2 2 4-4" }]], path: "intel/compliance.html" },
-    "app-movement":   { label: "Movement",   icon: [["path", { d: "M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.9.3 1.1L11 12l-2 3H6l-1 1 3 2 2 3 1-1v-3l3-2 3.7 7.3c.2.4.7.5 1.1.3l.5-.3c.4-.2.6-.6.5-1.1z" }]], path: "intel/movement.html" },
+    "app-movement":   { label: "Tracking",   icon: [["path", { d: "M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.9.3 1.1L11 12l-2 3H6l-1 1 3 2 2 3 1-1v-3l3-2 3.7 7.3c.2.4.7.5 1.1.3l.5-.3c.4-.2.6-.6.5-1.1z" }]], path: "intel/movement.html" },
     "app-events":     { label: "Events",     icon: [["circle", { cx: "12", cy: "12", r: "10" }], ["polyline", { points: "12 6 12 12 16 14" }]], path: "intel/events.html" },
     "app-satellite":  { label: "Satellite",  icon: [["circle", { cx: "12", cy: "12", r: "10" }], ["line", { x1: "2", y1: "12", x2: "22", y2: "12" }], ["path", { d: "M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" }]], path: "intel/satellite.html" }
   };
@@ -775,7 +775,7 @@
   // Group providers by domain for strip display
   const INTEL_STRIP_GROUPS = [
     { label: "Regulatory", keys: ["opensanctions", "secedgar", "courtlistener", "opencorporates", "gleif"] },
-    { label: "Movement",   keys: ["opensky", "flightaware", "adsbexchange", "marinetraffic", "vesselfinder", "broadcastify"] },
+    { label: "Tracking",   keys: ["opensky", "flightaware", "adsbexchange", "marinetraffic", "vesselfinder", "broadcastify"] },
     { label: "Events",     keys: ["gdelt"] },
     { label: "Satellite",  keys: ["sentinelhub"] },
     { label: "Blockchain",  keys: ["blockstream"] },

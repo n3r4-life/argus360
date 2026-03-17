@@ -467,6 +467,89 @@
     observer.observe(document.getElementById('sidePanel'), { attributes: true, attributeFilter: ['class'] });
   }
 
+  // ── WiGLE WiFi Overlay ──
+
+  let wigleMarkers = [];
+  let wigleVisible = false;
+
+  async function loadGeoWigleOverlay() {
+    if (!map) return;
+    const btn = document.getElementById('geoWifiToggle');
+    const countEl = document.getElementById('geoWifiCount');
+
+    const statusResp = await browser.runtime.sendMessage({ action: 'intelGetStatus' }).catch(() => null);
+    const wigleStatus = statusResp?.providers?.wigle;
+    if (!wigleStatus || wigleStatus.status !== 'connected') {
+      alert('WiGLE not configured — add credentials in Settings → Intel Providers');
+      wigleVisible = false;
+      if (btn) btn.classList.remove('active');
+      return;
+    }
+
+    const bounds = map.getBounds();
+    const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+
+    try {
+      const resp = await browser.runtime.sendMessage({
+        action: 'intelSearch',
+        provider: 'wigle',
+        query: '',
+        options: { bbox, resultsPerPage: 100 }
+      });
+
+      if (!resp?.success) throw new Error(resp?.error || 'WiGLE search failed');
+
+      wigleMarkers.forEach(m => map.removeLayer(m));
+      wigleMarkers = [];
+
+      const ENCRYPTION_COLORS = {
+        'WPA2': '#4fc3f7', 'WPA': '#81d4fa', 'WEP': '#ffb74d',
+        'None': '#ef5350', 'WPA3': '#aed581',
+      };
+
+      (resp.results?.results || []).forEach(net => {
+        if (!net.trilat || !net.trilong) return;
+        const enc = net.encryption || 'None';
+        const color = ENCRYPTION_COLORS[enc] || '#90a4ae';
+        const marker = L.circleMarker([net.trilat, net.trilong], {
+          radius: 5, color, fillColor: color, fillOpacity: 0.8, weight: 1.5, pane: 'markerPane',
+        }).addTo(map);
+        const ssid = net.ssid || '(hidden)';
+        marker.bindPopup(
+          `<strong>${ssid}</strong><br>` +
+          `Encryption: ${enc} · Ch: ${net.channel || '?'}<br>` +
+          `BSSID: <code>${net.netid || '?'}</code>`
+        );
+        wigleMarkers.push(marker);
+      });
+
+      if (countEl) countEl.textContent = wigleMarkers.length > 0 ? ` (${wigleMarkers.length})` : '';
+    } catch (e) {
+      alert(`WiGLE error: ${e.message}`);
+    }
+  }
+
+  function clearGeoWigleOverlay() {
+    wigleMarkers.forEach(m => map.removeLayer(m));
+    wigleMarkers = [];
+    const countEl = document.getElementById('geoWifiCount');
+    if (countEl) countEl.textContent = '';
+  }
+
+  document.getElementById('geoWifiToggle')?.addEventListener('click', async () => {
+    const btn = document.getElementById('geoWifiToggle');
+    if (wigleVisible) {
+      wigleVisible = false;
+      clearGeoWigleOverlay();
+      btn.classList.remove('active');
+    } else {
+      wigleVisible = true;
+      btn.classList.add('active');
+      await loadGeoWigleOverlay();
+    }
+  });
+
+
   /* ---- Init ---- */
   function init() {
     initMap();

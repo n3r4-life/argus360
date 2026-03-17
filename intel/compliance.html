@@ -32,6 +32,25 @@
       </div>
     </section>
 
+    <!-- KG Screening Summary (full-width, above columns) -->
+    <div class="comp-screening-bar">
+      <div class="comp-screening-summary" id="compScreeningSummary">
+        <div class="comp-summary-stat">
+          <span class="comp-summary-value" id="compFlaggedCount">0</span>
+          <span class="comp-summary-label">Flagged</span>
+        </div>
+        <div class="comp-summary-stat">
+          <span class="comp-summary-value" id="compCleanCount">0</span>
+          <span class="comp-summary-label">Clean</span>
+        </div>
+        <div class="comp-summary-stat">
+          <span class="comp-summary-value" id="compAdjacentCount">0</span>
+          <span class="comp-summary-label">Adjacent</span>
+        </div>
+      </div>
+      <div id="compFlaggedList" class="comp-flagged-list"></div>
+    </div>
+
     <!-- Two-column layout -->
     <div class="comp-columns">
 
@@ -63,25 +82,6 @@
             </div>
           </div>
         </section>
-
-        <!-- Entity Screening Summary -->
-                  <h2 class="intel-section-title">KG Screening Summary</h2>
-          <div class="comp-screening-summary" id="compScreeningSummary">
-            <div class="comp-summary-stat">
-              <span class="comp-summary-value" id="compFlaggedCount">0</span>
-              <span class="comp-summary-label">Flagged</span>
-            </div>
-            <div class="comp-summary-stat">
-              <span class="comp-summary-value" id="compCleanCount">0</span>
-              <span class="comp-summary-label">Clean</span>
-            </div>
-            <div class="comp-summary-stat">
-              <span class="comp-summary-value" id="compAdjacentCount">0</span>
-              <span class="comp-summary-label">Adjacent</span>
-            </div>
-          </div>
-          <div id="compFlaggedList" class="comp-flagged-list"></div>
-        </section>
       </div>
 
       <!-- RIGHT: Litigation Search -->
@@ -100,7 +100,7 @@
           </div>
           <div id="compLitigationResults" class="comp-results-list">
             <div class="comp-empty" id="compLitigationEmpty">
-              Search for court cases and litigation records. <em>Requires CourtListener API key — configure in <a href="../options/options.html#intel-providers" style="color:var(--accent);">Settings</a>.</em>
+              Search for court cases, opinions, and dockets.
             </div>
           </div>
         </section>

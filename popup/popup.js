@@ -104,6 +104,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await checkTrackingStatus();
   await initTrawlBadge();
   await initIncognitoBar();
+  await initReaderMode();
 });
 
 async function loadSettings() {
@@ -696,6 +697,75 @@ async function initTrawlBadge() {
 
     addShortLongPress(badge, toggleTrawl, openSettings);
   } catch { /* ignore */ }
+}
+
+// ──────────────────────────────────────────────
+// Reader Mode — inject/remove stripped CSS into active tab
+// ──────────────────────────────────────────────
+const READER_CSS_ID = "__argus_reader_mode__";
+const READER_CSS = [
+  "html, body { background: #fafaf8 !important; color: #1a1a1a !important; font-family: Georgia, 'Times New Roman', serif !important; }",
+  "body > *:not(article):not(main):not([role='main']):not(#main):not(.main):not(#content):not(.content):not(.post-content):not(.entry-content):not(.article-body):not(.story-body) { display: none !important; }",
+  "article, main, [role='main'], #main, .main, #content, .content, .post-content, .entry-content, .article-body, .story-body { display: block !important; max-width: 680px !important; margin: 48px auto !important; padding: 0 24px !important; font-size: 19px !important; line-height: 1.75 !important; color: #1a1a1a !important; background: #fafaf8 !important; box-shadow: none !important; float: none !important; position: static !important; width: auto !important; }",
+  "nav, header, footer, aside, [class*='sidebar'], [class*='header'], [class*='footer'], [class*='navbar'], [class*='nav-'], [class*='-nav'], [class*='cookie'], [class*='banner'], [class*='popup'], [class*='modal'], [class*='overlay'], [id*='sidebar'], [id*='header'], [id*='footer'], [id*='nav'], [id*='cookie'], [id*='banner'], [id*='popup'], [id*='modal'], [id*='overlay'] { display: none !important; }",
+  "img, video, iframe { max-width: 100% !important; height: auto !important; }",
+  "a { color: #1a56db !important; }",
+  "h1, h2, h3, h4, h5, h6 { font-family: inherit !important; color: #111 !important; line-height: 1.3 !important; margin: 1.2em 0 0.4em !important; }",
+  "p { margin: 0 0 1em !important; }",
+  "blockquote { border-left: 3px solid #ccc !important; padding-left: 1em !important; color: #555 !important; font-style: italic !important; margin: 1em 0 !important; }",
+  "code, pre { font-family: monospace !important; background: #f0f0f0 !important; color: #333 !important; padding: 2px 5px !important; border-radius: 3px !important; }"
+].join(" ");
+
+async function initReaderMode() {
+  const btn = document.getElementById("reader-mode-btn");
+  if (!btn) return;
+  let [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  if (!tab || !tab.url || tab.url.startsWith("about:") || tab.url.startsWith("moz-extension:") || tab.url.startsWith("chrome-extension:")) {
+    btn.disabled = true;
+    btn.style.opacity = "0.4";
+    btn.title = "Reader mode unavailable on this page";
+    return;
+  }
+  // Check if already active on this tab
+  const storageKey = "readerMode_" + tab.id;
+  const stored = await browser.storage.local.get({ [storageKey]: false });
+  if (stored[storageKey]) {
+    btn.classList.add("reader-active");
+    btn.title = "Reader Mode ON — click to restore page";
+  }
+  btn.addEventListener("click", async () => {
+    const isActive = btn.classList.contains("reader-active");
+    try {
+      if (!isActive) {
+        await browser.tabs.executeScript(tab.id, {
+          code: `(function() {
+  if (document.getElementById("__argus_reader_mode__")) return;
+  const s = document.createElement("style");
+  s.id = "__argus_reader_mode__";
+  s.textContent = ${JSON.stringify(READER_CSS)};
+  document.head.appendChild(s);
+  document.documentElement.setAttribute("data-argus-reader", "1");
+})();`
+        });
+        btn.classList.add("reader-active");
+        btn.title = "Reader Mode ON — click to restore page";
+        await browser.storage.local.set({ [storageKey]: true });
+      } else {
+        await browser.tabs.executeScript(tab.id, {
+          code: `(function() {
+  const s = document.getElementById("__argus_reader_mode__");
+  if (s) s.remove();
+  document.documentElement.removeAttribute("data-argus-reader");
+})();`
+        });
+        btn.classList.remove("reader-active");
+        btn.title = "Toggle Reader Mode — strip page to text only";
+        await browser.storage.local.set({ [storageKey]: false });
+      }
+    } catch (e) {
+      showToast("Reader mode unavailable on this page", "error");
+    }
+  });
 }
 
 // ──────────────────────────────────────────────

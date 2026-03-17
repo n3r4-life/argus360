@@ -53,6 +53,7 @@
     }).addTo(map);
 
     map.on('moveend', updateMapInfo);
+    map.on('moveend', _onMapMoveEndWigle);
     updateMapInfo();
   }
 
@@ -1829,6 +1830,330 @@
       });
     }
   }
+
+  // ── WiGLE WiFi Network Overlay ──
+
+  let wigleMarkers = [];
+  let wigleVisible = false;
+  let wigleCache = null; // { bbox, results, ts }
+  let wigleCoolingDown = false;
+  const WIGLE_CACHE_TTL = 10 * 60 * 1000;
+  const WIGLE_COOLDOWN_MS = 30 * 1000;
+
+  function _bboxSimilar(a, b) {
+    if (!a || !b) return false;
+    return Math.abs(a[0]-b[0]) < 0.01 && Math.abs(a[1]-b[1]) < 0.01 &&
+           Math.abs(a[2]-b[2]) < 0.01 && Math.abs(a[3]-b[3]) < 0.01;
+  }
+
+  function _wigleToast(msg, durationMs = 4000) {
+    let toast = document.getElementById('wigleToast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'wigleToast';
+      toast.style.cssText = [
+        'position:absolute','top:12px','left:50%','transform:translateX(-50%)',
+        'background:rgba(20,20,30,0.92)','color:#fff','padding:8px 16px',
+        'border-radius:6px','font-size:12px','z-index:2000','pointer-events:none',
+        'border:1px solid rgba(255,255,255,0.2)','max-width:420px','text-align:center',
+      ].join(';');
+      document.getElementById('satMap')?.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.display = 'block';
+    clearTimeout(toast._hideTimer);
+    toast._hideTimer = setTimeout(() => { toast.style.display = 'none'; }, durationMs);
+  }
+
+  async function loadWigleOverlay() {
+    if (!map) return;
+
+    const bounds = map.getBounds();
+    const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+
+    const cacheHit = wigleCache &&
+      _bboxSimilar(wigleCache.bbox, bbox) &&
+      (Date.now() - wigleCache.ts < WIGLE_CACHE_TTL);
+
+    let networks;
+
+    if (cacheHit) {
+      networks = wigleCache.results;
+      _wigleToast(`WiGLE: ${networks.length} networks (cached)`);
+    } else {
+      if (wigleCoolingDown) {
+        _wigleToast('WiGLE: please wait 30s before querying again (daily limit protection)', 4000);
+        return;
+      }
+      try {
+        const resp = await browser.runtime.sendMessage({
+          action: 'intelSearch',
+          provider: 'wigle',
+          query: '',
+          options: { bbox, resultsPerPage: 100 }
+        });
+        console.log('[WiGLE] response:', resp);
+        if (!resp?.success) {
+          const msg = resp?.error || 'WiGLE search failed';
+          if (msg.includes('429')) {
+            _wigleToast('⚠ WiGLE daily query limit reached. Free accounts ~10 queries/day. Try again tomorrow.', 8000);
+          } else if (msg.includes('not configured') || msg.includes('credentials')) {
+            _wigleToast('⚠ WiGLE: add API Name + Token in Settings → Intel Providers → WiGLE', 6000);
+          } else {
+            _wigleToast(`⚠ WiGLE: ${msg}`, 6000);
+          }
+          wigleVisible = false;
+          document.getElementById('satWifiToggle')?.classList.remove('active');
+          return;
+        }
+        networks = resp.results?.results || [];
+        wigleCache = { bbox, results: networks, ts: Date.now() };
+        wigleCoolingDown = true;
+        setTimeout(() => { wigleCoolingDown = false; }, WIGLE_COOLDOWN_MS);
+        _wigleToast(`WiGLE: ${networks.length} networks in view` +
+          (resp.results?.totalResults ? ` (${resp.results.totalResults} total)` : '') +
+          ' — click a dot for details');
+      } catch (e) {
+        _wigleToast(`WiGLE error: ${e.message}`, 6000);
+        wigleVisible = false;
+        document.getElementById('satWifiToggle')?.classList.remove('active');
+        return;
+      }
+    }
+
+    // Render markers
+    wigleMarkers.forEach(m => map.removeLayer(m));
+    wigleMarkers = [];
+
+    const ENCRYPTION_COLORS = {
+      'WPA2': '#4fc3f7', 'WPA': '#81d4fa', 'WEP': '#ffb74d',
+      'None': '#ef5350', 'WPA3': '#aed581',
+    };
+
+    networks.forEach(net => {
+      if (!net.trilat || !net.trilong) return;
+      const enc = net.encryption || 'None';
+      const color = ENCRYPTION_COLORS[enc] || '#90a4ae';
+      const marker = L.circleMarker([net.trilat, net.trilong], {
+        radius: 6, color, fillColor: color, fillOpacity: 0.85,
+        weight: 1.5, opacity: 1, pane: 'markerPane',
+      }).addTo(map);
+      const ssid = net.ssid || '(hidden)';
+      const lastSeen = net.lastupdt ? new Date(net.lastupdt).toLocaleDateString() : '?';
+      marker.bindPopup(
+        `<strong>${ssid}</strong><br>` +
+        `BSSID: <code>${net.netid || '?'}</code><br>` +
+        `Encryption: ${enc} · Ch: ${net.channel || '?'}<br>` +
+        `Last seen: ${lastSeen}`
+      );
+      wigleMarkers.push(marker);
+    });
+
+    const countEl = document.getElementById('satWifiCount');
+    if (countEl) countEl.textContent = wigleMarkers.length > 0 ? wigleMarkers.length : '';
+  }
+
+  function clearWigleOverlay() {
+    wigleMarkers.forEach(m => map.removeLayer(m));
+    wigleMarkers = [];
+    const countEl = document.getElementById('satWifiCount');
+    if (countEl) countEl.textContent = '';
+    const btn = document.getElementById('satWifiToggle');
+    if (btn) btn.classList.remove('active');
+  }
+
+  document.getElementById('satWifiToggle')?.addEventListener('click', async () => {
+    const btn = document.getElementById('satWifiToggle');
+    if (wigleVisible) {
+      wigleVisible = false;
+      clearWigleOverlay();
+    } else {
+      wigleVisible = true;
+      btn.classList.add('active');
+      const statusEl = document.getElementById('satImageryStatus');
+      if (statusEl) statusEl.textContent = 'WiGLE: sending request…';
+      try {
+        await loadWigleOverlay();
+      } catch (e) {
+        if (statusEl) statusEl.textContent = `WiGLE click error: ${e.message}`;
+        console.error('[WiGLE] click handler error:', e);
+      }
+    }
+  });
+
+  // NOTE: No moveend auto-reload — WiGLE free accounts rate-limit to ~1 query/10 min.
+  // User must manually click the WiFi button again after panning to a new area.
+  function _onMapMoveEndWigle() { /* intentionally empty — see note above */ }
+
+  // ── Broadcastify Radio Feed Overlay ──
+  // Uses RadioReference SOAP API (premium service key required)
+  // Coverage: US and Canada only (RadioReference county database)
+
+  let bcMarkers = [];
+  let bcVisible = false;
+  let bcCache = null; // { bbox, feeds, county, ts }
+  let bcCoolingDown = false;
+  const BC_CACHE_TTL = 20 * 60 * 1000; // 20 min — feed listings rarely change
+  const BC_COOLDOWN_MS = 60 * 1000;    // 1 min between API calls (2 SOAP round trips)
+
+  const BC_STYLE_COLORS = {
+    1:  "#1565c0", // Police/Law — blue
+    2:  "#c62828", // Fire — red
+    3:  "#2e7d32", // EMS — green
+    4:  "#e65100", // Aviation — orange
+    5:  "#827717", // Military — olive
+    6:  "#455a64", // Rail — blue-grey
+    7:  "#6d4c41", // Business — brown
+    8:  "#4527a0", // Federal — deep purple
+    9:  "#00838f", // Weather — teal
+    10: "#558b2f", // Ham Radio — light green
+  };
+  const BC_STYLE_LABELS = {
+    1: "Police/Law", 2: "Fire",    3: "EMS",       4: "Aviation",
+    5: "Military",   6: "Rail",    7: "Business",  8: "Federal",
+    9: "Weather",   10: "Ham Radio", 11: "Marine", 12: "Transportation",
+  };
+
+  function _bcToast(msg, durationMs = 4000) {
+    let toast = document.getElementById('bcToast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'bcToast';
+      toast.style.cssText = [
+        'position:absolute', 'top:50px', 'left:50%', 'transform:translateX(-50%)',
+        'background:rgba(20,20,30,0.92)', 'color:#fff', 'padding:8px 16px',
+        'border-radius:6px', 'font-size:12px', 'z-index:2000', 'pointer-events:none',
+        'border:1px solid rgba(255,255,255,0.2)', 'max-width:420px', 'text-align:center',
+      ].join(';');
+      document.getElementById('satMap')?.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.display = 'block';
+    clearTimeout(toast._hideTimer);
+    toast._hideTimer = setTimeout(() => { toast.style.display = 'none'; }, durationMs);
+  }
+
+  async function loadBroadcastifyOverlay() {
+    if (!map) return;
+    const bounds = map.getBounds();
+    const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+
+    // Cache check — use existing results if bbox is nearly the same and not stale
+    const cacheHit = bcCache &&
+      _bboxSimilar(bcCache.bbox, bbox) &&
+      (Date.now() - bcCache.ts < BC_CACHE_TTL);
+
+    let feeds, countyName;
+
+    if (cacheHit) {
+      feeds = bcCache.feeds;
+      countyName = bcCache.county;
+      _bcToast(`Radio: ${feeds.length} feeds in ${countyName} (cached)`);
+    } else {
+      if (bcCoolingDown) {
+        _bcToast('Radio: please wait 60s before querying again', 4000);
+        return;
+      }
+      try {
+        _bcToast('Radio: searching for feeds in this area…', 8000);
+        const resp = await browser.runtime.sendMessage({
+          action: 'intelSearch',
+          provider: 'broadcastify',
+          query: '',
+          options: { bbox },
+        });
+        if (!resp?.success) {
+          const msg = resp?.error || 'Broadcastify search failed';
+          if (msg.includes('not configured') || msg.includes('service key')) {
+            _bcToast('⚠ Radio: add your RadioReference service key in Settings → Intel Providers → Broadcastify', 7000);
+          } else if (msg.includes('US') || msg.includes('Canada') || msg.includes('county')) {
+            _bcToast('⚠ Radio: Broadcastify/RadioReference covers US & Canada — zoom to a US/Canadian location', 7000);
+          } else {
+            _bcToast(`⚠ Radio: ${msg}`, 6000);
+          }
+          bcVisible = false;
+          document.getElementById('satRadioToggle')?.classList.remove('active');
+          return;
+        }
+        feeds = resp.results?.feeds || [];
+        countyName = resp.results?.county?.name || 'this area';
+        bcCache = { bbox, feeds, county: countyName, ts: Date.now() };
+        bcCoolingDown = true;
+        setTimeout(() => { bcCoolingDown = false; }, BC_COOLDOWN_MS);
+        _bcToast(`Radio: ${feeds.length} feeds in ${countyName}` + (feeds.length ? ' — click a marker for details' : ' (none found)'));
+      } catch (e) {
+        _bcToast(`Radio error: ${e.message}`, 6000);
+        console.error('[Broadcastify] overlay error:', e);
+        bcVisible = false;
+        document.getElementById('satRadioToggle')?.classList.remove('active');
+        return;
+      }
+    }
+
+    // Render markers
+    bcMarkers.forEach(m => map.removeLayer(m));
+    bcMarkers = [];
+
+    feeds.forEach(feed => {
+      const lat = feed.feed_latitude;
+      const lon = feed.feed_longitude;
+      if (!lat || !lon || (lat === 0 && lon === 0)) return;
+      const styleId = feed.style_id || 0;
+      const color = BC_STYLE_COLORS[styleId] || '#9e9e9e';
+      const label = BC_STYLE_LABELS[styleId] || (styleId ? `Type ${styleId}` : 'Unknown');
+      const isLive = feed.status === 1;
+      const listeners = feed.listeners ?? '?';
+
+      const marker = L.circleMarker([lat, lon], {
+        radius: 7, color, fillColor: color,
+        fillOpacity: isLive ? 0.85 : 0.35,
+        weight: 2, opacity: 1, pane: 'markerPane',
+      }).addTo(map);
+
+      const feedUrl = `https://www.broadcastify.com/listen/feed/${encodeURIComponent(feed.fid)}`;
+      const descr = (feed.descr || 'Unknown Feed').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+      const county = (feed.county || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+      marker.bindPopup(
+        `<strong>${descr}</strong><br>` +
+        `<span style="color:${isLive ? '#4caf50' : '#888'};font-weight:bold">` +
+          `${isLive ? '● LIVE' : '○ Offline'}` +
+        `</span>` +
+        (isLive ? ` &middot; ${listeners} listeners` : '') + `<br>` +
+        (county ? `${county}${feed.state ? ', ' + feed.state : ''}<br>` : '') +
+        `Type: ${label}<br>` +
+        `<a href="${feedUrl}" target="_blank" rel="noopener" style="color:#4fc3f7">Listen on Broadcastify →</a>`
+      );
+      bcMarkers.push(marker);
+    });
+
+    const countEl = document.getElementById('satRadioCount');
+    if (countEl) countEl.textContent = bcMarkers.length > 0 ? bcMarkers.length : '';
+  }
+
+  function clearBroadcastifyOverlay() {
+    bcMarkers.forEach(m => map.removeLayer(m));
+    bcMarkers = [];
+    const countEl = document.getElementById('satRadioCount');
+    if (countEl) countEl.textContent = '';
+    document.getElementById('satRadioToggle')?.classList.remove('active');
+  }
+
+  document.getElementById('satRadioToggle')?.addEventListener('click', async () => {
+    const btn = document.getElementById('satRadioToggle');
+    if (bcVisible) {
+      bcVisible = false;
+      clearBroadcastifyOverlay();
+    } else {
+      bcVisible = true;
+      btn.classList.add('active');
+      try {
+        await loadBroadcastifyOverlay();
+      } catch (e) {
+        console.error('[Broadcastify] click handler error:', e);
+      }
+    }
+  });
+
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);

@@ -3677,6 +3677,20 @@ async function handleIntelSearch(providerKey, query, options) {
       case "flightaware":
         results = await provider.searchFlights(query, options);
         break;
+      case "wigle":
+        if (options?.bbox) {
+          results = await provider.searchByBbox(options.bbox, options);
+        } else {
+          results = await provider.searchByQuery(query, options);
+        }
+        break;
+      case "broadcastify":
+        if (options?.bbox) {
+          results = await provider.searchByBbox(options.bbox, options);
+        } else {
+          results = await provider.searchByQuery(query, options);
+        }
+        break;
       case "sentinelhub":
         // Test connection only — actual imagery uses sentinelGetImage action
         await provider.testConnection();
