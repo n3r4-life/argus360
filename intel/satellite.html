@@ -28,7 +28,7 @@
   <!-- Search bar (below header, above map) -->
   <div class="sat-search-strip">
     <div class="sat-search-row">
-      <input type="text" id="satSearchInput" class="sat-fp-input sat-search-equal" placeholder="Location A...">
+      <input type="text" id="satSearchInput" class="sat-fp-input sat-search-equal" placeholder="Address, city, or lat,lon (e.g. 41.76, -88.32)">
       <button class="pill-chip" id="satJumpBtn">Go</button>
       <label class="pill-toggle mode-pill" title="Single: same location for A+B. Overlay: two different locations.">
         <span class="mode-pill-label mode-pill-left">Single AB</span>
@@ -36,7 +36,7 @@
         <span class="pill-track" style="--pill-color:var(--accent)"><span class="pill-knob"></span></span>
         <span class="mode-pill-label mode-pill-right">Overlay AB</span>
       </label>
-      <input type="text" id="satSearchInputB" class="sat-fp-input sat-search-equal" placeholder="Location B..." disabled>
+      <input type="text" id="satSearchInputB" class="sat-fp-input sat-search-equal" placeholder="Address, city, or lat,lon" disabled>
       <button class="pill-chip" id="satJumpBtnB" disabled>Go</button>
     </div>
     <div class="sat-asset-link" id="satAssetLinkB" style="display:none;"></div>
@@ -119,6 +119,7 @@
 
         <!-- Opacity (between A and B) -->
         <div class="sat-fp-section sat-tile sat-tile-opacity">
+          <div class="sat-fp-label">Image Overlay Balance</div>
           <div class="sat-fp-row" style="justify-content:center;">
             <label class="pill-toggle mode-pill" title="Balance: A+B=100%. Independent: each 0-100%">
               <span class="mode-pill-label mode-pill-left">Balance</span>

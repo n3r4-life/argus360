@@ -79,22 +79,61 @@
     btn.textContent = 'Finding...';
 
     try {
-      const resp = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`, {
-        headers: { 'User-Agent': 'Argus/1.0' }
-      });
-      const results = await resp.json();
-      if (results.length) {
-        const lat = parseFloat(results[0].lat);
-        const lon = parseFloat(results[0].lon);
+      // Check if input is raw lat,lon coordinates
+      const coordMatch = query.match(/^(-?\d+\.?\d*)\s*[,\s]\s*(-?\d+\.?\d*)$/);
+      let lat, lon, addressData = null;
+
+      if (coordMatch) {
+        lat = parseFloat(coordMatch[1]);
+        lon = parseFloat(coordMatch[2]);
+        if (!(lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180)) {
+          document.getElementById('satImageryStatus').textContent = 'Invalid coordinates';
+          btn.disabled = false; btn.textContent = 'Go'; return;
+        }
         map.setView([lat, lon], 14);
-        // Auto-search scenes for both panels, auto-selects best and loads imagery
+        // Reverse geocode to get address from coordinates
         try {
-          await searchScenes('A');
-          if (dualMode) await searchScenes('B');
-        } catch { /* silent */ }
+          const revResp = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1`, {
+            headers: { 'User-Agent': 'Argus/1.0' }
+          });
+          const revResult = await revResp.json();
+          if (revResult?.display_name) {
+            addressData = revResult.address || {};
+            addressData._display = revResult.display_name;
+            document.getElementById('satSearchInput').value = revResult.display_name;
+            currentLocation = revResult.display_name;
+          }
+        } catch { /* reverse geocode failed, keep raw coords */ }
       } else {
-        document.getElementById('satImageryStatus').textContent = 'Location not found';
+        const resp = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1`, {
+          headers: { 'User-Agent': 'Argus/1.0' }
+        });
+        const results = await resp.json();
+        if (results.length) {
+          lat = parseFloat(results[0].lat);
+          lon = parseFloat(results[0].lon);
+          addressData = results[0].address || {};
+          addressData._display = results[0].display_name;
+          // Update input with full address from geocoder
+          if (results[0].display_name) {
+            document.getElementById('satSearchInput').value = results[0].display_name;
+            currentLocation = results[0].display_name;
+          }
+          map.setView([lat, lon], 14);
+        } else {
+          document.getElementById('satImageryStatus').textContent = 'Location not found';
+          btn.disabled = false; btn.textContent = 'Go'; return;
+        }
       }
+
+      // Store address data for use by asset library / sources
+      window._satLastAddress = addressData;
+
+      // Auto-search scenes for both panels, auto-selects best and loads imagery
+      try {
+        await searchScenes('A');
+        if (dualMode) await searchScenes('B');
+      } catch { /* silent */ }
     } catch (e) {
       document.getElementById('satImageryStatus').textContent = 'Geocode error: ' + e.message;
     }
@@ -542,6 +581,8 @@
       const srcB = document.getElementById('satSourceB');
       if (srcB) srcB.textContent = 'Satellite';
       if (typeof AssetLibrary !== 'undefined') AssetLibrary.markInUse(null);
+      resetGrabberTransform();
+      showGrabberControls(false);
       const assetLink = document.getElementById('satAssetLinkB');
       if (assetLink) { assetLink.innerHTML = ''; assetLink.style.display = 'none'; }
       // Re-enable swap button
@@ -593,6 +634,11 @@
             : (sliderVal / 100);
           imageLayerB = L.imageOverlay(resp.imageUrl, imageBounds, { opacity }).addTo(map);
           imageLayerB.setZIndex(200);
+          // Auto-slide to 50/50 so user sees both images
+          if (!independentMode && parseInt(slider.value) === 0) {
+            slider.value = 50;
+            slider.dispatchEvent(new Event('input'));
+          }
         }
         applyEnhanceFilters();
 
@@ -620,7 +666,12 @@
     const val = parseInt(e.target.value);
     if (imageLayerA) imageLayerA.setOpacity(1 - val / 100);
     if (imageLayerB) imageLayerB.setOpacity(val / 100);
-    const label = val === 0 ? 'Image A (100%)' : val === 100 ? 'Image B (100%)' : `A: ${100 - val}% · B: ${val}%`;
+    let label;
+    if (!imageLayerB && val > 0) {
+      label = `A: ${100 - val}% · B: no image loaded`;
+    } else {
+      label = val === 0 ? 'Image A (100%)' : val === 100 ? 'Image B (100%)' : `A: ${100 - val}% · B: ${val}%`;
+    }
     document.getElementById('satOpacityValue').textContent = label;
   });
 
@@ -1035,6 +1086,7 @@
         dateWindowB,
         cloudCover: maxCloudCoverage,
         zoom: map.getZoom(),
+        address: window._satLastAddress || null,
         sceneA: selectedSceneA ? { ...selectedSceneA } : null,
         sceneB: selectedSceneB ? { ...selectedSceneB } : null,
         dualMode,
@@ -1277,6 +1329,8 @@
       if (el && el.src) thumbnail = el.src;
     }
 
+    // Save satellite image asset
+    const addr = window._satLastAddress || null;
     await AssetLibrary.add({
       type: 'satellite',
       title: `${currentLocation || c.lat.toFixed(4) + ',' + c.lng.toFixed(4)} — ${layerA}`,
@@ -1284,7 +1338,24 @@
       thumbnail,
       metadata: {
         lat: c.lat, lon: c.lng, zoom: map.getZoom(),
+        searchQuery: currentLocation,
+        address: addr,
         dateA, layerA, enhanceA,
+        sceneA: selectedSceneA,
+      },
+      sourcePage: 'satellite',
+    });
+
+    // Also save the location as a separate asset
+    await AssetLibrary.add({
+      type: 'location',
+      title: currentLocation || `${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}`,
+      description: `${addr?._display || sceneInfo} · zoom ${map.getZoom()}`,
+      metadata: {
+        lat: c.lat, lon: c.lng, zoom: map.getZoom(),
+        searchQuery: currentLocation,
+        address: addr,
+        dateA, layerA,
         sceneA: selectedSceneA,
       },
       sourcePage: 'satellite',
@@ -1294,6 +1365,218 @@
     btn.textContent = 'Added!';
     setTimeout(() => { btn.textContent = '+ Asset'; }, 2000);
   });
+
+  // ── Grabber image transform system ──
+  let grabberLocked = false;
+  let grabberRotation = 0;
+  let grabberScale = 100;
+  let grabberFixedEl = null; // the fixed-position overlay element when locked
+  let grabberDragging = false;
+  let grabberResizing = false;
+  let dragStartX, dragStartY, dragStartLeft, dragStartTop;
+  let resizeStartX, resizeStartY, resizeStartW, resizeStartH;
+
+  function showGrabberControls(show) {
+    const el = document.getElementById('satGrabberControls');
+    if (el) el.style.display = show ? '' : 'none';
+  }
+
+  function resetGrabberTransform() {
+    grabberRotation = 0;
+    grabberScale = 100;
+    grabberLocked = false;
+    document.getElementById('satGrabberRotate').value = 0;
+    document.getElementById('satGrabberRotateVal').textContent = '0°';
+    document.getElementById('satGrabberScale').value = 100;
+    document.getElementById('satGrabberScaleVal').textContent = '100%';
+    document.getElementById('satGrabberLock').checked = false;
+    removeGrabberFixed();
+    applyGrabberTransform();
+  }
+
+  function applyGrabberTransform() {
+    if (grabberLocked && grabberFixedEl) {
+      // Apply to fixed overlay
+      const img = grabberFixedEl.querySelector('img');
+      if (img) {
+        img.style.transform = `rotate(${grabberRotation}deg) scale(${grabberScale / 100})`;
+      }
+    } else if (imageLayerB) {
+      // Apply to Leaflet overlay element
+      const el = imageLayerB._image || imageLayerB.getElement?.();
+      if (el) {
+        el.style.transform = `rotate(${grabberRotation}deg) scale(${grabberScale / 100})`;
+        el.style.transformOrigin = 'center center';
+      }
+    }
+  }
+
+  function createGrabberFixed() {
+    if (grabberFixedEl) return;
+    if (!imageLayerB) return;
+
+    const el = imageLayerB._image || imageLayerB.getElement?.();
+    if (!el || !el.src) return;
+
+    // Get current position on screen
+    const rect = el.getBoundingClientRect();
+
+    // Remove from Leaflet (but keep the reference)
+    const src = el.src;
+    if (map.hasLayer(imageLayerB)) map.removeLayer(imageLayerB);
+
+    // Create fixed overlay
+    grabberFixedEl = document.createElement('div');
+    grabberFixedEl.className = 'sat-grabber-fixed';
+    grabberFixedEl.style.cssText = `
+      position: fixed;
+      left: ${rect.left}px;
+      top: ${rect.top}px;
+      width: ${rect.width}px;
+      height: ${rect.height}px;
+      z-index: 500;
+      pointer-events: auto;
+      cursor: move;
+    `;
+
+    const img = document.createElement('img');
+    img.src = src;
+    img.style.cssText = `
+      width: 100%;
+      height: 100%;
+      object-fit: fill;
+      transform: rotate(${grabberRotation}deg) scale(${grabberScale / 100});
+      transform-origin: center center;
+      opacity: ${imageLayerB?.options?.opacity ?? 0.5};
+    `;
+    grabberFixedEl.appendChild(img);
+
+    // Resize handle (bottom-right corner)
+    const resizeHandle = document.createElement('div');
+    resizeHandle.className = 'sat-grabber-resize-handle';
+    grabberFixedEl.appendChild(resizeHandle);
+
+    // Lock indicator
+    const lockBadge = document.createElement('div');
+    lockBadge.className = 'sat-grabber-lock-badge';
+    lockBadge.textContent = '🔒';
+    grabberFixedEl.appendChild(lockBadge);
+
+    document.querySelector('.sat-map-main').appendChild(grabberFixedEl);
+
+    // Drag to reposition
+    grabberFixedEl.addEventListener('mousedown', (e) => {
+      if (e.target === resizeHandle) return;
+      grabberDragging = true;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      dragStartLeft = grabberFixedEl.offsetLeft;
+      dragStartTop = grabberFixedEl.offsetTop;
+      // Use fixed positioning coords
+      const fixedRect = grabberFixedEl.getBoundingClientRect();
+      dragStartLeft = fixedRect.left;
+      dragStartTop = fixedRect.top;
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', _grabberMouseMove);
+    document.addEventListener('mouseup', _grabberMouseUp);
+
+    // Resize via corner handle
+    resizeHandle.addEventListener('mousedown', (e) => {
+      grabberResizing = true;
+      resizeStartX = e.clientX;
+      resizeStartY = e.clientY;
+      resizeStartW = grabberFixedEl.offsetWidth;
+      resizeStartH = grabberFixedEl.offsetHeight;
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  }
+
+  function _grabberMouseMove(e) {
+    if (grabberDragging && grabberFixedEl) {
+      const dx = e.clientX - dragStartX;
+      const dy = e.clientY - dragStartY;
+      grabberFixedEl.style.left = (dragStartLeft + dx) + 'px';
+      grabberFixedEl.style.top = (dragStartTop + dy) + 'px';
+    }
+    if (grabberResizing && grabberFixedEl) {
+      const dx = e.clientX - resizeStartX;
+      const dy = e.clientY - resizeStartY;
+      grabberFixedEl.style.width = Math.max(50, resizeStartW + dx) + 'px';
+      grabberFixedEl.style.height = Math.max(50, resizeStartH + dy) + 'px';
+    }
+  }
+
+  function _grabberMouseUp() {
+    grabberDragging = false;
+    grabberResizing = false;
+  }
+
+  function removeGrabberFixed() {
+    if (grabberFixedEl) {
+      document.removeEventListener('mousemove', _grabberMouseMove);
+      document.removeEventListener('mouseup', _grabberMouseUp);
+      grabberFixedEl.remove();
+      grabberFixedEl = null;
+    }
+  }
+
+  // Wire up controls in setupPanelControls — but we need the elements to exist first
+  // So wire them here as they're in the DOM already
+  document.getElementById('satGrabberLock')?.addEventListener('change', (e) => {
+    grabberLocked = e.target.checked;
+    if (grabberLocked) {
+      createGrabberFixed();
+    } else {
+      // Unlock — put image back as Leaflet overlay
+      if (grabberFixedEl && map) {
+        const img = grabberFixedEl.querySelector('img');
+        const src = img?.src;
+        const opacity = parseFloat(img?.style.opacity) || 0.5;
+        removeGrabberFixed();
+
+        if (src) {
+          const bounds = map.getBounds();
+          const imageBounds = L.latLngBounds(
+            [bounds.getSouth(), bounds.getWest()],
+            [bounds.getNorth(), bounds.getEast()]
+          );
+          imageLayerB = L.imageOverlay(src, imageBounds, { opacity }).addTo(map);
+          imageLayerB.setZIndex(200);
+          applyGrabberTransform();
+          applyEnhanceFilters();
+        }
+      }
+    }
+  });
+
+  document.getElementById('satGrabberRotate')?.addEventListener('input', (e) => {
+    grabberRotation = parseInt(e.target.value);
+    document.getElementById('satGrabberRotateVal').textContent = grabberRotation + '°';
+    applyGrabberTransform();
+  });
+  document.getElementById('satGrabberRotate')?.addEventListener('dblclick', () => {
+    grabberRotation = 0;
+    document.getElementById('satGrabberRotate').value = 0;
+    document.getElementById('satGrabberRotateVal').textContent = '0°';
+    applyGrabberTransform();
+  });
+
+  document.getElementById('satGrabberScale')?.addEventListener('input', (e) => {
+    grabberScale = parseInt(e.target.value);
+    document.getElementById('satGrabberScaleVal').textContent = grabberScale + '%';
+    applyGrabberTransform();
+  });
+  document.getElementById('satGrabberScale')?.addEventListener('dblclick', () => {
+    grabberScale = 100;
+    document.getElementById('satGrabberScale').value = 100;
+    document.getElementById('satGrabberScaleVal').textContent = '100%';
+    applyGrabberTransform();
+  });
+
+  document.getElementById('satGrabberReset')?.addEventListener('click', resetGrabberTransform);
 
   function escHtml(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
@@ -1441,6 +1724,7 @@
           document.getElementById('satSceneListB').innerHTML = '';
           document.getElementById('satSceneInfoB').textContent = '';
           selectedSceneB = null;
+          showGrabberControls(true);
           AssetLibrary.markInUse(item.id);
 
           // Disable swap (can't swap satellite with grabber image)

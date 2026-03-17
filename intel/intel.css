@@ -1429,6 +1429,44 @@ body {
   color: var(--text-muted);
   margin-top: 4px;
 }
+
+/* Grabber image transform controls */
+.sat-grabber-controls {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+/* Locked fixed overlay */
+.sat-grabber-fixed {
+  border: 2px dashed rgba(100, 180, 230, 0.6);
+  box-shadow: 0 0 12px rgba(100, 180, 230, 0.2);
+  user-select: none;
+}
+.sat-grabber-fixed img {
+  pointer-events: none;
+}
+.sat-grabber-lock-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: 14px;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+  pointer-events: none;
+}
+.sat-grabber-resize-handle {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, rgba(100, 180, 230, 0.6) 50%);
+  border-radius: 0 0 2px 0;
+}
+.sat-grabber-resize-handle:hover {
+  background: linear-gradient(135deg, transparent 40%, rgba(100, 180, 230, 0.9) 40%);
+}
 .sat-opacity-val-sm {
   font-size: 10px;
   font-weight: 600;
