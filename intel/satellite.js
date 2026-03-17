@@ -1126,6 +1126,51 @@
       <em>${pin.layerA || pin.layer || ''}${pin.enhanceA && pin.enhanceA !== 'none' ? ' · ' + pin.enhanceA : ''}</em>
     `);
     marker._pinId = pin.id;
+
+    // Long-click (500ms hold) to show pin actions popup
+    let pressTimer = null;
+    marker.on('mousedown', () => {
+      pressTimer = setTimeout(() => {
+        const popupContent = document.createElement('div');
+        popupContent.style.cssText = 'display:flex;flex-direction:column;gap:4px;min-width:140px;';
+
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.value = pin.label;
+        nameInput.placeholder = 'Pin name...';
+        nameInput.style.cssText = 'padding:3px 6px;font-size:11px;background:var(--bg-primary,#1a1a2e);border:1px solid var(--border,#2a2a4a);border-radius:4px;color:var(--text-primary,#e8e8e8);font-family:inherit;';
+        nameInput.addEventListener('input', () => {
+          pin.label = nameInput.value;
+          savePins();
+          renderPinList();
+        });
+        nameInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') marker.closePopup();
+        });
+
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = 'Remove Pin';
+        removeBtn.style.cssText = 'padding:3px 6px;font-size:10px;background:rgba(233,69,96,0.15);border:1px solid rgba(233,69,96,0.3);border-radius:4px;color:#e94560;cursor:pointer;font-family:inherit;';
+        removeBtn.addEventListener('click', () => {
+          pins = pins.filter(p => p.id !== pin.id);
+          map.removeLayer(marker);
+          const mi = pinMarkers.indexOf(marker);
+          if (mi >= 0) pinMarkers.splice(mi, 1);
+          renderPinList();
+          savePins();
+        });
+
+        popupContent.append(nameInput, removeBtn);
+        marker.unbindPopup();
+        marker.bindPopup(popupContent, { closeButton: true }).openPopup();
+
+        // Auto-focus the input
+        setTimeout(() => nameInput.focus(), 100);
+      }, 500);
+    });
+    marker.on('mouseup', () => clearTimeout(pressTimer));
+    marker.on('mouseout', () => clearTimeout(pressTimer));
+
     pinMarkers.push(marker);
   }
 
