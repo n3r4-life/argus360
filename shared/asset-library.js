@@ -156,6 +156,7 @@ const AssetLibrary = (() => {
       <div class="fp-header">
         <span class="fp-title">Asset Library</span>
         <span class="fp-count" id="alTotalCount">0</span>
+        <span id="alHeaderActions" style="display:flex;gap:3px;"></span>
         <button class="fp-close" id="alClose">&times;</button>
       </div>
       <div class="asset-lib-tabs">
@@ -469,5 +470,29 @@ const AssetLibrary = (() => {
     });
   }
 
-  return { init, add, remove, list, get, clear, onSelect, getContext, markInUse };
+  /** Switch to a specific tab programmatically */
+  function switchTab(tabName) {
+    if (!_panel) return;
+    _activeTab = tabName;
+    _panel.querySelectorAll('.asset-lib-tab').forEach(t => t.classList.toggle('active', t.dataset.alTab === tabName));
+    _panel.querySelectorAll('.asset-lib-pane').forEach(p => p.classList.toggle('active', p.dataset.alPane === tabName));
+    try { browser.storage.local.set({ _assetLibActiveTab: tabName }); } catch {}
+  }
+
+  /** Add a pill button to the panel header (for page-specific actions) */
+  function addHeaderButton(label, title, onClick) {
+    if (!_panel) return;
+    const slot = _panel.querySelector('#alHeaderActions');
+    if (!slot) return;
+    const btn = document.createElement('button');
+    btn.className = 'pill-chip';
+    btn.textContent = label;
+    btn.title = title;
+    btn.style.cssText = 'font-size:8px;padding:2px 6px;';
+    btn.addEventListener('click', onClick);
+    slot.appendChild(btn);
+    return btn;
+  }
+
+  return { init, add, remove, list, get, clear, onSelect, getContext, markInUse, switchTab, addHeaderButton };
 })();

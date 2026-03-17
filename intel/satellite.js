@@ -1661,6 +1661,14 @@
     if (typeof AssetLibrary !== 'undefined') {
       AssetLibrary.init({ pageId: 'satellite' });
 
+      // Add "Pins" button to asset library header
+      AssetLibrary.addHeaderButton('Pins', 'Show pinned locations', () => {
+        // Switch asset library to Locations tab
+        AssetLibrary.switchTab('location');
+        // Open the Pinned Locations panel
+        document.getElementById('satPinsPanel')?.classList.remove('hidden');
+      });
+
       // When user selects an asset from the library on this page
       AssetLibrary.onSelect(async (item) => {
         if (!map) return;
