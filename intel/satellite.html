@@ -31,11 +31,11 @@
             <input type="text" id="satSearchInput" class="comp-search-input" placeholder="Jump to location...">
             <button class="pill-chip" id="satJumpBtn">Go</button>
           </div>
-          <label class="pill-toggle sat-dual-toggle" id="satDualToggle" title="Compare two different locations">
-            <span class="mode-pill-label">Single</span>
+          <label class="pill-toggle mode-pill sat-dual-toggle" id="satDualToggle" title="Compare two different locations">
+            <span class="mode-pill-label mode-pill-left">Single</span>
             <input type="checkbox" id="satDualCheck">
             <span class="pill-track" style="--pill-color:var(--accent)"><span class="pill-knob"></span></span>
-            <span class="mode-pill-label">Dual</span>
+            <span class="mode-pill-label mode-pill-right">Dual Overlay</span>
           </label>
           <div class="sat-search-bar sat-search-b disabled" id="satSearchBarB">
             <input type="text" id="satSearchInputB" class="comp-search-input" placeholder="Location B..." disabled>
@@ -54,7 +54,9 @@
           <button class="pill-chip sat-layer-btn-a" data-layer="ndvi">NDVI</button>
           <button class="pill-chip sat-layer-btn-a" data-layer="moisture">Moisture</button>
           <input type="date" id="satDateA" class="evt-date-input">
+          <button class="pill-chip sat-today-btn" id="satTodayA" title="Set to yesterday">Today</button>
           <button class="pill-chip sat-center-btn" id="satLoadImagery">Refresh Imagery</button>
+          <button class="pill-chip sat-today-btn" id="satTodayB" title="Set to yesterday">Today</button>
           <input type="date" id="satDateB" class="evt-date-input">
           <button class="pill-chip sat-layer-btn-b active" data-layer="trueColor">True Color</button>
           <button class="pill-chip sat-layer-btn-b" data-layer="falseColor">False Color</button>
@@ -68,12 +70,32 @@
     <!-- Overlay controls (above map) -->
     <section class="intel-section" id="satOverlaySection">
       <div class="sat-overlay-controls">
-        <div class="sat-overlay-row">
-          <span class="sat-overlay-label">A</span>
-          <input type="range" id="satOpacitySlider" min="0" max="100" value="0" class="sat-opacity-slider">
-          <span class="sat-overlay-label">B</span>
+        <label class="pill-toggle mode-pill sat-opacity-mode-toggle" title="Balance: A+B=100%. Independent: A and B each 0-100%">
+          <span class="mode-pill-label mode-pill-left">Balance</span>
+          <input type="checkbox" id="satOpacityMode">
+          <span class="pill-track" style="--pill-color:var(--accent)"><span class="pill-knob"></span></span>
+          <span class="mode-pill-label mode-pill-right">Independent</span>
+        </label>
+        <div id="satBalanceSlider">
+          <div class="sat-overlay-row">
+            <span class="sat-overlay-label">A</span>
+            <input type="range" id="satOpacitySlider" min="0" max="100" value="0" class="sat-opacity-slider">
+            <span class="sat-overlay-label">B</span>
+          </div>
+          <div class="sat-opacity-value" id="satOpacityValue">Image A (100%)</div>
         </div>
-        <div class="sat-opacity-value" id="satOpacityValue">Image A (100%)</div>
+        <div id="satIndependentSliders" style="display:none;">
+          <div class="sat-overlay-row">
+            <span class="sat-overlay-label">A</span>
+            <input type="range" id="satOpacityA" min="0" max="100" value="100" class="sat-opacity-slider">
+            <span class="sat-opacity-val-sm" id="satOpacityAVal">100%</span>
+          </div>
+          <div class="sat-overlay-row">
+            <span class="sat-overlay-label">B</span>
+            <input type="range" id="satOpacityB" min="0" max="100" value="50" class="sat-opacity-slider">
+            <span class="sat-opacity-val-sm" id="satOpacityBVal">50%</span>
+          </div>
+        </div>
       </div>
       <div class="sat-enhance-bar">
         <div class="sat-enhance-group">

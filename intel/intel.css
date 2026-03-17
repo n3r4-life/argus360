@@ -884,6 +884,16 @@ body {
   background: var(--bg-primary);
   color: var(--text-muted);
 }
+/* Active state — baby blue glow when dual mode is on */
+.sat-search-b:not(.disabled) .comp-search-input {
+  border-color: #60a5fa;
+  box-shadow: 0 0 8px rgba(96, 165, 250, 0.4);
+}
+.sat-search-b:not(.disabled) .pill-chip {
+  border-color: #60a5fa !important;
+  color: #60a5fa !important;
+  box-shadow: 0 0 6px rgba(96, 165, 250, 0.3);
+}
 .sat-dual-toggle {
   flex-shrink: 0;
   margin: 0 4px;
@@ -1116,6 +1126,17 @@ body {
   font-size: 10px;
   color: var(--text-muted);
   margin-top: 4px;
+}
+.sat-opacity-val-sm {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  min-width: 35px;
+  text-align: right;
+  font-family: monospace;
+}
+.sat-opacity-mode-toggle {
+  margin-bottom: 6px;
 }
 
 /* Enhancement bar */

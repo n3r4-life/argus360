@@ -139,6 +139,7 @@
 
   async function jumpToLocationB() {
     const query = document.getElementById('satSearchInputB').value.trim();
+    console.log('[Satellite] jumpToLocationB called, query:', query, 'dualMode:', dualMode);
     if (!query) return;
 
     const btn = document.getElementById('satJumpBtnB');
@@ -153,11 +154,24 @@
       if (results.length) {
         const lat = parseFloat(results[0].lat);
         const lon = parseFloat(results[0].lon);
-        // Create a bbox matching current zoom level around location B
-        const zoom = map.getZoom();
-        const delta = 180 / Math.pow(2, zoom) * 0.5;
-        bboxB = [lon - delta, lat - delta, lon + delta, lat + delta];
-        document.getElementById('satImageryStatus').textContent = `Location B set: ${query}`;
+        // Create a bbox matching the EXACT proportions of the current map viewport
+        const bounds = map.getBounds();
+        const halfLat = (bounds.getNorth() - bounds.getSouth()) / 2;
+        const halfLon = (bounds.getEast() - bounds.getWest()) / 2;
+        bboxB = [lon - halfLon, lat - halfLat, lon + halfLon, lat + halfLat];
+        document.getElementById('satImageryStatus').textContent = `Location B set: ${query} — loading imagery...`;
+
+        // Auto-reload Image B with the new location
+        await reloadSingleImage('B');
+
+        // Auto-slide to 50/50 so user can see both
+        const slider = document.getElementById('satOpacitySlider');
+        slider.value = 50;
+        slider.dispatchEvent(new Event('input'));
+
+        document.getElementById('satImageryStatus').textContent = `A: current view · B: ${query}`;
+      } else {
+        document.getElementById('satImageryStatus').textContent = `Location B not found: ${query}`;
       }
     } catch (e) {
       document.getElementById('satImageryStatus').textContent = 'Geocode error: ' + e.message;
@@ -205,22 +219,21 @@
       if (imageLayerA) map.removeLayer(imageLayerA);
       if (imageLayerB) map.removeLayer(imageLayerB);
 
-      const imageBoundsA = L.latLngBounds(
+      // Both images overlay at the same viewport bounds (for comparison)
+      // In dual mode, Image B's data comes from a different location but displays here
+      const imageBounds = L.latLngBounds(
         [bounds.getSouth(), bounds.getWest()],
         [bounds.getNorth(), bounds.getEast()]
       );
-      const imageBoundsB = (dualMode && bboxB)
-        ? L.latLngBounds([bboxB[1], bboxB[0]], [bboxB[3], bboxB[2]])
-        : imageBoundsA;
 
       // Add Image A as base overlay
       if (respA?.success && respA.imageUrl) {
-        imageLayerA = L.imageOverlay(respA.imageUrl, imageBoundsA, { opacity: 1 }).addTo(map);
+        imageLayerA = L.imageOverlay(respA.imageUrl, imageBounds, { opacity: 1 }).addTo(map);
       }
 
       // Add Image B on top (user controls opacity to compare)
       if (respB?.success && respB.imageUrl) {
-        imageLayerB = L.imageOverlay(respB.imageUrl, imageBoundsB, { opacity: 0 }).addTo(map);
+        imageLayerB = L.imageOverlay(respB.imageUrl, imageBounds, { opacity: 0 }).addTo(map);
       }
 
       // Enable actions
@@ -271,9 +284,12 @@
 
   // ── Reload single image (when layer changes) ──
   async function reloadSingleImage(panel) {
-    if (!map) return;
+    console.log('[Satellite] reloadSingleImage called, panel:', panel, 'dualMode:', dualMode, 'bboxB:', bboxB);
+    if (!map) { console.log('[Satellite] no map'); return; }
     const bounds = map.getBounds();
-    const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+    const mapBbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+    const bbox = (panel === 'B' && dualMode && bboxB) ? bboxB : mapBbox;
+    console.log('[Satellite] using bbox:', bbox);
     const date = document.getElementById(panel === 'A' ? 'satDateA' : 'satDateB').value;
     const layer = panel === 'A' ? layerA : layerB;
     const res = panel === 'A' ? resolutionA : resolutionB;
@@ -282,8 +298,12 @@
     statusEl.textContent = `Reloading Image ${panel} (${layer})...`;
 
     try {
+      console.log('[Satellite] fetching image, date:', date, 'layer:', layer, 'res:', res);
       const resp = await fetchSatImage(bbox, date, EVALSCRIPTS[layer], res);
+      console.log('[Satellite] image response:', resp?.success, resp?.error);
       if (resp?.success && resp.imageUrl) {
+        // In dual mode, Image B renders at the SAME map position (for overlay comparison)
+        // The imagery data comes from Location B's bbox, but displays at the viewport bounds
         const imageBounds = L.latLngBounds(
           [bounds.getSouth(), bounds.getWest()],
           [bounds.getNorth(), bounds.getEast()]
@@ -310,12 +330,56 @@
   }
 
   // ── Overlay controls ──
+  let independentMode = false;
+
+  // Balance slider
   document.getElementById('satOpacitySlider')?.addEventListener('input', (e) => {
+    if (independentMode) return;
     const val = parseInt(e.target.value);
     if (imageLayerA) imageLayerA.setOpacity(1 - val / 100);
     if (imageLayerB) imageLayerB.setOpacity(val / 100);
     const label = val === 0 ? 'Image A (100%)' : val === 100 ? 'Image B (100%)' : `A: ${100 - val}% · B: ${val}%`;
     document.getElementById('satOpacityValue').textContent = label;
+  });
+
+  // Independent sliders
+  document.getElementById('satOpacityA')?.addEventListener('input', (e) => {
+    if (!independentMode) return;
+    const val = parseInt(e.target.value);
+    if (imageLayerA) imageLayerA.setOpacity(val / 100);
+    document.getElementById('satOpacityAVal').textContent = val + '%';
+  });
+  document.getElementById('satOpacityB')?.addEventListener('input', (e) => {
+    if (!independentMode) return;
+    const val = parseInt(e.target.value);
+    if (imageLayerB) imageLayerB.setOpacity(val / 100);
+    document.getElementById('satOpacityBVal').textContent = val + '%';
+  });
+
+  // Mode toggle
+  document.getElementById('satOpacityMode')?.addEventListener('change', (e) => {
+    independentMode = e.target.checked;
+    document.getElementById('satBalanceSlider').style.display = independentMode ? 'none' : '';
+    document.getElementById('satIndependentSliders').style.display = independentMode ? '' : 'none';
+
+    if (independentMode) {
+      // Switch to independent — set both to current levels
+      const balVal = parseInt(document.getElementById('satOpacitySlider').value);
+      document.getElementById('satOpacityA').value = 100 - balVal;
+      document.getElementById('satOpacityB').value = balVal;
+      document.getElementById('satOpacityAVal').textContent = (100 - balVal) + '%';
+      document.getElementById('satOpacityBVal').textContent = balVal + '%';
+    } else {
+      // Switch to balance — map current independent values back
+      const aVal = parseInt(document.getElementById('satOpacityA').value);
+      const bVal = parseInt(document.getElementById('satOpacityB').value);
+      // Use B's value as the slider position
+      document.getElementById('satOpacitySlider').value = bVal;
+      if (imageLayerA) imageLayerA.setOpacity(1 - bVal / 100);
+      if (imageLayerB) imageLayerB.setOpacity(bVal / 100);
+      const label = bVal === 0 ? 'Image A (100%)' : bVal === 100 ? 'Image B (100%)' : `A: ${100 - bVal}% · B: ${bVal}%`;
+      document.getElementById('satOpacityValue').textContent = label;
+    }
   });
 
 
@@ -378,9 +442,10 @@
     });
   });
 
-  // Swap button — swaps everything: images, dates, enhance, layers, resolution
+  // Swap button — swaps EVERYTHING: images, dates, search inputs, enhance, layers, resolution
+  // Slider and enhance effects stay in place — what changes is what A and B mean
   document.getElementById('satSwapBtnEnhance')?.addEventListener('click', () => {
-    // Swap layer references
+    // Swap image layer references
     const tempLayer = imageLayerA;
     imageLayerA = imageLayerB;
     imageLayerB = tempLayer;
@@ -392,12 +457,34 @@
     dateAEl.value = dateBEl.value;
     dateBEl.value = tempDate;
 
+    // Swap search inputs (dual mode)
+    const searchA = document.getElementById('satSearchInput');
+    const searchB = document.getElementById('satSearchInputB');
+    if (searchA && searchB) {
+      const tempSearch = searchA.value;
+      searchA.value = searchB.value;
+      searchB.value = tempSearch;
+    }
+
+    // Swap bboxB with current viewport
+    if (dualMode && bboxB) {
+      const bounds = map.getBounds();
+      const oldViewport = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+      // bboxB becomes the new viewport target, old viewport becomes new bboxB
+      const tempBbox = [...bboxB];
+      bboxB = oldViewport;
+      // Jump map to the old B location
+      const centerLat = (tempBbox[1] + tempBbox[3]) / 2;
+      const centerLon = (tempBbox[0] + tempBbox[2]) / 2;
+      map.setView([centerLat, centerLon], map.getZoom());
+    }
+
     // Swap enhance states
     const tempE = enhanceA;
     enhanceA = enhanceB;
     enhanceB = tempE;
 
-    // Swap layer type states
+    // Swap layer/band types
     const tempL = layerA;
     layerA = layerB;
     layerB = tempL;
@@ -406,22 +493,28 @@
     const tempR = resolutionA;
     resolutionA = resolutionB;
     resolutionB = tempR;
+
+    // Update all UI to reflect swapped states
+
+    // Resolution dropdowns
     const resAEl = document.getElementById('satResA');
     const resBEl = document.getElementById('satResB');
     if (resAEl) resAEl.value = resolutionA;
     if (resBEl) resBEl.value = resolutionB;
 
-    // Flip slider and recalculate opacities
+    // Band/layer buttons
+    document.querySelectorAll('.sat-layer-btn-a').forEach(b => b.classList.toggle('active', b.dataset.layer === layerA));
+    document.querySelectorAll('.sat-layer-btn-b').forEach(b => b.classList.toggle('active', b.dataset.layer === layerB));
+
+    // Enhance buttons
+    document.querySelectorAll('.sat-enhance-btn-a').forEach(b => b.classList.toggle('active', b.dataset.enhance === enhanceA));
+    document.querySelectorAll('.sat-enhance-btn-b').forEach(b => b.classList.toggle('active', b.dataset.enhance === enhanceB));
+
+    // Slider stays the same position — just reapply opacities with current slider value
     const slider = document.getElementById('satOpacitySlider');
-    const newVal = 100 - parseInt(slider.value);
-    slider.value = newVal;
-
-    // Set opacities directly
-    if (imageLayerA) imageLayerA.setOpacity(1 - newVal / 100);
-    if (imageLayerB) imageLayerB.setOpacity(newVal / 100);
-
-    const label = newVal === 0 ? 'Image A (100%)' : newVal === 100 ? 'Image B (100%)' : `A: ${100 - newVal}% · B: ${newVal}%`;
-    document.getElementById('satOpacityValue').textContent = label;
+    const val = parseInt(slider.value);
+    if (imageLayerA) imageLayerA.setOpacity(1 - val / 100);
+    if (imageLayerB) imageLayerB.setOpacity(val / 100);
 
     applyEnhanceFilters();
   });
@@ -511,7 +604,7 @@
         notes: '',
         dateA,
         dateB,
-        layer: activeLayer,
+        layer: layerA,
         ts: Date.now(),
       };
 
@@ -679,7 +772,7 @@
     try {
       await browser.runtime.sendMessage({
         action: 'extractAndUpsert',
-        text: `Satellite comparison: ${currentLocation || c.lat.toFixed(4) + ',' + c.lng.toFixed(4)} (${dateA} vs ${dateB}, ${activeLayer})`,
+        text: `Satellite comparison: ${currentLocation || c.lat.toFixed(4) + ',' + c.lng.toFixed(4)} (${dateA} vs ${dateB}, ${layerA})`,
         pageUrl: `sentinel:${c.lat.toFixed(4)},${c.lng.toFixed(4)}`,
         pageTitle: `Satellite — ${currentLocation || 'Location'}`
       });
@@ -701,7 +794,7 @@
     if (currentLocation) lines.push(`Location: ${currentLocation}`);
     lines.push(`Date A: ${document.getElementById('satDateA').value}`);
     lines.push(`Date B: ${document.getElementById('satDateB').value}`);
-    lines.push(`Layer: ${activeLayer}`);
+    lines.push(`Layer: ${layerA}`);
     lines.push(`Imagery: ${imageLayerA ? 'loaded' : 'none'}`);
     ArgusChat.updateContext(lines.join('\n'));
   }
