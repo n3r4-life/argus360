@@ -4,28 +4,16 @@
   const params = new URLSearchParams(location.search);
   const storeKey = params.get("id");
 
-  // ── History Panel (shared between landing page & gallery view) ──
+  // ── History (tab inside Filter Controls panel) ──
   async function populateHistoryPanel(activeStoreKey) {
     const HISTORY_KEY = "imageGrabberHistory";
-    const panel = document.getElementById("historyPanel");
-    const tab = document.getElementById("historyTab");
     const timeline = document.getElementById("historyTimeline");
     const countEl = document.getElementById("historyCount");
-    if (!panel || !timeline) return;
-
-    // Toggle
-    tab.addEventListener("click", () => {
-      panel.classList.toggle("hidden");
-      PanelState.save("images", "history", { visible: !panel.classList.contains("hidden") });
-    });
-    document.getElementById("historyPanelClose").addEventListener("click", () => {
-      panel.classList.add("hidden");
-      PanelState.save("images", "history", { visible: false });
-    });
+    if (!timeline) return;
 
     // Load history
     const hist = (await browser.storage.local.get(HISTORY_KEY))[HISTORY_KEY] || [];
-    if (hist.length === 0) { tab.style.display = "none"; return; }
+    if (hist.length === 0) return;
 
     // Verify entries
     const keys = hist.map(h => h.storeKey);
@@ -86,7 +74,7 @@
         node.remove();
         const remaining = timeline.querySelectorAll(".history-node").length;
         countEl.textContent = remaining ? `${remaining} session${remaining !== 1 ? "s" : ""}` : "";
-        if (remaining === 0) { panel.classList.add("hidden"); tab.style.display = "none"; }
+        if (remaining === 0) { countEl.textContent = ""; }
       });
 
       timeline.appendChild(node);
@@ -101,66 +89,8 @@
       try { indexedDB.deleteDatabase("ArgusImageCache"); } catch {}
       sessionStorage.removeItem("imageGrabberActive");
       timeline.innerHTML = "";
-      panel.classList.add("hidden");
-      tab.style.display = "none";
       countEl.textContent = "";
     });
-
-    // Draggable
-    {
-      const header = panel.querySelector(".fp-header");
-      let dragging = false, startX, startY, startLeft, startTop;
-      header.addEventListener("mousedown", (e) => {
-        if (e.target.closest("button, input")) return;
-        dragging = true;
-        const rect = panel.getBoundingClientRect();
-        startX = e.clientX; startY = e.clientY;
-        startLeft = rect.left; startTop = rect.top;
-        header.style.cursor = "grabbing";
-        e.preventDefault();
-      });
-      document.addEventListener("mousemove", (e) => {
-        if (!dragging) return;
-        panel.style.left = (startLeft + e.clientX - startX) + "px";
-        panel.style.top = (startTop + e.clientY - startY) + "px";
-        panel.style.right = "auto";
-        panel.style.transform = "none";
-      });
-      document.addEventListener("mouseup", () => {
-        if (!dragging) return;
-        dragging = false;
-        header.style.cursor = "grab";
-        const rect = panel.getBoundingClientRect();
-        PanelState.save("images", "history", { left: rect.left, top: rect.top });
-      });
-    }
-
-    // Resizable
-    {
-      const handle = document.createElement("div");
-      handle.className = "fp-resize";
-      panel.appendChild(handle);
-      let resizing = false, rStartX, rStartY, rStartW, rStartH;
-      handle.addEventListener("mousedown", (e) => {
-        resizing = true;
-        rStartX = e.clientX; rStartY = e.clientY;
-        rStartW = panel.offsetWidth; rStartH = panel.offsetHeight;
-        e.preventDefault(); e.stopPropagation();
-      });
-      document.addEventListener("mousemove", (e) => {
-        if (!resizing) return;
-        panel.style.width = Math.max(180, rStartW + (e.clientX - rStartX)) + "px";
-        panel.style.height = Math.max(150, rStartH + (e.clientY - rStartY)) + "px";
-      });
-      document.addEventListener("mouseup", () => {
-        if (!resizing) return;
-        resizing = false;
-        PanelState.save("images", "history", { width: panel.offsetWidth, height: panel.offsetHeight });
-      });
-    }
-
-    // Restore panel state (position, size, visibility)
-    PanelState.apply(panel, "images", "history");
   }
 
   if (!storeKey) {
@@ -1374,7 +1304,12 @@
     });
 
     updateSelectedCount();
+    // Mark cards that are in the asset library (if loaded)
+    if (typeof _markLibraryCards === 'function') _markLibraryCards();
   }
+
+  // Placeholder — overwritten when AssetLibrary initializes
+  let _markLibraryCards = null;
 
   function toggleSelect(src) {
     if (selected.has(src)) selected.delete(src);
@@ -1395,6 +1330,8 @@
     document.getElementById("save-to-cloud").disabled = selected.size === 0;
     document.getElementById("insert-to-draft").disabled = selected.size === 0;
     document.getElementById("add-to-project").disabled = selected.size === 0;
+    const assBtn = document.getElementById("add-to-assets");
+    if (assBtn) assBtn.disabled = selected.size === 0;
     const cmpBtn = document.getElementById("compare-selected");
     if (cmpBtn) cmpBtn.disabled = selected.size < 2;
     const apc = document.getElementById("actionsPanelCount");
@@ -2375,5 +2312,87 @@
 
   // Populate session history panel
   populateHistoryPanel(storeKey);
+
+  // ── Shared Asset Library ──
+  if (typeof AssetLibrary !== 'undefined') {
+    AssetLibrary.init({ pageId: 'images' });
+
+    // Track which srcs are in the asset library
+    const librarySrcs = new Set();
+
+    async function refreshLibrarySrcs() {
+      librarySrcs.clear();
+      const items = await AssetLibrary.list('image');
+      items.forEach(i => { if (i.metadata?.src) librarySrcs.add(i.metadata.src); });
+      // Also check satellite type
+      const satItems = await AssetLibrary.list('satellite');
+      satItems.forEach(i => { if (i.metadata?.src) librarySrcs.add(i.metadata.src); });
+      markLibraryCards();
+    }
+
+    function markLibraryCards() {
+      document.querySelectorAll('.image-card').forEach(card => {
+        card.classList.toggle('in-library', librarySrcs.has(card.dataset.src));
+      });
+    }
+    _markLibraryCards = markLibraryCards;
+
+    // Initial load of library srcs
+    refreshLibrarySrcs();
+
+    // Add selected images to asset library
+    document.getElementById('add-to-assets')?.addEventListener('click', async () => {
+      if (selected.size === 0) return;
+      const btn = document.getElementById('add-to-assets');
+      btn.disabled = true;
+      btn.textContent = 'Adding...';
+      let count = 0;
+      for (const src of selected) {
+        const img = images.find(i => i.src === src);
+        await AssetLibrary.add({
+          type: 'image',
+          title: img?.filename || src.split('/').pop() || 'Image',
+          description: `${img?.width || '?'}×${img?.height || '?'} ${img?.typeNorm || ''} · ${img?.source || ''}`,
+          thumbnail: src,
+          metadata: {
+            src,
+            width: img?.width,
+            height: img?.height,
+            type: img?.typeNorm,
+            source: img?.source,
+            alt: img?.alt,
+            pageUrl: img?.tabUrl || pageUrl,
+            pageTitle: img?.tabTitle || pageTitle,
+          },
+          sourcePage: 'images',
+        });
+        count++;
+      }
+
+      // Clear selection and highlight library cards
+      selected.clear();
+      await refreshLibrarySrcs();
+      render();
+      saveSession();
+
+      btn.textContent = `Added ${count}!`;
+      setTimeout(() => { btn.textContent = '+ Asset'; btn.disabled = false; }, 2000);
+    });
+
+    // When user selects an asset from the library on this page
+    AssetLibrary.onSelect((item) => {
+      if (item.type === 'image' && (item.thumbnail || item.metadata?.src)) {
+        const m = item.metadata || {};
+        openPreview({
+          src: m.src || item.thumbnail,
+          filename: item.title || 'image',
+          width: m.width,
+          height: m.height,
+          type: m.type || '',
+          alt: m.alt || item.description || '',
+        });
+      }
+    });
+  }
 
 })();

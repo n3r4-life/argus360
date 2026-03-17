@@ -11,7 +11,8 @@
   let resolutionB = 1024;
   let defaultResolution = 1024;
   let maxCloudCoverage = 40;
-  let dateWindowDays = 7;
+  let dateWindowA = 14;
+  let dateWindowB = 14;
   let brightnessFactor = 2.5;
   let dualMode = false;
   let bboxB = null; // separate bbox for location B in dual mode
@@ -29,12 +30,16 @@
   let pins = [];
   let pinMarkers = [];
 
-  // Default dates — B is yesterday (not today, avoids requesting future imagery)
+  // Selected scene metadata per panel (null = no specific scene selected)
+  let selectedSceneA = null;
+  let selectedSceneB = null;
+
+  // Default dates — both start at yesterday (B mirrors A in single mode)
   const today = new Date();
   const yesterday = new Date(today.getTime() - 1 * 24 * 60 * 60 * 1000);
-  const sixMonthsAgo = new Date(today.getTime() - 180 * 24 * 60 * 60 * 1000);
-  document.getElementById('satDateB').value = yesterday.toISOString().slice(0, 10);
-  document.getElementById('satDateA').value = sixMonthsAgo.toISOString().slice(0, 10);
+  const defaultDate = yesterday.toISOString().slice(0, 10);
+  document.getElementById('satDateA').value = defaultDate;
+  document.getElementById('satDateB').value = defaultDate;
 
   // ── Init map ──
   function initMap() {
@@ -82,8 +87,11 @@
         const lat = parseFloat(results[0].lat);
         const lon = parseFloat(results[0].lon);
         map.setView([lat, lon], 14);
-        // Auto-load imagery after jumping to location
-        try { await loadImagery(); } catch { /* silent */ }
+        // Auto-search scenes for both panels, auto-selects best and loads imagery
+        try {
+          await searchScenes('A');
+          if (dualMode) await searchScenes('B');
+        } catch { /* silent */ }
       } else {
         document.getElementById('satImageryStatus').textContent = 'Location not found';
       }
@@ -114,31 +122,45 @@
   // ── Today buttons ──
   document.getElementById('satTodayA')?.addEventListener('click', () => {
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    document.getElementById('satDateA').value = yesterday.toISOString().slice(0, 10);
+    const val = yesterday.toISOString().slice(0, 10);
+    document.getElementById('satDateA').value = val;
+    // In single mode, B mirrors A's date
+    if (!dualMode) document.getElementById('satDateB').value = val;
   });
   document.getElementById('satTodayB')?.addEventListener('click', () => {
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
     document.getElementById('satDateB').value = yesterday.toISOString().slice(0, 10);
   });
 
+  // In single mode, changing Date A also updates Date B
+  document.getElementById('satDateA')?.addEventListener('change', () => {
+    if (!dualMode) {
+      document.getElementById('satDateB').value = document.getElementById('satDateA').value;
+    }
+  });
+
   // ── Dual mode toggle ──
   document.getElementById('satDualCheck')?.addEventListener('change', (e) => {
     dualMode = e.target.checked;
-    const searchB = document.getElementById('satSearchBarB');
     const inputB = document.getElementById('satSearchInputB');
     const btnB = document.getElementById('satJumpBtnB');
+    const basemapBRow = document.getElementById('satBasemapBRow');
 
     if (dualMode) {
-      searchB.classList.remove('disabled');
       inputB.disabled = false;
       btnB.disabled = false;
-      // Mirror the A search text as placeholder
       inputB.placeholder = document.getElementById('satSearchInput').value || 'Location B...';
+      if (basemapBRow) basemapBRow.style.display = '';
     } else {
-      searchB.classList.add('disabled');
       inputB.disabled = true;
       btnB.disabled = true;
       bboxB = null;
+      // Re-sync B to A (single mode = same source imagery)
+      document.getElementById('satDateB').value = document.getElementById('satDateA').value;
+      dateWindowB = dateWindowA;
+      document.getElementById('satDateWindowB').value = dateWindowA;
+      document.getElementById('satDateWindowBVal').textContent = `±${dateWindowA}d`;
+      if (basemapBRow) basemapBRow.style.display = 'none';
     }
   });
 
@@ -178,17 +200,15 @@
         const halfLat = (bounds.getNorth() - bounds.getSouth()) / 2;
         const halfLon = (bounds.getEast() - bounds.getWest()) / 2;
         bboxB = [lon - halfLon, lat - halfLat, lon + halfLon, lat + halfLat];
-        document.getElementById('satImageryStatus').textContent = `Location B set: ${query} — loading imagery...`;
+        document.getElementById('satImageryStatus').textContent = `Location B set: ${query} — searching scenes...`;
 
-        // Auto-reload Image B with the new location
-        await reloadSingleImage('B');
+        // Auto-search scenes for B with its new location
+        await searchScenes('B');
 
         // Auto-slide to 50/50 so user can see both
         const slider = document.getElementById('satOpacitySlider');
         slider.value = 50;
         slider.dispatchEvent(new Event('input'));
-
-        document.getElementById('satImageryStatus').textContent = `A: current view · B: ${query}`;
       } else {
         document.getElementById('satImageryStatus').textContent = `Location B not found: ${query}`;
       }
@@ -201,7 +221,16 @@
   }
 
   // ── Load imagery ──
-  document.getElementById('satLoadImagery').addEventListener('click', () => loadImagery());
+  document.getElementById('satLoadImagery').addEventListener('click', async () => {
+    // If scenes have been searched, re-search to refresh; otherwise fall back to direct load
+    const hasScenes = document.getElementById('satSceneListA').children.length > 0;
+    if (hasScenes) {
+      await searchScenes('A');
+      if (dualMode) await searchScenes('B');
+    } else {
+      await loadImagery();
+    }
+  });
 
   async function loadImagery() {
     if (!map) return;
@@ -225,61 +254,88 @@
     const dateB = document.getElementById('satDateB').value;
 
     try {
-      // In dual mode, Image B uses a different location
+      // In dual mode, Image B uses a different location + its own date
+      // In single mode, Image B mirrors A's location & date (user differentiates via filters/enhancements)
       const bboxForB = (dualMode && bboxB) ? bboxB : bbox;
+      const dateForB = dualMode ? dateB : dateA;
 
       // Load both images in parallel with their respective layers + resolutions
       const [respA, respB] = await Promise.all([
-        fetchSatImage(bbox, dateA, getEvalscripts()[layerA], resolutionA),
-        fetchSatImage(bboxForB, dateB, getEvalscripts()[layerB], resolutionB),
+        fetchSatImage(bbox, dateA, getEvalscripts()[layerA], resolutionA, dateWindowA),
+        fetchSatImage(bboxForB, dateForB, getEvalscripts()[layerB], resolutionB, dateWindowB),
       ]);
 
-      // Remove old overlays
-      if (imageLayerA) map.removeLayer(imageLayerA);
-      if (imageLayerB) map.removeLayer(imageLayerB);
+      // Remove old overlays completely
+      if (imageLayerA) { try { map.removeLayer(imageLayerA); } catch (e) {} }
+      if (imageLayerB) { try { map.removeLayer(imageLayerB); } catch (e) {} }
+      imageLayerA = null;
+      imageLayerB = null;
 
-      // Both images overlay at the same viewport bounds (for comparison)
-      // In dual mode, Image B's data comes from a different location but displays here
       const imageBounds = L.latLngBounds(
         [bounds.getSouth(), bounds.getWest()],
         [bounds.getNorth(), bounds.getEast()]
       );
 
+      // Get current slider position for opacity
+      const slider = document.getElementById('satOpacitySlider');
+      const currentVal = parseInt(slider.value);
+
       // Add Image A as base overlay
       if (respA?.success && respA.imageUrl) {
-        imageLayerA = L.imageOverlay(respA.imageUrl, imageBounds, { opacity: 1 }).addTo(map);
+        imageLayerA = L.imageOverlay(respA.imageUrl, imageBounds, {
+          opacity: independentMode ? parseInt(document.getElementById('satOpacityA').value) / 100 : (1 - currentVal / 100)
+        }).addTo(map);
       }
 
-      // Add Image B on top (user controls opacity to compare)
+      // Add Image B on top
       if (respB?.success && respB.imageUrl) {
-        imageLayerB = L.imageOverlay(respB.imageUrl, imageBounds, { opacity: 0 }).addTo(map);
+        imageLayerB = L.imageOverlay(respB.imageUrl, imageBounds, {
+          opacity: independentMode ? parseInt(document.getElementById('satOpacityB').value) / 100 : (currentVal / 100)
+        }).addTo(map);
       }
 
-      // After imagery loads, hide basemap and bring to front as optional overlay
-      if (baseTileLayer) {
-        baseTileLayer.setOpacity(0);
-        baseTileLayer.bringToFront();
-        document.getElementById('satBasemapSlider').value = 0;
-        document.getElementById('satBasemapVal').textContent = '0%';
+      // Ensure correct z-order: A bottom, B middle, basemap on top (if visible)
+      if (imageLayerA) imageLayerA.setZIndex(100);
+      if (imageLayerB) imageLayerB.setZIndex(200);
+
+      // Dim basemap if imagery loaded — keep at 15% so user isn't lost if imagery is blank
+      if (baseTileLayer && (imageLayerA || imageLayerB)) {
+        baseTileLayer.setOpacity(0.15);
+        if (map.hasLayer(baseTileLayer)) baseTileLayer.bringToFront();
+        document.getElementById('satBasemapSlider').value = 15;
+        document.getElementById('satBasemapVal').textContent = '15%';
       }
+
+      applyEnhanceFilters();
 
       // Enable actions
       document.getElementById('satSaveToKg').disabled = false;
       document.getElementById('satCaptureView').disabled = false;
-
-      // Restore slider position (don't reset)
-      const slider = document.getElementById('satOpacitySlider');
-      const currentVal = parseInt(slider.value);
-      if (imageLayerA) imageLayerA.setOpacity(1 - currentVal / 100);
-      if (imageLayerB) imageLayerB.setOpacity(currentVal / 100);
-      applyEnhanceFilters();
+      document.getElementById('satCaptureViewSaveAs').disabled = false;
+      document.getElementById('satCollectView').disabled = false;
 
       const hasA = !!respA?.success;
       const hasB = !!respB?.success;
-      statusEl.textContent = `A: ${hasA ? dateA : 'no data'} (${layerA}) · B: ${hasB ? dateB : 'no data'} (${layerB})`;
+      const errA = !hasA ? (respA?.error || 'no data') : '';
+      const errB = !hasB ? (respB?.error || 'no data') : '';
+      let status = `A: ${hasA ? dateA : errA} (${layerA}) · B: ${hasB ? dateForB : errB} (${layerB})`;
+      if (!hasA && !hasB) {
+        status = `⚠ No imagery returned — try widening ±Days or click Scenes`;
+        // Flash the Scenes buttons to draw attention
+        ['satFindScenesA', 'satFindScenesB'].forEach(id => {
+          const btn = document.getElementById(id);
+          if (btn) {
+            btn.classList.add('flashing');
+            setTimeout(() => btn.classList.remove('flashing'), 4000);
+          }
+        });
+      }
+      statusEl.textContent = status;
+      console.log('[Satellite] loadImagery result — A:', respA, 'B:', respB);
 
     } catch (e) {
       statusEl.textContent = 'Error: ' + e.message;
+      console.error('[Satellite] loadImagery error:', e);
     }
 
     btn.disabled = false;
@@ -288,10 +344,35 @@
     refreshChatContext();
   }
 
-  async function fetchSatImage(bbox, date, evalscript, resolution) {
-    const targetDate = new Date(date);
-    const rangeStart = new Date(targetDate.getTime() - dateWindowDays * 24 * 60 * 60 * 1000);
-    const rangeEnd = new Date(targetDate.getTime() + dateWindowDays * 24 * 60 * 60 * 1000);
+  // ── Image cache (avoids re-fetching identical requests) ──
+  const imageCache = new Map();
+  const IMAGE_CACHE_MAX = 50;
+
+  function imageCacheKey(bbox, dateFrom, dateTo, evalscript, resolution) {
+    const b = bbox.map(v => v.toFixed(4)).join(',');
+    const es = evalscript.slice(0, 32);
+    return `${b}|${dateFrom}|${dateTo}|${es}|${resolution}|${maxCloudCoverage}`;
+  }
+
+  async function fetchSatImage(bbox, date, evalscript, resolution, windowDays, exactFrom, exactTo) {
+    // If exact date range provided (from catalog scene), use it directly
+    // Otherwise compute from date ± windowDays
+    let rangeStart, rangeEnd;
+    if (exactFrom && exactTo) {
+      rangeStart = new Date(exactFrom);
+      rangeEnd = new Date(exactTo);
+    } else {
+      const days = windowDays || 14;
+      const targetDate = new Date(date);
+      rangeStart = new Date(targetDate.getTime() - days * 24 * 60 * 60 * 1000);
+      rangeEnd = new Date(targetDate.getTime() + days * 24 * 60 * 60 * 1000);
+    }
+
+    const cacheKey = imageCacheKey(bbox, rangeStart.toISOString(), rangeEnd.toISOString(), evalscript, resolution);
+    if (imageCache.has(cacheKey)) {
+      console.log('[Satellite] cache hit:', cacheKey.slice(0, 60));
+      return imageCache.get(cacheKey);
+    }
 
     const maxDim = resolution || defaultResolution;
     const bboxWidth = bbox[2] - bbox[0];
@@ -300,13 +381,25 @@
     const width = aspect >= 1 ? maxDim : Math.round(maxDim * aspect);
     const height = aspect >= 1 ? Math.round(maxDim / aspect) : maxDim;
 
-    return browser.runtime.sendMessage({
+    const resp = await browser.runtime.sendMessage({
       action: 'sentinelGetImage',
       bbox,
       dateFrom: rangeStart.toISOString(),
       dateTo: rangeEnd.toISOString(),
       options: { width, height, maxCloudCoverage, evalscript }
     });
+
+    // Only cache successful responses
+    if (resp?.success && resp.imageUrl) {
+      // Evict oldest entries if cache is full
+      if (imageCache.size >= IMAGE_CACHE_MAX) {
+        const oldest = imageCache.keys().next().value;
+        imageCache.delete(oldest);
+      }
+      imageCache.set(cacheKey, resp);
+    }
+
+    return resp;
   }
 
   // ── Reload single image (when layer changes) ──
@@ -317,7 +410,10 @@
     const mapBbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
     const bbox = (panel === 'B' && dualMode && bboxB) ? bboxB : mapBbox;
     console.log('[Satellite] using bbox:', bbox);
-    const date = document.getElementById(panel === 'A' ? 'satDateA' : 'satDateB').value;
+    // In single mode, B mirrors A's date; in dual mode each has its own
+    const date = (panel === 'B' && !dualMode)
+      ? document.getElementById('satDateA').value
+      : document.getElementById(panel === 'A' ? 'satDateA' : 'satDateB').value;
     const layer = panel === 'A' ? layerA : layerB;
     const res = panel === 'A' ? resolutionA : resolutionB;
 
@@ -325,34 +421,188 @@
     statusEl.textContent = `Reloading Image ${panel} (${layer})...`;
 
     try {
-      console.log('[Satellite] fetching image, date:', date, 'layer:', layer, 'res:', res);
-      const resp = await fetchSatImage(bbox, date, getEvalscripts()[layer], res);
-      console.log('[Satellite] image response:', resp?.success, resp?.error);
+      const window = panel === 'A' ? dateWindowA : dateWindowB;
+      const resp = await fetchSatImage(bbox, date, getEvalscripts()[layer], res, window);
       if (resp?.success && resp.imageUrl) {
-        // In dual mode, Image B renders at the SAME map position (for overlay comparison)
-        // The imagery data comes from Location B's bbox, but displays at the viewport bounds
         const imageBounds = L.latLngBounds(
           [bounds.getSouth(), bounds.getWest()],
           [bounds.getNorth(), bounds.getEast()]
         );
+        const slider = document.getElementById('satOpacitySlider');
+        const sliderVal = parseInt(slider.value);
+
         if (panel === 'A') {
-          if (imageLayerA) map.removeLayer(imageLayerA);
-          const slider = document.getElementById('satOpacitySlider');
-          const opacity = 1 - parseInt(slider.value) / 100;
+          if (imageLayerA) { try { map.removeLayer(imageLayerA); } catch (e) {} }
+          const opacity = independentMode
+            ? parseInt(document.getElementById('satOpacityA').value) / 100
+            : (1 - sliderVal / 100);
           imageLayerA = L.imageOverlay(resp.imageUrl, imageBounds, { opacity }).addTo(map);
-          if (imageLayerB) imageLayerB.bringToFront();
-          applyEnhanceFilters();
+          imageLayerA.setZIndex(100);
         } else {
-          if (imageLayerB) map.removeLayer(imageLayerB);
-          const slider = document.getElementById('satOpacitySlider');
-          const opacity = parseInt(slider.value) / 100;
+          if (imageLayerB) { try { map.removeLayer(imageLayerB); } catch (e) {} }
+          const opacity = independentMode
+            ? parseInt(document.getElementById('satOpacityB').value) / 100
+            : (sliderVal / 100);
           imageLayerB = L.imageOverlay(resp.imageUrl, imageBounds, { opacity }).addTo(map);
-          applyEnhanceFilters();
+          imageLayerB.setZIndex(200);
         }
+        applyEnhanceFilters();
         statusEl.textContent = `Image ${panel} reloaded (${layer})`;
+      } else {
+        statusEl.textContent = `⚠ Image ${panel} failed: ${resp?.error || 'no data returned'}`;
+        console.warn('[Satellite] reloadSingleImage failed:', resp);
       }
     } catch (e) {
       statusEl.textContent = `Error reloading ${panel}: ${e.message}`;
+      console.error('[Satellite] reloadSingleImage error:', e);
+    }
+  }
+
+  // ── Scene catalog search ──
+
+  async function searchScenes(panel) {
+    if (!map) return;
+    const bounds = map.getBounds();
+    const mapBbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+    const bbox = (panel === 'B' && dualMode && bboxB) ? bboxB : mapBbox;
+    const date = document.getElementById(panel === 'A' ? 'satDateA' : 'satDateB').value;
+    const window = panel === 'A' ? dateWindowA : dateWindowB;
+
+    const targetDate = new Date(date);
+    const dateFrom = new Date(targetDate.getTime() - window * 24 * 60 * 60 * 1000).toISOString();
+    const dateTo = new Date(targetDate.getTime() + window * 24 * 60 * 60 * 1000).toISOString();
+
+    const listEl = document.getElementById(panel === 'A' ? 'satSceneListA' : 'satSceneListB');
+    const infoEl = document.getElementById(panel === 'A' ? 'satSceneInfoA' : 'satSceneInfoB');
+    listEl.innerHTML = '<div style="font-size:10px;color:var(--text-muted);padding:4px;">Searching...</div>';
+    infoEl.textContent = '';
+
+    try {
+      const resp = await browser.runtime.sendMessage({
+        action: 'sentinelCatalog',
+        bbox,
+        dateFrom,
+        dateTo,
+        options: { maxCloudCoverage, limit: 20 }
+      });
+
+      if (!resp?.success || !resp.scenes?.length) {
+        listEl.innerHTML = '<div style="font-size:10px;color:var(--text-muted);padding:4px;">No scenes found in this date range</div>';
+        return;
+      }
+
+      listEl.innerHTML = '';
+      resp.scenes.forEach((scene, i) => {
+        const item = document.createElement('div');
+        item.className = 'sat-scene-item';
+        item.dataset.index = i;
+        const cc = scene.cloudCover !== null ? scene.cloudCover.toFixed(0) + '%' : '?';
+        item.innerHTML = `<span class="sat-scene-date">${scene.date}</span>` +
+          `<span class="sat-scene-cloud">☁${cc}</span>` +
+          `<span class="sat-scene-sat">${scene.satellite}</span>` +
+          `<span style="flex:1"></span>` +
+          `<span style="font-size:9px;color:var(--text-muted)">${scene.time}</span>`;
+
+        item.addEventListener('click', () => selectScene(panel, scene, item));
+        listEl.appendChild(item);
+      });
+
+      // Auto-select the best scene (lowest cloud cover)
+      const best = resp.scenes.reduce((a, b) =>
+        (a.cloudCover ?? 100) <= (b.cloudCover ?? 100) ? a : b
+      );
+      const bestIdx = resp.scenes.indexOf(best);
+      const bestEl = listEl.children[bestIdx];
+      if (bestEl) selectScene(panel, best, bestEl);
+
+    } catch (e) {
+      listEl.innerHTML = `<div style="font-size:10px;color:var(--text-muted);padding:4px;">Error: ${e.message}</div>`;
+      console.error('[Satellite] searchScenes error:', e);
+    }
+  }
+
+  async function selectScene(panel, scene, itemEl) {
+    // Highlight selected
+    const listEl = itemEl.parentElement;
+    listEl.querySelectorAll('.sat-scene-item').forEach(el => el.classList.remove('active'));
+    itemEl.classList.add('active');
+
+    // Store selected scene and reset source label to Satellite
+    if (panel === 'A') {
+      selectedSceneA = scene;
+      const srcA = document.getElementById('satSourceA');
+      if (srcA) srcA.textContent = 'Satellite';
+    } else {
+      selectedSceneB = scene;
+      const srcB = document.getElementById('satSourceB');
+      if (srcB) srcB.textContent = 'Satellite';
+      if (typeof AssetLibrary !== 'undefined') AssetLibrary.markInUse(null);
+      const assetLink = document.getElementById('satAssetLinkB');
+      if (assetLink) { assetLink.innerHTML = ''; assetLink.style.display = 'none'; }
+      // Re-enable swap button
+      const swapBtn = document.getElementById('satSwapBtnEnhance');
+      if (swapBtn) { swapBtn.disabled = false; swapBtn.style.opacity = ''; }
+    }
+
+    // Show scene info
+    const infoEl = document.getElementById(panel === 'A' ? 'satSceneInfoA' : 'satSceneInfoB');
+    const cc = scene.cloudCover !== null ? scene.cloudCover.toFixed(1) + '%' : '?';
+    infoEl.textContent = `${scene.satellite} · ${scene.date} ${scene.time} UTC · ☁${cc}`;
+
+    // Load image with this exact scene's tight time window
+    const statusEl = document.getElementById('satImageryStatus');
+    statusEl.textContent = `Loading ${panel}: ${scene.date} ${scene.time}...`;
+
+    const bounds = map.getBounds();
+    const mapBbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+    const bbox = (panel === 'B' && dualMode && bboxB) ? bboxB : mapBbox;
+    const layer = panel === 'A' ? layerA : layerB;
+    const res = panel === 'A' ? resolutionA : resolutionB;
+
+    try {
+      // Use the scene's tight dateFrom/dateTo for exact match
+      const resp = await fetchSatImage(bbox, scene.date, getEvalscripts()[layer], res,
+        0, // window=0 since we provide exact dates
+        scene.dateFrom, scene.dateTo // override date range
+      );
+
+      if (resp?.success && resp.imageUrl) {
+        const imageBounds = L.latLngBounds(
+          [bounds.getSouth(), bounds.getWest()],
+          [bounds.getNorth(), bounds.getEast()]
+        );
+        const slider = document.getElementById('satOpacitySlider');
+        const sliderVal = parseInt(slider.value);
+
+        if (panel === 'A') {
+          if (imageLayerA) { try { map.removeLayer(imageLayerA); } catch (e) {} }
+          const opacity = independentMode
+            ? parseInt(document.getElementById('satOpacityA').value) / 100
+            : (1 - sliderVal / 100);
+          imageLayerA = L.imageOverlay(resp.imageUrl, imageBounds, { opacity }).addTo(map);
+          imageLayerA.setZIndex(100);
+        } else {
+          if (imageLayerB) { try { map.removeLayer(imageLayerB); } catch (e) {} }
+          const opacity = independentMode
+            ? parseInt(document.getElementById('satOpacityB').value) / 100
+            : (sliderVal / 100);
+          imageLayerB = L.imageOverlay(resp.imageUrl, imageBounds, { opacity }).addTo(map);
+          imageLayerB.setZIndex(200);
+        }
+        applyEnhanceFilters();
+
+        // Enable action buttons
+        document.getElementById('satSaveToKg').disabled = false;
+        document.getElementById('satCaptureView').disabled = false;
+        document.getElementById('satCaptureViewSaveAs').disabled = false;
+        document.getElementById('satCollectView').disabled = false;
+
+        statusEl.textContent = `${panel}: ${scene.satellite} · ${scene.date} ${scene.time} UTC · ☁${cc}`;
+      } else {
+        statusEl.textContent = `⚠ ${panel}: no imagery for scene ${scene.date} — ${resp?.error || ''}`;
+      }
+    } catch (e) {
+      statusEl.textContent = `Error loading scene: ${e.message}`;
     }
   }
 
@@ -521,6 +771,15 @@
     resolutionA = resolutionB;
     resolutionB = tempR;
 
+    // Swap date windows
+    const tempW = dateWindowA;
+    dateWindowA = dateWindowB;
+    dateWindowB = tempW;
+    document.getElementById('satDateWindowA').value = dateWindowA;
+    document.getElementById('satDateWindowB').value = dateWindowB;
+    document.getElementById('satDateWindowAVal').textContent = `±${dateWindowA}d`;
+    document.getElementById('satDateWindowBVal').textContent = `±${dateWindowB}d`;
+
     // Update all UI to reflect swapped states
 
     // Resolution dropdowns
@@ -548,6 +807,10 @@
 
   // ── Floating panel controls ──
   function setupPanelControls() {
+    // Init floating panels (drag, resize, state restore) via shared lib
+    FloatingPanel.init(document.getElementById('satToolbar'), 'satellite');
+    FloatingPanel.init(document.getElementById('satPinsPanel'), 'satellite');
+
     // Toolbar toggle
     document.getElementById('satToolbarToggle')?.addEventListener('click', () => {
       document.getElementById('satToolbar').classList.toggle('hidden');
@@ -561,6 +824,18 @@
       document.getElementById('satToolbar')?.classList.replace('panel-deferred', 'panel-revealed');
     }, 300);
 
+    // Tab switching inside Imagery Controls panel
+    const toolbar = document.getElementById('satToolbar');
+    toolbar?.querySelectorAll('.fp-tab[data-sat-tab]').forEach(tab => {
+      tab.addEventListener('click', () => {
+        toolbar.querySelectorAll('.fp-tab[data-sat-tab]').forEach(t => t.classList.remove('active'));
+        toolbar.querySelectorAll('.fp-pane[data-sat-pane]').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        const pane = toolbar.querySelector(`[data-sat-pane="${tab.dataset.satTab}"]`);
+        if (pane) pane.classList.add('active');
+      });
+    });
+
     // Resolution dropdowns
     document.getElementById('satResA')?.addEventListener('change', (e) => {
       resolutionA = parseInt(e.target.value);
@@ -569,16 +844,30 @@
       resolutionB = parseInt(e.target.value);
     });
 
+    // Scene search buttons
+    document.getElementById('satFindScenesA')?.addEventListener('click', () => searchScenes('A'));
+    document.getElementById('satFindScenesB')?.addEventListener('click', () => searchScenes('B'));
+
     // Cloud coverage slider
     document.getElementById('satCloudSlider')?.addEventListener('input', (e) => {
       maxCloudCoverage = parseInt(e.target.value);
       document.getElementById('satCloudVal').textContent = `≤${maxCloudCoverage}%`;
     });
 
-    // Date window slider
-    document.getElementById('satDateWindow')?.addEventListener('input', (e) => {
-      dateWindowDays = parseInt(e.target.value);
-      document.getElementById('satDateWindowVal').textContent = `±${dateWindowDays}d`;
+    // Per-image date window sliders
+    document.getElementById('satDateWindowA')?.addEventListener('input', (e) => {
+      dateWindowA = parseInt(e.target.value);
+      document.getElementById('satDateWindowAVal').textContent = `±${dateWindowA}d`;
+      // In single mode, sync B to A
+      if (!dualMode) {
+        dateWindowB = dateWindowA;
+        document.getElementById('satDateWindowB').value = dateWindowA;
+        document.getElementById('satDateWindowBVal').textContent = `±${dateWindowA}d`;
+      }
+    });
+    document.getElementById('satDateWindowB')?.addEventListener('input', (e) => {
+      dateWindowB = parseInt(e.target.value);
+      document.getElementById('satDateWindowBVal').textContent = `±${dateWindowB}d`;
     });
 
     // Brightness slider
@@ -591,11 +880,109 @@
     document.getElementById('satBasemapSlider')?.addEventListener('input', (e) => {
       const val = parseInt(e.target.value);
       if (baseTileLayer) {
-        baseTileLayer.setOpacity(val / 100);
-        // When imagery is loaded, bring basemap to front so it overlays
-        if (imageLayerA || imageLayerB) baseTileLayer.bringToFront();
+        if (val === 0) {
+          // Fully remove to eliminate any glow/bleed
+          if (map.hasLayer(baseTileLayer)) map.removeLayer(baseTileLayer);
+        } else {
+          if (!map.hasLayer(baseTileLayer)) baseTileLayer.addTo(map);
+          baseTileLayer.setOpacity(val / 100);
+          if (imageLayerA || imageLayerB) baseTileLayer.bringToFront();
+        }
       }
       document.getElementById('satBasemapVal').textContent = val + '%';
+    });
+
+    // Basemap B slider (dual mode — shares tile layer for now, future: split view)
+    document.getElementById('satBasemapSliderB')?.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value);
+      document.getElementById('satBasemapBVal').textContent = val + '%';
+    });
+
+    // ── Basemap visual enhancements ──
+    const BASEMAP_FILTERS = {
+      none:      '',
+      invert:    'invert(1)',
+      grayscale: 'grayscale(1)',
+      contrast:  'contrast(2) brightness(1.1)',
+      sepia:     'sepia(1)',
+      warm:      'sepia(0.3) saturate(1.2)',
+      cool:      'saturate(0.8) hue-rotate(20deg)',
+    };
+    let bmEnhance = 'none';
+    let bmBrightness = 100;
+    let bmContrast = 100;
+    let bmTint = 'none';
+
+    function applyBasemapFilter() {
+      if (!baseTileLayer) return;
+      const container = baseTileLayer.getContainer?.();
+      if (!container) return;
+
+      // Build composite CSS filter
+      let filter = `brightness(${bmBrightness / 100}) contrast(${bmContrast / 100})`;
+      const enhance = BASEMAP_FILTERS[bmEnhance];
+      if (enhance) filter += ' ' + enhance;
+      container.style.filter = filter;
+
+      // Color tint via overlay pseudo-element hack — use a real overlay div
+      let tintEl = container.querySelector('.sat-basemap-tint-overlay');
+      if (bmTint === 'none') {
+        if (tintEl) tintEl.remove();
+      } else {
+        if (!tintEl) {
+          tintEl = document.createElement('div');
+          tintEl.className = 'sat-basemap-tint-overlay';
+          tintEl.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:1;mix-blend-mode:multiply;';
+          container.style.position = 'relative';
+          container.appendChild(tintEl);
+        }
+        tintEl.style.background = bmTint;
+        tintEl.style.opacity = '0.35';
+      }
+    }
+
+    // Enhance buttons
+    document.querySelectorAll('.sat-basemap-enhance').forEach(btn => {
+      btn.addEventListener('click', () => {
+        bmEnhance = btn.dataset.bm;
+        document.querySelectorAll('.sat-basemap-enhance').forEach(b => b.classList.toggle('active', b === btn));
+        applyBasemapFilter();
+      });
+    });
+
+    // Brightness slider
+    document.getElementById('satBasemapBright')?.addEventListener('input', (e) => {
+      bmBrightness = parseInt(e.target.value);
+      document.getElementById('satBasemapBrightVal').textContent = bmBrightness + '%';
+      applyBasemapFilter();
+    });
+    document.getElementById('satBasemapBright')?.addEventListener('dblclick', () => {
+      bmBrightness = 100;
+      document.getElementById('satBasemapBright').value = 100;
+      document.getElementById('satBasemapBrightVal').textContent = '100%';
+      applyBasemapFilter();
+    });
+
+    // Contrast slider
+    document.getElementById('satBasemapContrast')?.addEventListener('input', (e) => {
+      bmContrast = parseInt(e.target.value);
+      document.getElementById('satBasemapContrastVal').textContent = bmContrast + '%';
+      applyBasemapFilter();
+    });
+    document.getElementById('satBasemapContrast')?.addEventListener('dblclick', () => {
+      bmContrast = 100;
+      document.getElementById('satBasemapContrast').value = 100;
+      document.getElementById('satBasemapContrastVal').textContent = '100%';
+      applyBasemapFilter();
+    });
+
+    // Tint buttons
+    document.querySelectorAll('.sat-basemap-tint').forEach(btn => {
+      btn.addEventListener('click', () => {
+        bmTint = btn.dataset.tint;
+        document.querySelectorAll('.sat-basemap-tint').forEach(b => b.classList.toggle('active', b === btn));
+        applyBasemapFilter();
+      });
     });
   }
 
@@ -628,11 +1015,24 @@
         id: Date.now().toString(36),
         lat,
         lon,
-        label: `Pin ${pins.length + 1}`,
+        label: currentLocation || `Pin ${pins.length + 1}`,
         notes: '',
+        searchQuery: currentLocation,
         dateA,
         dateB,
-        layer: layerA,
+        layerA,
+        layerB,
+        enhanceA,
+        enhanceB,
+        resolutionA,
+        resolutionB,
+        dateWindowA,
+        dateWindowB,
+        cloudCover: maxCloudCoverage,
+        zoom: map.getZoom(),
+        sceneA: selectedSceneA ? { ...selectedSceneA } : null,
+        sceneB: selectedSceneB ? { ...selectedSceneB } : null,
+        dualMode,
         ts: Date.now(),
       };
 
@@ -659,11 +1059,14 @@
     });
 
     const marker = L.marker([pin.lat, pin.lon], { icon }).addTo(map);
+    const sceneInfo = pin.sceneA
+      ? `${pin.sceneA.satellite} ${pin.sceneA.date} ${pin.sceneA.time} ☁${pin.sceneA.cloudCover?.toFixed(0)}%`
+      : pin.dateA;
     marker.bindPopup(`
       <strong>${pin.label}</strong><br>
       ${pin.lat.toFixed(6)}, ${pin.lon.toFixed(6)}<br>
-      ${pin.dateA} / ${pin.dateB}<br>
-      <em>${pin.layer}</em>
+      ${sceneInfo}<br>
+      <em>${pin.layerA || pin.layer || ''}${pin.enhanceA && pin.enhanceA !== 'none' ? ' · ' + pin.enhanceA : ''}</em>
     `);
     marker._pinId = pin.id;
     pinMarkers.push(marker);
@@ -789,6 +1192,104 @@
     setTimeout(() => { btn.textContent = 'All to KG'; btn.disabled = false; }, 2000);
   });
 
+  // ── Capture current view as downloadable PNG ──
+  async function captureImage(saveAs) {
+    if (!imageLayerA) return;
+    const el = imageLayerA._image || imageLayerA.getElement?.();
+    if (!el || !el.src) return;
+
+    const sceneInfo = selectedSceneA
+      ? `${selectedSceneA.satellite}_${selectedSceneA.date}_${selectedSceneA.time.replace(/:/g, '')}`
+      : document.getElementById('satDateA').value;
+    const filename = `satellite_${(currentLocation || 'view').replace(/\s+/g, '-')}_${layerA}_${sceneInfo}.png`;
+
+    try {
+      // Route through background script for browser.downloads access
+      await browser.runtime.sendMessage({
+        action: 'downloadDataUrl',
+        dataUrl: el.src,
+        filename,
+        saveAs: !!saveAs,
+      });
+
+      const btn = document.getElementById(saveAs ? 'satCaptureViewSaveAs' : 'satCaptureView');
+      if (btn) {
+        btn.textContent = 'Saved!';
+        setTimeout(() => { btn.textContent = saveAs ? 'Save As' : 'PNG Capture'; }, 2000);
+      }
+    } catch (e) {
+      console.error('[Satellite] PNG capture error:', e);
+      document.getElementById('satImageryStatus').textContent = 'Capture failed: ' + e.message;
+    }
+  }
+
+  document.getElementById('satCaptureView')?.addEventListener('click', () => captureImage(false));
+  document.getElementById('satCaptureViewSaveAs')?.addEventListener('click', () => captureImage(true));
+
+  // ── Collect pins to asset library ──
+  document.getElementById('satPinsToCollection')?.addEventListener('click', async () => {
+    if (!pins.length || typeof AssetLibrary === 'undefined') return;
+    const btn = document.getElementById('satPinsToCollection');
+    btn.disabled = true;
+    btn.textContent = 'Adding...';
+    for (const pin of pins) {
+      const sceneDesc = pin.sceneA
+        ? `${pin.sceneA.satellite} ${pin.sceneA.date} ${pin.sceneA.time} ☁${pin.sceneA.cloudCover?.toFixed(0)}%`
+        : pin.dateA;
+      await AssetLibrary.add({
+        type: 'location',
+        title: pin.label || `${pin.lat.toFixed(4)}, ${pin.lon.toFixed(4)}`,
+        description: `${sceneDesc} · ${pin.layerA || ''}${pin.notes ? ' · ' + pin.notes : ''}`,
+        metadata: {
+          lat: pin.lat, lon: pin.lon, zoom: pin.zoom || 14,
+          searchQuery: pin.searchQuery,
+          sceneA: pin.sceneA, sceneB: pin.sceneB,
+          layerA: pin.layerA, layerB: pin.layerB,
+          enhanceA: pin.enhanceA, enhanceB: pin.enhanceB,
+          dateA: pin.dateA, dateB: pin.dateB,
+          cloudCover: pin.cloudCover,
+        },
+        sourcePage: 'satellite',
+      });
+    }
+    btn.textContent = `Collected ${pins.length}!`;
+    setTimeout(() => { btn.textContent = 'Collect All'; btn.disabled = false; }, 2000);
+  });
+
+  // ── Collect current satellite view to asset library ──
+  document.getElementById('satCollectView')?.addEventListener('click', async () => {
+    if (!map || typeof AssetLibrary === 'undefined') return;
+    const c = map.getCenter();
+    const dateA = document.getElementById('satDateA').value;
+    const sceneInfo = selectedSceneA
+      ? `${selectedSceneA.satellite} ${selectedSceneA.date} ${selectedSceneA.time}`
+      : dateA;
+
+    // If we have an image layer, grab its data URL as thumbnail
+    let thumbnail = null;
+    if (imageLayerA) {
+      const el = imageLayerA._image || imageLayerA.getElement?.();
+      if (el && el.src) thumbnail = el.src;
+    }
+
+    await AssetLibrary.add({
+      type: 'satellite',
+      title: `${currentLocation || c.lat.toFixed(4) + ',' + c.lng.toFixed(4)} — ${layerA}`,
+      description: `${sceneInfo} · ${layerA}${enhanceA !== 'none' ? ' · ' + enhanceA : ''}`,
+      thumbnail,
+      metadata: {
+        lat: c.lat, lon: c.lng, zoom: map.getZoom(),
+        dateA, layerA, enhanceA,
+        sceneA: selectedSceneA,
+      },
+      sourcePage: 'satellite',
+    });
+
+    const btn = document.getElementById('satCollectView');
+    btn.textContent = 'Added!';
+    setTimeout(() => { btn.textContent = '+ Asset'; }, 2000);
+  });
+
   function escHtml(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
   // ── KG Actions ──
@@ -822,8 +1323,14 @@
     if (currentLocation) lines.push(`Location: ${currentLocation}`);
     lines.push(`Date A: ${document.getElementById('satDateA').value}`);
     lines.push(`Date B: ${document.getElementById('satDateB').value}`);
-    lines.push(`Layer: ${layerA}`);
+    lines.push(`Layer A: ${layerA}, Layer B: ${layerB}`);
     lines.push(`Imagery: ${imageLayerA ? 'loaded' : 'none'}`);
+    if (selectedSceneA) {
+      lines.push(`Scene A: ${selectedSceneA.satellite} ${selectedSceneA.date} ${selectedSceneA.time} UTC, cloud: ${selectedSceneA.cloudCover?.toFixed(1)}%`);
+    }
+    if (selectedSceneB) {
+      lines.push(`Scene B: ${selectedSceneB.satellite} ${selectedSceneB.date} ${selectedSceneB.time} UTC, cloud: ${selectedSceneB.cloudCover?.toFixed(1)}%`);
+    }
     ArgusChat.updateContext(lines.join('\n'));
   }
 
@@ -861,6 +1368,114 @@
     try { await loadPins(); } catch (e) { console.warn('[Satellite] Pin load error:', e); }
 
     // Don't auto-load imagery — wait for user to search
+
+    // Init shared asset library
+    if (typeof AssetLibrary !== 'undefined') {
+      AssetLibrary.init({ pageId: 'satellite' });
+
+      // When user selects an asset from the library on this page
+      AssetLibrary.onSelect(async (item) => {
+        if (!map) return;
+        const m = item.metadata || {};
+
+        if (item.type === 'satellite' && m.lat) {
+          // Full state restoration — jump to location, restore layer/enhance/dates, re-search scenes
+          map.setView([m.lat, m.lon], m.zoom || 14);
+          document.getElementById('satSearchInput').value = m.searchQuery || item.title.split(' — ')[0] || '';
+          currentLocation = document.getElementById('satSearchInput').value;
+
+          // Restore layer
+          if (m.layerA) {
+            layerA = m.layerA;
+            document.querySelectorAll('.sat-layer-btn-a').forEach(b => b.classList.toggle('active', b.dataset.layer === layerA));
+          }
+          // Restore enhance
+          if (m.enhanceA) {
+            enhanceA = m.enhanceA;
+            document.querySelectorAll('.sat-enhance-btn-a').forEach(b => b.classList.toggle('active', b.dataset.enhance === enhanceA));
+          }
+          // Restore date
+          if (m.dateA) {
+            document.getElementById('satDateA').value = m.dateA;
+            if (!dualMode) document.getElementById('satDateB').value = m.dateA;
+          }
+
+          document.getElementById('satImageryStatus').textContent = `Restoring: ${item.title}...`;
+          AssetLibrary.markInUse(item.id);
+
+          // If we have the scene info, try to load that exact scene
+          if (m.sceneA) {
+            selectedSceneA = m.sceneA;
+            const infoEl = document.getElementById('satSceneInfoA');
+            const cc = m.sceneA.cloudCover !== null ? m.sceneA.cloudCover.toFixed(1) + '%' : '?';
+            if (infoEl) infoEl.textContent = `${m.sceneA.satellite} · ${m.sceneA.date} ${m.sceneA.time} UTC · ☁${cc}`;
+          }
+
+          // Re-search scenes to populate the list and load imagery
+          try {
+            await searchScenes('A');
+          } catch { /* silent */ }
+
+        } else if (item.type === 'image' && item.thumbnail) {
+          // Load the collected image as Image B overlay
+          const bounds = map.getBounds();
+          const imageBounds = L.latLngBounds(
+            [bounds.getSouth(), bounds.getWest()],
+            [bounds.getNorth(), bounds.getEast()]
+          );
+          if (imageLayerB) { try { map.removeLayer(imageLayerB); } catch (e) {} }
+          imageLayerB = L.imageOverlay(item.thumbnail, imageBounds, { opacity: 0.5 }).addTo(map);
+          imageLayerB.setZIndex(200);
+          const slider = document.getElementById('satOpacitySlider');
+          slider.value = 50;
+          slider.dispatchEvent(new Event('input'));
+          // Update source label and highlight in library
+          const srcLabel = document.getElementById('satSourceB');
+          if (srcLabel) srcLabel.textContent = 'Grabber';
+          // Clear old satellite scene list/info for B
+          document.getElementById('satSceneListB').innerHTML = '';
+          document.getElementById('satSceneInfoB').textContent = '';
+          selectedSceneB = null;
+          AssetLibrary.markInUse(item.id);
+
+          // Disable swap (can't swap satellite with grabber image)
+          const swapBtn = document.getElementById('satSwapBtnEnhance');
+          if (swapBtn) { swapBtn.disabled = true; swapBtn.style.opacity = '0.4'; }
+
+          // Switch to Single AB mode and clear Location B input
+          if (dualMode) {
+            dualMode = false;
+            document.getElementById('satDualCheck').checked = false;
+            document.getElementById('satDualCheck').dispatchEvent(new Event('change'));
+          }
+          document.getElementById('satSearchInputB').value = '';
+
+          // Show asset source link in search strip
+          const assetLink = document.getElementById('satAssetLinkB');
+          if (assetLink && item.metadata?.pageUrl) {
+            assetLink.innerHTML = `<a href="${item.metadata.pageUrl}" target="_blank" title="${item.metadata.pageUrl}">${item.title}</a>`;
+            assetLink.style.display = '';
+          }
+          document.getElementById('satImageryStatus').textContent = `B: collection image — ${item.title}`;
+
+        } else if (item.type === 'location' && m.lat) {
+          // Jump to location and optionally restore scene/layer state
+          map.setView([m.lat, m.lon], m.zoom || 14);
+          document.getElementById('satSearchInput').value = m.searchQuery || item.title;
+          currentLocation = document.getElementById('satSearchInput').value;
+
+          if (m.layerA) {
+            layerA = m.layerA;
+            document.querySelectorAll('.sat-layer-btn-a').forEach(b => b.classList.toggle('active', b.dataset.layer === layerA));
+          }
+          if (m.dateA) document.getElementById('satDateA').value = m.dateA;
+
+          document.getElementById('satImageryStatus').textContent = `Jumped to: ${item.title}`;
+          AssetLibrary.markInUse(item.id);
+          try { await searchScenes('A'); } catch { /* silent */ }
+        }
+      });
+    }
 
     if (typeof ArgusChat !== 'undefined') {
       ArgusChat.init({

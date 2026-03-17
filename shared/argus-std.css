@@ -469,7 +469,7 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
   border-radius: var(--radius);
   display: flex;
   flex-direction: column;
-  z-index: 20;
+  z-index: 1000;
   box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
@@ -581,7 +581,7 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 19;
+  z-index: 999;
   transition: all 0.12s;
 }
 .edge-tab:hover {

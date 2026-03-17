@@ -472,6 +472,8 @@ body {
 }
 .image-card:hover { border-color: var(--accent); box-shadow: 0 2px 12px rgba(0,0,0,0.3); }
 .image-card.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(233,69,96,0.3); }
+.image-card.in-library { border-color: rgba(100,200,150,0.6); box-shadow: 0 0 8px rgba(100,200,150,0.25); }
+.image-card.in-library.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(233,69,96,0.3), 0 0 8px rgba(100,200,150,0.25); }
 
 .image-card .card-checkbox {
   position: absolute;

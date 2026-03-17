@@ -862,17 +862,86 @@ body {
 /* Satellite search strip */
 .sat-search-strip {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 2px;
   padding: 6px 16px;
   max-width: 1200px;
   margin: 0 auto;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
 }
+.sat-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .sat-search-strip .sat-fp-input {
   flex: 1;
-  min-width: 150px;
+  min-width: 100px;
+}
+.sat-search-equal {
+  flex: 1 1 0 !important;
+  min-width: 80px;
+}
+.sat-asset-link {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-align: right;
+  margin-top: -2px;
+  line-height: 1;
+  min-height: 0;
+}
+.sat-asset-link:empty, .sat-asset-link[style*="display: none"] {
+  margin: 0;
+  padding: 0;
+}
+.sat-asset-link a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.sat-asset-link a:hover { text-decoration: underline; }
+/* Date strip — second row with A/B date controls */
+.sat-date-strip {
+  gap: 4px !important;
+  flex-wrap: wrap;
+}
+.sat-date-strip .sat-fp-date { max-width: 105px; }
+.sat-date-slider { max-width: 80px; }
+.sat-date-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-light);
+  margin: 0 4px;
+}
+/* Header action buttons (compact) */
+.sat-header-btn {
+  font-size: 8px !important;
+  padding: 2px 6px !important;
+}
+/* Spread row: label left, pills right */
+.sat-fp-row-spread {
+  justify-content: space-between;
+}
+.sat-fp-pills-right {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+/* Source label in Image A/B title */
+.sat-source-label {
+  font-weight: 400;
+  font-size: 8px;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+/* Flash hint for no-imagery */
+@keyframes sat-flash-hint {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; background: var(--accent); color: #fff; border-color: var(--accent); }
+}
+.sat-flash-hint.flashing {
+  animation: sat-flash-hint 1.2s ease-in-out 3;
 }
 
 /* Satellite full-height map */
@@ -881,6 +950,10 @@ body {
   height: calc(100vh - 120px);
   max-width: 1200px;
   margin: 0 auto;
+  background: #000;
+}
+.sat-map-main .leaflet-container {
+  background: var(--bg-primary, #0d0d1a);
 }
 
 /* Floating toolbar panel */
@@ -894,6 +967,38 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+/* Tile sections — subtle background cards for visual grouping */
+.sat-tile {
+  padding: 6px 8px;
+  border-radius: 6px;
+  margin: 2px 0;
+  border: 1px solid transparent;
+}
+.sat-tile-basemap {
+  background: rgba(60, 80, 120, 0.15);
+  border-color: rgba(60, 80, 120, 0.25);
+}
+.sat-tile-a {
+  background: rgba(80, 120, 80, 0.12);
+  border-color: rgba(80, 120, 80, 0.2);
+}
+.sat-tile-b {
+  background: rgba(120, 80, 60, 0.12);
+  border-color: rgba(120, 80, 60, 0.2);
+}
+.sat-tile-actions {
+  background: rgba(100, 60, 120, 0.1);
+  border-color: rgba(100, 60, 120, 0.15);
+}
+.sat-tile-opacity {
+  background: rgba(80, 80, 100, 0.12);
+  border-color: rgba(80, 80, 100, 0.2);
+}
+.sat-tile-settings {
+  background: rgba(60, 60, 80, 0.15);
+  border-color: rgba(60, 60, 80, 0.2);
 }
 .sat-fp-row {
   display: flex;
@@ -931,7 +1036,7 @@ body {
 }
 .sat-fp-date:focus { border-color: var(--accent); }
 .sat-fp-select {
-  padding: 2px 4px;
+  padding: 1px 2px;
   background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -939,6 +1044,8 @@ body {
   font-size: 9px;
   font-family: inherit;
   cursor: pointer;
+  min-width: 0;
+  max-width: 52px;
 }
 .sat-fp-label {
   font-size: 9px;
@@ -958,6 +1065,49 @@ body {
   background: var(--border);
   margin: 4px 0;
 }
+/* Scene picker list */
+.sat-scene-list {
+  max-height: 120px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0;
+}
+.sat-scene-list:empty { display: none; }
+.sat-scene-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  font-size: 10px;
+  font-family: var(--font);
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.sat-scene-item:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+.sat-scene-item.active {
+  border-color: var(--accent);
+  background: rgba(233, 69, 96, 0.1);
+  color: var(--text-primary);
+}
+.sat-scene-date { font-weight: 700; }
+.sat-scene-cloud { color: var(--text-muted); }
+.sat-scene-sat { color: var(--text-muted); font-size: 9px; }
+/* Scene info (shown after selection) */
+.sat-scene-info {
+  font-size: 9px;
+  color: var(--accent);
+  padding: 2px 4px;
+}
+.sat-scene-info:empty { display: none; }
 .sat-fp-today {
   font-size: 7px !important;
   padding: 1px 4px !important;

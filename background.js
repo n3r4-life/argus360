@@ -2004,7 +2004,26 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "intelSearch")       return handleIntelSearch(message.provider, message.query, message.options);
   if (message.action === "intelEnrichEntity") return handleIntelEnrichEntity(message.entityId, message.providers);
   if (message.action === "intelScreenAll")    return handleIntelScreenAll();
+  if (message.action === "downloadDataUrl") {
+    return (async () => {
+      try {
+        const resp = await fetch(message.dataUrl);
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        await browser.downloads.download({
+          url,
+          filename: message.filename || 'download.png',
+          saveAs: message.saveAs !== false,
+        });
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: e.message };
+      }
+    })();
+  }
   if (message.action === "sentinelGetImage")    return IntelProviders.sentinelhub.getImage(message.bbox, message.dateFrom, message.dateTo, message.options).then(url => ({ success: true, imageUrl: url })).catch(e => ({ success: false, error: e.message }));
+  if (message.action === "sentinelCatalog")     return IntelProviders.sentinelhub.searchCatalog(message.bbox, message.dateFrom, message.dateTo, message.options).then(scenes => ({ success: true, scenes })).catch(e => ({ success: false, error: e.message, scenes: [] }));
   if (message.action === "flightawareSearch")   return IntelProviders.flightaware.searchFlights(message.query, message.options).then(r => ({ success: true, ...r })).catch(e => ({ success: false, error: e.message }));
   if (message.action === "flightawareLastFlight") return IntelProviders.flightaware.getLastFlight(message.query).then(r => ({ success: true, ...r })).catch(e => ({ success: false, error: e.message }));
   if (message.action === "flightawareTrack")   return IntelProviders.flightaware.getFlightTrack(message.query).then(r => ({ success: true, ...r })).catch(e => ({ success: false, error: e.message }));
