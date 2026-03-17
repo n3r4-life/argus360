@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Movement - Argus Intelligence</title>
+  <link rel="stylesheet" href="../lib/vendor/leaflet.css">
   <link rel="stylesheet" href="../shared/argus-std.css">
   <link rel="stylesheet" href="../shared/ribbon.css">
   <link rel="stylesheet" href="../lib/argus-chat.css">
@@ -23,17 +24,9 @@
   <main class="intel-main">
     <svg class="intel-watermark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.5"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.9.3 1.1L11 12l-2 3H6l-1 1 3 2 2 3 1-1v-3l3-2 3.7 7.3c.2.4.7.5 1.1.3l.5-.3c.4-.2.6-.6.5-1.1z"/></svg>
 
-    <section class="intel-section">
-      <h2 class="intel-section-title">Provider Status</h2>
-      <div id="intel-page-providers" class="intel-page-providers"></div>
-      <div id="intel-not-configured" class="intel-not-configured hidden">
-        Providers not configured. <a href="../options/options.html#intel-providers">Go to Settings</a> to add API keys.
-      </div>
-    </section>
-
+    
     <!-- Mode Toggle + Search -->
-    <section class="intel-section">
-      <div class="mvmt-toolbar">
+          <div class="mvmt-toolbar">
         <div class="mvmt-mode-toggle">
           <button class="pill-chip active" id="mvmtModeAviation" data-mode="aviation">Aviation</button>
           <button class="pill-chip" id="mvmtModeMaritime" data-mode="maritime">Maritime</button>
@@ -47,25 +40,17 @@
     </section>
 
     <!-- Map Area -->
-    <section class="intel-section">
-      <div class="mvmt-map-container" id="mvmtMapContainer">
-        <div class="mvmt-map-placeholder" id="mvmtMapPlaceholder">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3;">
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-            <circle cx="12" cy="10" r="3"/>
-          </svg>
-          <div style="margin-top:8px;">Map view requires provider API keys.</div>
-          <div style="margin-top:4px;font-size:11px;color:var(--text-muted);">Configure OpenSky, ADS-B Exchange, or MarineTraffic in Settings to enable live tracking.</div>
-        </div>
+          <div class="mvmt-map-container" id="mvmtMapContainer">
+        <div id="mvmtMap" style="width:100%;height:100%;"></div>
       </div>
     </section>
+    <script src="../lib/vendor/leaflet.js"></script>
 
     <!-- Results / Detail Area -->
     <div class="mvmt-columns">
       <!-- Search Results -->
       <div class="mvmt-col">
-        <section class="intel-section">
-          <h2 class="intel-section-title" id="mvmtResultsTitle">Search Results</h2>
+                  <h2 class="intel-section-title" id="mvmtResultsTitle">Search Results</h2>
           <div class="mvmt-results" id="mvmtResults">
             <div class="comp-empty" id="mvmtResultsEmpty">
               Search for aircraft by tail number or callsign, vessels by IMO/MMSI, or browse radio feeds by location.
@@ -74,8 +59,7 @@
         </section>
 
         <!-- Watchlist -->
-        <section class="intel-section">
-          <h2 class="intel-section-title">Movement Watchlist</h2>
+                  <h2 class="intel-section-title">Movement Watchlist</h2>
           <div class="mvmt-watchlist" id="mvmtWatchlist">
             <div class="comp-empty">No tracked aircraft or vessels. Use "Watch" on search results to add items here.</div>
           </div>
@@ -84,16 +68,14 @@
 
       <!-- Detail Sidebar -->
       <div class="mvmt-col">
-        <section class="intel-section">
-          <h2 class="intel-section-title">Details</h2>
+                  <h2 class="intel-section-title">Details</h2>
           <div class="mvmt-detail" id="mvmtDetail">
             <div class="comp-empty">Select a result to view details.</div>
           </div>
         </section>
 
         <!-- KG Actions -->
-        <section class="intel-section">
-          <h2 class="intel-section-title">KG Actions</h2>
+                  <h2 class="intel-section-title">KG Actions</h2>
           <div class="mvmt-kg-actions">
             <button class="pill-chip" id="mvmtAddToKg" disabled>Add to KG</button>
             <button class="pill-chip" id="mvmtWatchItem" disabled>Watch</button>

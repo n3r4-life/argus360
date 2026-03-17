@@ -767,25 +767,45 @@
   const INTEL_PILL_LABELS = {
     opensanctions: "Sanctions", secedgar: "SEC", courtlistener: "Courts",
     opensky: "OpenSky", adsbexchange: "ADS-B", marinetraffic: "Marine",
+    flightaware: "FlightAware", vesselfinder: "VesselFinder",
     gdelt: "GDELT", sentinelhub: "Sentinel", opencorporates: "Corps",
     gleif: "GLEIF", blockstream: "BTC", broadcastify: "Radio",
   };
+
+  // Group providers by domain for strip display
+  const INTEL_STRIP_GROUPS = [
+    { label: "Regulatory", keys: ["opensanctions", "secedgar", "courtlistener", "opencorporates", "gleif"] },
+    { label: "Movement",   keys: ["opensky", "flightaware", "adsbexchange", "marinetraffic", "vesselfinder", "broadcastify"] },
+    { label: "Events",     keys: ["gdelt"] },
+    { label: "Satellite",  keys: ["sentinelhub"] },
+    { label: "Blockchain",  keys: ["blockstream"] },
+  ];
 
   async function _doUpdateIntelStrip() {
     const strip = document.getElementById("ribbon-intel-strip");
     if (!strip) return;
     try {
       const resp = await browser.runtime.sendMessage({ action: "intelGetStatus" });
-      const pills = [];
-      for (const [key, info] of Object.entries(resp?.providers || {})) {
-        if (!info.configured && info.status !== "connected") continue;
-        const label = INTEL_PILL_LABELS[key] || key;
-        const statusClass = info.status === "connected" ? "live" : info.status === "error" ? "error" : "idle";
-        const tip = `${info.label} · ${info.status} — click to manage`;
-        pills.push(`<button class="ribbon-intel-pill" data-nav="settings" title="${tip}"><span class="ribbon-intel-dot ${statusClass}"></span>${label}</button>`);
+      const allProviders = resp?.providers || {};
+      const sections = [];
+
+      for (const group of INTEL_STRIP_GROUPS) {
+        const pills = [];
+        for (const key of group.keys) {
+          const info = allProviders[key];
+          if (!info || (!info.configured && info.status !== "connected")) continue;
+          const label = INTEL_PILL_LABELS[key] || key;
+          const statusClass = info.status === "connected" ? "live" : info.status === "error" ? "error" : "idle";
+          const tip = `${info.label || label} · ${info.status} — click to manage`;
+          pills.push(`<button class="ribbon-intel-pill" data-nav="settings" title="${tip}"><span class="ribbon-intel-dot ${statusClass}"></span>${label}</button>`);
+        }
+        if (pills.length) {
+          sections.push(pills.join(""));
+        }
       }
-      strip.innerHTML = pills.length
-        ? `<span class="ribbon-intel-strip-label">INTEL</span>` + pills.join("")
+
+      strip.innerHTML = sections.length
+        ? `<span class="ribbon-intel-strip-label">INTEL</span>` + sections.join('<span class="ribbon-intel-sep">|</span>')
         : "";
       strip.querySelectorAll("[data-nav]").forEach(btn => {
         btn.addEventListener("click", () => nav(btn.dataset.nav));

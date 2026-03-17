@@ -23,17 +23,9 @@
   <main class="intel-main">
     <svg class="intel-watermark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
 
-    <section class="intel-section">
-      <h2 class="intel-section-title">Provider Status</h2>
-      <div id="intel-page-providers" class="intel-page-providers"></div>
-      <div id="intel-not-configured" class="intel-not-configured hidden">
-        Providers not configured. <a href="../options/options.html#intel-providers">Go to Settings</a> to add API keys.
-      </div>
-    </section>
-
+    
     <!-- Screen All -->
-    <section class="intel-section">
-      <div class="comp-screen-bar">
+          <div class="comp-screen-bar">
         <button class="pill-chip" id="compScreenAll">Screen All KG Entities</button>
         <span class="comp-screen-status" id="compScreenStatus"></span>
         <span class="comp-screen-timestamp" id="compScreenTimestamp"></span>
@@ -45,8 +37,7 @@
 
       <!-- LEFT: Sanctions Screening -->
       <div class="comp-col">
-        <section class="intel-section">
-          <h2 class="intel-section-title">Sanctions Search</h2>
+                  <h2 class="intel-section-title">Sanctions Search</h2>
           <div class="comp-search-row">
             <input type="text" id="compSanctionsInput" class="comp-search-input" placeholder="Search name, organization, or vessel...">
             <button class="pill-chip" id="compSanctionsBtn">Search</button>
@@ -62,8 +53,7 @@
         </section>
 
         <!-- Sanctions Results -->
-        <section class="intel-section">
-          <div class="comp-results-header">
+                  <div class="comp-results-header">
             <h2 class="intel-section-title">Results</h2>
             <span class="comp-results-count" id="compSanctionsCount"></span>
           </div>
@@ -75,8 +65,7 @@
         </section>
 
         <!-- Entity Screening Summary -->
-        <section class="intel-section">
-          <h2 class="intel-section-title">KG Screening Summary</h2>
+                  <h2 class="intel-section-title">KG Screening Summary</h2>
           <div class="comp-screening-summary" id="compScreeningSummary">
             <div class="comp-summary-stat">
               <span class="comp-summary-value" id="compFlaggedCount">0</span>
@@ -97,8 +86,7 @@
 
       <!-- RIGHT: Litigation Search -->
       <div class="comp-col">
-        <section class="intel-section">
-          <h2 class="intel-section-title">Litigation Search</h2>
+                  <h2 class="intel-section-title">Litigation Search</h2>
           <div class="comp-search-row">
             <input type="text" id="compLitigationInput" class="comp-search-input" placeholder="Search name or case number...">
             <button class="pill-chip" id="compLitigationBtn">Search</button>
@@ -106,8 +94,7 @@
         </section>
 
         <!-- Litigation Results -->
-        <section class="intel-section">
-          <div class="comp-results-header">
+                  <div class="comp-results-header">
             <h2 class="intel-section-title">Court Records</h2>
             <span class="comp-results-count" id="compLitigationCount"></span>
           </div>
@@ -119,8 +106,7 @@
         </section>
 
         <!-- Quick Entity Match -->
-        <section class="intel-section">
-          <h2 class="intel-section-title">Entity Match</h2>
+                  <h2 class="intel-section-title">Entity Match</h2>
           <p class="comp-match-desc">Structured entity matching against OpenSanctions. Higher confidence than text search.</p>
           <div class="comp-match-form">
             <div class="comp-match-row">

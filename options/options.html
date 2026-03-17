@@ -809,6 +809,8 @@
               <button class="tab-btn" data-iprovider="gleif">GLEIF</button>
               <button class="tab-btn" data-iprovider="blockstream">Blockstream</button>
               <button class="tab-btn" data-iprovider="broadcastify">Broadcastify</button>
+              <button class="tab-btn" data-iprovider="vesselfinder">VesselFinder</button>
+              <button class="tab-btn" data-iprovider="flightaware">FlightAware</button>
             </div>
           </div>
 
@@ -916,9 +918,25 @@
             <!-- Sentinel Hub fields -->
             <div id="intel-sentinelhub-fields" class="hidden">
               <div class="form-group">
-                <label for="intel-sentinelhub-apikey">API Key</label>
-                <div class="input-row"><input type="password" id="intel-sentinelhub-apikey" placeholder="Sentinel Hub API key"><button class="icon-btn intel-eye-toggle" data-target="intel-sentinelhub-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+                <label>OAuth2 Client Credentials (Copernicus Data Space)</label>
+                <div class="dp-action-row" style="margin-bottom:8px;">
+                  <button id="intel-sentinelhub-load-json" class="pill-chip">Load credentials.json</button>
+                  <input type="file" id="intel-sentinelhub-file" accept=".json" style="display:none;">
+                </div>
               </div>
+              <div class="form-group">
+                <label for="intel-sentinelhub-clientid">Client ID</label>
+                <div class="input-row"><input type="password" id="intel-sentinelhub-clientid" placeholder="OAuth2 Client ID"><button class="icon-btn intel-eye-toggle" data-target="intel-sentinelhub-clientid" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <div class="form-group">
+                <label for="intel-sentinelhub-clientsecret">Client Secret</label>
+                <div class="input-row"><input type="password" id="intel-sentinelhub-clientsecret" placeholder="OAuth2 Client Secret"><button class="icon-btn intel-eye-toggle" data-target="intel-sentinelhub-clientsecret" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <div class="form-group">
+                <label for="intel-sentinelhub-instanceid">WMS Instance ID <span class="hint">(optional — for Leaflet tile layer)</span></label>
+                <div class="input-row"><input type="text" id="intel-sentinelhub-instanceid" placeholder="From Dashboard → Configuration Utility"><button class="icon-btn intel-eye-toggle" data-target="intel-sentinelhub-instanceid" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Get credentials at <a href="https://shapps.dataspace.copernicus.eu/dashboard/" target="_blank" style="color:var(--accent);">Copernicus Dashboard ↗</a>. Create an OAuth Client for Client ID + Secret. Instance ID is from Configuration Utility (needed for WMS tile layers).</p>
               <div class="dp-action-row">
                 <button id="intel-sentinelhub-test-btn" class="pill-chip">Test Connection</button>
                 <span id="intel-sentinelhub-status" class="dp-status"></span>
@@ -970,6 +988,32 @@
               <div class="dp-action-row">
                 <button id="intel-broadcastify-test-btn" class="pill-chip">Test Connection</button>
                 <span id="intel-broadcastify-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- FlightAware fields -->
+            <div id="intel-flightaware-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-flightaware-apikey">AeroAPI Key</label>
+                <div class="input-row"><input type="password" id="intel-flightaware-apikey" placeholder="FlightAware AeroAPI key"><button class="icon-btn intel-eye-toggle" data-target="intel-flightaware-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">FlightAware AeroAPI provides flight tracking, history, and airport data. Search by tail number, flight ID, or airline. Get your key at <a href="https://www.flightaware.com/aeroapi/portal" target="_blank" style="color:var(--accent);">flightaware.com/aeroapi ↗</a></p>
+              <div class="dp-action-row">
+                <button id="intel-flightaware-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-flightaware-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- VesselFinder fields -->
+            <div id="intel-vesselfinder-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-vesselfinder-apikey">API Key</label>
+                <div class="input-row"><input type="password" id="intel-vesselfinder-apikey" placeholder="VesselFinder API key ($10/mo)"><button class="icon-btn intel-eye-toggle" data-target="intel-vesselfinder-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">VesselFinder provides live vessel positions, details, and port calls. Optional — the ITU Ship Station database works for free vessel lookup without this key.</p>
+              <div class="dp-action-row">
+                <button id="intel-vesselfinder-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-vesselfinder-status" class="dp-status"></span>
               </div>
             </div>
           </div>
@@ -2627,6 +2671,35 @@
           <button class="pill-chip" data-goto-tab="providers" data-goto-anchor="dp-gdrive-folder-section">Cloud Folder</button>
           <span style="flex:1;"></span>
           <button id="set-argus-homepage" class="pill-chip">Set as Homepage</button>
+        </div>
+      </section>
+
+      <!-- ── Satellite Defaults ── -->
+      <section class="card settings-wide">
+        <h2 class="card-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          Satellite Defaults
+        </h2>
+        <div class="card-body">
+          <div class="form-row" style="gap:12px;flex-wrap:wrap;">
+            <div class="form-group" style="flex:1;min-width:200px;">
+              <label for="sat-default-location">Default Location</label>
+              <input type="text" id="sat-default-location" placeholder="e.g. Los Angeles, CA">
+            </div>
+            <div class="form-group" style="min-width:100px;">
+              <label for="sat-default-zoom">Default Zoom</label>
+              <input type="number" id="sat-default-zoom" min="1" max="18" value="12">
+            </div>
+            <div class="form-group" style="min-width:120px;">
+              <label for="sat-default-resolution">Image Resolution</label>
+              <select id="sat-default-resolution">
+                <option value="512">512px (Fast)</option>
+                <option value="1024" selected>1024px (Default)</option>
+                <option value="2048">2048px (High)</option>
+              </select>
+            </div>
+          </div>
+          <span class="hint">These defaults apply when the Satellite page loads. Changes save automatically.</span>
         </div>
       </section>
 

@@ -23,17 +23,9 @@
   <main class="intel-main">
     <svg class="intel-watermark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
 
-    <section class="intel-section">
-      <h2 class="intel-section-title">Provider Status</h2>
-      <div id="intel-page-providers" class="intel-page-providers"></div>
-      <div id="intel-not-configured" class="intel-not-configured hidden">
-        Providers not configured. <a href="../options/options.html#intel-providers">Go to Settings</a> to add API keys.
-      </div>
-    </section>
-
+    
     <!-- Search Bar -->
-    <section class="intel-section">
-      <div class="evt-search-bar">
+          <div class="evt-search-bar">
         <input type="text" id="evtSearchInput" class="comp-search-input" placeholder="Search entity, topic, or keyword...">
         <div class="evt-date-range">
           <input type="date" id="evtDateFrom" class="evt-date-input">
@@ -45,8 +37,7 @@
     </section>
 
     <!-- Coverage Volume Chart -->
-    <section class="intel-section">
-      <h2 class="intel-section-title">Coverage Volume</h2>
+          <h2 class="intel-section-title">Coverage Volume</h2>
       <div class="evt-chart-container" id="evtVolumeChart">
         <div class="evt-chart-placeholder">
           <div class="evt-chart-bars">
@@ -69,8 +60,7 @@
     </section>
 
     <!-- Sentiment Trend -->
-    <section class="intel-section">
-      <h2 class="intel-section-title">Sentiment Trend</h2>
+          <h2 class="intel-section-title">Sentiment Trend</h2>
       <div class="evt-chart-container" id="evtSentimentChart">
         <div class="evt-chart-placeholder">
           <div class="evt-sentiment-line">
@@ -86,8 +76,7 @@
     </section>
 
     <!-- Geographic Coverage -->
-    <section class="intel-section">
-      <h2 class="intel-section-title">Geographic Coverage</h2>
+          <h2 class="intel-section-title">Geographic Coverage</h2>
       <div class="evt-map-placeholder" id="evtGeoMap">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3;">
           <circle cx="12" cy="12" r="10"/>
@@ -100,8 +89,7 @@
     </section>
 
     <!-- Recent Articles -->
-    <section class="intel-section">
-      <div class="comp-results-header">
+          <div class="comp-results-header">
         <h2 class="intel-section-title">Recent Articles</h2>
         <span class="comp-results-count" id="evtArticleCount"></span>
       </div>
@@ -113,8 +101,7 @@
     </section>
 
     <!-- Actions -->
-    <section class="intel-section">
-      <div class="evt-actions">
+          <div class="evt-actions">
         <button class="pill-chip" id="evtAddEventToKg" disabled>Add Coverage Spike as KG Event</button>
         <button class="pill-chip" id="evtExport" disabled>Export</button>
       </div>

@@ -2004,6 +2004,13 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "intelSearch")       return handleIntelSearch(message.provider, message.query, message.options);
   if (message.action === "intelEnrichEntity") return handleIntelEnrichEntity(message.entityId, message.providers);
   if (message.action === "intelScreenAll")    return handleIntelScreenAll();
+  if (message.action === "sentinelGetImage")    return IntelProviders.sentinelhub.getImage(message.bbox, message.dateFrom, message.dateTo, message.options).then(url => ({ success: true, imageUrl: url })).catch(e => ({ success: false, error: e.message }));
+  if (message.action === "flightawareSearch")   return IntelProviders.flightaware.searchFlights(message.query, message.options).then(r => ({ success: true, ...r })).catch(e => ({ success: false, error: e.message }));
+  if (message.action === "flightawareLastFlight") return IntelProviders.flightaware.getLastFlight(message.query).then(r => ({ success: true, ...r })).catch(e => ({ success: false, error: e.message }));
+  if (message.action === "flightawareTrack")   return IntelProviders.flightaware.getFlightTrack(message.query).then(r => ({ success: true, ...r })).catch(e => ({ success: false, error: e.message }));
+  if (message.action === "vesselSearch")        return VesselLookup.search(message.query).then(r => ({ success: true, ...r })).catch(e => ({ success: false, error: e.message }));
+  if (message.action === "aircraftLookup")     return AircraftLookup.lookupByTailNumber(message.query).then(r => ({ success: true, ...r })).catch(e => ({ success: false, error: e.message }));
+  if (message.action === "aircraftLookupHex")  return AircraftLookup.lookupByHex(message.query).then(r => ({ success: true, ...r })).catch(e => ({ success: false, error: e.message }));
   if (message.action === "gdeltTimeline")     return IntelProviders.gdelt.getTimelineVolume(message.query, message.options).then(r => ({ success: true, data: r })).catch(e => ({ success: false, error: e.message }));
   if (message.action === "gdeltTone")         return IntelProviders.gdelt.getTimelineTone(message.query, message.options).then(r => ({ success: true, data: r })).catch(e => ({ success: false, error: e.message }));
   if (message.action === "gdeltGeo")          return IntelProviders.gdelt.getGeo(message.query, message.options).then(r => ({ success: true, data: r })).catch(e => ({ success: false, error: e.message }));
@@ -3647,6 +3654,14 @@ async function handleIntelSearch(providerKey, query, options) {
         break;
       case "gleif":
         results = await provider.searchByName(query, options);
+        break;
+      case "flightaware":
+        results = await provider.searchFlights(query, options);
+        break;
+      case "sentinelhub":
+        // Test connection only — actual imagery uses sentinelGetImage action
+        await provider.testConnection();
+        results = { connected: true };
         break;
       default:
         return { success: false, error: `Provider ${providerKey} search not yet implemented` };
