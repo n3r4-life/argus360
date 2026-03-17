@@ -180,6 +180,31 @@
               <button class="pill-chip sat-enhance-btn-b" data-enhance="block">Block</button>
             </span>
           </div>
+          <!-- Grabber image transform controls (hidden until grabber loaded) -->
+          <div class="sat-grabber-controls" id="satGrabberControls" style="display:none;">
+            <div class="sat-fp-row sat-fp-row-spread">
+              <span class="sat-fp-sublabel">Transform:</span>
+              <span class="sat-fp-pills-right">
+                <label class="pill-toggle mode-pill" title="Lock: image stays fixed while map scrolls">
+                  <span class="mode-pill-label mode-pill-left" style="font-size:8px;">Free</span>
+                  <input type="checkbox" id="satGrabberLock">
+                  <span class="pill-track" style="--pill-color:var(--accent)"><span class="pill-knob"></span></span>
+                  <span class="mode-pill-label mode-pill-right" style="font-size:8px;">Lock</span>
+                </label>
+                <button class="pill-chip" id="satGrabberReset" title="Reset all transforms">Reset</button>
+              </span>
+            </div>
+            <div class="sat-fp-row">
+              <span class="sat-fp-sublabel">Rotate:</span>
+              <input type="range" id="satGrabberRotate" min="0" max="360" value="0" class="sat-opacity-slider">
+              <span class="sat-opacity-val-sm" id="satGrabberRotateVal">0°</span>
+            </div>
+            <div class="sat-fp-row">
+              <span class="sat-fp-sublabel">Scale:</span>
+              <input type="range" id="satGrabberScale" min="10" max="300" value="100" class="sat-opacity-slider">
+              <span class="sat-opacity-val-sm" id="satGrabberScaleVal">100%</span>
+            </div>
+          </div>
         </div>
 
         <!-- Actions -->

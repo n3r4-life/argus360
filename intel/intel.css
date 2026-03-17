@@ -1387,29 +1387,42 @@ body {
 }
 .sat-opacity-slider {
   flex: 1;
-  height: 6px;
+  height: 3px;
   -webkit-appearance: none;
   appearance: none;
   background: var(--border);
-  border-radius: 3px;
+  border-radius: 2px;
   outline: none;
   cursor: pointer;
 }
 .sat-opacity-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
+  width: 10px;
+  height: 10px;
   background: var(--accent);
   border-radius: 50%;
   cursor: pointer;
+  transition: box-shadow 0.2s;
 }
 .sat-opacity-slider::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
+  width: 10px;
+  height: 10px;
   background: var(--accent);
   border-radius: 50%;
   border: none;
   cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+/* Pulse animation for sliders needing attention */
+@keyframes sat-slider-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(233, 69, 96, 0.4); }
+  50% { box-shadow: 0 0 8px 4px rgba(233, 69, 96, 0.6); }
+}
+.sat-opacity-slider.pulse-hint::-webkit-slider-thumb {
+  animation: sat-slider-pulse 1s ease-in-out 3;
+}
+.sat-opacity-slider.pulse-hint::-moz-range-thumb {
+  animation: sat-slider-pulse 1s ease-in-out 3;
 }
 .sat-opacity-value {
   font-size: 10px;

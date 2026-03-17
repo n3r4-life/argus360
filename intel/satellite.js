@@ -487,7 +487,12 @@
       });
 
       if (!resp?.success || !resp.scenes?.length) {
-        listEl.innerHTML = '<div style="font-size:10px;color:var(--text-muted);padding:4px;">No scenes found in this date range</div>';
+        listEl.innerHTML = '<div style="font-size:10px;color:var(--text-muted);padding:4px;">No scenes found — widen ±Days or adjust cloud cover</div>';
+        // Pulse the ±Days slider and Scenes button to draw attention
+        const windowSlider = document.getElementById(panel === 'A' ? 'satDateWindowA' : 'satDateWindowB');
+        const scenesBtn = document.getElementById(panel === 'A' ? 'satFindScenesA' : 'satFindScenesB');
+        if (windowSlider) { windowSlider.classList.add('pulse-hint'); setTimeout(() => windowSlider.classList.remove('pulse-hint'), 3500); }
+        if (scenesBtn) { scenesBtn.classList.add('flashing'); setTimeout(() => scenesBtn.classList.remove('flashing'), 3500); }
         return;
       }
 
