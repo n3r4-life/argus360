@@ -1310,7 +1310,7 @@
       });
     }
     btn.textContent = `Collected ${pins.length}!`;
-    setTimeout(() => { btn.textContent = 'Collect All'; btn.disabled = false; }, 2000);
+    setTimeout(() => { btn.textContent = '+ Asset'; btn.disabled = false; }, 2000);
   });
 
   // ── Collect current satellite view to asset library ──

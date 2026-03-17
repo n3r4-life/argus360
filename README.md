@@ -130,16 +130,41 @@ Results are exportable as CSV. Coverage spikes can be saved to the KG as `global
 
 Browse the planet with 10-meter resolution Sentinel-2 imagery on a Leaflet map.
 
-- **Jump to location** — geocode any address, city, or coordinates via Nominatim
-- **Dual date comparison** — pick Date A and Date B, load imagery for both
-- **Opacity slider** — Balance mode (A + B = 100%) or Independent mode (A and B each 0-100%)
-- **Band selection** — True Color, False Color (vegetation), NDVI, Moisture — independently per image
-- **Enhancement filters** — Normal, Invert, B/W, Hi-Contrast, Saturate, Edge Detect, Block — independently per image
-- **Dual Overlay mode** — compare two different locations side-by-side on the same viewport
-- **Swap A/B** — full swap of images, dates, search inputs, bands, and enhancements
-- **Pin collection** — click the map to pin locations with labels and notes, export as CSV or add to KG
-- **Resolution control** — 512px (fast), 1024px (default), 2048px (high) — independently per image
-- **Settings** — default location, zoom, and resolution configurable in the console Settings tab
+**Search & Location:**
+- **Jump to location** — geocode any address, city, or lat/lon coordinates via Nominatim
+- **Reverse geocoding** — raw coordinates auto-resolve to full structured addresses (street, city, state, postcode, country)
+- **Address data stored** with all pins, assets, and location entries for use across pages
+
+**Scene Catalog & Imagery:**
+- **Catalog-first workflow** — searches the Sentinel-2 Catalog API for available scenes, shows date/time/cloud cover/satellite ID for each pass, auto-selects the lowest cloud cover scene
+- **Scene picker** — scrollable list of available passes per image, click to load that exact scene with guaranteed metadata accuracy
+- **Per-image date windows** — ±Days slider (1-60 days) independently for Image A and Image B
+- **Image cache** — in-memory cache avoids redundant API calls for identical requests (up to 50 entries)
+- **No-imagery flash hint** — when scenes aren't found, the ±Days slider and Scenes button pulse to guide the user
+
+**Image Controls (tabbed Imagery Controls panel):**
+- **Search tab** — Image A/B band selection (True Color, False Color, NDVI, Moisture), enhancement filters (Normal, Invert, B/W, Hi-Contrast, Saturate, Edge Detect, Block), scene lists, cloud cover threshold, opacity/balance controls, action buttons
+- **Basemap tab** — opacity, style (Normal/Invert/B&W/Hi-C/Sepia/Warm/Cool), brightness (20-300%), contrast (20-300%), color tint (None/White/Yellow/Red/Green/Blue), dual basemap slider
+- **Settings tab** — image brightness, resolution per image (512/1024/2048)
+- **Image Overlay Balance** — Balance mode (A + B = 100%) or Independent mode, with clear "no image loaded" indicator
+
+**Dual Mode:**
+- **Single AB** — same location for both images, different filters/enhancements for comparison
+- **Overlay AB** — two different locations overlaid on the same viewport
+- **Swap A/B** — full swap of images, dates, bands, enhancements, date windows, resolutions
+
+**Grabber Image Integration:**
+- **Insert image from Asset Library** — load a collected image from the Image Grabber as Image B overlay
+- **Transform controls** — rotate (0-360°), scale (10-300%), with Lock toggle
+- **Lock mode** — freezes the image in place while the map scrolls underneath; enables drag-to-reposition and corner resize handles
+- **Source label** — Image B shows "Satellite" or "Grabber" to indicate the source
+
+**Output & Collection:**
+- **Pin collection** — click the map to pin locations with full context (search query, scene, layer, enhance, dates, cloud cover, address, zoom level); export as CSV or add to KG
+- **PNG Capture** — download Image A as a named PNG file
+- **Save As** — browser save dialog for choosing download location
+- **+ Asset** — save current satellite view + location to the Shared Asset Library (creates both a satellite image asset and a location asset with full metadata)
+- **Collect All Pins** — batch-add all pinned locations to the Asset Library
 
 Requires OAuth2 client credentials from the Copernicus Data Space Ecosystem dashboard.
 
@@ -292,7 +317,7 @@ Create your own in Console → **Prompts** tab. Each preset can be bound to a sp
 | Whois / DNS | RDAP lookups (rdap.org) + DNS records (dns.google) |
 | Tech Stack Detection | Frameworks, CDNs, analytics, CMS identification |
 | Regex Scanner | Pattern scanning with AI-powered threat/entity/summary analysis |
-| Image Grabber | Extract, filter, preview, download, and cloud-save images (single page or all open tabs) |
+| Image Grabber | Extract, filter, preview, download, cloud-save, and collect images to Asset Library (single page or all open tabs) |
 | Connection Graph | Interactive force-directed visualization (project-level and global) |
 | Entity Heatmap | Mention frequency visualization across project items |
 | Geolocation Map | Plot extracted locations on an interactive map (OpenStreetMap) |
@@ -357,6 +382,30 @@ Standalone AI chat with persistent sessions. Switch providers mid-conversation. 
 ## Workbench
 
 Project-aware deep-analysis workspace. Drag research items onto a work surface, chat with AI about connections and contradictions. Floating, draggable, resizable panels. Provider override per session.
+
+---
+
+## Shared Asset Library
+
+Cross-page collection system for research assets. Available on every page via a floating panel (folder icon, left edge).
+
+- **Asset types** — Images, Satellite captures, Locations, Sources, Entities, Snippets — each with its own tab
+- **Cross-page persistence** — add an image on the Image Grabber, use it on the Satellite page as an overlay. Pin a location on Satellite, pull it into Sources later
+- **Per-asset actions** — Use (→ triggers page-specific handler), Go to page (↪ navigates to the source page with auto-load), Open source page (↗), Open original URL (🔗), Remove
+- **Auto-load navigation** — clicking "Go to page" on an asset navigates to the originating page and automatically loads that asset
+- **In-use highlighting** — assets actively loaded on the current page glow baby blue in the library panel
+- **Image Grabber integration** — selected images collected via "+ Asset" button; collected images highlighted with green glow in the gallery
+- **Satellite integration** — "+ Asset" saves both the satellite image and the location with full metadata (address, scene, layer, enhance, coordinates); locations restore full state when clicked
+- **Project selector** — dropdown in the panel footer shows/switches the active project from any page
+- **Panel state** — position, visibility, and active tab persist across pages and sessions
+- **ACC button** — "Add Collection Context" in every AI chat panel; opens a picker with checkboxes to select which assets to share as context with the AI
+- **Storage** — `browser.storage.local` with cross-tab sync via `storage.onChanged`
+
+### Shared Libraries
+
+- `shared/floating-panel.js` — `FloatingPanel.init(panel, pageId)` provides drag, resize, z-stacking, and state persistence for all `.fp` panels across the app
+- `shared/asset-library.js` — `AssetLibrary.init({ pageId })` mounts the collection panel with full CRUD API
+- `shared/panel-state.js` — position/size/visibility persistence for floating panels
 
 ---
 
@@ -494,7 +543,7 @@ Argus/
 ├── feeds/                       # RSS reader
 ├── finance/                     # Finance monitor
 ├── ssh/                         # Terminal
-├── shared/                      # Ribbon nav, shared UI, lock screen
+├── shared/                      # Ribbon nav, floating panels, asset library, shared UI, lock screen
 ├── osint/                       # OSINT tools (graph, dashboard, timeline, geomap, etc.)
 ├── lib/                         # Shared libraries (ArgusDB, cloud, vault, vendor)
 ├── data/                        # Resources, KG dictionaries

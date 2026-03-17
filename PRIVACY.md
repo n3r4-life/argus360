@@ -1,6 +1,6 @@
 # Argus Privacy Policy
 
-**Last updated:** March 12, 2026
+**Last updated:** March 17, 2026
 **Developer:** n3r4-life
 
 ## Summary
@@ -19,6 +19,8 @@ All extension data is stored in your browser's local storage (`browser.storage.l
 - RSS feed subscriptions and articles
 - Keyword watchlist terms
 - Geocoding cache (location name to coordinates)
+- Shared Asset Library (collected images, locations, entities across pages)
+- Satellite pins and scene metadata
 - Extension settings and preferences
 
 This data never leaves your browser except as described below. You can clear all stored data at any time using the **"Wipe Everything"** button in extension settings. Note: Firefox does not automatically clear extension data on uninstall — use "Wipe Everything" before uninstalling to leave no traces.
@@ -39,9 +41,13 @@ When you analyze a page, generate a report, or use any AI-powered feature, the c
 
 Each provider has its own privacy policy and data handling practices. Argus sends page content and your prompt to the provider's API using your own API key. The developer of Argus has no access to your API keys or the data you send to these providers.
 
-### OpenStreetMap Nominatim (geolocation feature)
+### OpenStreetMap Nominatim (geolocation & satellite)
 
-When you use the Geolocation Map OSINT tool, location names extracted from your project are sent to the OpenStreetMap Nominatim geocoding service to obtain coordinates. Results are cached locally for 30 days to minimize requests. See the [Nominatim Usage Policy](https://operations.osmfoundation.org/policies/nominatim/).
+When you use the Geolocation Map or Satellite page, location names and coordinates are sent to the OpenStreetMap Nominatim geocoding service for forward and reverse geocoding. The Satellite page uses Nominatim for both address→coordinate and coordinate→address lookups. Results are cached locally to minimize requests. See the [Nominatim Usage Policy](https://operations.osmfoundation.org/policies/nominatim/).
+
+### Copernicus / Sentinel Hub (satellite imagery, user-configured)
+
+When you use the Satellite page, imagery requests are sent to the Copernicus Data Space Ecosystem Sentinel Hub API using OAuth2 client credentials you provide. Data sent includes: bounding box coordinates, date ranges, cloud cover thresholds, and processing parameters. The API returns satellite imagery tiles. The Catalog API is also queried to list available scenes for a location. No personal data is sent — only geographic coordinates and dates. See the [Copernicus Data Space Terms](https://dataspace.copernicus.eu/terms-and-conditions).
 
 ### Archive.is and Internet Archive (optional)
 
