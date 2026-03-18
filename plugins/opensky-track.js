@@ -1,8 +1,8 @@
 window.ArgusPluginRegistry.registerPlugin({
-    id: 'airport-intelligence',
-    name: 'Airport Intelligence',
+    id: 'opensky-track',
+    name: 'OpenSky Track',
     version: '1.0',
-    category: 'govintel',
+    category: 'location',
     requires: ['kg'],
     run: async (input, context) => {
         var response = await new Promise(function(resolve) {
@@ -12,10 +12,10 @@ window.ArgusPluginRegistry.registerPlugin({
                 options: { method: 'GET' }
             }, resolve);
         });
-        var flights = [];
+        var aircraft = [];
         if (response && response.success) {
-            flights = response.data.states || [];
+            aircraft = response.data.states || [];
         }
-        return { message: 'Airport tracking complete', entities: flights };
+        return { message: 'OpenSky tracking complete', entities: aircraft };
     }
 });

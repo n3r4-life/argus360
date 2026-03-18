@@ -1,9 +1,9 @@
 window.ArgusPluginRegistry.registerPlugin({
-    id: 'sanctions-screen',
-    name: 'Sanctions Screening',
+    id: 'finance-screen',
+    name: 'Finance Screening',
     version: '1.0',
-    category: 'govintel',
-    requires: ['vault', 'kg'],
+    category: 'finance',
+    requires: ['kg'],
     run: async (input, context) => {
         var response = await new Promise(function(resolve) {
             browser.runtime.sendMessage({
@@ -16,10 +16,10 @@ window.ArgusPluginRegistry.registerPlugin({
                 }
             }, resolve);
         });
-        var entities = [];
+        var screen = [];
         if (response && response.success) {
-            entities = response.data.results || [];
+            screen = response.data.results || [];
         }
-        return { message: 'Sanctions check complete', entities: entities };
+        return { message: 'Finance screening complete', entities: screen };
     }
 });

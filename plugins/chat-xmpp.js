@@ -1,21 +1,21 @@
 window.ArgusPluginRegistry.registerPlugin({
-    id: 'airport-intelligence',
-    name: 'Airport Intelligence',
+    id: 'chat-xmpp',
+    name: 'Chat XMPP',
     version: '1.0',
-    category: 'govintel',
-    requires: ['kg'],
+    category: 'communication',
+    requires: ['vault'],
     run: async (input, context) => {
         var response = await new Promise(function(resolve) {
             browser.runtime.sendMessage({
                 type: 'EXTERNAL_API_CALL',
-                url: 'https://opensky-network.org/api/states/all',
+                url: 'https://api.gdeltproject.org/api/v2/doc/doc',
                 options: { method: 'GET' }
             }, resolve);
         });
-        var flights = [];
+        var chat = [];
         if (response && response.success) {
-            flights = response.data.states || [];
+            chat = response.data.articles || [];
         }
-        return { message: 'Airport tracking complete', entities: flights };
+        return { message: 'XMPP chat complete', entities: chat };
     }
 });

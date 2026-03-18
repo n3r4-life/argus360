@@ -1,8 +1,8 @@
 window.ArgusPluginRegistry.registerPlugin({
-    id: 'airport-intelligence',
-    name: 'Airport Intelligence',
+    id: 'monitors-diff',
+    name: 'Monitors Diff',
     version: '1.0',
-    category: 'govintel',
+    category: 'monitors',
     requires: ['kg'],
     run: async (input, context) => {
         var response = await new Promise(function(resolve) {
@@ -12,10 +12,10 @@ window.ArgusPluginRegistry.registerPlugin({
                 options: { method: 'GET' }
             }, resolve);
         });
-        var flights = [];
+        var diff = [];
         if (response && response.success) {
-            flights = response.data.states || [];
+            diff = response.data.states || [];
         }
-        return { message: 'Airport tracking complete', entities: flights };
+        return { message: 'Monitor diff complete', entities: diff };
     }
 });

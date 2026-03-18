@@ -1,8 +1,8 @@
 window.ArgusPluginRegistry.registerPlugin({
-    id: 'airport-intelligence',
-    name: 'Airport Intelligence',
+    id: 'vessel-track',
+    name: 'Vessel Tracking',
     version: '1.0',
-    category: 'govintel',
+    category: 'location',
     requires: ['kg'],
     run: async (input, context) => {
         var response = await new Promise(function(resolve) {
@@ -12,10 +12,10 @@ window.ArgusPluginRegistry.registerPlugin({
                 options: { method: 'GET' }
             }, resolve);
         });
-        var flights = [];
+        var vessels = [];
         if (response && response.success) {
-            flights = response.data.states || [];
+            vessels = response.data.states || [];
         }
-        return { message: 'Airport tracking complete', entities: flights };
+        return { message: 'Vessel tracking complete', entities: vessels };
     }
 });

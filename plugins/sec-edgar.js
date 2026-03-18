@@ -1,21 +1,21 @@
 window.ArgusPluginRegistry.registerPlugin({
-    id: 'airport-intelligence',
-    name: 'Airport Intelligence',
+    id: 'sec-edgar',
+    name: 'SEC EDGAR',
     version: '1.0',
-    category: 'govintel',
+    category: 'finance',
     requires: ['kg'],
     run: async (input, context) => {
         var response = await new Promise(function(resolve) {
             browser.runtime.sendMessage({
                 type: 'EXTERNAL_API_CALL',
-                url: 'https://opensky-network.org/api/states/all',
+                url: 'https://efts.sec.gov/LATEST/search-index?q=test',
                 options: { method: 'GET' }
             }, resolve);
         });
-        var flights = [];
+        var filings = [];
         if (response && response.success) {
-            flights = response.data.states || [];
+            filings = response.data || [];
         }
-        return { message: 'Airport tracking complete', entities: flights };
+        return { message: 'SEC EDGAR complete', entities: filings };
     }
 });

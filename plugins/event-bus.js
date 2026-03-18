@@ -1,21 +1,21 @@
 window.ArgusPluginRegistry.registerPlugin({
-    id: 'airport-intelligence',
-    name: 'Airport Intelligence',
+    id: 'event-bus',
+    name: 'Event Bus',
     version: '1.0',
-    category: 'govintel',
+    category: 'productivity',
     requires: ['kg'],
     run: async (input, context) => {
         var response = await new Promise(function(resolve) {
             browser.runtime.sendMessage({
                 type: 'EXTERNAL_API_CALL',
-                url: 'https://opensky-network.org/api/states/all',
+                url: 'https://api.gdeltproject.org/api/v2/doc/doc',
                 options: { method: 'GET' }
             }, resolve);
         });
-        var flights = [];
+        var events = [];
         if (response && response.success) {
-            flights = response.data.states || [];
+            events = response.data.articles || [];
         }
-        return { message: 'Airport tracking complete', entities: flights };
+        return { message: 'Event bus complete', entities: events };
     }
 });

@@ -1,21 +1,21 @@
 window.ArgusPluginRegistry.registerPlugin({
-    id: 'airport-intelligence',
-    name: 'Airport Intelligence',
+    id: 'copernicus-wms',
+    name: 'Copernicus WMS',
     version: '1.0',
-    category: 'govintel',
+    category: 'location',
     requires: ['kg'],
     run: async (input, context) => {
         var response = await new Promise(function(resolve) {
             browser.runtime.sendMessage({
                 type: 'EXTERNAL_API_CALL',
-                url: 'https://opensky-network.org/api/states/all',
+                url: 'https://api.gdeltproject.org/api/v2/doc/doc',
                 options: { method: 'GET' }
             }, resolve);
         });
-        var flights = [];
+        var wms = [];
         if (response && response.success) {
-            flights = response.data.states || [];
+            wms = response.data || [];
         }
-        return { message: 'Airport tracking complete', entities: flights };
+        return { message: 'Copernicus WMS complete', entities: wms };
     }
 });

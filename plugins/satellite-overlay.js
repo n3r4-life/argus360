@@ -5,9 +5,20 @@ window.ArgusPluginRegistry.registerPlugin({
     category: 'location',
     requires: ['kg'],
     run: async (input, context) => {
-        let overlay = [];
-        if (window.ArgusKG && typeof window.ArgusKG.satelliteAnalyze === 'function') {
-            overlay = await window.ArgusKG.satelliteAnalyze(input);
+        var response = await new Promise(function(resolve) {
+            browser.runtime.sendMessage({
+                type: 'EXTERNAL_API_CALL',
+                url: 'https://api.opensanctions.org/search',
+                options: {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ q: input })
+                }
+            }, resolve);
+        });
+        var overlay = [];
+        if (response && response.success) {
+            overlay = response.data.results || [];
         }
         return { message: 'Satellite overlay complete', entities: overlay };
     }

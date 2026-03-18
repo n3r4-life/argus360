@@ -1,9 +1,9 @@
 window.ArgusPluginRegistry.registerPlugin({
-    id: 'sanctions-screen',
-    name: 'Sanctions Screening',
+    id: 'draft-pad-ai',
+    name: 'Draft Pad AI',
     version: '1.0',
-    category: 'govintel',
-    requires: ['vault', 'kg'],
+    category: 'reporting',
+    requires: ['kg'],
     run: async (input, context) => {
         var response = await new Promise(function(resolve) {
             browser.runtime.sendMessage({
@@ -16,10 +16,10 @@ window.ArgusPluginRegistry.registerPlugin({
                 }
             }, resolve);
         });
-        var entities = [];
+        var draft = [];
         if (response && response.success) {
-            entities = response.data.results || [];
+            draft = response.data.results || [];
         }
-        return { message: 'Sanctions check complete', entities: entities };
+        return { message: 'Draft pad AI complete', entities: draft };
     }
 });

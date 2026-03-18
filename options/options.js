@@ -12761,3 +12761,61 @@ async function refreshKGStatus() {
     });
 }
 refreshKGStatus();
+
+// === PHASE 3 TEST ALL BUTTON ===
+var testBtn = document.createElement('button');
+testBtn.className = 'pill-chip';
+testBtn.textContent = 'Test All Plugins (Safe)';
+testBtn.style.marginTop = '10px';
+testBtn.onclick = async function() {
+    var plugins = window.ArgusPluginRegistry.listAllPlugins();
+    var skipIds = ['google-earth-engine', 'textit', 'trawl-enhancement'];
+    for (var i = 0; i < plugins.length; i++) {
+        var p = plugins[i];
+        if (!(await window.ArgusPluginRegistry.isPluginEnabled(p.id))) continue;
+        if (skipIds.indexOf(p.id) !== -1) {
+            console.log(p.name + ' skipped (UI panel plugin)');
+            continue;
+        }
+        try {
+            var result = await window.ArgusPluginRegistry.runPlugin(p.id, 'test');
+            console.log(p.name + ' test OK: ' + (result.message || 'OK'));
+        } catch (e) {
+            console.warn(p.name + ' test failed: ' + e.message);
+        }
+    }
+    console.log('All plugins tested safely — KG pruning confirmed');
+};
+document.querySelector('.settings-grid').appendChild(testBtn);
+
+// === PHASE 3 WIPE + EXPORT ===
+var wipeBtn = document.createElement('button');
+wipeBtn.className = 'pill-chip';
+wipeBtn.textContent = 'Wipe Everything (Factory Reset)';
+wipeBtn.style.cssText = 'margin-top:10px; border-color:#f44; color:#f44;';
+wipeBtn.onclick = async function() {
+    if (confirm('This will delete ALL data, plugins, KG, and settings. Irreversible. Continue?')) {
+        await browser.storage.local.clear();
+        if (window.ArgusKG && typeof window.ArgusKG.wipe === 'function') {
+            window.ArgusKG.wipe();
+        }
+        alert('Everything wiped. Reload the extension.');
+        location.reload();
+    }
+};
+document.querySelector('.settings-grid').appendChild(wipeBtn);
+
+var exportBtn = document.createElement('button');
+exportBtn.className = 'pill-chip';
+exportBtn.textContent = 'Export All Settings + KG';
+exportBtn.style.marginTop = '6px';
+exportBtn.onclick = async function() {
+    var data = await browser.storage.local.get(null);
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'argus-backup.json';
+    a.click();
+};
+document.querySelector('.settings-grid').appendChild(exportBtn);

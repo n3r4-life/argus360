@@ -1,21 +1,21 @@
 window.ArgusPluginRegistry.registerPlugin({
-    id: 'airport-intelligence',
-    name: 'Airport Intelligence',
+    id: 'rss-keyword-router',
+    name: 'RSS Keyword Router',
     version: '1.0',
-    category: 'govintel',
+    category: 'feeds',
     requires: ['kg'],
     run: async (input, context) => {
         var response = await new Promise(function(resolve) {
             browser.runtime.sendMessage({
                 type: 'EXTERNAL_API_CALL',
-                url: 'https://opensky-network.org/api/states/all',
+                url: 'https://api.gdeltproject.org/api/v2/doc/doc',
                 options: { method: 'GET' }
             }, resolve);
         });
-        var flights = [];
+        var routed = [];
         if (response && response.success) {
-            flights = response.data.states || [];
+            routed = response.data.articles || [];
         }
-        return { message: 'Airport tracking complete', entities: flights };
+        return { message: 'RSS keyword routing complete', entities: routed };
     }
 });

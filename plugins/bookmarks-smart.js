@@ -1,21 +1,21 @@
 window.ArgusPluginRegistry.registerPlugin({
-    id: 'airport-intelligence',
-    name: 'Airport Intelligence',
+    id: 'bookmarks-smart',
+    name: 'Smart Bookmarks',
     version: '1.0',
-    category: 'govintel',
+    category: 'bookmarks',
     requires: ['kg'],
     run: async (input, context) => {
         var response = await new Promise(function(resolve) {
             browser.runtime.sendMessage({
                 type: 'EXTERNAL_API_CALL',
-                url: 'https://opensky-network.org/api/states/all',
+                url: 'https://api.gdeltproject.org/api/v2/doc/doc',
                 options: { method: 'GET' }
             }, resolve);
         });
-        var flights = [];
+        var bookmarks = [];
         if (response && response.success) {
-            flights = response.data.states || [];
+            bookmarks = response.data.articles || [];
         }
-        return { message: 'Airport tracking complete', entities: flights };
+        return { message: 'Smart bookmarks complete', entities: bookmarks };
     }
 });

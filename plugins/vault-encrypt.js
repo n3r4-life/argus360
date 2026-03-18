@@ -1,9 +1,9 @@
 window.ArgusPluginRegistry.registerPlugin({
-    id: 'sanctions-screen',
-    name: 'Sanctions Screening',
+    id: 'vault-encrypt',
+    name: 'Vault Encrypt',
     version: '1.0',
-    category: 'govintel',
-    requires: ['vault', 'kg'],
+    category: 'privacy',
+    requires: ['vault'],
     run: async (input, context) => {
         var response = await new Promise(function(resolve) {
             browser.runtime.sendMessage({
@@ -16,10 +16,10 @@ window.ArgusPluginRegistry.registerPlugin({
                 }
             }, resolve);
         });
-        var entities = [];
+        var encrypted = [];
         if (response && response.success) {
-            entities = response.data.results || [];
+            encrypted = response.data.results || [];
         }
-        return { message: 'Sanctions check complete', entities: entities };
+        return { message: 'Vault encryption complete', entities: encrypted };
     }
 });

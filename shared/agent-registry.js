@@ -1,5 +1,5 @@
 // shared/agent-registry.js
-// Safe KG wrapper – does NOT override runPlugin
+// Safe wrapper around existing runPlugin so pruning fires without breaking anything
 
 window.ArgusAgentRegistry = window.ArgusAgentRegistry || {
     agents: new Map(),
@@ -9,45 +9,37 @@ window.ArgusAgentRegistry = window.ArgusAgentRegistry || {
         this.agents.set(agentDef.id, agentDef);
         console.log('Agent registered with optional KG: ' + agentDef.id);
         return true;
-    },
-
-    runAgentWithKG: async function(id, input) {
-        const agent = this.agents.get(id);
-        if (!agent) throw new Error('Agent not found');
-        var context = await window.ArgusPluginContext.getPluginContext();
-        var result = await agent.run(input, context);
-        if (result.entities && window.ArgusKG) {
-            try {
-                window.ArgusKG.addEntities(result.entities);
-            } catch (e) {
-                console.warn('KG write failed (non-fatal):', e);
-            }
-        }
-        return result;
     }
 };
 
-// Single safe KG backfill (method guard prevents error if method missing)
+// Manifest V3 prep note: move backfill to browser.alarms in service-worker later
+// Single safe KG backfill at startup only (method guard prevents error if method missing)
 if (window.ArgusKG && typeof window.ArgusKG.backfillFromHistory === 'function') {
     window.ArgusKG.backfillFromHistory();
-    console.log('Agent Registry triggered full KG backfill');
+    console.log('KG backfill triggered at startup only');
 }
 
-// After every runAgentWithKG, trigger pruning
-window.ArgusAgentRegistry.runAgentWithKG = async function(id, input) {
-    const agent = this.agents.get(id);
-    if (!agent) throw new Error('Agent not found');
-    const context = await window.ArgusPluginContext.getPluginContext();
-    const result = await agent.run(input, context);
-    if (result.entities && window.ArgusKG) {
-        try {
-            window.ArgusKG.addEntities(result.entities);
-            if (typeof window.ArgusKG.pruneOldEntities === 'function') {
-                window.ArgusKG.pruneOldEntities();
+// Safe wrap of original runPlugin (executes after real plugin run)
+if (!window.ArgusPluginRegistry._originalRunPlugin) {
+    window.ArgusPluginRegistry._originalRunPlugin = window.ArgusPluginRegistry.runPlugin;
+    window.ArgusPluginRegistry.runPlugin = async function(id, input) {
+        var result = await window.ArgusPluginRegistry._originalRunPlugin.call(this, id, input);
+        if (result && result.entities && window.ArgusKG) {
+            try {
+                window.ArgusKG.addEntities(result.entities);
+                if (typeof window.ArgusKG.pruneOldEntities === 'function') {
+                    window.ArgusKG.pruneOldEntities();
+                }
+            } catch (e) {
+                console.warn('KG write or prune failed (non-fatal):', e);
             }
-        } catch (e) {
-            console.warn('KG write or prune failed (non-fatal):', e);
         }
-    }
-    return result;
+        return result;
+    };
+}
+
+// Export helper for full plugin + KG state
+window.ArgusAgentRegistry.exportAll = async function() {
+    var data = await browser.storage.local.get(null);
+    return data;
 };

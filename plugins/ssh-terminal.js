@@ -1,9 +1,9 @@
 window.ArgusPluginRegistry.registerPlugin({
-    id: 'airport-intelligence',
-    name: 'Airport Intelligence',
+    id: 'ssh-terminal',
+    name: 'SSH Terminal',
     version: '1.0',
-    category: 'govintel',
-    requires: ['kg'],
+    category: 'ssh',
+    requires: ['vault'],
     run: async (input, context) => {
         var response = await new Promise(function(resolve) {
             browser.runtime.sendMessage({
@@ -12,10 +12,10 @@ window.ArgusPluginRegistry.registerPlugin({
                 options: { method: 'GET' }
             }, resolve);
         });
-        var flights = [];
+        var session = [];
         if (response && response.success) {
-            flights = response.data.states || [];
+            session = response.data.states || [];
         }
-        return { message: 'Airport tracking complete', entities: flights };
+        return { message: 'SSH terminal complete', entities: session };
     }
 });

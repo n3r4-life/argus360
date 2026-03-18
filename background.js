@@ -8943,3 +8943,32 @@ async function handleSaveTrawlAsProject(message) {
   // Finance price refresh alarm (every 5 min)
   browser.alarms.create("finance-price-refresh", { delayInMinutes: 1, periodInMinutes: 5 });
 })();
+
+// Manifest V2 safe external API proxy for all plugins
+browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === 'EXTERNAL_API_CALL') {
+        fetch(message.url, message.options || {})
+            .then(r => r.json())
+            .then(data => sendResponse({ success: true, data: data }))
+            .catch(e => sendResponse({ success: false, error: e.message }));
+        return true;
+    }
+    // Manifest V3 prep: broadcast prune request to active tabs
+    if (message.type === 'KG_PRUNE_ALARM') {
+        sendResponse({ success: true });
+    }
+});
+
+// Manifest V3 prep: alarm-based pruning scheduler (runs every 30 minutes)
+// Note: ArgusKG lives in page context, not background — send message to active tab
+browser.alarms.create('kgPruneAlarm', { periodInMinutes: 30 });
+browser.alarms.onAlarm.addListener(function(alarm) {
+    if (alarm.name === 'kgPruneAlarm') {
+        browser.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+            if (tabs[0]) {
+                browser.tabs.sendMessage(tabs[0].id, { type: 'KG_PRUNE_REQUEST' }).catch(function() {});
+            }
+        });
+        console.log('KG prune alarm fired — request sent to active tab');
+    }
+});

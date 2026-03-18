@@ -1,21 +1,21 @@
 window.ArgusPluginRegistry.registerPlugin({
-    id: 'airport-intelligence',
-    name: 'Airport Intelligence',
+    id: 'wigle-wifi',
+    name: 'WiGLE WiFi',
     version: '1.0',
-    category: 'govintel',
+    category: 'osint',
     requires: ['kg'],
     run: async (input, context) => {
         var response = await new Promise(function(resolve) {
             browser.runtime.sendMessage({
                 type: 'EXTERNAL_API_CALL',
-                url: 'https://opensky-network.org/api/states/all',
+                url: 'https://api.wigle.net/api/v2/network/search',
                 options: { method: 'GET' }
             }, resolve);
         });
-        var flights = [];
+        var wifi = [];
         if (response && response.success) {
-            flights = response.data.states || [];
+            wifi = response.data.results || [];
         }
-        return { message: 'Airport tracking complete', entities: flights };
+        return { message: 'WiGLE WiFi complete', entities: wifi };
     }
 });

@@ -5,9 +5,16 @@ window.ArgusPluginRegistry.registerPlugin({
     category: 'location',
     requires: ['kg'],
     run: async (input, context) => {
-        let geo = [];
-        if (window.ArgusKG && typeof window.ArgusKG.geoEnrich === 'function') {
-            geo = await window.ArgusKG.geoEnrich(input);
+        var response = await new Promise(function(resolve) {
+            browser.runtime.sendMessage({
+                type: 'EXTERNAL_API_CALL',
+                url: 'https://opensky-network.org/api/states/all',
+                options: { method: 'GET' }
+            }, resolve);
+        });
+        var geo = [];
+        if (response && response.success) {
+            geo = response.data.states || [];
         }
         return { message: 'Geo enrichment complete', entities: geo };
     }
