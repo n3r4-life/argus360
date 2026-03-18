@@ -13,6 +13,7 @@ window.ArgusRibbon = window.ArgusRibbon || {
     },
 
     addPluginButton: function(pluginId, label, icon, onClick) {
+        if (this.buttons.has(pluginId)) return; // prevent duplicate buttons
         const btn = document.createElement('button');
         btn.className = 'pill-chip';
         btn.innerHTML = `${icon} ${label}`;

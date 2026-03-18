@@ -1,25 +1,48 @@
 // shared/plugin-loader.js
-// Dynamic loader – scales to all 70 plugins without manual script tags
+// Dynamic loader with idempotency guard and auto ribbon init
 
 window.ArgusPluginLoader = window.ArgusPluginLoader || {
     pluginFiles: [
         'google-earth-engine.js',
         'textit.js',
-        'trawl-enhancement.js'
-        // add more here as we implement the 70
+        'trawl-enhancement.js',
+        'sanctions-screen.js',
+        'semantic-index.js',
+        'location-intelligence.js',
+        'calendar-event-bus.js',
+        'govintel-feature.js',
+        'airport-intelligence.js',
+        '100-eyes-library.js',
+        'satellite-overlay.js',
+        'sanctions-v2.js',
+        'xmpp-router.js'
     ],
+    loaded: false,
 
-    loadAll: function() {
+    loadAll: async function() {
+        if (this.loaded) return;
         const promises = this.pluginFiles.map(filename => {
-            return new Promise((resolve, reject) => {
+            return new Promise(resolve => {
                 const script = document.createElement('script');
-                script.src = browser.runtime.getURL(`plugins/${filename}`);
+                script.src = browser.runtime.getURL('plugins/' + filename);
+                script.async = true;
                 script.onload = resolve;
-                script.onerror = () => { console.warn(`Failed to load plugin: ${filename}`); resolve(); };
+                script.onerror = () => { console.warn('Failed to load plugin: ' + filename); resolve(); };
                 document.body.appendChild(script);
             });
         });
-        console.log('✅ Argus Plugin Loader injecting all plugins dynamically');
-        return Promise.all(promises);
+        await Promise.all(promises);
+        this.loaded = true;
+        console.log('Argus Plugin Loader injected all plugins dynamically');
+        this.initRibbonOnPage();
+        return true;
+    },
+
+    initRibbonOnPage: function() {
+        if (document.querySelector('.argus-ribbon')) return;
+        const ribbonInit = document.createElement('script');
+        ribbonInit.src = browser.runtime.getURL('shared/ribbon-auto-init.js');
+        ribbonInit.async = true;
+        document.body.appendChild(ribbonInit);
     }
 };

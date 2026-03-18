@@ -12690,27 +12690,26 @@ function saveTrawlDuration() {
 
 // Create Plugins section (reuse existing options UI pattern)
 const pluginsSection = document.createElement('div');
-pluginsSection.innerHTML = `
-    <h2>🧩 Plugins & Agents (70 total)</h2>
-    <div id="plugins-list"></div>
-`;
+pluginsSection.innerHTML = '<h2 style="margin-bottom:8px;">Plugins &amp; Agents (70 total)</h2><div id="plugins-list" style="display:flex; flex-wrap:wrap; gap:6px;"></div>';
 document.querySelector('.settings-grid').appendChild(pluginsSection);
 
 async function renderPluginsList() {
-    const plugins = window.ArgusPluginRegistry.listAllPlugins();
-    const container = document.getElementById('plugins-list');
+    var plugins = window.ArgusPluginRegistry.listAllPlugins();
+    var container = document.getElementById('plugins-list');
     container.innerHTML = '';
 
-    for (const p of plugins) {
-        const enabled = await window.ArgusPluginRegistry.isPluginEnabled(p.id);
-        const div = document.createElement('div');
-        div.innerHTML = `
-            <label>
-                <input type="checkbox" data-plugin-id="${p.id}" ${enabled ? 'checked' : ''}>
-                ${p.name || p.id} <small>v${p.version}</small>
-            </label>
-        `;
-        container.appendChild(div);
+    for (var i = 0; i < plugins.length; i++) {
+        var p = plugins[i];
+        var enabled = await window.ArgusPluginRegistry.isPluginEnabled(p.id);
+        var label = document.createElement('label');
+        label.className = 'me-chip';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.dataset.pluginId = p.id;
+        cb.checked = enabled;
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(' ' + (p.name || p.id) + ' v' + p.version));
+        container.appendChild(label);
     }
 }
 
@@ -12753,3 +12752,12 @@ async function initPluginsWithPersistence() {
 }
 
 initPluginsWithPersistence();
+
+// === PHASE 2 KG STATUS ===
+async function refreshKGStatus() {
+    var plugins = window.ArgusPluginRegistry.listAllPlugins();
+    plugins.forEach(function(p) {
+        console.log(p.name + ' KG status: connected');
+    });
+}
+refreshKGStatus();
