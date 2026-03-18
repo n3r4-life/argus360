@@ -700,70 +700,181 @@ async function initTrawlBadge() {
 }
 
 // ──────────────────────────────────────────────
-// Reader Mode — inject/remove stripped CSS into active tab
+// Reader Mode — overlay approach (robust across all page layouts)
 // ──────────────────────────────────────────────
-const READER_CSS_ID = "__argus_reader_mode__";
-const READER_CSS = [
-  "html, body { background: #fafaf8 !important; color: #1a1a1a !important; font-family: Georgia, 'Times New Roman', serif !important; }",
-  "body > *:not(article):not(main):not([role='main']):not(#main):not(.main):not(#content):not(.content):not(.post-content):not(.entry-content):not(.article-body):not(.story-body) { display: none !important; }",
-  "article, main, [role='main'], #main, .main, #content, .content, .post-content, .entry-content, .article-body, .story-body { display: block !important; max-width: 680px !important; margin: 48px auto !important; padding: 0 24px !important; font-size: 19px !important; line-height: 1.75 !important; color: #1a1a1a !important; background: #fafaf8 !important; box-shadow: none !important; float: none !important; position: static !important; width: auto !important; }",
-  "nav, header, footer, aside, [class*='sidebar'], [class*='header'], [class*='footer'], [class*='navbar'], [class*='nav-'], [class*='-nav'], [class*='cookie'], [class*='banner'], [class*='popup'], [class*='modal'], [class*='overlay'], [id*='sidebar'], [id*='header'], [id*='footer'], [id*='nav'], [id*='cookie'], [id*='banner'], [id*='popup'], [id*='modal'], [id*='overlay'] { display: none !important; }",
-  "img, video, iframe { max-width: 100% !important; height: auto !important; }",
-  "a { color: #1a56db !important; }",
-  "h1, h2, h3, h4, h5, h6 { font-family: inherit !important; color: #111 !important; line-height: 1.3 !important; margin: 1.2em 0 0.4em !important; }",
-  "p { margin: 0 0 1em !important; }",
-  "blockquote { border-left: 3px solid #ccc !important; padding-left: 1em !important; color: #555 !important; font-style: italic !important; margin: 1em 0 !important; }",
-  "code, pre { font-family: monospace !important; background: #f0f0f0 !important; color: #333 !important; padding: 2px 5px !important; border-radius: 3px !important; }"
-].join(" ");
+const READER_OVERLAY_ID = "__argus_reader_overlay__";
+
+// Injected into the page to mount the reader overlay.
+// Uses a polling loop so SPAs (Twitter/X, Reddit, etc.) work even when
+// content renders after status:complete fires.
+const READER_MOUNT_FN = function () {
+  if (document.getElementById("__argus_reader_overlay__")) return;
+
+  const CANDIDATES = [
+    "article", "[role='article']", "main", "[role='main']",
+    ".post-content", ".entry-content", ".article-body", ".article-content",
+    ".story-body", ".story-content", ".content-body", ".page-content",
+    "#article-body", "#article-content", "#post-content", "#main-content",
+    ".post", "#post", ".entry", "#entry", "#content", ".content", "#main", "main"
+  ];
+  const STRIP_TAGS = [
+    "script", "style", "noscript", "iframe", "form",
+    "nav", "header", "footer", "aside", "button",
+    "[class*='ad-']", "[class*='-ad']", "[id*='cookie']", "[class*='cookie']",
+    "[class*='subscribe']", "[class*='newsletter']", "[class*='popup']",
+    "[class*='modal']", "[class*='sidebar']", "[class*='related']",
+    "[class*='recommended']", "[class*='share']", "[class*='social']"
+  ];
+
+  function findBest() {
+    let best = null, bestLen = 0;
+    for (const sel of CANDIDATES) {
+      try {
+        const el = document.querySelector(sel);
+        if (!el) continue;
+        const txt = el.innerText || "";
+        if (txt.length > bestLen) { best = el; bestLen = txt.length; }
+      } catch {}
+    }
+    return { best, bestLen };
+  }
+
+  function buildOverlay(best) {
+    const overlay = document.createElement("div");
+    overlay.id = "__argus_reader_overlay__";
+    overlay.style.cssText = "position:fixed;inset:0;z-index:2147483647;overflow-y:auto;background:#fafaf8;color:#1a1a1a;font-family:Georgia,'Times New Roman',serif;font-size:19px;line-height:1.75;padding:48px 24px 80px";
+    const col = document.createElement("div");
+    col.style.cssText = "max-width:680px;margin:0 auto;";
+    const closeBtn = document.createElement("button");
+    closeBtn.textContent = "\u2715 Exit Reader";
+    closeBtn.style.cssText = "position:fixed;top:12px;right:16px;z-index:2147483648;padding:5px 12px;background:#e94560;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:sans-serif;font-size:12px;font-weight:600";
+    closeBtn.addEventListener("click", () => { overlay.remove(); closeBtn.remove(); });
+    const clone = best.cloneNode(true);
+    for (const sel of STRIP_TAGS) { try { clone.querySelectorAll(sel).forEach(e => e.remove()); } catch {} }
+    clone.style.cssText = "all:unset;display:block;";
+    clone.querySelectorAll("*").forEach(el => {
+      const tag = el.tagName.toLowerCase();
+      if (tag === "a") { el.style.cssText = "color:#1a56db"; }
+      else if (tag === "img") { el.style.cssText = "max-width:100%;height:auto;display:block;margin:1em 0"; }
+      else if (/^h[1-6]$/.test(tag)) {
+        el.style.cssText = "display:block;font-weight:bold;margin:1.2em 0 0.4em;line-height:1.3;color:#111";
+        el.style.fontSize = { h1:"2em", h2:"1.5em", h3:"1.2em", h4:"1em", h5:"0.9em", h6:"0.85em" }[tag] || "1em";
+      } else if (tag === "p") { el.style.cssText = "display:block;margin:0 0 1em"; }
+      else if (tag === "blockquote") { el.style.cssText = "display:block;border-left:3px solid #ccc;padding-left:1em;color:#555;font-style:italic;margin:1em 0"; }
+      else if (tag === "pre" || tag === "code") { el.style.cssText = "font-family:monospace;background:#f0f0f0;color:#333;padding:2px 5px;border-radius:3px"; }
+      else if (tag === "ul" || tag === "ol") { el.style.cssText = "display:block;margin:0 0 1em;padding-left:1.6em"; }
+      else if (tag === "li") { el.style.cssText = "display:list-item;margin-bottom:0.25em"; }
+    });
+    col.appendChild(clone);
+    overlay.appendChild(col);
+    document.body.appendChild(overlay);
+    document.body.appendChild(closeBtn);
+  }
+
+  // Poll until real content is rendered (handles SPAs like Twitter/X, Reddit)
+  // Max 25 attempts × 400ms = 10 seconds
+  function tryMount(attempt) {
+    if (document.getElementById("__argus_reader_overlay__")) return;
+    if (attempt > 25) return;
+    const { best, bestLen } = findBest();
+    // Require ≥500 chars to consider content ready; fall back to body only after 12 attempts (~5s)
+    if (bestLen >= 500) {
+      buildOverlay(best);
+    } else if (attempt >= 12 && document.body && (document.body.innerText || "").length > 100) {
+      buildOverlay(document.body);
+    } else {
+      setTimeout(tryMount, 400, attempt + 1);
+    }
+  }
+
+  tryMount(0);
+};
+
+// Injected into the page to remove the reader overlay
+const READER_UNMOUNT_FN = function () {
+  const overlay = document.getElementById("__argus_reader_overlay__");
+  if (overlay) {
+    if (overlay._closeBtn) overlay._closeBtn.remove();
+    overlay.remove();
+  }
+};
+
+const READER_SKIP_RE = /^(about:|moz-extension:|chrome:|chrome-extension:|file:)/;
 
 async function initReaderMode() {
   const btn = document.getElementById("reader-mode-btn");
   if (!btn) return;
-  let [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-  if (!tab || !tab.url || tab.url.startsWith("about:") || tab.url.startsWith("moz-extension:") || tab.url.startsWith("chrome-extension:")) {
-    btn.disabled = true;
-    btn.style.opacity = "0.4";
-    btn.title = "Reader mode unavailable on this page";
-    return;
+
+  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  let currentDomain = "";
+  if (tab?.url && !READER_SKIP_RE.test(tab.url)) {
+    try { currentDomain = new URL(tab.url).hostname.replace(/^www\./, ""); } catch {}
   }
-  // Check if already active on this tab
-  const storageKey = "readerMode_" + tab.id;
-  const stored = await browser.storage.local.get({ [storageKey]: false });
-  if (stored[storageKey]) {
+
+  const { readerModeGlobal, readerSites = [] } = await browser.storage.local.get({ readerModeGlobal: false, readerSites: [] });
+  const domainLearned = currentDomain && readerSites.some(d => currentDomain === d || currentDomain.endsWith("." + d));
+
+  if (readerModeGlobal) {
     btn.classList.add("reader-active");
-    btn.title = "Reader Mode ON — click to restore page";
+    btn.title = "Reader Mode ON (all tabs) \u2014 click to disable";
+  } else if (domainLearned) {
+    // Domain is on the learned list — show the pill as active (page will already have the overlay from bg auto-inject)
+    btn.classList.add("reader-active", "reader-learned");
+    btn.title = "Reader Mode auto-on for " + currentDomain + " \u2014 click to disable for this site";
+    const span = btn.querySelector("span");
+    if (span) span.textContent = "Reader \u2605";
   }
+
   btn.addEventListener("click", async () => {
     const isActive = btn.classList.contains("reader-active");
-    try {
-      if (!isActive) {
-        await browser.tabs.executeScript(tab.id, {
-          code: `(function() {
-  if (document.getElementById("__argus_reader_mode__")) return;
-  const s = document.createElement("style");
-  s.id = "__argus_reader_mode__";
-  s.textContent = ${JSON.stringify(READER_CSS)};
-  document.head.appendChild(s);
-  document.documentElement.setAttribute("data-argus-reader", "1");
-})();`
-        });
-        btn.classList.add("reader-active");
-        btn.title = "Reader Mode ON — click to restore page";
-        await browser.storage.local.set({ [storageKey]: true });
-      } else {
-        await browser.tabs.executeScript(tab.id, {
-          code: `(function() {
-  const s = document.getElementById("__argus_reader_mode__");
-  if (s) s.remove();
-  document.documentElement.removeAttribute("data-argus-reader");
-})();`
-        });
-        btn.classList.remove("reader-active");
-        btn.title = "Toggle Reader Mode — strip page to text only";
-        await browser.storage.local.set({ [storageKey]: false });
+    const mountCode = "(" + READER_MOUNT_FN.toString() + ")();";
+    const unmountCode = "(" + READER_UNMOUNT_FN.toString() + ")();";
+
+    if (!isActive) {
+      // Enable globally
+      await browser.storage.local.set({ readerModeGlobal: true });
+      btn.classList.add("reader-active");
+      btn.classList.remove("reader-learned");
+      btn.title = "Reader Mode ON (all tabs) \u2014 click to disable";
+      const span = btn.querySelector("span"); if (span) span.textContent = "Reader";
+      // Auto-learn current domain
+      if (currentDomain) {
+        const { readerSites: rs = [] } = await browser.storage.local.get({ readerSites: [] });
+        if (!rs.some(d => currentDomain === d || currentDomain.endsWith("." + d))) {
+          rs.push(currentDomain);
+          await browser.storage.local.set({ readerSites: rs });
+        }
       }
-    } catch (e) {
-      showToast("Reader mode unavailable on this page", "error");
+      // Inject into every currently open tab
+      const allTabs = await browser.tabs.query({});
+      for (const t of allTabs) {
+        if (!t.url || READER_SKIP_RE.test(t.url)) continue;
+        browser.tabs.executeScript(t.id, { code: mountCode }).catch(() => {});
+      }
+    } else {
+      const wasLearned = btn.classList.contains("reader-learned");
+      const span = btn.querySelector("span"); if (span) span.textContent = "Reader";
+      btn.classList.remove("reader-active", "reader-learned");
+
+      if (wasLearned && currentDomain) {
+        // Remove this domain from the learned list
+        const { readerSites: rs = [] } = await browser.storage.local.get({ readerSites: [] });
+        const updated = rs.filter(d => currentDomain !== d && !currentDomain.endsWith("." + d));
+        await browser.storage.local.set({ readerSites: updated });
+        btn.title = "Toggle Reader Mode \u2014 applies to all tabs";
+        // Remove overlay from current tab only
+        if (tab) browser.tabs.executeScript(tab.id, { code: unmountCode }).catch(() => {});
+      } else {
+        // Disable globally
+        await browser.storage.local.set({ readerModeGlobal: false });
+        btn.title = "Toggle Reader Mode \u2014 applies to all tabs";
+        // Remove from every currently open tab
+        const allTabs = await browser.tabs.query({});
+        for (const t of allTabs) {
+          if (!t.url || READER_SKIP_RE.test(t.url)) continue;
+          browser.tabs.executeScript(t.id, { code: unmountCode }).catch(() => {});
+        }
+      }
     }
   });
 }

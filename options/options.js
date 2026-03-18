@@ -12685,3 +12685,71 @@ function saveTrawlDuration() {
     }
   });
 })();
+
+// === PLUGIN REGISTRY INTEGRATION (Phase 1.2) ===
+
+// Create Plugins section (reuse existing options UI pattern)
+const pluginsSection = document.createElement('div');
+pluginsSection.innerHTML = `
+    <h2>🧩 Plugins & Agents (70 total)</h2>
+    <div id="plugins-list"></div>
+`;
+document.querySelector('.settings-grid').appendChild(pluginsSection);
+
+async function renderPluginsList() {
+    const plugins = window.ArgusPluginRegistry.listAllPlugins();
+    const container = document.getElementById('plugins-list');
+    container.innerHTML = '';
+
+    for (const p of plugins) {
+        const enabled = await window.ArgusPluginRegistry.isPluginEnabled(p.id);
+        const div = document.createElement('div');
+        div.innerHTML = `
+            <label>
+                <input type="checkbox" data-plugin-id="${p.id}" ${enabled ? 'checked' : ''}>
+                ${p.name || p.id} <small>v${p.version}</small>
+            </label>
+        `;
+        container.appendChild(div);
+    }
+}
+
+// Wire toggles
+document.addEventListener('change', async (e) => {
+    if (e.target.dataset.pluginId) {
+        const id = e.target.dataset.pluginId;
+        await window.ArgusPluginRegistry.saveToggleState(id, e.target.checked);
+
+        if (e.target.checked) {
+            await window.ArgusPluginRegistry.activatePlugin(id);
+        }
+    }
+});
+
+// Update isPluginEnabled to use persistent storage
+window.ArgusPluginRegistry.isPluginEnabled = async function(id) {
+    return await window.ArgusPluginRegistry.loadToggleState(id);
+};
+
+// === PHASE 1.5 PERSISTENT TOGGLES + RIBBON ===
+async function initPluginsWithPersistence() {
+    await window.ArgusPluginLoader.loadAll();
+    const plugins = window.ArgusPluginRegistry.listAllPlugins();
+    window.ArgusRibbon.init(document.querySelector('.settings-grid'));
+
+    for (const p of plugins) {
+        const enabled = await window.ArgusPluginRegistry.isPluginEnabled(p.id);
+        window.ArgusRibbon.addPluginButton(p.id, p.name, '🧩', async () => {
+            if (await window.ArgusPluginRegistry.isPluginEnabled(p.id)) {
+                await window.ArgusPluginRegistry.runPlugin(p.id);
+            } else {
+                alert('Enable this plugin first');
+            }
+        });
+    }
+
+    // Render toggle list with saved state
+    renderPluginsList();
+}
+
+initPluginsWithPersistence();

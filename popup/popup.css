@@ -747,6 +747,16 @@ textarea {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
 }
+/* Reader mode learned (auto-on for this domain) — gold tint */
+#reader-mode-btn.reader-learned {
+  color: #1a1a1a;
+  background: #f59e0b;
+  border-color: #f59e0b;
+}
+#reader-mode-btn.reader-learned:hover {
+  background: #d97706;
+  border-color: #d97706;
+}
 /* Forced-private indicator */
 .status-forced {
   display: inline-flex;
