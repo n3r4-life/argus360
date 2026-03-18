@@ -1,22 +1,25 @@
-web-ext-artifacts/
+
 *.xpi
 *.code-workspace
 *.zip
 node_modules/
 .DS_Store
 .local-archive/
-argus-settings.json
-image-archive/
-proposals/
+grok-page-analyzer.code-workspace
 
 # Third-party vendored libraries — excluded to reduce repo size during development.
 # These are unmodified downloads. See lib/VENDOR_LIBS.md for versions and sources.
 lib/vendor/
 
-grok-page-analyzer.code-workspace
+# Generated artifacts — excluded to avoid clutter and reduce repo size.
+web-ext-artifacts/
+
 
 # Personal and sensitive files — excluded for security and privacy.
 all-nec-non-shardlib-file/
 archives/
 instructions_for_claudecode_agent/
 personal-credentials/
+argus-settings.json
+image-archive/
+proposals/
