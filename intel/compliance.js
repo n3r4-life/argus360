@@ -2,42 +2,63 @@
   'use strict';
 
   // ── State ──
-  let sanctionsResults = [];
+  let searchResults = [];
   let matchResults = [];
   let screeningSummary = { flagged: [], clean: 0, adjacent: 0 };
+  let lastProvider = 'opensanctions';
 
-  // ── Sanctions Search ──
+  // ── Unified Search ──
 
-  document.getElementById("compSanctionsBtn").addEventListener("click", () => sanctionsSearch());
-  document.getElementById("compSanctionsInput").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") sanctionsSearch();
+  document.getElementById("compSearchBtn").addEventListener("click", () => unifiedSearch());
+  document.getElementById("compSearchInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") unifiedSearch();
   });
 
-  async function sanctionsSearch() {
-    const query = document.getElementById("compSanctionsInput").value.trim();
-    if (!query) return;
+  // Update dataset/filter visibility based on provider
+  document.getElementById("compProvider").addEventListener("change", function() {
+    var provider = this.value;
+    var datasetRow = document.getElementById("compDataset").parentNode;
+    // Dataset filter only relevant for OpenSanctions
+    document.getElementById("compDataset").style.display = provider === "opensanctions" ? "" : "none";
+    // Type filter relevant for OpenSanctions + CSL
+    document.getElementById("compTypeFilter").style.display = (provider === "opensanctions" || provider === "csl") ? "" : "none";
+    // Country filter relevant for CSL
+    document.getElementById("compCountryFilter").style.display = provider === "csl" ? "" : "none";
+    // Fuzzy toggle relevant for CSL
+    document.getElementById("compFuzzyToggle").parentNode.style.display = provider === "csl" ? "" : "none";
+    // Update placeholder
+    var input = document.getElementById("compSearchInput");
+    if (provider === "courtlistener") {
+      input.placeholder = "Search case name, opinion, or docket...";
+    } else {
+      input.placeholder = "Search name, entity, or vessel...";
+    }
+  });
+  // Trigger initial state
+  document.getElementById("compProvider").dispatchEvent(new Event("change"));
 
-    const btn = document.getElementById("compSanctionsBtn");
-    const dataset = document.getElementById("compDataset").value;
+  async function unifiedSearch() {
+    var query = document.getElementById("compSearchInput").value.trim();
+    if (!query) return;
+    var provider = document.getElementById("compProvider").value;
+    lastProvider = provider;
+
+    var btn = document.getElementById("compSearchBtn");
     btn.disabled = true;
     btn.textContent = "Searching...";
 
     try {
-      const resp = await browser.runtime.sendMessage({
-        action: "intelSearch",
-        provider: "opensanctions",
-        query,
-        options: { dataset }
-      });
-
-      if (resp?.success && resp.results) {
-        sanctionsResults = resp.results.results || [];
-        renderSanctionsResults(sanctionsResults, resp.results.total || 0);
-      } else {
-        renderSanctionsError(resp?.error || "Search failed");
+      var results;
+      if (provider === "opensanctions") {
+        results = await searchOpenSanctions(query);
+      } else if (provider === "csl") {
+        results = await searchCSL(query);
+      } else if (provider === "courtlistener") {
+        results = await searchCourtListener(query);
       }
+      renderResults(results, provider);
     } catch (e) {
-      renderSanctionsError(e.message);
+      renderError(e.message, provider);
     }
 
     btn.disabled = false;
@@ -45,179 +66,386 @@
     refreshChatContext();
   }
 
-  function renderSanctionsResults(results, total) {
-    const container = document.getElementById("compSanctionsResults");
-    const empty = document.getElementById("compSanctionsEmpty");
-    const countEl = document.getElementById("compSanctionsCount");
+  // ── OpenSanctions Search ──
 
-    countEl.textContent = `${total} result${total !== 1 ? "s" : ""}`;
+  async function searchOpenSanctions(query) {
+    var dataset = document.getElementById("compDataset").value;
+    var resp = await browser.runtime.sendMessage({
+      action: "intelSearch", provider: "opensanctions", query, options: { dataset }
+    });
+    if (!resp?.success) throw new Error(resp?.error || "OpenSanctions search failed");
+    var raw = resp.results?.results || [];
+    searchResults = raw;
+    return {
+      total: resp.results?.total || raw.length,
+      results: raw.map(function(r) {
+        var props = r.properties || {};
+        return {
+          name: (props.name || [r.caption || "Unknown"])[0],
+          type: r.schema || "Entity",
+          source: (r.datasets || []).join(", "),
+          score: r.score,
+          country: (props.country || []).join(", "),
+          topics: (props.topics || []).join(", "),
+          dob: props.birthDate ? props.birthDate[0] : "",
+          idNumber: props.idNumber ? props.idNumber[0] : "",
+          sourceUrl: r.referents?.[0] ? "https://opensanctions.org/entities/" + r.referents[0] : "",
+          raw: r
+        };
+      })
+    };
+  }
 
-    if (!results.length) {
-      container.querySelectorAll(".comp-result-card").forEach(el => el.remove());
+  // ── CSL Search ──
+
+  async function searchCSL(query) {
+    var fuzzy = document.getElementById("compFuzzyToggle").checked;
+    var types = document.getElementById("compTypeFilter").value;
+    var countries = document.getElementById("compCountryFilter").value.trim();
+
+    var resp = await browser.runtime.sendMessage({
+      action: "intelSearch", provider: "csl", query,
+      options: { fuzzy: fuzzy, types: types, countries: countries, size: 25 }
+    });
+    if (!resp?.success) throw new Error(resp?.error || "CSL search failed");
+    var data = resp.results || {};
+    var raw = data.results || [];
+    searchResults = raw;
+    return {
+      total: data.total || raw.length,
+      sourcesUsed: data.sources_used || [],
+      results: raw.map(function(r) {
+        var docLinks = [];
+        if (r.source_information_url) docLinks.push({ label: "Source Info ↗", url: r.source_information_url });
+        if (r.source_list_url) docLinks.push({ label: "Source List ↗", url: r.source_list_url });
+        if (r.federal_register_notice) docLinks.push({ label: "Fed Register: " + r.federal_register_notice, url: "" });
+        return {
+          name: r.name || "Unknown",
+          altNames: r.alt_names || [],
+          type: r.type || "Entity",
+          source: r.source || "",
+          country: r.country || "",
+          programs: r.programs || [],
+          addresses: r.addresses || [],
+          ids: r.ids || [],
+          dob: (r.dates_of_birth || []).join(", "),
+          remarks: r.remarks || "",
+          title: r.title || "",
+          docLinks: docLinks,
+          // Vessel fields
+          callSign: r.call_sign || "",
+          vesselType: r.vessel_type || "",
+          vesselFlag: r.vessel_flag || "",
+          raw: r
+        };
+      })
+    };
+  }
+
+  // ── CourtListener Search ──
+
+  async function searchCourtListener(query) {
+    var resp = await browser.runtime.sendMessage({
+      action: "intelSearch", provider: "courtlistener", query, options: { pageSize: 20 }
+    });
+    if (!resp?.success) throw new Error(resp?.error || "CourtListener search failed");
+    var raw = resp.results?.results || [];
+    searchResults = raw;
+    return {
+      total: resp.results?.count || raw.length,
+      results: raw.map(function(r) {
+        var url = r.absolute_url ? "https://www.courtlistener.com" + r.absolute_url : "";
+        var isPdf = url && url.endsWith(".pdf");
+        return {
+          name: r.caseName || r.caseNameFull || "Untitled",
+          type: "Court Record",
+          source: r.court || "",
+          date: r.dateFiled || "",
+          citations: (r.citation || []).join(", "),
+          citeCount: r.citeCount || 0,
+          snippet: r.snippet || "",
+          url: url,
+          isPdf: isPdf,
+          raw: r
+        };
+      })
+    };
+  }
+
+  // ── Result Rendering ──
+
+  function renderResults(data, provider) {
+    var container = document.getElementById("compResults");
+    var empty = document.getElementById("compEmpty");
+    var countEl = document.getElementById("compResultsCount");
+    var sourceEl = document.getElementById("compResultsSource");
+
+    // Clear previous
+    container.querySelectorAll(".comp-result-card, .comp-error").forEach(function(el) { el.remove(); });
+
+    var providerLabel = provider === "opensanctions" ? "OpenSanctions" :
+                        provider === "csl" ? "U.S. CSL" :
+                        provider === "courtlistener" ? "CourtListener" : provider;
+    sourceEl.textContent = "via " + providerLabel;
+    countEl.textContent = data.total + " result" + (data.total !== 1 ? "s" : "");
+
+    if (!data.results.length) {
       empty.style.display = "";
-      empty.textContent = "No sanctions matches found.";
+      empty.textContent = "No matches found.";
       return;
     }
     empty.style.display = "none";
-    container.querySelectorAll(".comp-result-card").forEach(el => el.remove());
 
-    const cards = results.map((r, i) => {
-      const props = r.properties || {};
-      const name = (props.name || [r.caption || "Unknown"])[0];
-      const schema = r.schema || "Entity";
-      const datasets = (r.datasets || []).join(", ") || "Unknown dataset";
-      const countries = (props.country || []).join(", ");
-      const score = r.score != null ? `${Math.round(r.score * 100)}%` : "";
-      const topics = (props.topics || []).join(", ");
-
-      const detailParts = [];
-      if (countries) detailParts.push(`Country: ${countries}`);
-      if (topics) detailParts.push(`Topics: ${topics}`);
-      if (props.birthDate) detailParts.push(`DOB: ${props.birthDate[0]}`);
-      if (props.idNumber) detailParts.push(`ID: ${props.idNumber[0]}`);
-
-      return `
-        <div class="comp-result-card" data-result-idx="${i}">
-          <div class="comp-result-header">
-            <span class="comp-result-badge sanctioned">MATCH</span>
-            <span class="comp-result-name">${escapeHtml(name)}</span>
-            <span class="comp-result-schema">${schema}</span>
-            ${score ? `<span class="comp-result-score">${score}</span>` : ""}
-          </div>
-          <div class="comp-result-datasets">${escapeHtml(datasets)}</div>
-          ${detailParts.length ? `<div class="comp-result-details">${detailParts.map(d => `<span class="comp-result-detail">${escapeHtml(d)}</span>`).join("")}</div>` : ""}
-          <div class="comp-result-actions">
-            <button class="pill-chip comp-add-kg-btn" data-idx="${i}">Add to KG</button>
-            <button class="pill-chip comp-detail-btn" data-idx="${i}">Details</button>
-          </div>
-        </div>
-      `;
+    var cards = data.results.map(function(r, i) {
+      if (provider === "courtlistener") return renderCourtCard(r, i);
+      if (provider === "csl") return renderCSLCard(r, i);
+      return renderSanctionsCard(r, i);
     }).join("");
+
     container.insertAdjacentHTML("beforeend", cards);
-
-    // Wire action buttons
-    container.querySelectorAll(".comp-add-kg-btn").forEach(btn => {
-      btn.addEventListener("click", () => addSanctionsToKg(parseInt(btn.dataset.idx)));
-    });
-    container.querySelectorAll(".comp-detail-btn").forEach(btn => {
-      btn.addEventListener("click", () => toggleResultDetail(parseInt(btn.dataset.idx)));
-    });
+    wireCardActions(container, provider);
   }
 
-  function renderSanctionsError(msg) {
-    const container = document.getElementById("compSanctionsResults");
-    const empty = document.getElementById("compSanctionsEmpty");
-    empty.style.display = "none";
-    container.innerHTML = `<div class="comp-error">Error: ${escapeHtml(msg)}</div>`;
+  function renderSanctionsCard(r, i) {
+    var details = [];
+    if (r.country) details.push("Country: " + escapeHtml(r.country));
+    if (r.topics) details.push("Topics: " + escapeHtml(r.topics));
+    if (r.dob) details.push("DOB: " + escapeHtml(r.dob));
+    if (r.idNumber) details.push("ID: " + escapeHtml(r.idNumber));
+    var score = r.score != null ? Math.round(r.score * 100) + "%" : "";
+
+    return '<div class="comp-result-card" data-idx="' + i + '">' +
+      '<div class="comp-result-header">' +
+        '<span class="comp-result-badge sanctioned">MATCH</span>' +
+        '<span class="comp-result-name">' + escapeHtml(r.name) + '</span>' +
+        '<span class="comp-result-schema">' + escapeHtml(r.type) + '</span>' +
+        (score ? '<span class="comp-result-score">' + score + '</span>' : '') +
+      '</div>' +
+      '<div class="comp-result-datasets">' + escapeHtml(r.source) + '</div>' +
+      (details.length ? '<div class="comp-result-details">' + details.map(function(d) { return '<span class="comp-result-detail">' + d + '</span>'; }).join("") + '</div>' : '') +
+      '<div class="comp-result-actions">' +
+        '<button class="pill-chip comp-add-kg" data-idx="' + i + '">Add to KG</button>' +
+        '<button class="pill-chip comp-add-asset" data-idx="' + i + '">+ Asset</button>' +
+        (r.sourceUrl ? '<a class="pill-chip" href="' + escapeHtml(r.sourceUrl) + '" target="_blank" rel="noopener">View ↗</a>' : '') +
+      '</div>' +
+    '</div>';
   }
 
-  async function addSanctionsToKg(idx) {
-    const r = sanctionsResults[idx];
-    if (!r) return;
-    const name = (r.properties?.name || [r.caption || "Unknown"])[0];
-    const schema = r.schema || "Entity";
-    const type = schema === "Person" ? "person" : "organization";
+  function renderCSLCard(r, i) {
+    var details = [];
+    if (r.country) details.push("Country: " + escapeHtml(r.country));
+    if (r.programs.length) details.push("Programs: " + escapeHtml(r.programs.join(", ")));
+    if (r.dob) details.push("DOB: " + escapeHtml(r.dob));
+    if (r.title) details.push("Title: " + escapeHtml(r.title));
+    if (r.callSign) details.push("Call Sign: " + escapeHtml(r.callSign));
+    if (r.vesselType) details.push("Vessel: " + escapeHtml(r.vesselType) + (r.vesselFlag ? " (" + escapeHtml(r.vesselFlag) + ")" : ""));
 
-    try {
-      await browser.runtime.sendMessage({
-        action: "extractAndUpsert",
-        text: name,
-        pageUrl: `opensanctions:${r.id || ""}`,
-        pageTitle: `OpenSanctions — ${name}`
-      });
+    // Alt names
+    var altStr = r.altNames.length ? '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">AKA: ' + escapeHtml(r.altNames.slice(0, 5).join(", ")) + (r.altNames.length > 5 ? " +" + (r.altNames.length - 5) + " more" : "") + '</div>' : '';
 
-      const btn = document.querySelectorAll(".comp-add-kg-btn")[idx];
-      if (btn) { btn.textContent = "Added!"; setTimeout(() => { btn.textContent = "Add to KG"; }, 2000); }
-    } catch (e) { console.warn("[Compliance] KG add error:", e); }
-  }
+    // Addresses
+    var addrStr = r.addresses.length ? '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">' + r.addresses.slice(0, 2).map(function(a) {
+      return escapeHtml([a.address, a.city, a.state, a.country].filter(Boolean).join(", "));
+    }).join("<br>") + '</div>' : '';
 
-  function toggleResultDetail(idx) {
-    const card = document.querySelector(`[data-result-idx="${idx}"]`);
-    if (!card) return;
+    // IDs
+    var idStr = r.ids.length ? '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">IDs: ' + r.ids.slice(0, 3).map(function(id) {
+      return escapeHtml(id.type + ": " + id.number);
+    }).join("; ") + '</div>' : '';
 
-    let detail = card.querySelector(".comp-result-expanded");
-    if (detail) {
-      detail.remove();
-      return;
-    }
-
-    const r = sanctionsResults[idx];
-    if (!r) return;
-
-    const props = r.properties || {};
-    const lines = [];
-    for (const [key, vals] of Object.entries(props)) {
-      if (Array.isArray(vals) && vals.length) {
-        lines.push(`<div class="comp-detail-line"><strong>${escapeHtml(key)}:</strong> ${escapeHtml(vals.join(", "))}</div>`);
+    // Document links (including PDFs)
+    var docBtns = r.docLinks.map(function(d) {
+      if (!d.url) return '<span class="pill-chip" style="opacity:0.5;font-size:8px;">' + escapeHtml(d.label) + '</span>';
+      var isPdf = d.url.endsWith(".pdf");
+      if (isPdf) {
+        return '<button class="pill-chip comp-view-pdf" data-url="' + escapeAttr(d.url) + '" title="View PDF">' + escapeHtml(d.label) + '</button>';
       }
-    }
+      return '<a class="pill-chip" href="' + escapeHtml(d.url) + '" target="_blank" rel="noopener">' + escapeHtml(d.label) + '</a>';
+    }).join("");
 
-    detail = document.createElement("div");
-    detail.className = "comp-result-expanded";
-    detail.innerHTML = lines.join("") || "<em>No additional properties.</em>";
-    card.appendChild(detail);
+    // Remarks
+    var remarkStr = r.remarks ? '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px;font-style:italic;">' + escapeHtml(r.remarks.substring(0, 300)) + (r.remarks.length > 300 ? "..." : "") + '</div>' : '';
+
+    return '<div class="comp-result-card csl" data-idx="' + i + '">' +
+      '<div class="comp-result-header">' +
+        '<span class="comp-result-badge sanctioned">CSL</span>' +
+        '<span class="comp-result-name">' + escapeHtml(r.name) + '</span>' +
+        '<span class="comp-result-schema">' + escapeHtml(r.type) + '</span>' +
+      '</div>' +
+      '<div class="comp-result-datasets">' + escapeHtml(r.source) + '</div>' +
+      altStr + addrStr + idStr +
+      (details.length ? '<div class="comp-result-details">' + details.map(function(d) { return '<span class="comp-result-detail">' + d + '</span>'; }).join("") + '</div>' : '') +
+      remarkStr +
+      '<div class="comp-result-actions">' +
+        '<button class="pill-chip comp-add-kg" data-idx="' + i + '">Add to KG</button>' +
+        '<button class="pill-chip comp-add-asset" data-idx="' + i + '">+ Asset</button>' +
+        docBtns +
+      '</div>' +
+    '</div>';
   }
 
-  // ── Entity Match ──
+  function renderCourtCard(r, i) {
+    return '<div class="comp-result-card" data-idx="' + i + '">' +
+      '<div class="comp-result-header">' +
+        '<span class="comp-result-name">' +
+          (r.url ? '<a href="' + escapeHtml(r.url) + '" target="_blank" rel="noopener" style="color:var(--text-primary);text-decoration:none;">' + escapeHtml(r.name) + '</a>' : escapeHtml(r.name)) +
+        '</span>' +
+        (r.citeCount > 0 ? '<span class="comp-result-score">' + r.citeCount + ' cites</span>' : '') +
+      '</div>' +
+      '<div class="comp-result-datasets">' + escapeHtml(r.source) + (r.date ? " · " + escapeHtml(r.date) : "") + (r.citations ? " · " + escapeHtml(r.citations) : "") + '</div>' +
+      (r.snippet ? '<div class="comp-result-details" style="margin-top:4px;font-size:11px;color:var(--text-secondary);">' + r.snippet + '</div>' : '') +
+      '<div class="comp-result-actions">' +
+        '<button class="pill-chip comp-add-kg" data-idx="' + i + '">Add to KG</button>' +
+        '<button class="pill-chip comp-add-asset" data-idx="' + i + '">+ Asset</button>' +
+        (r.url && r.isPdf ? '<button class="pill-chip comp-view-pdf" data-url="' + escapeAttr(r.url) + '">View PDF</button>' : '') +
+        (r.url && !r.isPdf ? '<a class="pill-chip" href="' + escapeHtml(r.url) + '" target="_blank" rel="noopener">View ↗</a>' : '') +
+      '</div>' +
+    '</div>';
+  }
 
-  document.getElementById("compMatchBtn").addEventListener("click", () => entityMatch());
+  function wireCardActions(container, provider) {
+    // Add to KG
+    container.querySelectorAll(".comp-add-kg").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        var idx = parseInt(this.dataset.idx);
+        var r = searchResults[idx];
+        if (!r) return;
+        var name, url, title;
+        if (provider === "opensanctions") {
+          name = (r.properties?.name || [r.caption || "Unknown"])[0];
+          url = "opensanctions:" + (r.id || "");
+          title = "OpenSanctions — " + name;
+        } else if (provider === "csl") {
+          name = r.name || "Unknown";
+          url = "csl:" + (r.entity_number || r.id || "");
+          title = "U.S. CSL — " + name;
+        } else if (provider === "courtlistener") {
+          name = r.caseName || r.caseNameFull || "Untitled";
+          url = r.absolute_url ? "https://www.courtlistener.com" + r.absolute_url : "courtlistener:";
+          title = "CourtListener — " + name;
+        }
+        var self = this;
+        browser.runtime.sendMessage({
+          action: "extractAndUpsert", text: name, pageUrl: url, pageTitle: title
+        }).then(function() {
+          self.textContent = "Added!";
+          setTimeout(function() { self.textContent = "Add to KG"; }, 2000);
+        });
+      });
+    });
+
+    // Add to Asset Library
+    container.querySelectorAll(".comp-add-asset").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        var idx = parseInt(this.dataset.idx);
+        var r = searchResults[idx];
+        if (!r) return;
+        var name, assetType;
+        if (provider === "opensanctions") {
+          name = (r.properties?.name || [r.caption || "Unknown"])[0];
+          assetType = "entity";
+        } else if (provider === "csl") {
+          name = r.name || "Unknown";
+          assetType = "entity";
+        } else {
+          name = r.caseName || r.caseNameFull || "Untitled";
+          assetType = "source";
+        }
+        if (typeof AssetLibrary !== "undefined") {
+          AssetLibrary.add({ type: assetType, label: name, source: provider, data: r, ts: Date.now() });
+          this.textContent = "Saved!";
+          var self = this;
+          setTimeout(function() { self.textContent = "+ Asset"; }, 2000);
+        }
+      });
+    });
+
+    // PDF viewer
+    container.querySelectorAll(".comp-view-pdf").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        var url = this.dataset.url;
+        if (!url) return;
+        // Open in a new tab — browser handles PDF rendering
+        window.open(url, "_blank", "noopener");
+      });
+    });
+  }
+
+  function renderError(msg, provider) {
+    var container = document.getElementById("compResults");
+    var empty = document.getElementById("compEmpty");
+    container.querySelectorAll(".comp-result-card, .comp-error").forEach(function(el) { el.remove(); });
+    empty.style.display = "none";
+
+    var isKeyError = msg.includes("API key") || msg.includes("not configured") || msg.includes("subscription key");
+    var html;
+    if (isKeyError) {
+      if (provider === "csl") {
+        html = 'CSL subscription key not configured. <a href="https://developer.trade.gov" target="_blank" style="color:var(--accent);">Sign up free at developer.trade.gov ↗</a>, then add your key in <a href="../options/options.html" style="color:var(--accent);">Settings → Providers</a>.';
+      } else if (provider === "courtlistener") {
+        html = 'CourtListener API key not configured. <a href="https://www.courtlistener.com/profile/api-token/" target="_blank" style="color:var(--accent);">Get a free token ↗</a>, then add it in <a href="../options/options.html" style="color:var(--accent);">Settings → Providers</a>.';
+      } else {
+        html = 'OpenSanctions API key not configured. <a href="https://opensanctions.org/api/" target="_blank" style="color:var(--accent);">Get a key ↗</a>, then add it in <a href="../options/options.html" style="color:var(--accent);">Settings → Providers</a>.';
+      }
+    } else {
+      html = "Error: " + escapeHtml(msg);
+    }
+    container.insertAdjacentHTML("beforeend", '<div class="comp-error">' + html + '</div>');
+  }
+
+  // ── Entity Match (OpenSanctions structured) ──
+
+  document.getElementById("compMatchBtn").addEventListener("click", function() { entityMatch(); });
 
   async function entityMatch() {
-    const schema = document.getElementById("compMatchSchema").value;
-    const name = document.getElementById("compMatchName").value.trim();
+    var schema = document.getElementById("compMatchSchema").value;
+    var name = document.getElementById("compMatchName").value.trim();
     if (!name) return;
 
-    const country = document.getElementById("compMatchCountry").value.trim();
-    const birthDate = document.getElementById("compMatchBirthDate").value.trim();
+    var country = document.getElementById("compMatchCountry").value.trim();
+    var birthDate = document.getElementById("compMatchBirthDate").value.trim();
 
-    const btn = document.getElementById("compMatchBtn");
+    var btn = document.getElementById("compMatchBtn");
     btn.disabled = true;
     btn.textContent = "Matching...";
 
-    const entity = {
-      schema,
-      properties: { name: [name] }
-    };
+    var entity = { schema: schema, properties: { name: [name] } };
     if (country) entity.properties.country = [country.toUpperCase()];
     if (birthDate) entity.properties.birthDate = [birthDate];
 
     try {
-      const resp = await browser.runtime.sendMessage({
-        action: "intelSearch",
-        provider: "opensanctions",
-        query: name,
-        options: { dataset: "default" }
+      var resp = await browser.runtime.sendMessage({
+        action: "intelSearch", provider: "opensanctions", query: name, options: { dataset: "default" }
       });
 
-      // Also do a structured match
-      let matchResp;
+      var matchResp;
       try {
         matchResp = await fetch("https://api.opensanctions.org/match/default", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             ...(await browser.storage.local.get({ argusIntelProviders: {} })
-              .then(d => d.argusIntelProviders?.opensanctions?.apiKey
-                ? { "Authorization": `ApiKey ${d.argusIntelProviders.opensanctions.apiKey}` }
-                : {})),
+              .then(function(d) {
+                return d.argusIntelProviders?.opensanctions?.apiKey
+                  ? { "Authorization": "ApiKey " + d.argusIntelProviders.opensanctions.apiKey }
+                  : {};
+              })),
           },
           body: JSON.stringify(entity),
         });
         if (matchResp.ok) {
-          const matchData = await matchResp.json();
+          var matchData = await matchResp.json();
           matchResults = matchData.responses || matchData.results || [];
         }
-      } catch { /* match endpoint may fail, fall back to search */ }
+      } catch(e) { /* match endpoint may fail */ }
 
-      // Use search results if match didn't return anything
       if (!matchResults.length && resp?.success) {
         matchResults = resp.results?.results || [];
       }
-
       renderMatchResults(matchResults);
     } catch (e) {
       document.getElementById("compMatchResults").innerHTML =
-        `<div class="comp-error">Error: ${escapeHtml(e.message)}</div>`;
+        '<div class="comp-error">Error: ' + escapeHtml(e.message) + '</div>';
     }
 
     btn.disabled = false;
@@ -226,8 +454,8 @@
   }
 
   function renderMatchResults(results) {
-    const container = document.getElementById("compMatchResults");
-    const empty = document.getElementById("compMatchEmpty");
+    var container = document.getElementById("compMatchResults");
+    var empty = document.getElementById("compMatchEmpty");
 
     if (!results.length) {
       container.innerHTML = "";
@@ -237,39 +465,37 @@
     }
     empty.style.display = "none";
 
-    container.innerHTML = results.map((r, i) => {
-      const props = r.properties || {};
-      const name = (props.name || [r.caption || "Unknown"])[0];
-      const score = r.score != null ? `${Math.round(r.score * 100)}%` : "";
-      const datasets = (r.datasets || []).join(", ");
+    container.innerHTML = results.map(function(r, i) {
+      var props = r.properties || {};
+      var name = (props.name || [r.caption || "Unknown"])[0];
+      var score = r.score != null ? Math.round(r.score * 100) + "%" : "";
+      var datasets = (r.datasets || []).join(", ");
 
-      return `
-        <div class="comp-result-card match">
-          <div class="comp-result-header">
-            <span class="comp-result-badge ${r.score > 0.7 ? "sanctioned" : "adjacent"}">
-              ${r.score > 0.7 ? "HIGH" : "LOW"}
-            </span>
-            <span class="comp-result-name">${escapeHtml(name)}</span>
-            ${score ? `<span class="comp-result-score">${score}</span>` : ""}
-          </div>
-          <div class="comp-result-datasets">${escapeHtml(datasets)}</div>
-          <div class="comp-result-actions">
-            <button class="pill-chip comp-match-kg-btn" data-name="${escapeAttr(name)}">Add to KG</button>
-          </div>
-        </div>
-      `;
+      return '<div class="comp-result-card match">' +
+        '<div class="comp-result-header">' +
+          '<span class="comp-result-badge ' + (r.score > 0.7 ? "sanctioned" : "adjacent") + '">' +
+            (r.score > 0.7 ? "HIGH" : "LOW") +
+          '</span>' +
+          '<span class="comp-result-name">' + escapeHtml(name) + '</span>' +
+          (score ? '<span class="comp-result-score">' + score + '</span>' : '') +
+        '</div>' +
+        '<div class="comp-result-datasets">' + escapeHtml(datasets) + '</div>' +
+        '<div class="comp-result-actions">' +
+          '<button class="pill-chip comp-match-kg-btn" data-name="' + escapeAttr(name) + '">Add to KG</button>' +
+        '</div>' +
+      '</div>';
     }).join("");
 
-    container.querySelectorAll(".comp-match-kg-btn").forEach(btn => {
-      btn.addEventListener("click", async () => {
+    container.querySelectorAll(".comp-match-kg-btn").forEach(function(btn) {
+      btn.addEventListener("click", async function() {
         await browser.runtime.sendMessage({
           action: "extractAndUpsert",
           text: btn.dataset.name,
           pageUrl: "opensanctions:match",
-          pageTitle: `OpenSanctions Match — ${btn.dataset.name}`
+          pageTitle: "OpenSanctions Match — " + btn.dataset.name
         });
         btn.textContent = "Added!";
-        setTimeout(() => { btn.textContent = "Add to KG"; }, 2000);
+        setTimeout(function() { btn.textContent = "Add to KG"; }, 2000);
       });
     });
   }
@@ -279,9 +505,8 @@
   document.getElementById("compScreenAll").addEventListener("click", screenAll);
 
   async function screenAll() {
-    const btn = document.getElementById("compScreenAll");
-    const status = document.getElementById("compScreenStatus");
-    const timestamp = document.getElementById("compScreenTimestamp");
+    var btn = document.getElementById("compScreenAll");
+    var status = document.getElementById("compScreenStatus");
 
     btn.disabled = true;
     btn.textContent = "Screening...";
@@ -289,202 +514,133 @@
     status.className = "comp-screen-status active";
 
     try {
-      const resp = await browser.runtime.sendMessage({ action: "intelScreenAll" });
-
+      var resp = await browser.runtime.sendMessage({ action: "intelScreenAll" });
       if (resp?.success) {
-        status.textContent = `Screened ${resp.screened} entities — ${resp.flagged} flagged`;
+        status.textContent = "Screened " + resp.screened + " — " + resp.flagged + " flagged";
         status.className = resp.flagged > 0 ? "comp-screen-status flagged" : "comp-screen-status clean";
-        timestamp.textContent = `Last screened: ${new Date().toLocaleString()}`;
-
-        // Save timestamp
         await browser.storage.local.set({ compLastScreened: Date.now() });
-
-        // Reload KG summary
         await loadScreeningSummary();
       } else {
-        status.textContent = `Error: ${resp?.error || "Unknown"}`;
+        status.textContent = "Error: " + (resp?.error || "Unknown");
         status.className = "comp-screen-status error";
       }
     } catch (e) {
-      status.textContent = `Error: ${e.message}`;
+      status.textContent = "Error: " + e.message;
       status.className = "comp-screen-status error";
     }
 
     btn.disabled = false;
-    btn.textContent = "Screen All KG Entities";
+    btn.textContent = "Screen All KG";
     refreshChatContext();
   }
 
   async function loadScreeningSummary() {
     try {
-      const kgResp = await browser.runtime.sendMessage({ action: "getKGData" });
-      const nodes = kgResp?.nodes || [];
+      var kgResp = await browser.runtime.sendMessage({ action: "getKGData" });
+      var nodes = kgResp?.nodes || [];
 
-      const flagged = nodes.filter(n => n.sanctioned);
-      const adjacent = nodes.filter(n => n["sanctions-adjacent"] && !n.sanctioned);
-      const persons = nodes.filter(n => n.type === "person" || n.type === "organization");
-      const clean = persons.length - flagged.length - adjacent.length;
+      var flagged = nodes.filter(function(n) { return n.sanctioned; });
+      var adjacent = nodes.filter(function(n) { return n["sanctions-adjacent"] && !n.sanctioned; });
+      var persons = nodes.filter(function(n) { return n.type === "person" || n.type === "organization"; });
+      var clean = persons.length - flagged.length - adjacent.length;
 
-      screeningSummary = { flagged, clean: Math.max(0, clean), adjacent: adjacent.length };
+      screeningSummary = { flagged: flagged, clean: Math.max(0, clean), adjacent: adjacent.length };
 
       document.getElementById("compFlaggedCount").textContent = flagged.length;
       document.getElementById("compCleanCount").textContent = Math.max(0, clean);
       document.getElementById("compAdjacentCount").textContent = adjacent.length;
 
-      // Render flagged entities list
-      const list = document.getElementById("compFlaggedList");
+      var list = document.getElementById("compFlaggedList");
       if (flagged.length) {
-        list.innerHTML = flagged.map(n => `
-          <div class="comp-flagged-entity">
-            <span class="comp-result-badge sanctioned">FLAGGED</span>
-            <span class="comp-flagged-name">${escapeHtml(n.displayName)}</span>
-            <span class="comp-flagged-type">${n.type}</span>
-          </div>
-        `).join("");
+        list.innerHTML = flagged.map(function(n) {
+          return '<div class="comp-flagged-entity"><span class="comp-result-badge sanctioned">FLAGGED</span><span class="comp-flagged-name">' + escapeHtml(n.displayName) + '</span><span class="comp-flagged-type">' + n.type + '</span></div>';
+        }).join("");
 
-        // Show adjacent entities too
         if (adjacent.length) {
-          list.innerHTML += `<div style="margin-top:8px;"><span class="intel-section-title" style="margin:0;">Sanctions-Adjacent Entities</span></div>`;
-          list.innerHTML += adjacent.map(n => `
-            <div class="comp-flagged-entity adjacent">
-              <span class="comp-result-badge adjacent">ADJACENT</span>
-              <span class="comp-flagged-name">${escapeHtml(n.displayName)}</span>
-              <span class="comp-flagged-type">${n.type}</span>
-            </div>
-          `).join("");
+          list.innerHTML += '<div style="margin-top:8px;"><span class="intel-section-title" style="margin:0;">Sanctions-Adjacent</span></div>';
+          list.innerHTML += adjacent.map(function(n) {
+            return '<div class="comp-flagged-entity adjacent"><span class="comp-result-badge adjacent">ADJACENT</span><span class="comp-flagged-name">' + escapeHtml(n.displayName) + '</span><span class="comp-flagged-type">' + n.type + '</span></div>';
+          }).join("");
         }
       } else {
-        list.innerHTML = '<div class="comp-empty">No flagged entities. Run "Screen All" to check your KG.</div>';
+        list.innerHTML = '<div class="comp-empty">No flagged entities. Run "Screen All KG" to check.</div>';
       }
     } catch (e) {
       console.warn("[Compliance] KG summary error:", e);
     }
   }
 
-  // ── Litigation Search (stub — CourtListener not yet implemented) ──
+  // ── Side Dock ──
 
-  document.getElementById("compLitigationBtn").addEventListener("click", () => litigationSearch());
-  document.getElementById("compLitigationInput").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") litigationSearch();
+  var _compDockOpen = false;
+
+  document.getElementById("compDockToggle")?.addEventListener("click", function() {
+    _compDockOpen = !_compDockOpen;
+    document.getElementById("compDockColumn").classList.toggle("open", _compDockOpen);
+    document.body.classList.toggle("comp-dock-open", _compDockOpen);
   });
 
-  async function litigationSearch() {
-    const query = document.getElementById("compLitigationInput").value.trim();
-    if (!query) return;
+  document.getElementById("compDockClose")?.addEventListener("click", function() {
+    _compDockOpen = false;
+    document.getElementById("compDockColumn").classList.remove("open");
+    document.body.classList.remove("comp-dock-open");
+  });
 
-    const container = document.getElementById("compLitigationResults");
-    const empty = document.getElementById("compLitigationEmpty");
+  // Dock tab switching
+  document.getElementById("compDockTabs")?.addEventListener("click", function(e) {
+    var btn = e.target.closest("[data-dock-tab]");
+    if (!btn) return;
+    var tabId = btn.dataset.dockTab;
+    document.querySelectorAll("#compDockTabs [data-dock-tab]").forEach(function(b) {
+      b.classList.toggle("active", b.dataset.dockTab === tabId);
+    });
+    document.querySelectorAll(".comp-dock-pane").forEach(function(p) {
+      p.classList.toggle("active", p.dataset.dockPane === tabId);
+    });
 
-    // Clear previous result cards (preserve the empty div — it lives inside the container)
-    container.querySelectorAll(".comp-result-card, .comp-error").forEach(el => el.remove());
-    empty.style.display = "none";
-    document.getElementById("compLitigationCount").textContent = "";
-
-    const btn = document.getElementById("compLitigationBtn");
-    try {
-      btn.disabled = true;
-      btn.textContent = "Searching...";
-
-      const searchResp = await browser.runtime.sendMessage({
-        action: "intelSearch", provider: "courtlistener", query, options: { pageSize: 20 }
-      });
-
-      btn.disabled = false;
-      btn.textContent = "Search";
-
-      if (searchResp?.success && searchResp.results) {
-        const results = searchResp.results.results || [];
-        const total = searchResp.results.count || 0;
-        const countEl = document.getElementById("compLitigationCount");
-        countEl.textContent = `${total} result${total !== 1 ? "s" : ""}`;
-
-        if (!results.length) {
-          empty.style.display = "";
-          empty.textContent = "No court records found.";
-        } else {
-          empty.style.display = "none";
-          const cards = results.map((r, i) => {
-            const name = r.caseName || r.caseNameFull || "Untitled";
-            const court = r.court || "";
-            const date = r.dateFiled || "";
-            const citations = (r.citation || []).join(", ");
-            const citeCount = r.citeCount || 0;
-            const url = r.absolute_url ? `https://www.courtlistener.com${r.absolute_url}` : "#";
-            const snippet = r.snippet || "";
-
-            return `<div class="comp-result-card">
-              <div class="comp-result-header">
-                <span class="comp-result-name"><a href="${escapeHtml(url)}" target="_blank" rel="noopener" style="color:var(--text-primary);text-decoration:none;">${escapeHtml(name)}</a></span>
-                ${citeCount > 0 ? `<span class="comp-result-score">${citeCount} cites</span>` : ""}
-              </div>
-              <div class="comp-result-datasets">${escapeHtml(court)} ${date ? "· " + escapeHtml(date) : ""} ${citations ? "· " + escapeHtml(citations) : ""}</div>
-              ${snippet ? `<div class="comp-result-details" style="margin-top:4px;font-size:11px;color:var(--text-secondary);">${snippet}</div>` : ""}
-              <div class="comp-result-actions">
-                <button class="pill-chip comp-lit-kg-btn" data-name="${escapeAttr(name)}" data-url="${escapeAttr(url)}">Add to KG</button>
-              </div>
-            </div>`;
-          }).join("");
-          container.insertAdjacentHTML("beforeend", cards);
-
-          container.querySelectorAll(".comp-lit-kg-btn").forEach(btn => {
-            btn.addEventListener("click", async () => {
-              await browser.runtime.sendMessage({
-                action: "extractAndUpsert",
-                text: btn.dataset.name,
-                pageUrl: btn.dataset.url,
-                pageTitle: `CourtListener — ${btn.dataset.name}`
-              });
-              btn.textContent = "Added!";
-              setTimeout(() => { btn.textContent = "Add to KG"; }, 2000);
-            });
-          });
-        }
-      } else {
-        empty.style.display = "";
-        empty.textContent = `Error: ${searchResp?.error || "Search failed"}`;
+    // If Assets tab, dock the Asset Library panel into it
+    if (tabId === "compDockAssets") {
+      var alPanel = document.getElementById("assetLibPanel");
+      var pane = document.querySelector('[data-dock-pane="compDockAssets"]');
+      if (alPanel && pane && alPanel.parentNode !== pane) {
+        alPanel.classList.remove("hidden");
+        alPanel.style.cssText = "position:relative!important;right:auto!important;top:auto!important;bottom:auto!important;left:auto!important;width:100%!important;height:100%!important;max-height:none!important;border-radius:0!important;box-shadow:none!important;z-index:auto!important;display:flex;flex-direction:column;";
+        var header = alPanel.querySelector(".fp-header");
+        if (header) header.style.display = "none";
+        pane.innerHTML = "";
+        pane.appendChild(alPanel);
       }
-    } catch (e) {
-      btn.disabled = false;
-      btn.textContent = "Search";
-      empty.style.display = "";
-      empty.innerHTML = e.message.includes("API key") || e.message.includes("not configured")
-        ? `CourtListener API key not configured. <a href="../options/options.html#intel-providers" style="color:var(--accent);">Add your key in Settings ↗</a>`
-        : `Error: ${escapeHtml(e.message)}`;
     }
-  }
+  });
 
   // ── AI Chat Context ──
 
   function gatherComplianceContext() {
-    const lines = ["Compliance Intelligence Page\n"];
+    var lines = ["Compliance Intelligence Page\n"];
 
-    if (sanctionsResults.length) {
-      lines.push(`== Sanctions Search Results (${sanctionsResults.length}) ==`);
-      for (const r of sanctionsResults.slice(0, 15)) {
-        const name = (r.properties?.name || [r.caption || "Unknown"])[0];
-        const datasets = (r.datasets || []).join(", ");
-        const score = r.score != null ? `${Math.round(r.score * 100)}%` : "";
-        lines.push(`- ${name} | ${datasets} ${score}`);
+    if (searchResults.length) {
+      lines.push("== Search Results (" + searchResults.length + ", via " + lastProvider + ") ==");
+      for (var i = 0; i < Math.min(searchResults.length, 15); i++) {
+        var r = searchResults[i];
+        var name = r.name || r.caption || (r.properties?.name || ["Unknown"])[0];
+        lines.push("- " + name);
       }
     }
 
     if (matchResults.length) {
-      lines.push(`\n== Entity Match Results (${matchResults.length}) ==`);
-      for (const r of matchResults.slice(0, 10)) {
-        const name = (r.properties?.name || [r.caption || "Unknown"])[0];
-        const score = r.score != null ? `${Math.round(r.score * 100)}%` : "";
-        lines.push(`- ${name} ${score}`);
+      lines.push("\n== Entity Match Results (" + matchResults.length + ") ==");
+      for (var j = 0; j < Math.min(matchResults.length, 10); j++) {
+        var mr = matchResults[j];
+        var mname = (mr.properties?.name || [mr.caption || "Unknown"])[0];
+        var mscore = mr.score != null ? Math.round(mr.score * 100) + "%" : "";
+        lines.push("- " + mname + " " + mscore);
       }
     }
 
-    lines.push(`\n== KG Screening Summary ==`);
-    lines.push(`Flagged: ${screeningSummary.flagged.length || 0}`);
-    lines.push(`Clean: ${screeningSummary.clean}`);
-    lines.push(`Adjacent: ${screeningSummary.adjacent}`);
-
-    if (screeningSummary.flagged.length) {
-      lines.push(`Flagged entities: ${screeningSummary.flagged.map(n => n.displayName).join(", ")}`);
-    }
+    lines.push("\n== KG Screening Summary ==");
+    lines.push("Flagged: " + (screeningSummary.flagged.length || 0));
+    lines.push("Clean: " + screeningSummary.clean);
+    lines.push("Adjacent: " + screeningSummary.adjacent);
 
     return lines.join("\n");
   }
@@ -509,29 +665,36 @@
   // ── Init ──
 
   async function init() {
-    // Load last screened timestamp
-    const { compLastScreened } = await browser.storage.local.get({ compLastScreened: null });
-    if (compLastScreened) {
-      document.getElementById("compScreenTimestamp").textContent =
-        `Last screened: ${new Date(compLastScreened).toLocaleString()}`;
-    }
-
-    // Load KG screening summary
     await loadScreeningSummary();
 
-    // Update litigation placeholder based on CourtListener config status
+    // Init floating panels
+    var settingsPanel = document.getElementById("compSettingsPanel");
+    if (settingsPanel && typeof FloatingPanel !== "undefined") {
+      FloatingPanel.init(settingsPanel, "compliance");
+    }
+
+    // Check provider status and update dots
     try {
-      const statusResp = await browser.runtime.sendMessage({ action: "intelGetStatus" });
-      const cl = statusResp?.providers?.courtlistener;
-      const litEmpty = document.getElementById("compLitigationEmpty");
-      if (litEmpty) {
-        if (cl?.configured) {
-          litEmpty.textContent = "Search for court cases, opinions, and dockets. Enter a name or case number above.";
-        } else {
-          litEmpty.innerHTML = `CourtListener API key not configured. Get a free token at <a href="https://www.courtlistener.com/profile/api-token/" target="_blank" style="color:var(--accent);">courtlistener.com ↗</a>, then add it in <a href="../options/options.html" style="color:var(--accent);">Settings → Providers</a>.`;
-        }
+      var statusResp = await browser.runtime.sendMessage({ action: "intelGetStatus" });
+      if (statusResp?.providers) {
+        document.querySelectorAll(".comp-provider-status").forEach(function(dot) {
+          var key = dot.dataset.provider;
+          var info = statusResp.providers[key];
+          if (info) {
+            var color = info.status === "connected" ? "#22c55e" : info.status === "error" ? "#f59e0b" : "#6b7280";
+            dot.innerHTML = '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + color + ';"></span>';
+          }
+        });
+        // Update provider dropdown — disable unconfigured ones
+        var select = document.getElementById("compProvider");
+        Array.from(select.options).forEach(function(opt) {
+          var info = statusResp.providers[opt.value];
+          if (info && info.status !== "connected") {
+            opt.textContent = opt.textContent.replace(/ \(.*\)$/, "") + " (no key)";
+          }
+        });
       }
-    } catch { /* background not ready */ }
+    } catch(e) { /* background not ready */ }
 
     // Init AI chat
     if (typeof ArgusChat !== "undefined") {

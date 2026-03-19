@@ -96,9 +96,9 @@
       <button class="pill-chip sat-tile-source" data-tile="stadia-terrain" title="Stamen Terrain — requires API key">Terrain</button>
       <button class="pill-chip sat-tile-source" data-tile="stadia-watercolor" title="Stamen Watercolor — artistic — requires API key">Watercolor</button>
       <span style="flex:1;"></span>
-      <button class="pill-chip sat-view-mode" data-view="compact" title="Half-height map">½</button>
-      <button class="pill-chip sat-view-mode" data-view="split" title="Dock panels to right side">◧</button>
+      <button class="pill-chip sat-view-mode" data-view="compact" title="Toggle Split"><span style="display:inline-block;transform:rotate(90deg);">◧</span></button>
       <button class="pill-chip sat-view-mode" data-view="fullscreen" title="True fullscreen (F11)">⬛</button>
+      <button class="pill-chip sat-view-mode" data-view="split" title="Side Dock"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg></button>
     </div>
   </div>
 
@@ -474,7 +474,7 @@
   </div>
 
   <!-- Toolbar toggle button -->
-  <button class="edge-tab edge-tab-right" id="satToolbarToggle" title="Imagery Controls" style="top:120px;">
+  <button class="edge-tab edge-tab-right" id="satToolbarToggle" title="Imagery Controls" style="top:400px;">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15 1.65 1.65 0 0 0 3.17 14H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68 1.65 1.65 0 0 0 10 3.17V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
   </button>
 
@@ -517,22 +517,14 @@
       <button class="pill-chip" id="satPinsToCollection">+ Asset</button>
     </div>
   </div>
-  <button class="edge-tab edge-tab-right" id="satPinsToggle" title="Pinned Locations" style="top:160px;">
+  <button class="edge-tab edge-tab-right" id="satPinsToggle" title="Pinned Locations" style="top:470px;">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
     <span id="satPinsToggleCount"></span>
   </button>
 
-  <!-- WiFi overlay toggle (WiGLE) -->
-  <button class="edge-tab edge-tab-right" id="satWifiToggle" title="WiFi Networks (WiGLE)" style="top:200px;">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>
-    <span id="satWifiCount"></span>
-  </button>
-
-  <!-- Radio overlay toggle (Broadcastify) -->
-  <button class="edge-tab edge-tab-right" id="satRadioToggle" title="Radio Feeds (Broadcastify)" style="top:240px;">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="16" width="20" height="6" rx="1"/><path d="M6 16V8"/><path d="M18 16V8"/><line x1="2" y1="8" x2="22" y2="8"/><path d="M6 8 L12 3 L18 8"/></svg>
-    <span id="satRadioCount"></span>
-  </button>
+  <!-- WiFi / Radio edge tabs removed — controlled via Settings panel toggles now -->
+  <button id="satWifiToggle" style="display:none;"><span id="satWifiCount"></span></button>
+  <button id="satRadioToggle" style="display:none;"><span id="satRadioCount"></span></button>
 
   <!-- ═══ Measurement Tools Panel ═══ -->
   <div class="fp sat-measure-panel hidden" id="satMeasurePanel" data-panel-id="sat-measure">
@@ -574,9 +566,21 @@
       </div>
     </div>
   </div>
-  <button class="edge-tab edge-tab-right" id="satMeasureToggle" title="Measurement Tools" style="top:280px;">
+  <button class="edge-tab edge-tab-right" id="satMeasureToggle" title="Measurement Tools" style="top:540px;">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 2l20 20"/><path d="M6 2v4"/><path d="M10 2v2"/><path d="M14 2v4"/><path d="M18 2v2"/><path d="M22 6h-4"/><path d="M22 10h-2"/><path d="M22 14h-4"/><path d="M22 18h-2"/></svg>
   </button>
+
+  <!-- Side dock column for split mode -->
+  <div class="sat-dock-column" id="satDockColumn">
+    <div class="sat-dock-tabs" id="satDockTabs">
+      <button id="satDockClose" title="Close Dock" style="flex:none; padding:6px 10px; color:var(--text-muted);">▶</button>
+      <button data-dock-tab="assetLibPanel">Assets</button>
+      <button class="active" data-dock-tab="satToolbar">Imagery</button>
+      <button data-dock-tab="satPinsPanel">Pins</button>
+      <button data-dock-tab="satMeasurePanel">Measure</button>
+    </div>
+    <div class="sat-dock-body" id="satDockBody"></div>
+  </div>
 
   <div id="argus-chat-container" style="padding:16px 20px;"></div>
 

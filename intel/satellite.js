@@ -4350,7 +4350,6 @@
   // Load saved drawings
   browser.storage.local.get({ satDrawings: [] }).then(function(s) {
     _savedDrawings = s.satDrawings || [];
-    // Re-render saved drawings on map after init
     setTimeout(function() { _restoreDrawingsOnMap(); }, 1500);
   });
 
@@ -4488,8 +4487,8 @@
     if (!list) return;
     var countTab = document.getElementById('satDrawTabCount');
 
-    // Filter out tracks (Aircraft tab) and spotlights (Spots tab)
-    var geomDrawings = _savedDrawings.filter(function(d) { return d.type !== 'track' && d.type !== 'spotlight'; });
+    // Filter out tracks (Aircraft tab) — show spotlights here so they can be deleted
+    var geomDrawings = _savedDrawings.filter(function(d) { return d.type !== 'track'; });
 
     if (!geomDrawings.length) {
       list.innerHTML = '<div style="padding:12px;font-size:11px;color:var(--text-muted);text-align:center;">No geometry — use Measure tools to draw on the map</div>';
@@ -4694,8 +4693,21 @@
       btn.addEventListener('click', function(e) {
         e.stopPropagation();
         var idx = parseInt(this.dataset.spotIdx);
+        var focal = _spotlightFocals[idx];
         _spotlightFocals.splice(idx, 1);
         browser.storage.local.set({ satSpotlightFocals: _spotlightFocals });
+        // Also remove matching spotlight drawing from savedDrawings so the circle goes away
+        if (focal) {
+          _savedDrawings = _savedDrawings.filter(function(d) {
+            if (d.type !== 'spotlight') return true;
+            // Match by approximate coordinates (same focal point)
+            if (d.points && d.points.length && Math.abs(d.points[0][0] - focal.lat) < 0.0001 && Math.abs(d.points[0][1] - focal.lon) < 0.0001) return false;
+            return true;
+          });
+          _saveDrawings();
+          _clearAllMapDrawings();
+          _restoreDrawingsOnMap();
+        }
         _renderSpotlightCaptures();
         renderSpotsList();
       });
@@ -5231,6 +5243,11 @@
     _clearAllMapDrawings();
     _savedDrawings = [];
     _saveDrawings();
+    // Also clear spotlight focals so circles don't linger
+    _spotlightFocals = [];
+    browser.storage.local.set({ satSpotlightFocals: [] });
+    _renderSpotlightCaptures();
+    renderSpotsList();
     renderDrawList();
     var results = document.getElementById('satMeasureResults');
     if (results) results.innerHTML = '';
@@ -5493,15 +5510,27 @@
 
     // Freeze animation — bright ring that contracts and fades
     var animCircle = L.circle(latlng, { radius: radiusKm * 1000 * 1.5, color: '#00e5ff', fillColor: '#00e5ff', fillOpacity: 0.2, weight: 3, opacity: 1 }).addTo(map);
+    _measureLayers.push(animCircle);
     var animR = radiusKm * 1000 * 1.5;
     var fadeInterval = setInterval(function() {
       animR *= 0.92;
       var opacity = animR / (radiusKm * 1000 * 1.5);
-      if (opacity < 0.05) { try { map.removeLayer(animCircle); } catch(e) {} clearInterval(fadeInterval); return; }
+      if (opacity < 0.05) {
+        try { map.removeLayer(animCircle); } catch(e) {}
+        var idx = _measureLayers.indexOf(animCircle);
+        if (idx > -1) _measureLayers.splice(idx, 1);
+        clearInterval(fadeInterval);
+        return;
+      }
       try {
         animCircle.setRadius(animR);
         animCircle.setStyle({ fillOpacity: opacity * 0.2, opacity: opacity });
-      } catch(e) { clearInterval(fadeInterval); }
+      } catch(e) {
+        try { map.removeLayer(animCircle); } catch(ex) {}
+        var idx2 = _measureLayers.indexOf(animCircle);
+        if (idx2 > -1) _measureLayers.splice(idx2, 1);
+        clearInterval(fadeInterval);
+      }
     }, 50);
 
     _wigleToast('🔦 Spotlight captured', 2000);
@@ -5737,16 +5766,101 @@
     });
   });
 
+  var _preSplitParents = {}; // track original parent of each panel
+  var _dockedPanels = {};    // track which panels are currently in the dock
+  var _dockPanelIds = ['assetLibPanel', 'satToolbar', 'satPinsPanel', 'satMeasurePanel'];
+  var _activeDockTab = 'satToolbar';
+
   function _setViewMode(mode) {
     _viewMode = mode;
     document.body.classList.remove('sat-compact', 'sat-split', 'sat-fullscreen');
     if (mode === 'compact') document.body.classList.add('sat-compact');
-    if (mode === 'split') document.body.classList.add('sat-split');
+    if (mode === 'split') {
+      document.body.classList.add('sat-split');
+      var dockBody = document.getElementById('satDockBody');
+      _preSplitParents = {};
+      _dockedPanels = {};
+      _dockPanelIds.forEach(function(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        _preSplitParents[id] = el.parentNode;
+        // Only dock panels that are hidden — leave floating ones alone
+        if (el.classList.contains('hidden')) {
+          el.classList.remove('hidden');
+          dockBody.appendChild(el);
+          el.style.display = 'none';
+          _dockedPanels[id] = true;
+        }
+      });
+      _showDockPanel(_activeDockTab);
+    } else {
+      // Exiting split — move docked panels back, re-hide them
+      _dockPanelIds.forEach(function(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.style.display = '';
+        if (_dockedPanels[id]) {
+          var origParent = _preSplitParents[id];
+          if (origParent) origParent.appendChild(el);
+          el.classList.add('hidden');
+        }
+      });
+      // Clean up any redock placeholders
+      var redockEl = document.getElementById('satDockRedock');
+      if (redockEl) redockEl.remove();
+      _preSplitParents = {};
+      _dockedPanels = {};
+    }
     document.querySelectorAll('.sat-view-mode').forEach(function(b) {
       b.style.opacity = b.dataset.view === mode ? '1' : '0.6';
     });
     setTimeout(function() { if (map) map.invalidateSize(); }, 100);
   }
+
+  function _showDockPanel(id) {
+    _activeDockTab = id;
+    var dockBody = document.getElementById('satDockBody');
+    // Hide all docked panels
+    _dockPanelIds.forEach(function(pid) {
+      var el = document.getElementById(pid);
+      if (el && _dockedPanels[pid]) el.style.display = pid === id ? '' : 'none';
+    });
+    // Remove any existing redock placeholder
+    var redockEl = document.getElementById('satDockRedock');
+    if (redockEl) redockEl.remove();
+    // If the panel isn't in the dock (floating or lost), show Redock button
+    if (!_dockedPanels[id]) {
+      var redock = document.createElement('div');
+      redock.id = 'satDockRedock';
+      redock.style.cssText = 'display:flex; align-items:center; justify-content:center; height:100%;';
+      redock.innerHTML = '<button class="pill-chip" style="font-size:12px; padding:8px 20px;">Redock</button>';
+      redock.querySelector('button').addEventListener('click', function() {
+        var panel = document.getElementById(id);
+        if (!panel) return;
+        _preSplitParents[id] = _preSplitParents[id] || panel.parentNode;
+        panel.classList.remove('hidden');
+        panel.style.display = '';
+        dockBody.appendChild(panel);
+        _dockedPanels[id] = true;
+        redock.remove();
+        _showDockPanel(id);
+      });
+      dockBody.appendChild(redock);
+    }
+    document.querySelectorAll('#satDockTabs button').forEach(function(btn) {
+      btn.classList.toggle('active', btn.dataset.dockTab === id);
+    });
+  }
+
+  // Wire dock tab clicks
+  document.getElementById('satDockTabs')?.addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-dock-tab]');
+    if (btn) _showDockPanel(btn.dataset.dockTab);
+  });
+
+  document.getElementById('satDockClose')?.addEventListener('click', function() {
+    _setViewMode('normal');
+  });
 
   function _toggleFullscreen() {
     if (document.fullscreenElement) {

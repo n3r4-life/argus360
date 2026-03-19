@@ -570,8 +570,6 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
  */
 .edge-tab {
   position: fixed;
-  top: 50%;
-  transform: translateY(-50%);
   width: 28px;
   height: 52px;
   background: var(--bg-surface);

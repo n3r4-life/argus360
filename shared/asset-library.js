@@ -142,8 +142,9 @@ const AssetLibrary = (() => {
   function _createPanel() {
     // Edge tab toggle (left side)
     const toggle = document.createElement('button');
-    toggle.className = 'edge-tab edge-tab-left asset-lib-toggle';
+    toggle.className = 'edge-tab edge-tab-right asset-lib-toggle';
     toggle.title = 'Asset Library';
+    toggle.style.top = '330px';
     toggle.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
     document.body.appendChild(toggle);
 
@@ -425,6 +426,21 @@ const AssetLibrary = (() => {
     _pageId = opts.pageId || 'default';
 
     _createPanel();
+
+    // Hide tabs not relevant to this page
+    if (opts.tabs && Array.isArray(opts.tabs)) {
+      document.querySelectorAll('.asset-lib-tab').forEach(btn => {
+        if (btn.dataset.alTab !== 'all' && opts.tabs.indexOf(btn.dataset.alTab) < 0) {
+          btn.style.display = 'none';
+        }
+      });
+      document.querySelectorAll('.asset-lib-pane').forEach(pane => {
+        if (pane.dataset.alPane !== 'all' && opts.tabs.indexOf(pane.dataset.alPane) < 0) {
+          pane.style.display = 'none';
+        }
+      });
+    }
+
     _load().then(() => _render());
 
     // Listen for storage changes from other pages

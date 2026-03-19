@@ -1,23 +1,27 @@
 # Argus — 100 Eyes
 
-**The internet lies to you. Argus helps you check.**
+A Firefox extension for direct-source research and OSINT. Named for Argus Panoptes — the hundred-eyed watchman of Greek mythology whose eyes never all slept at once.
 
-Argus is the hundred-eyed watchman for your browser. Every API key you configure opens another eye. One watches through Grok. One watches through Claude. One watches corporate registries. One watches court records. One watches the skies. The Knowledge Graph connects what all of them see.
+Every API key you configure opens another eye. The Knowledge Graph connects what all of them see.
 
-Named for Argus Panoptes — the all-seeing giant of Greek mythology whose hundred eyes never all slept at once. Some were always watching.
-
-A Firefox extension. Under 5MB. Every provider. Your data.
-
-No accounts. No telemetry. No servers. Bring your own keys, keep your own data.
+**BYOK. No accounts. No telemetry. No servers. Your keys, your data.**
 
 ---
 
-## Open Your Eyes
+## What It Is
 
-Every API key unlocks a new capability. Start with one. Add more as you need them. Each one makes Argus smarter.
+Most research workflows route through aggregators — search engines, news platforms, data brokers — that sit between you and primary sources. Argus is built to skip that layer.
 
-| Eye | What It Watches | Free? |
-|-----|----------------|-------|
+You configure your own API keys for the sources you want. Argus connects directly to those providers. Nothing is brokered, cached, or transmitted through any Argus infrastructure — because there isn't any. Every key goes straight from your browser to the provider you chose.
+
+The result is a research environment that spans AI analysis, OSINT tooling, corporate intelligence, aviation and maritime tracking, satellite imagery, sanctions screening, court records, and global media — all under one interface, all running on credentials you control.
+
+---
+
+## Integrations
+
+| Provider | Purpose | Free? |
+|----------|---------|-------|
 | xAI (Grok) | AI analysis with real-time web access | Free tier |
 | OpenAI (ChatGPT) | AI analysis, embeddings, vision | Free tier |
 | Anthropic (Claude) | AI analysis with extended thinking | Free tier |
@@ -46,45 +50,28 @@ Every API key unlocks a new capability. Start with one. Add more as you need the
 | VesselFinder | Live vessel positions, AIS data | Paid |
 | FAA Aircraft Registry | N-number to Mode-S code resolution | Free |
 
-That's 25+ eyes from free services alone. Argus doesn't need infrastructure because it plugs into everyone else's.
+Most of this runs on free tiers. Many users spend under $1/month total.
 
 ---
 
-## Why Argus Exists
+## What's Inside
 
-AI-generated text. Deepfake video. Cloned voices. Fake company websites. Synthetic social media profiles. Fabricated reviews. The average person has no tools to fight this. They scroll and hope their gut instinct holds up.
+Argus is a collection of tools that share a common storage layer and a persistent Knowledge Graph. Each tool can be used independently; together they build a research session with memory.
 
-Every AI provider is also building walled gardens. Your research in Claude Projects is invisible to Grok. What you build in ChatGPT's canvas, Gemini doesn't know exists. Your knowledge fragments across however many providers you use.
-
-Argus fixes both problems.
-
-You see a claim online. Argus analyzes the page across multiple AI models — sentiment, bias, source quality. The regex scanner pulls every email, domain, and link. Whois shows the domain was registered two weeks ago. Tech stack detection reveals a cookie-cutter site with no real infrastructure. The Knowledge Graph already has the company mentioned — and it cross-references everything it knows.
-
-All from clicking one button on one page. No single AI provider gives you that. Argus connects to everything.
-
----
-
-## What Argus Becomes
-
-Argus isn't one tool — it's the tool that becomes what you need:
-
-- **Page analyzer** — TLDR summaries to legal risk breakdowns, powered by any provider
-- **Fact checker** — cross-reference claims against multiple AI models, media coverage, and source quality analysis
-- **OSINT toolkit** — metadata extraction, tech stack detection, whois/DNS, regex scanning, link mapping, image grabbing
-- **Knowledge graph engine** — automatic entity extraction, relationship inference, cross-project intelligence
-- **Smart bookmark agent** — AI-generated tags, categories, summaries, hierarchical folders
-- **Page monitor** — track changes on any page with configurable intervals and diff detection
-- **RSS reader** — subscribe, filter, route keywords to projects automatically
-- **Research workspace** — project-based investigations with AI chat over your collected data
+- **Page analysis** — AI-powered summaries, fact-checking, sentiment, bias detection, legal risk, and custom prompts across any provider
+- **OSINT** — metadata extraction, tech stack detection, whois/DNS, regex scanning, link mapping, image grabbing
+- **Knowledge Graph** — automatic entity extraction, relationship inference, cross-session intelligence
+- **Smart bookmarks** — AI-generated tags, categories, summaries, hierarchical folders
+- **Page monitor** — change detection with visual diffs and AI-powered change summaries
+- **RSS reader** — subscribe, filter by keyword, route to projects
+- **Research workspace** — project-based investigations with AI chat over collected data
 - **Automation engine** — multi-step pipelines with URL triggers, chaining analysis across providers
-- **Report builder** — markdown editor with an asset library pulling from your entire research history
-- **Finance tracker** — watchlists for stocks, crypto, forex with price alerts and calendar events
-- **Remote terminal** — WebSocket shell client for your servers, right inside the extension
-- **Encrypted vault** — AES-256-GCM encryption for all stored credentials, locked behind PIN or password
+- **Draft Pad** — markdown editor with asset library, templates, and one-click publishing to Gist/Pastebin/PrivateBin
+- **Finance tracker** — watchlists for stocks, crypto, forex with price alerts
+- **Terminal** — WebSocket shell client (xterm.js) for remote server access
+- **Encrypted vault** — AES-256-GCM encryption for all credentials, locked behind PIN or password
 - **Cloud backup** — scheduled or manual backup to Google Drive, Dropbox, S3, WebDAV, or GitHub
 - **Paywall bypass** — automatic archive.is redirect for configurable site lists
-
-Watch your patterns, watch others' patterns. Argus is the extension that becomes what you need.
 
 ---
 
@@ -200,8 +187,6 @@ Green dot = connected. One place to see everything. Click any pill to jump to Se
 
 ## Provider Interoperability
 
-This is what no other tool does.
-
 Claude has Projects. ChatGPT has memory. Grok has collections. Gemini has Gems. None of them talk to each other. Argus sits underneath all of them, keeping your intelligence unified and provider-agnostic.
 
 - **Unified storage** — every analysis, bookmark, entity, and project item lives in one local database regardless of which model produced it
@@ -239,7 +224,7 @@ Claude has Projects. ChatGPT has memory. Grok has collections. Gemini has Gems. 
 - [Privacy](#privacy)
 - [Installation](#installation)
 - [Project Structure](#project-structure)
-- [Fork It, Make It Yours](#fork-it-make-it-yours)
+- [Contributing](#contributing)
 - [Roadmap](#roadmap)
 
 ---
@@ -265,7 +250,7 @@ Custom endpoint support covers Ollama, LM Studio, Hugging Face, vLLM, and any se
 3. **Configure** — click the Argus icon → gear icon → paste your API key → Save
 4. **Analyze** — navigate to any page, click Argus, choose a preset, hit Analyze
 
-That's your first eye open. Most providers offer generous free tiers. Many users spend less than $1/month.
+Most providers offer generous free tiers. Many users spend less than $1/month.
 
 ---
 
@@ -330,7 +315,7 @@ Create your own in Console → **Prompts** tab. Each preset can be bound to a sp
 
 ## Knowledge Graph
 
-Argus automatically builds a persistent knowledge graph from every analysis, bookmark, and monitored page. This is the brain that connects what all the eyes see.
+Argus automatically builds a persistent knowledge graph from every analysis, bookmark, and monitored page. Each eye feeds into it. The graph connects what all of them see.
 
 - Automatic entity extraction: people, organizations, locations, dates, events
 - Fuzzy matching (Levenshtein distance + token overlap) prevents duplicates
@@ -552,11 +537,13 @@ Argus/
 
 ---
 
-## Fork It, Make It Yours
+## Contributing
 
 Fully open source. Vanilla JavaScript, zero build dependencies. No frameworks, no bundlers, no transpilers.
 
 > **Why open source?** You're handing this extension your API keys and browsing content. You should see exactly what it does with them.
+
+Pull requests welcome. For major changes, open an issue first. [GitHub Issues](https://github.com/n3r4-life/argus360/issues)
 
 ---
 
@@ -566,7 +553,7 @@ Fully open source. Vanilla JavaScript, zero build dependencies. No frameworks, n
 
 **Location Intelligence** — 3D globe visualization. Street View. Wireless scanning. Device discovery. Every pin is an entity you can investigate.
 
-**Intelligence Data Providers** — Flight tracking. Ship tracking. Corporate registries. Beneficial ownership. SEC filings. Court records. Global events. Blockchain analysis. Satellite imagery. Sanctions screening. Each one is another eye.
+**Intelligence Data Providers** — Radio intelligence. Trawl Net passive collection. Image metadata extraction. Each one is another eye.
 
 **Agentic Investigations** — Give Argus a target and tools. The AI decides what to search next. Human reviews the dossier.
 

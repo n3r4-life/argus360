@@ -276,6 +276,113 @@ body {
    Compliance Page
    ═══════════════════════════════════════════════ */
 
+/* Compliance search strip */
+.comp-search-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.comp-search-strip .comp-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.comp-provider-select {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 11px;
+  min-width: 130px;
+}
+.comp-provider-select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.comp-results-source {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+.comp-match-section {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.02);
+}
+.comp-match-section summary {
+  margin: 0;
+  user-select: none;
+}
+.comp-result-card.csl {
+  border-left: 3px solid #3b82f6;
+}
+
+/* Compliance dock column */
+.comp-dock-column {
+  position: fixed;
+  right: 0;
+  top: 178px;
+  bottom: 0;
+  width: 360px;
+  background: var(--bg-primary, #1a1a2e);
+  border-left: 1px solid var(--border);
+  z-index: 998;
+  display: none;
+  flex-direction: column;
+}
+.comp-dock-column.open {
+  display: flex;
+}
+.comp-dock-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--bg-secondary, #16213e);
+}
+.comp-dock-tabs button {
+  flex: 1;
+  padding: 6px 4px;
+  font-size: 10px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.comp-dock-tabs button:hover {
+  color: var(--text-primary);
+  background: rgba(255,255,255,0.03);
+}
+.comp-dock-tabs button.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.comp-dock-body {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+}
+.comp-dock-pane {
+  display: none;
+  height: 100%;
+  overflow-y: auto;
+}
+.comp-dock-pane.active {
+  display: block;
+}
+body.comp-dock-open .edge-tab,
+body.comp-dock-open .asset-lib-toggle {
+  display: none !important;
+}
+
 /* Screen All bar */
 .comp-screen-bar {
   display: flex;
@@ -1680,26 +1787,80 @@ body.sat-compact .sat-map-main {
 
 /* Split mode — panels dock right, below header */
 body.sat-split .sat-map-main {
-  max-width: none !important;
-  width: calc(100% - 360px) !important;
-  margin: 0 !important;
+  /* Map stays full width — dock overlays on top */
 }
+body.sat-split .asset-lib-panel,
 body.sat-split .sat-toolbar-panel,
 body.sat-split .sat-pins-panel,
 body.sat-split .sat-measure-panel {
-  position: fixed !important;
-  right: 0 !important;
+  position: relative !important;
+  right: auto !important;
   top: auto !important;
-  bottom: 0 !important;
-  height: calc(100vh - 34px) !important;
-  max-height: calc(100vh - 34px) !important;
-  width: 360px !important;
+  bottom: auto !important;
+  left: auto !important;
+  height: 100% !important;
+  max-height: none !important;
+  width: 100% !important;
   border-radius: 0 !important;
-  border-left: 1px solid var(--border);
   overflow-y: auto !important;
+  box-shadow: none !important;
+  z-index: auto !important;
+  display: flex;
+  flex-direction: column;
 }
-body.sat-split .edge-tab {
-  right: 360px !important;
+body.sat-split .asset-lib-panel > .fp-header,
+body.sat-split .sat-toolbar-panel > .fp-header,
+body.sat-split .sat-pins-panel > .fp-header,
+body.sat-split .sat-measure-panel > .fp-header {
+  display: none !important;
+}
+/* Dock column */
+.sat-dock-column {
+  position: fixed;
+  right: 0;
+  top: 178px;
+  bottom: 0;
+  width: 360px;
+  background: var(--bg-primary, #1a1a2e);
+  border-left: 1px solid var(--border);
+  z-index: 998;
+  display: none;
+  flex-direction: column;
+}
+body.sat-split .sat-dock-column {
+  display: flex;
+}
+.sat-dock-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--bg-secondary, #16213e);
+}
+.sat-dock-tabs button {
+  flex: 1;
+  padding: 6px 4px;
+  font-size: 10px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.sat-dock-tabs button:hover {
+  color: var(--text-primary);
+  background: rgba(255,255,255,0.03);
+}
+.sat-dock-tabs button.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.sat-dock-body {
+  flex: 1;
+  overflow-y: auto;
+}
+body.sat-split .edge-tab,
+body.sat-split .asset-lib-toggle {
+  display: none !important;
 }
 
 /* Fullscreen mode — true fullscreen, everything hidden except map + info bar */

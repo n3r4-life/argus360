@@ -3716,6 +3716,9 @@ async function handleIntelSearch(providerKey, query, options) {
       case "opensanctions":
         results = await provider.search(query, options?.dataset);
         break;
+      case "csl":
+        results = await provider.search(query, options);
+        break;
       case "secedgar":
         results = await provider.searchCompany(query);
         break;

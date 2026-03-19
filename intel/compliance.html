@@ -6,6 +6,7 @@
   <title>Compliance - Argus Intelligence</title>
   <link rel="stylesheet" href="../shared/argus-std.css">
   <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../shared/asset-library.css">
   <link rel="stylesheet" href="../lib/argus-chat.css">
   <link rel="stylesheet" href="../shared/xmpp-chat.css">
   <link rel="stylesheet" href="intel.css">
@@ -13,27 +14,58 @@
 <body>
   <script src="../lib/vendor/browser-polyfill.min.js"></script>
   <script src="../shared/ribbon.js"></script>
-
+  <script src="../shared/panel-state.js"></script>
+  <script src="../shared/floating-panel.js"></script>
+  <script src="../shared/asset-library.js"></script>
 
   <header class="intel-page-header">
     <svg class="header-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
-    <h1 class="header-title">Compliance</h1>
+    <a href="https://grokipedia.com/search?q=sanctions%20compliance" target="_blank" class="header-title-link" title="Learn about sanctions compliance"><h1 class="header-title">Compliance</h1></a>
     <span class="header-desc">Sanctions screening, PEP checks, court records, and regulatory compliance.</span>
     <span class="header-spacer"></span>
   </header>
+
+  <!-- ═══ Unified Search Bar ═══ -->
+  <div class="comp-search-strip">
+    <div class="comp-search-row">
+      <select id="compProvider" class="comp-provider-select" title="Search provider">
+        <option value="opensanctions">OpenSanctions</option>
+        <option value="csl">U.S. CSL</option>
+        <option value="courtlistener">CourtListener</option>
+      </select>
+      <input type="text" id="compSearchInput" class="comp-search-input" placeholder="Search name, entity, or case..." autocomplete="off">
+      <label class="pill-toggle" title="Fuzzy matching">
+        <input type="checkbox" id="compFuzzyToggle">
+        <span class="pill-track" style="--pill-color:var(--accent);"><span class="pill-knob"></span></span>
+        <span style="font-size:10px; color:var(--text-muted); margin-left:2px;">Fuzzy</span>
+      </label>
+      <button class="pill-chip" id="compSearchBtn">Search</button>
+    </div>
+    <div class="comp-search-row" style="gap:4px;">
+      <select id="compDataset" class="comp-dataset-select" title="Dataset filter">
+        <option value="default">All Datasets</option>
+        <option value="sanctions">Sanctions Only</option>
+        <option value="peps">PEPs Only</option>
+        <option value="crime">Crime</option>
+      </select>
+      <select id="compTypeFilter" class="comp-dataset-select" title="Entity type">
+        <option value="">All Types</option>
+        <option value="Individual">Individual</option>
+        <option value="Entity">Entity / Org</option>
+        <option value="Vessel">Vessel</option>
+        <option value="Aircraft">Aircraft</option>
+      </select>
+      <input type="text" id="compCountryFilter" class="comp-search-input" placeholder="Country (e.g. RU, IR, CN)" style="max-width:180px;">
+      <span style="flex:1;"></span>
+      <button class="pill-chip" id="compScreenAll">Screen All KG</button>
+      <span class="comp-screen-status" id="compScreenStatus"></span>
+    </div>
+  </div>
+
   <main class="intel-main">
     <svg class="intel-watermark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
 
-    
-    <!-- Screen All -->
-          <div class="comp-screen-bar">
-        <button class="pill-chip" id="compScreenAll">Screen All KG Entities</button>
-        <span class="comp-screen-status" id="compScreenStatus"></span>
-        <span class="comp-screen-timestamp" id="compScreenTimestamp"></span>
-      </div>
-    </section>
-
-    <!-- KG Screening Summary (full-width, above columns) -->
+    <!-- KG Screening Summary -->
     <div class="comp-screening-bar">
       <div class="comp-screening-summary" id="compScreeningSummary">
         <div class="comp-summary-stat">
@@ -52,89 +84,191 @@
       <div id="compFlaggedList" class="comp-flagged-list"></div>
     </div>
 
-    <!-- Two-column layout -->
-    <div class="comp-columns">
+    <!-- Results area -->
+    <div class="comp-results-header">
+      <h2 class="intel-section-title">Results</h2>
+      <span class="comp-results-count" id="compResultsCount"></span>
+      <span class="comp-results-source" id="compResultsSource"></span>
+    </div>
+    <div id="compResults" class="comp-results-list">
+      <div class="comp-empty" id="compEmpty">
+        Search a name to check against sanctions lists, screening databases, court records, and watchlists.
+      </div>
+    </div>
 
-      <!-- LEFT: Sanctions Screening -->
-      <div class="comp-col">
-                  <h2 class="intel-section-title">Sanctions Search</h2>
-          <div class="comp-search-row">
-            <input type="text" id="compSanctionsInput" class="comp-search-input" placeholder="Search name, organization, or vessel...">
-            <button class="pill-chip" id="compSanctionsBtn">Search</button>
-          </div>
-          <div class="comp-dataset-row">
-            <select id="compDataset" class="comp-dataset-select">
-              <option value="default">All Datasets</option>
-              <option value="sanctions">Sanctions Only</option>
-              <option value="peps">PEPs Only</option>
-              <option value="crime">Crime</option>
-            </select>
-          </div>
-        </section>
+    <!-- Entity Match (collapsible) -->
+    <details class="comp-match-section">
+      <summary class="intel-section-title" style="cursor:pointer;">Entity Match (Structured)</summary>
+      <p class="comp-match-desc">Structured entity matching against OpenSanctions. Higher confidence than text search.</p>
+      <div class="comp-match-form">
+        <div class="comp-match-row">
+          <select id="compMatchSchema" class="comp-dataset-select">
+            <option value="Person">Person</option>
+            <option value="Company">Company</option>
+            <option value="Vessel">Vessel</option>
+            <option value="Aircraft">Aircraft</option>
+          </select>
+          <input type="text" id="compMatchName" class="comp-search-input" placeholder="Entity name...">
+        </div>
+        <div class="comp-match-row">
+          <input type="text" id="compMatchCountry" class="comp-search-input" placeholder="Country (optional, e.g. RU, IR, CN)">
+          <input type="text" id="compMatchBirthDate" class="comp-search-input" placeholder="Birth date (optional, YYYY-MM-DD)">
+        </div>
+        <button class="pill-chip" id="compMatchBtn">Match Entity</button>
+      </div>
+      <div id="compMatchResults" class="comp-results-list">
+        <div class="comp-empty" id="compMatchEmpty">
+          Entity match results will appear here.
+        </div>
+      </div>
+    </details>
+  </main>
 
-        <!-- Sanctions Results -->
-                  <div class="comp-results-header">
-            <h2 class="intel-section-title">Results</h2>
-            <span class="comp-results-count" id="compSanctionsCount"></span>
-          </div>
-          <div id="compSanctionsResults" class="comp-results-list">
-            <div class="comp-empty" id="compSanctionsEmpty">
-              Search a name to check against global sanctions lists, PEP databases, and watchlists across 30+ datasets.
-            </div>
-          </div>
-        </section>
+  <!-- ═══ Side Dock ═══ -->
+  <div class="comp-dock-column" id="compDockColumn">
+    <div class="comp-dock-tabs" id="compDockTabs">
+      <button id="compDockClose" title="Close Dock" style="flex:none; padding:6px 10px; color:var(--text-muted);">▶</button>
+      <button class="active" data-dock-tab="compDockAssets">Assets</button>
+      <button data-dock-tab="compDockScreening">Screening</button>
+      <button data-dock-tab="compDockEntities">Entities</button>
+      <button data-dock-tab="compDockPatents">Patents</button>
+      <button data-dock-tab="compDockLitigation">Litigation</button>
+    </div>
+    <div class="comp-dock-body" id="compDockBody">
+
+      <!-- ── Assets tab (Asset Library gets docked here) ── -->
+      <div class="comp-dock-pane active" data-dock-pane="compDockAssets">
+        <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);font-size:11px;">
+          Asset Library will dock here
+        </div>
       </div>
 
-      <!-- RIGHT: Litigation Search -->
-      <div class="comp-col">
-                  <h2 class="intel-section-title">Litigation Search</h2>
-          <div class="comp-search-row">
-            <input type="text" id="compLitigationInput" class="comp-search-input" placeholder="Search name or case number...">
-            <button class="pill-chip" id="compLitigationBtn">Search</button>
+      <!-- ── Screening tab ── -->
+      <div class="comp-dock-pane" data-dock-pane="compDockScreening">
+        <div style="padding:10px;">
+          <div style="font-size:11px; font-weight:600; margin-bottom:8px; color:var(--text-primary);">Screening Providers</div>
+          <div style="font-size:10px; color:var(--text-muted); margin-bottom:8px;">Toggle APIs on/off. Keys configured in Settings → Providers.</div>
+          <div class="comp-provider-toggles" id="compProviderToggles">
+            <label class="pill-toggle" style="display:flex; align-items:center; gap:6px; padding:6px 0; border-bottom:1px solid var(--border);">
+              <input type="checkbox" id="compToggleOpensanctions" checked>
+              <span class="pill-track" style="--pill-color:#22c55e;"><span class="pill-knob"></span></span>
+              <span style="font-size:11px;">OpenSanctions</span>
+              <span class="comp-provider-status" data-provider="opensanctions" style="margin-left:auto;"></span>
+            </label>
+            <label class="pill-toggle" style="display:flex; align-items:center; gap:6px; padding:6px 0; border-bottom:1px solid var(--border);">
+              <input type="checkbox" id="compToggleCsl" checked>
+              <span class="pill-track" style="--pill-color:#22c55e;"><span class="pill-knob"></span></span>
+              <span style="font-size:11px;">U.S. CSL (Trade.gov)</span>
+              <span class="comp-provider-status" data-provider="csl" style="margin-left:auto;"></span>
+            </label>
+            <label class="pill-toggle" style="display:flex; align-items:center; gap:6px; padding:6px 0; border-bottom:1px solid var(--border);">
+              <input type="checkbox" id="compToggleEuSanctions" disabled>
+              <span class="pill-track" style="--pill-color:#22c55e;"><span class="pill-knob"></span></span>
+              <span style="font-size:11px; opacity:0.5;">EU Sanctions (coming soon)</span>
+            </label>
+            <label class="pill-toggle" style="display:flex; align-items:center; gap:6px; padding:6px 0; border-bottom:1px solid var(--border);">
+              <input type="checkbox" id="compTogglePep" disabled>
+              <span class="pill-track" style="--pill-color:#22c55e;"><span class="pill-knob"></span></span>
+              <span style="font-size:11px; opacity:0.5;">PEP / RCA Check (coming soon)</span>
+            </label>
+            <label class="pill-toggle" style="display:flex; align-items:center; gap:6px; padding:6px 0;">
+              <input type="checkbox" id="compToggleAdverseMedia" disabled>
+              <span class="pill-track" style="--pill-color:#22c55e;"><span class="pill-knob"></span></span>
+              <span style="font-size:11px; opacity:0.5;">Adverse Media (coming soon)</span>
+            </label>
           </div>
-        </section>
+          <div style="margin-top:12px; font-size:9px; color:var(--text-muted); opacity:0.5;">
+            This product uses the International Trade Administration's Data API but is not endorsed or certified by the International Trade Administration.
+          </div>
+        </div>
+      </div>
 
-        <!-- Litigation Results -->
-                  <div class="comp-results-header">
-            <h2 class="intel-section-title">Court Records</h2>
-            <span class="comp-results-count" id="compLitigationCount"></span>
-          </div>
-          <div id="compLitigationResults" class="comp-results-list">
-            <div class="comp-empty" id="compLitigationEmpty">
-              Search for court cases, opinions, and dockets.
+      <!-- ── Entities tab ── -->
+      <div class="comp-dock-pane" data-dock-pane="compDockEntities">
+        <div style="padding:10px;">
+          <div style="font-size:11px; font-weight:600; margin-bottom:8px; color:var(--text-primary);">Entity Verification</div>
+          <label class="pill-toggle" style="display:flex; align-items:center; gap:6px; padding:6px 0; border-bottom:1px solid var(--border);">
+            <input type="checkbox" id="compToggleSamGov" disabled>
+            <span class="pill-track" style="--pill-color:#22c55e;"><span class="pill-knob"></span></span>
+            <span style="font-size:11px; opacity:0.5;">SAM.gov (coming soon)</span>
+          </label>
+          <label class="pill-toggle" style="display:flex; align-items:center; gap:6px; padding:6px 0; border-bottom:1px solid var(--border);">
+            <input type="checkbox" id="compToggleKyb" disabled>
+            <span class="pill-track" style="--pill-color:#22c55e;"><span class="pill-knob"></span></span>
+            <span style="font-size:11px; opacity:0.5;">KYB / Business Registry (coming soon)</span>
+          </label>
+          <div style="margin-top:12px;">
+            <div style="font-size:10px; color:var(--text-muted); margin-bottom:6px;">Entity Match (OpenSanctions structured matching)</div>
+            <div class="comp-match-form">
+              <div class="comp-match-row">
+                <select id="compMatchSchemaDock" class="comp-dataset-select" style="font-size:10px;">
+                  <option value="Person">Person</option>
+                  <option value="Company">Company</option>
+                  <option value="Vessel">Vessel</option>
+                  <option value="Aircraft">Aircraft</option>
+                </select>
+                <input type="text" id="compMatchNameDock" class="comp-search-input" placeholder="Entity name..." style="font-size:10px;">
+              </div>
+              <div class="comp-match-row">
+                <input type="text" id="compMatchCountryDock" class="comp-search-input" placeholder="Country (RU, IR...)" style="font-size:10px;">
+                <input type="text" id="compMatchBirthDateDock" class="comp-search-input" placeholder="DOB (YYYY-MM-DD)" style="font-size:10px;">
+              </div>
+              <button class="pill-chip" id="compMatchBtnDock" style="font-size:10px;">Match Entity</button>
             </div>
+            <div id="compMatchResultsDock" class="comp-results-list" style="max-height:300px; overflow-y:auto;"></div>
           </div>
-        </section>
+        </div>
+      </div>
 
-        <!-- Quick Entity Match -->
-                  <h2 class="intel-section-title">Entity Match</h2>
-          <p class="comp-match-desc">Structured entity matching against OpenSanctions. Higher confidence than text search.</p>
-          <div class="comp-match-form">
-            <div class="comp-match-row">
-              <select id="compMatchSchema" class="comp-dataset-select">
-                <option value="Person">Person</option>
-                <option value="Company">Company</option>
-                <option value="Vessel">Vessel</option>
-                <option value="Aircraft">Aircraft</option>
-              </select>
-              <input type="text" id="compMatchName" class="comp-search-input" placeholder="Entity name...">
-            </div>
-            <div class="comp-match-row">
-              <input type="text" id="compMatchCountry" class="comp-search-input" placeholder="Country (optional, e.g. RU, IR, CN)">
-              <input type="text" id="compMatchBirthDate" class="comp-search-input" placeholder="Birth date (optional, YYYY-MM-DD)">
-            </div>
-            <button class="pill-chip" id="compMatchBtn">Match Entity</button>
-          </div>
-          <div id="compMatchResults" class="comp-results-list">
-            <div class="comp-empty" id="compMatchEmpty">
-              Entity match results will appear here.
-            </div>
-          </div>
-        </section>
+      <!-- ── Patents tab ── -->
+      <div class="comp-dock-pane" data-dock-pane="compDockPatents">
+        <div style="padding:10px;">
+          <div style="font-size:11px; font-weight:600; margin-bottom:8px; color:var(--text-primary);">Patent & IP Search</div>
+          <label class="pill-toggle" style="display:flex; align-items:center; gap:6px; padding:6px 0; border-bottom:1px solid var(--border);">
+            <input type="checkbox" id="compToggleUspto" disabled>
+            <span class="pill-track" style="--pill-color:#22c55e;"><span class="pill-knob"></span></span>
+            <span style="font-size:11px; opacity:0.5;">USPTO ODP (coming soon)</span>
+          </label>
+          <label class="pill-toggle" style="display:flex; align-items:center; gap:6px; padding:6px 0; border-bottom:1px solid var(--border);">
+            <input type="checkbox" id="compTogglePatentsview" disabled>
+            <span class="pill-track" style="--pill-color:#22c55e;"><span class="pill-knob"></span></span>
+            <span style="font-size:11px; opacity:0.5;">PatentsView (coming soon)</span>
+          </label>
+          <label class="pill-toggle" style="display:flex; align-items:center; gap:6px; padding:6px 0; border-bottom:1px solid var(--border);">
+            <input type="checkbox" id="compToggleLens" disabled>
+            <span class="pill-track" style="--pill-color:#22c55e;"><span class="pill-knob"></span></span>
+            <span style="font-size:11px; opacity:0.5;">Lens.org (coming soon)</span>
+          </label>
+          <label class="pill-toggle" style="display:flex; align-items:center; gap:6px; padding:6px 0;">
+            <input type="checkbox" id="compTogglePqai" disabled>
+            <span class="pill-track" style="--pill-color:#22c55e;"><span class="pill-knob"></span></span>
+            <span style="font-size:11px; opacity:0.5;">PQAI Semantic (coming soon)</span>
+          </label>
+          <div class="comp-empty" style="margin-top:12px;">Patent search APIs will be wired here. Search by inventor, assignee, title, or classification.</div>
+        </div>
+      </div>
+
+      <!-- ── Litigation tab ── -->
+      <div class="comp-dock-pane" data-dock-pane="compDockLitigation">
+        <div style="padding:10px;">
+          <div style="font-size:11px; font-weight:600; margin-bottom:8px; color:var(--text-primary);">Litigation Search</div>
+          <label class="pill-toggle" style="display:flex; align-items:center; gap:6px; padding:6px 0; border-bottom:1px solid var(--border);">
+            <input type="checkbox" id="compToggleCourtlistener" checked>
+            <span class="pill-track" style="--pill-color:#22c55e;"><span class="pill-knob"></span></span>
+            <span style="font-size:11px;">CourtListener</span>
+            <span class="comp-provider-status" data-provider="courtlistener" style="margin-left:auto;"></span>
+          </label>
+          <div style="margin-top:8px; font-size:10px; color:var(--text-muted);">Use the main search bar with CourtListener selected to search court records, opinions, and dockets.</div>
+        </div>
       </div>
 
     </div>
-  </main>
+  </div>
+
+  <!-- ═══ Edge Tab — Dock Toggle ═══ -->
+  <button class="edge-tab edge-tab-right" id="compDockToggle" title="Side Dock" style="top:400px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+  </button>
 
   <div id="argus-chat-container" style="padding:16px 20px;"></div>
 
@@ -144,10 +278,10 @@
   <script src="../shared/xmpp-chat.js"></script>
   <script src="../lib/argus-chat.js"></script>
   <script src="domain-shell.js"></script>
-  
+
   <script src="compliance.js"></script>
   <div id="xmpp-chat-container"></div>
-  
-<script src="compliance-init.js"></script>
+
+  <script src="compliance-init.js"></script>
 </body>
 </html>
