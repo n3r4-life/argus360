@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="../shared/xmpp-chat.css">
 </head>
 <body>
+  <script src="../lib/vendor/browser-polyfill.min.js"></script>
   <script src="../shared/ribbon.js"></script>
   <header class="tl-header">
     <div class="header-left">
@@ -71,10 +72,7 @@
   <script src="../lib/argus-chat.js"></script>
   <script src="timeline.js"></script>
   <div id="xmpp-chat-container"></div>
-  <script>
-    if (typeof XmppChat !== "undefined") {
-      XmppChat.init({ container: document.getElementById("xmpp-chat-container"), pageId: "timeline" });
-    }
-  </script>
+  
+  <script src="timeline-init.js"></script>
 </body>
 </html>

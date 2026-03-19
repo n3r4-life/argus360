@@ -1629,3 +1629,98 @@ body {
   color: var(--text-muted);
   margin-right: 4px;
 }
+
+/* Aircraft icon markers */
+.sat-aircraft-icon {
+  background: none !important;
+  border: none !important;
+}
+
+/* Measurement tool labels */
+.sat-measure-label {
+  background: rgba(20, 20, 30, 0.85) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 4px !important;
+  color: #e8e8e8 !important;
+  font-size: 10px !important;
+  font-family: 'SF Mono', 'Fira Code', monospace !important;
+  padding: 2px 6px !important;
+  white-space: pre !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4) !important;
+}
+.sat-measure-label::before {
+  display: none !important;
+}
+
+/* Measurement panel */
+.sat-measure-panel {
+  position: fixed;
+  right: 20px;
+  top: 320px;
+  width: 280px;
+  z-index: 1200;
+}
+.sat-measure-tool.active,
+#satSpotlightBtn.active {
+  background: var(--accent, #e94560) !important;
+  color: #fff !important;
+}
+
+/* Spotlight overlay transition */
+#satSpotlightOverlay {
+  transition: none;
+}
+
+/* ── View modes ── */
+
+/* Compact mode — half-height map */
+body.sat-compact .sat-map-main {
+  height: calc(50vh - 60px) !important;
+}
+
+/* Split mode — panels dock right, below header */
+body.sat-split .sat-map-main {
+  max-width: none !important;
+  width: calc(100% - 360px) !important;
+  margin: 0 !important;
+}
+body.sat-split .sat-toolbar-panel,
+body.sat-split .sat-pins-panel,
+body.sat-split .sat-measure-panel {
+  position: fixed !important;
+  right: 0 !important;
+  top: auto !important;
+  bottom: 0 !important;
+  height: calc(100vh - 34px) !important;
+  max-height: calc(100vh - 34px) !important;
+  width: 360px !important;
+  border-radius: 0 !important;
+  border-left: 1px solid var(--border);
+  overflow-y: auto !important;
+}
+body.sat-split .edge-tab {
+  right: 360px !important;
+}
+
+/* Fullscreen mode — true fullscreen, everything hidden except map + info bar */
+body.sat-fullscreen .intel-page-header,
+body.sat-fullscreen .sat-search-strip,
+body.sat-fullscreen .edge-tab,
+body.sat-fullscreen #argus-chat-container,
+body.sat-fullscreen #xmpp-chat-container,
+body.sat-fullscreen .app-ribbon {
+  display: none !important;
+}
+body.sat-fullscreen .sat-map-main {
+  height: 100vh !important;
+  max-width: none !important;
+}
+body.sat-fullscreen .fp {
+  z-index: 1600;
+}
+
+/* Tracking badge pulse */
+@keyframes sat-track-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

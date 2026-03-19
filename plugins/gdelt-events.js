@@ -1,21 +1,37 @@
+// plugins/gdelt-events.js
+// Real GDELT Events plugin — wraps intelligence-providers.js GDELT integration
+// For use on the Events page (intel/events.js) — timeline, tone, geo analysis
+
 window.ArgusPluginRegistry.registerPlugin({
     id: 'gdelt-events',
     name: 'GDELT Events',
-    version: '1.0',
+    version: '2.0',
     category: 'osint',
-    requires: ['kg'],
-    run: async (input, context) => {
-        var response = await new Promise(function(resolve) {
-            browser.runtime.sendMessage({
-                type: 'EXTERNAL_API_CALL',
-                url: 'https://api.gdeltproject.org/api/v2/doc/doc',
-                options: { method: 'GET' }
-            }, resolve);
+    requires: [],
+
+    init: async function(context) {
+        console.log('[GDELT Plugin] initialized — free, no API key required');
+    },
+
+    run: async function(input, context) {
+        var query = (typeof input === 'string') ? input : '';
+        var resp = await browser.runtime.sendMessage({
+            action: 'intelSearch',
+            provider: 'gdelt',
+            query: query,
+            options: {}
         });
-        var events = [];
-        if (response && response.success) {
-            events = response.data.articles || [];
+        if (!resp || !resp.success) {
+            return { message: 'GDELT error: ' + ((resp && resp.error) || 'failed'), entities: [] };
         }
-        return { message: 'GDELT events complete', entities: events };
+        var articles = (resp.results && resp.results.articles) || [];
+        var entities = articles.map(function(a) {
+            return { type: 'event', title: a.title, url: a.url, source: a.domain, date: a.seendate, tone: a.tone };
+        });
+        return { message: 'GDELT: ' + articles.length + ' events', entities: entities };
+    },
+
+    cleanup: async function() {
+        console.log('[GDELT Plugin] cleaned up');
     }
 });

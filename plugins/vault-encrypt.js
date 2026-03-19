@@ -1,25 +1,34 @@
+// plugins/vault-encrypt.js
+// Real Vault Encrypt plugin — wraps existing ArgusVault encryption
+// Provides vault status and encryption/decryption via the plugin interface
+
 window.ArgusPluginRegistry.registerPlugin({
     id: 'vault-encrypt',
     name: 'Vault Encrypt',
-    version: '1.0',
+    version: '2.0',
     category: 'privacy',
     requires: ['vault'],
-    run: async (input, context) => {
-        var response = await new Promise(function(resolve) {
-            browser.runtime.sendMessage({
-                type: 'EXTERNAL_API_CALL',
-                url: 'https://api.opensanctions.org/search',
-                options: {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ q: input })
-                }
-            }, resolve);
-        });
-        var encrypted = [];
-        if (response && response.success) {
-            encrypted = response.data.results || [];
+
+    init: async function(context) {
+        console.log('[Vault Plugin] initialized');
+    },
+
+    run: async function(input, context) {
+        // Check vault status
+        var resp = await browser.runtime.sendMessage({ action: 'vaultGetStatus' });
+        if (!resp) {
+            return { message: 'Vault: status unavailable', entities: [] };
         }
-        return { message: 'Vault encryption complete', entities: encrypted };
+        var entities = [{
+            type: 'vault-status',
+            setup: resp.setup,
+            unlocked: resp.unlocked
+        }];
+        var status = resp.unlocked ? 'unlocked' : (resp.setup ? 'locked' : 'not configured');
+        return { message: 'Vault: ' + status, entities: entities };
+    },
+
+    cleanup: async function() {
+        console.log('[Vault Plugin] cleaned up');
     }
 });

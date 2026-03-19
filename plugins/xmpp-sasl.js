@@ -1,21 +1,35 @@
+// plugins/xmpp-sasl.js
+// Real XMPP SASL plugin — wraps existing XMPP client connection/auth
+// For use on chat page and anywhere XMPP messaging is needed
+
 window.ArgusPluginRegistry.registerPlugin({
     id: 'xmpp-sasl',
     name: 'XMPP SASL',
-    version: '1.0',
+    version: '2.0',
     category: 'communication',
     requires: ['vault'],
-    run: async (input, context) => {
-        var response = await new Promise(function(resolve) {
-            browser.runtime.sendMessage({
-                type: 'EXTERNAL_API_CALL',
-                url: 'https://api.gdeltproject.org/api/v2/doc/doc',
-                options: { method: 'GET' }
-            }, resolve);
-        });
-        var sasl = [];
-        if (response && response.success) {
-            sasl = response.data.articles || [];
+
+    init: async function(context) {
+        console.log('[XMPP Plugin] initialized');
+    },
+
+    run: async function(input, context) {
+        // Check XMPP connection status
+        var resp = await browser.runtime.sendMessage({ action: 'xmppGetStatus' });
+        if (!resp) {
+            return { message: 'XMPP: status unavailable', entities: [] };
         }
-        return { message: 'XMPP SASL complete', entities: sasl };
+        var entities = [{
+            type: 'xmpp-status',
+            configured: resp.configured,
+            connected: resp.connected,
+            jid: resp.jid || ''
+        }];
+        var status = resp.connected ? 'connected as ' + resp.jid : (resp.configured ? 'configured but disconnected' : 'not configured');
+        return { message: 'XMPP: ' + status, entities: entities };
+    },
+
+    cleanup: async function() {
+        console.log('[XMPP Plugin] cleaned up');
     }
 });

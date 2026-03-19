@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="../shared/xmpp-chat.css">
 </head>
 <body>
+  <script src="../lib/vendor/browser-polyfill.min.js"></script>
   <script src="../shared/ribbon.js"></script>
   <header class="header">
     <div class="header-left">
@@ -65,10 +66,7 @@
   <script src="../lib/argus-chat.js"></script>
   <script src="techstack.js"></script>
   <div id="xmpp-chat-container"></div>
-  <script>
-    if (typeof XmppChat !== "undefined") {
-      XmppChat.init({ container: document.getElementById("xmpp-chat-container"), pageId: "techstack" });
-    }
-  </script>
+  
+  <script src="techstack-init.js"></script>
 </body>
 </html>

@@ -1,21 +1,47 @@
+// plugins/vessel-track.js
+// Real Vessel Tracking plugin — wraps intelligence-providers.js VesselFinder/MarineTraffic
+// For use on movement page (intel/movement.js) and satellite page overlay
+
 window.ArgusPluginRegistry.registerPlugin({
     id: 'vessel-track',
     name: 'Vessel Tracking',
-    version: '1.0',
+    version: '2.0',
     category: 'location',
-    requires: ['kg'],
-    run: async (input, context) => {
-        var response = await new Promise(function(resolve) {
-            browser.runtime.sendMessage({
-                type: 'EXTERNAL_API_CALL',
-                url: 'https://opensky-network.org/api/states/all',
-                options: { method: 'GET' }
-            }, resolve);
+    requires: [],
+
+    _markers: [],
+    _map: null,
+
+    init: async function(context) {
+        console.log('[Vessel Plugin] initialized');
+    },
+
+    run: async function(input, context) {
+        var query = (typeof input === 'string') ? input : '';
+        var resp = await browser.runtime.sendMessage({
+            action: 'intelSearch',
+            provider: 'vesselfinder',
+            query: query,
+            options: {}
         });
-        var vessels = [];
-        if (response && response.success) {
-            vessels = response.data.states || [];
+        if (!resp || !resp.success) {
+            return { message: 'Vessel error: ' + ((resp && resp.error) || 'failed'), entities: [] };
         }
-        return { message: 'Vessel tracking complete', entities: vessels };
+        var vessels = resp.results || [];
+        var entities = (Array.isArray(vessels) ? vessels : []).map(function(v) {
+            return { type: 'vessel', name: v.name || v.SHIPNAME, imo: v.imo || v.IMO, mmsi: v.mmsi || v.MMSI, lat: v.lat || v.LAT, lon: v.lon || v.LON };
+        });
+        return { message: 'Vessels: ' + entities.length + ' tracked', entities: entities };
+    },
+
+    cleanup: async function() {
+        if (this._map) {
+            for (var i = 0; i < this._markers.length; i++) {
+                try { this._map.removeLayer(this._markers[i]); } catch(e) {}
+            }
+        }
+        this._markers = [];
+        this._map = null;
+        console.log('[Vessel Plugin] cleaned up');
     }
 });

@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="intel.css">
 </head>
 <body>
+  <script src="../lib/vendor/browser-polyfill.min.js"></script>
   <script src="../shared/ribbon.js"></script>
 
 
@@ -81,10 +82,7 @@
   <script src="../lib/argus-chat.js"></script>
   <script src="hub.js"></script>
   <div id="xmpp-chat-container"></div>
-  <script>
-    if (typeof XmppChat !== "undefined") {
-      XmppChat.init({ container: document.getElementById("xmpp-chat-container"), pageId: "intel-hub" });
-    }
-  </script>
+  
+  <script src="hub-init.js"></script>
 </body>
 </html>

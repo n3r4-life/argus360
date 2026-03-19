@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Geolocation Map - Argus OSINT</title>
   <link rel="stylesheet" href="../lib/vendor/leaflet.css" />
+  <script src="../lib/vendor/browser-polyfill.min.js"></script>
   <script src="../lib/vendor/leaflet.js"></script>
   <link rel="stylesheet" href="geomap.css">
   <link rel="stylesheet" href="../lib/argus-chat.css">
@@ -104,10 +105,7 @@
   <script src="../lib/argus-chat.js"></script>
   <script src="geomap.js"></script>
   <div id="xmpp-chat-container"></div>
-  <script>
-    if (typeof XmppChat !== "undefined") {
-      XmppChat.init({ container: document.getElementById("xmpp-chat-container"), pageId: "geomap" });
-    }
-  </script>
+  
+  <script src="geomap-init.js"></script>
 </body>
 </html>

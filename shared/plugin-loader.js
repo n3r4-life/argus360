@@ -35,7 +35,10 @@ window.ArgusPluginLoader = window.ArgusPluginLoader || {
         'opensky-track.js',
         'xmpp-sasl.js',
         'vault-encrypt.js',
-        'kg-prune.js'
+        'kg-prune.js',
+        'tile-provider-selector.js',
+        'chat-history.js',
+        'ssh-proxy.js'
     ],
     loaded: false,
 

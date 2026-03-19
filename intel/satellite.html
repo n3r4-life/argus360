@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="intel.css">
 </head>
 <body>
+  <script src="../lib/vendor/browser-polyfill.min.js"></script>
   <script src="../shared/ribbon.js"></script>
   <script src="../shared/panel-state.js"></script>
   <script src="../shared/floating-panel.js"></script>
@@ -28,7 +29,10 @@
   <!-- Search bar (below header, above map) -->
   <div class="sat-search-strip">
     <div class="sat-search-row">
-      <input type="text" id="satSearchInput" class="sat-fp-input sat-search-equal" placeholder="Address, city, or lat,lon (e.g. 41.76, -88.32)">
+      <div style="position:relative; flex:1;">
+        <input type="text" id="satSearchInput" class="sat-fp-input sat-search-equal" placeholder="Address, city, or lat,lon (e.g. 41.76, -88.32)" autocomplete="off" style="width:100%;">
+        <div id="satSearchSuggestions" style="display:none; position:absolute; top:100%; left:0; right:0; background:var(--bg-primary,#1a1a2e); border:1px solid var(--border); border-top:none; border-radius:0 0 6px 6px; max-height:180px; overflow-y:auto; z-index:2000;"></div>
+      </div>
       <button class="pill-chip" id="satJumpBtn">Go</button>
       <label class="pill-toggle mode-pill" title="Single: same location for A+B. Overlay: two different locations.">
         <span class="mode-pill-label mode-pill-left">Single AB</span>
@@ -49,9 +53,52 @@
       <input type="date" id="satDateB" class="sat-fp-date">
       <button class="pill-chip sat-fp-today" id="satTodayB">Today</button>
       <span class="sat-date-divider"></span>
-      <span class="sat-fp-sublabel">Clouds:</span>
-      <input type="range" id="satCloudSlider" min="0" max="100" value="40" class="sat-opacity-slider sat-date-slider">
+      <span class="sat-fp-sublabel" title="Sentinel Hub only — maximum cloud coverage allowed in scene search. Lower = clearer images but fewer results. Higher = more results but cloudier. Does not affect ESRI/CARTO/OSM tiles.">Cloud Cover:</span>
+      <input type="range" id="satCloudSlider" min="0" max="100" value="40" class="sat-opacity-slider sat-date-slider" title="Sentinel Hub only — maximum cloud coverage allowed in scene search. Lower = clearer images but fewer results. Higher = more results but cloudier.">
       <span class="sat-opacity-val-sm" id="satCloudVal">≤40%</span>
+      <span style="flex:1;"></span>
+      <label class="pill-toggle" title="Place name labels (CartoDB)" style="font-size:9px;gap:3px;">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5;"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5" fill="currentColor" stroke="none"/></svg>
+        <span class="sat-fp-sublabel" style="font-size:8px;">Places</span>
+        <input type="checkbox" id="satPlacesToggle">
+        <span class="pill-track" style="--pill-color:#ffcc80"><span class="pill-knob"></span></span>
+      </label>
+      <label class="pill-toggle" title="Temperature labels at cities/towns (Open-Meteo)" style="font-size:9px;gap:3px;">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5;"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+        <span class="sat-fp-sublabel" style="font-size:8px;">Temps</span>
+        <input type="checkbox" id="satTempToggle">
+        <span class="pill-track" style="--pill-color:#ffd54f"><span class="pill-knob"></span></span>
+      </label>
+      <label class="pill-toggle" title="Offline only: local dictionary, no Nominatim API calls" style="font-size:9px;gap:3px;">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <span class="sat-fp-sublabel" style="font-size:8px;">Offline</span>
+        <input type="checkbox" id="satOfflineSearchTop">
+        <span class="pill-track" style="--pill-color:var(--accent)"><span class="pill-knob"></span></span>
+      </label>
+      <label class="pill-toggle" title="Basemap only: disable Sentinel imagery and intel overlays" style="font-size:9px;gap:3px;">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5;"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 3v18"/></svg>
+        <span class="sat-fp-sublabel" style="font-size:8px;">Carto Only</span>
+        <input type="checkbox" id="satCartoOnly">
+        <span class="pill-track" style="--pill-color:var(--accent)"><span class="pill-knob"></span></span>
+      </label>
+    </div>
+    <div class="sat-search-row" style="gap:3px; flex-wrap:wrap; padding:2px 0;">
+      <button class="pill-chip sat-tile-source active" data-tile="carto-dark">Dark</button>
+      <button class="pill-chip sat-tile-source" data-tile="carto-light">Light</button>
+      <button class="pill-chip sat-tile-source" data-tile="carto-voyager">Voyager</button>
+      <button class="pill-chip sat-tile-source" data-tile="osm">OSM</button>
+      <button class="pill-chip sat-tile-source" data-tile="esri-sat">ESRI Sat</button>
+      <button class="pill-chip sat-tile-source" data-tile="esri-topo">ESRI Topo</button>
+      <button class="pill-chip sat-tile-source" data-tile="stadia-dark" title="Stadia Maps — requires API key (Settings → Intel Providers)">Stadia Dark</button>
+      <button class="pill-chip sat-tile-source" data-tile="stadia-sat" title="Stadia Satellite — requires API key">Stadia Sat</button>
+      <button class="pill-chip sat-tile-source" data-tile="stadia-outdoors" title="Stadia Outdoors — terrain + trails — requires API key">Outdoors</button>
+      <button class="pill-chip sat-tile-source" data-tile="stadia-toner" title="Stamen Toner — high contrast B/W — requires API key">Toner</button>
+      <button class="pill-chip sat-tile-source" data-tile="stadia-terrain" title="Stamen Terrain — requires API key">Terrain</button>
+      <button class="pill-chip sat-tile-source" data-tile="stadia-watercolor" title="Stamen Watercolor — artistic — requires API key">Watercolor</button>
+      <span style="flex:1;"></span>
+      <button class="pill-chip sat-view-mode" data-view="compact" title="Half-height map">½</button>
+      <button class="pill-chip sat-view-mode" data-view="split" title="Dock panels to right side">◧</button>
+      <button class="pill-chip sat-view-mode" data-view="fullscreen" title="True fullscreen (F11)">⬛</button>
     </div>
   </div>
 
@@ -59,6 +106,10 @@
   <main class="sat-map-main">
     <svg class="intel-watermark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
     <div id="satMap" style="width:100%;height:100%;"></div>
+    <!-- Spotlight mask overlay -->
+    <div id="satSpotlightOverlay" style="display:none; position:absolute; inset:0; z-index:800; pointer-events:none;"></div>
+    <!-- Hidden canvas for edge detection processing -->
+    <canvas id="satEdgeCanvas" style="display:none;"></canvas>
     <div class="sat-map-info">
       <span id="satMapCenter">—</span>
       <span id="satMapZoom">—</span>
@@ -74,10 +125,24 @@
       <button class="pill-chip sat-header-btn" id="satSwapBtnEnhance">⇄ Swap</button>
       <button class="fp-close" id="satToolbarClose">&times;</button>
     </div>
+    <!-- Always-visible controls (above tabs) -->
+    <div style="padding:6px 10px 2px; border-bottom:1px solid var(--border);">
+      <div class="sat-fp-row" style="gap:4px; align-items:center;">
+        <span class="sat-fp-sublabel" style="width:36px;">Bright:</span>
+        <input type="range" id="satBrightness2" min="10" max="50" value="25" class="sat-opacity-slider" style="flex:1;">
+        <span class="sat-opacity-val-sm" id="satBrightnessVal2" style="width:28px;">2.5x</span>
+      </div>
+      <div class="sat-fp-row" style="gap:4px; align-items:center; margin-top:4px;">
+        <span class="sat-fp-sublabel" style="width:36px;">Res:</span>
+        <span class="sat-fp-sublabel" style="font-size:8px;">A</span><select class="sat-fp-select" id="satResA2"><option value="512">512</option><option value="1024" selected>1024</option><option value="2048">2048</option></select>
+        <span class="sat-fp-sublabel" style="font-size:8px;">B</span><select class="sat-fp-select" id="satResB2"><option value="512">512</option><option value="1024" selected>1024</option><option value="2048">2048</option></select>
+      </div>
+    </div>
     <div class="fp-tabs">
-      <button class="fp-tab active" data-sat-tab="imagery">Search</button>
-      <button class="fp-tab" data-sat-tab="basemap">Basemap</button>
+      <button class="fp-tab active" data-sat-tab="imagery">Sentinel</button>
+      <button class="fp-tab" data-sat-tab="basemap">Image Settings</button>
       <button class="fp-tab" data-sat-tab="settings">Settings</button>
+      <button class="fp-tab" data-sat-tab="spotlight">🔦 Spotlight</button>
     </div>
     <div class="fp-body">
 
@@ -117,35 +182,22 @@
           </div>
         </div>
 
-        <!-- Opacity (between A and B) -->
+        <!-- Opacity balance -->
         <div class="sat-fp-section sat-tile sat-tile-opacity">
-          <div class="sat-fp-label">Image Overlay Balance</div>
-          <div class="sat-fp-row" style="justify-content:center;">
-            <label class="pill-toggle mode-pill" title="Balance: A+B=100%. Independent: each 0-100%">
-              <span class="mode-pill-label mode-pill-left">Balance</span>
-              <input type="checkbox" id="satOpacityMode">
+          <div class="sat-fp-row" style="gap:4px; align-items:center;">
+            <div class="sat-slider-labeled" style="flex:1; position:relative; height:16px;">
+              <span class="sat-slider-inner-label" id="satOverlayALabel" style="position:absolute; left:0; right:0; top:0; bottom:0; display:flex; align-items:center; justify-content:center; font-size:8px; font-weight:600; color:var(--text-muted); opacity:0.4; pointer-events:none; z-index:0;">A 100%</span>
+              <input type="range" id="satOverlayA" min="0" max="100" value="100" class="sat-opacity-slider" style="flex:1; position:relative; z-index:1; width:100%; background:rgba(255,255,255,0.06); height:16px; border-radius:4px;">
+            </div>
+            <label class="pill-toggle" title="A = linked balance. AB = independent opacity" style="flex-shrink:0; margin:0 2px;">
+              <span class="sat-fp-sublabel" style="font-size:8px;">A</span>
+              <input type="checkbox" id="satOpacityMode2">
               <span class="pill-track" style="--pill-color:var(--accent)"><span class="pill-knob"></span></span>
-              <span class="mode-pill-label mode-pill-right">Independent</span>
+              <span class="sat-fp-sublabel" style="font-size:8px;">AB</span>
             </label>
-          </div>
-          <div id="satBalanceSlider">
-            <div class="sat-fp-row">
-              <span class="sat-fp-sublabel">A</span>
-              <input type="range" id="satOpacitySlider" min="0" max="100" value="0" class="sat-opacity-slider">
-              <span class="sat-fp-sublabel">B</span>
-            </div>
-            <div class="sat-opacity-value" id="satOpacityValue">Image A (100%)</div>
-          </div>
-          <div id="satIndependentSliders" style="display:none;">
-            <div class="sat-fp-row">
-              <span class="sat-fp-sublabel">A</span>
-              <input type="range" id="satOpacityA" min="0" max="100" value="100" class="sat-opacity-slider">
-              <span class="sat-opacity-val-sm" id="satOpacityAVal">100%</span>
-            </div>
-            <div class="sat-fp-row">
-              <span class="sat-fp-sublabel">B</span>
-              <input type="range" id="satOpacityB" min="0" max="100" value="50" class="sat-opacity-slider">
-              <span class="sat-opacity-val-sm" id="satOpacityBVal">50%</span>
+            <div id="satOverlayBWrap" class="sat-slider-labeled" style="flex:1; position:relative; height:16px;">
+              <span class="sat-slider-inner-label" id="satOverlayBLabel" style="position:absolute; left:0; right:0; top:0; bottom:0; display:flex; align-items:center; justify-content:center; font-size:8px; font-weight:600; color:var(--text-muted); opacity:0.2; pointer-events:none; z-index:0;">B 50%</span>
+              <input type="range" id="satOverlayB" min="0" max="100" value="50" class="sat-opacity-slider" style="flex:1; position:relative; z-index:1; width:100%; background:rgba(255,255,255,0.06); height:16px; border-radius:4px; opacity:0.3; pointer-events:none;">
             </div>
           </div>
         </div>
@@ -223,6 +275,7 @@
       <!-- ═══ TAB: Basemap ═══ -->
       <div class="fp-pane" data-sat-pane="basemap">
         <div class="sat-fp-section sat-tile sat-tile-basemap" id="satBasemapSection">
+          <!-- Tile source buttons moved above map -->
           <div class="sat-fp-row">
             <span class="sat-fp-sublabel">Opacity:</span>
             <input type="range" id="satBasemapSlider" min="0" max="100" value="100" class="sat-opacity-slider">
@@ -262,22 +315,158 @@
             <input type="range" id="satBasemapSliderB" min="0" max="100" value="100" class="sat-opacity-slider">
             <span class="sat-opacity-val-sm" id="satBasemapBVal">100%</span>
           </div>
+          <!-- Edge Detection -->
+          <div style="border-top:1px solid var(--border); margin-top:6px; padding-top:6px;">
+            <div class="sat-fp-row" style="gap:4px;">
+              <span class="sat-fp-sublabel">Detect:</span>
+              <button class="pill-chip" id="satEdgeDetect" title="Sobel edge detection on current view">Edges</button>
+              <button class="pill-chip" id="satEdgeClear" title="Remove edge overlay" style="display:none;">Clear</button>
+            </div>
+            <div id="satEdgeControls" style="display:none; margin-top:4px;">
+              <div class="sat-fp-row" style="gap:4px; align-items:center;">
+                <span class="sat-fp-sublabel" style="width:50px;">Threshold:</span>
+                <input type="range" id="satEdgeThreshold" min="10" max="200" value="60" class="sat-opacity-slider" style="flex:1;">
+                <span class="sat-opacity-val-sm" id="satEdgeThresholdVal" style="width:24px;">60</span>
+              </div>
+              <div class="sat-fp-row" style="gap:4px; align-items:center; margin-top:3px;">
+                <span class="sat-fp-sublabel" style="width:50px;">Opacity:</span>
+                <input type="range" id="satEdgeOpacity" min="10" max="100" value="70" class="sat-opacity-slider" style="flex:1;">
+                <span class="sat-opacity-val-sm" id="satEdgeOpacityVal" style="width:24px;">70%</span>
+              </div>
+              <div class="sat-fp-row" style="gap:4px; margin-top:3px;">
+                <button class="pill-chip" data-color="lime" style="font-size:8px;padding:1px 5px;color:#76ff03;">Lime</button>
+                <button class="pill-chip" data-color="white" style="font-size:8px;padding:1px 5px;">White</button>
+                <button class="pill-chip" data-color="cyan" style="font-size:8px;padding:1px 5px;color:#00e5ff;">Cyan</button>
+                <button class="pill-chip" data-color="red" style="font-size:8px;padding:1px 5px;color:#ff4444;">Red</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       <!-- ═══ TAB: Settings ═══ -->
       <div class="fp-pane" data-sat-pane="settings">
         <div class="sat-fp-section sat-tile sat-tile-settings">
-          <div class="sat-fp-row">
-            <span class="sat-fp-sublabel">Bright:</span>
-            <input type="range" id="satBrightness" min="10" max="50" value="25" class="sat-opacity-slider">
-            <span class="sat-opacity-val-sm" id="satBrightnessVal">2.5x</span>
+          <!-- Brightness and Res moved above tabs -->
+          <!-- Provider toggles -->
+          <div class="sat-fp-row" style="margin-top:8px; gap:12px; flex-wrap:wrap;">
+            <label class="pill-toggle" title="Sentinel Hub — auto-search scenes and load imagery on location search. Disable to use basemap tiles only.">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.6;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              <span class="sat-fp-sublabel">Sentinel</span>
+              <input type="checkbox" id="satSentinelToggle">
+              <span class="pill-track" style="--pill-color:var(--accent)"><span class="pill-knob"></span></span>
+            </label>
+            <label class="pill-toggle" title="WiFi Networks (WiGLE)">
+              <svg id="satWigleIcon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.6;flex-shrink:0;transition:all 0.3s;"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>
+              <span class="sat-fp-sublabel">WiGLE</span>
+              <input type="checkbox" id="satWigleToggle">
+              <span class="pill-track" style="--pill-color:var(--accent)"><span class="pill-knob"></span></span>
+              <span class="sat-fp-sublabel" id="satWigleApiCount" style="opacity:0.5; font-size:8px; margin-left:2px;"></span>
+            </label>
+            <label class="pill-toggle" title="Aircraft Tracking (OpenSky Network) — shows live aircraft positions on the map">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.6;flex-shrink:0;"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.9.3 1.1L11 12l-2 3H6l-1 1 3 2 2 3 1-1v-3l3-2 3.8 7.3c.2.4.7.5 1.1.3l.5-.3c.4-.2.6-.6.5-1.1z"/></svg>
+              <span class="sat-fp-sublabel">OpenSky</span>
+              <input type="checkbox" id="satOpenskyToggle">
+              <span class="pill-track" style="--pill-color:var(--accent)"><span class="pill-knob"></span></span>
+            </label>
+            <label class="pill-toggle" title="Radio Feeds (Broadcastify)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.6;flex-shrink:0;"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
+              <span class="sat-fp-sublabel">Radio</span>
+              <input type="checkbox" id="satRadioToggle2">
+              <span class="pill-track" style="--pill-color:var(--accent)"><span class="pill-knob"></span></span>
+            </label>
+            <label class="pill-toggle" title="Live Webcams (Windy Webcams API)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.6;flex-shrink:0;"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+              <span class="sat-fp-sublabel">Webcams</span>
+              <input type="checkbox" id="satWebcamToggle">
+              <span class="pill-track" style="--pill-color:#4fc3f7"><span class="pill-knob"></span></span>
+              <span class="sat-fp-sublabel" id="satWebcamApiCount" style="opacity:0.5; font-size:8px; margin-left:2px;"></span>
+            </label>
+            <label class="pill-toggle" title="Weather tile overlay (OpenWeatherMap / Windy)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.6;flex-shrink:0;"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+              <span class="sat-fp-sublabel">Weather</span>
+              <input type="checkbox" id="satWeatherToggle">
+              <span class="pill-track" style="--pill-color:#80cbc4"><span class="pill-knob"></span></span>
+            </label>
           </div>
-          <div class="sat-fp-row">
-            <span class="sat-fp-sublabel">Res:</span>
-            <span class="sat-fp-sublabel">A</span><select class="sat-fp-select" id="satResA"><option value="512">512</option><option value="1024" selected>1024</option><option value="2048">2048</option></select>
-            <span class="sat-fp-sublabel">B</span><select class="sat-fp-select" id="satResB"><option value="512">512</option><option value="1024" selected>1024</option><option value="2048">2048</option></select>
+          <!-- Places / Photon POI search row -->
+          <div class="sat-fp-row" style="margin-top:6px; gap:4px; align-items:center;">
+            <input id="satPlacesSearch" type="text" placeholder="Search places in view… (Enter or wait)" autocomplete="off"
+              style="flex:1;font-size:10px;padding:2px 6px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#fff;outline:none;">
+            <button id="satPlacesClear" class="pill-chip" title="Clear pins" style="font-size:9px;padding:1px 6px;flex-shrink:0;">&#10005;</button>
           </div>
+          <!-- Weather layer selector -->
+          <div class="sat-fp-row" id="satWeatherLayerRow" style="margin-top:6px; gap:8px; align-items:center; display:none;">
+            <span class="sat-fp-sublabel" style="font-size:9px;">Source:</span>
+            <select class="sat-fp-select" id="satWeatherSourceSelect" style="font-size:9px; padding:1px 4px;">
+              <option value="owm">OpenWeatherMap</option>
+              <option value="windy">Windy</option>
+            </select>
+            <span class="sat-fp-sublabel" style="font-size:9px;">Layer:</span>
+            <select class="sat-fp-select" id="satWeatherLayerSelect" style="font-size:9px; padding:1px 4px;">
+              <option value="precipitation">Rain</option>
+              <option value="wind">Wind</option>
+              <option value="temp">Temperature</option>
+              <option value="clouds">Clouds</option>
+              <option value="pressure">Pressure</option>
+            </select>
+          </div>
+          <!-- Offline toggle moved to search bar area -->
+          <!-- WiGLE cache management -->
+          <div class="sat-fp-row" style="margin-top:6px; gap:8px; align-items:center;">
+            <span class="sat-fp-sublabel" style="font-size:8px; opacity:0.5;" id="satWigleCacheStats">WiGLE cache: —</span>
+            <button class="pill-chip" id="satClearWigleCache" style="font-size:8px; padding:1px 5px;">Clear WiFi Cache</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ TAB: Spotlight ═══ -->
+      <div class="fp-pane" data-sat-pane="spotlight">
+        <div class="sat-fp-section sat-tile">
+          <!-- On/Off -->
+          <div class="sat-fp-row" style="gap:8px; align-items:center;">
+            <label class="pill-toggle" title="Enable spotlight mask">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.6;"><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="10" stroke-dasharray="3,3"/></svg>
+              <span class="sat-fp-sublabel">Spotlight</span>
+              <input type="checkbox" id="satSpotlightToggle">
+              <span class="pill-track" style="--pill-color:#00e5ff"><span class="pill-knob"></span></span>
+            </label>
+            <span class="sat-fp-sublabel" id="satSpotlightStatus" style="font-size:8px; opacity:0.5;">Off</span>
+          </div>
+          <!-- Wheel mode -->
+          <div class="sat-fp-row" style="gap:8px; align-items:center; margin-top:6px;">
+            <span class="sat-fp-sublabel" style="font-size:9px;">Scroll wheel:</span>
+            <label class="pill-toggle mode-pill" title="What the scroll wheel controls while spotlight is anchored">
+              <span class="mode-pill-label mode-pill-left" style="font-size:8px;">Size</span>
+              <input type="checkbox" id="satSpotlightWheelMode">
+              <span class="pill-track" style="--pill-color:#00e5ff"><span class="pill-knob"></span></span>
+              <span class="mode-pill-label mode-pill-right" style="font-size:8px;">Bright</span>
+            </label>
+          </div>
+          <!-- Brightness slider -->
+          <div class="sat-fp-row" style="gap:4px; align-items:center; margin-top:6px;">
+            <span class="sat-fp-sublabel" style="width:40px;">Bright:</span>
+            <input type="range" id="satSpotlightBrightness" min="50" max="300" value="100" class="sat-opacity-slider" style="flex:1;">
+            <span class="sat-opacity-val-sm" id="satSpotlightBrightVal" style="width:32px;">100%</span>
+          </div>
+          <!-- Mask opacity -->
+          <div class="sat-fp-row" style="gap:4px; align-items:center; margin-top:4px;">
+            <span class="sat-fp-sublabel" style="width:40px;">Mask:</span>
+            <input type="range" id="satSpotlightMaskOpacity" min="10" max="98" value="92" class="sat-opacity-slider" style="flex:1;">
+            <span class="sat-opacity-val-sm" id="satSpotlightMaskVal" style="width:32px;">92%</span>
+          </div>
+          <!-- Circle size readout -->
+          <div class="sat-fp-row" style="gap:4px; align-items:center; margin-top:4px;">
+            <span class="sat-fp-sublabel" style="width:40px;">Radius:</span>
+            <span class="sat-fp-sublabel" id="satSpotlightRadiusVal" style="font-family:'SF Mono',monospace; font-size:9px;">48px</span>
+          </div>
+          <!-- Freeze frame -->
+          <div class="sat-fp-row" style="gap:6px; margin-top:8px;">
+            <button class="pill-chip" id="satSpotlightFreeze" style="background:rgba(0,229,255,0.15); color:#00e5ff;">🔦 Freeze Frame</button>
+            <button class="pill-chip" id="satSpotlightCapturePng">📷 Screenshot</button>
+          </div>
+          <!-- Spotlight captures list -->
+          <div id="satSpotlightCaptures" style="margin-top:6px; max-height:150px; overflow-y:auto;"></div>
         </div>
       </div>
 
@@ -289,25 +478,43 @@
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15 1.65 1.65 0 0 0 3.17 14H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68 1.65 1.65 0 0 0 10 3.17V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
   </button>
 
-  <!-- Coordinate display -->
-  <div class="sat-coord-display" id="satCoordDisplay">
-    <span id="satCoordLat">—</span>, <span id="satCoordLon">—</span>
-    <span class="sat-coord-hint">Click to pin</span>
-  </div>
-
   <!-- Pin collection panel -->
   <div class="fp sat-pins-panel hidden" id="satPinsPanel" data-panel-id="sat-pins">
     <div class="fp-header">
       <span class="fp-title">Pinned Locations</span>
-      <span class="fp-count" id="satPinCount">0</span>
+      <button class="pill-chip" id="satClearPins" style="font-size:8px; padding:2px 6px; margin-left:auto; margin-right:4px;">Clear All</button>
       <button class="fp-close" id="satPinsClose">&times;</button>
     </div>
-    <div class="fp-body" id="satPinsList"></div>
+    <!-- Coordinate display + pin count -->
+    <div class="sat-coord-display visible" id="satCoordDisplay" style="position:static; opacity:1; pointer-events:auto; margin:0; border-radius:0; border-bottom:1px solid var(--border); font-size:11px; padding:4px 10px; background:rgba(22,33,62,0.5); z-index:auto; display:flex; justify-content:space-between; align-items:center;">
+      <span style="font-family:'SF Mono','Fira Code',monospace;"><span id="satCoordLat">—</span>, <span id="satCoordLon">—</span> <span class="sat-coord-hint" style="opacity:0.4;">Click to pin</span></span>
+      <span class="fp-count" id="satPinCount" style="margin:0;">0</span>
+    </div>
+    <!-- Tabs: Pins / WiFi / Aircraft / Draw -->
+    <div class="fp-tabs" style="padding:0 8px;">
+      <button class="fp-tab active" data-pins-tab="pins" style="font-size:10px;">Pins</button>
+      <button class="fp-tab" data-pins-tab="wifi" style="font-size:10px;">WiFi <span id="satWifiTabCount" style="opacity:0.5;"></span></button>
+      <button class="fp-tab" data-pins-tab="aircraft" style="font-size:10px;">Aircraft <span id="satAircraftTabCount" style="opacity:0.5;"></span></button>
+      <button class="fp-tab" data-pins-tab="webcams" style="font-size:10px;">Webcams <span id="satWebcamsTabCount" style="opacity:0.5;"></span></button>
+      <button class="fp-tab" data-pins-tab="geom" style="font-size:10px;">Geom <span id="satDrawTabCount" style="opacity:0.5;"></span></button>
+      <button class="fp-tab" data-pins-tab="spots" style="font-size:10px;">Spots <span id="satSpotsTabCount" style="opacity:0.5;"></span></button>
+    </div>
+    <!-- Pins tab -->
+    <div class="fp-body" id="satPinsList" data-pins-pane="pins"></div>
+    <!-- WiFi tab -->
+    <div class="fp-body" id="satWifiList" data-pins-pane="wifi" style="display:none; overflow-y:auto;"></div>
+    <!-- Aircraft tab -->
+    <div class="fp-body" id="satAircraftList" data-pins-pane="aircraft" style="display:none; overflow-y:auto;"></div>
+    <!-- Webcams tab -->
+    <div class="fp-body" id="satWebcamsList" data-pins-pane="webcams" style="display:none; overflow-y:auto;"></div>
+    <!-- Geom tab -->
+    <div class="fp-body" id="satDrawList" data-pins-pane="geom" style="display:none; overflow-y:auto;"></div>
+    <!-- Spots tab -->
+    <div class="fp-body" id="satSpotsList" data-pins-pane="spots" style="display:none; overflow-y:auto;"></div>
     <div class="sat-pins-footer">
       <button class="pill-chip" id="satPinsExportCsv">Export CSV</button>
       <button class="pill-chip" id="satPinsToKg">All to KG</button>
       <button class="pill-chip" id="satPinsToCollection">+ Asset</button>
-      <button class="pill-chip" id="satClearPins">Clear All</button>
     </div>
   </div>
   <button class="edge-tab edge-tab-right" id="satPinsToggle" title="Pinned Locations" style="top:160px;">
@@ -327,21 +534,64 @@
     <span id="satRadioCount"></span>
   </button>
 
+  <!-- ═══ Measurement Tools Panel ═══ -->
+  <div class="fp sat-measure-panel hidden" id="satMeasurePanel" data-panel-id="sat-measure">
+    <div class="fp-header">
+      <span class="fp-title">Measure</span>
+      <button class="fp-close" id="satMeasureClose">&times;</button>
+    </div>
+    <div class="fp-body" style="padding:8px 10px;">
+      <div class="sat-fp-row" style="gap:4px; flex-wrap:wrap;">
+        <button class="pill-chip sat-measure-tool" data-tool="distance" title="Click two points to measure distance">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="20" x2="20" y2="4"/><polyline points="14 4 20 4 20 10"/></svg>
+          Distance
+        </button>
+        <button class="pill-chip sat-measure-tool" data-tool="radius" title="Click center, then click edge to draw radius circle">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="12" x2="20" y2="8"/></svg>
+          Radius
+        </button>
+        <button class="pill-chip sat-measure-tool" data-tool="line" title="Click points to draw a line, long-press to finish">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 20 8 8 16 16 20 4"/></svg>
+          Line
+        </button>
+        <button class="pill-chip sat-measure-tool" data-tool="parcel" title="Click corners to draw a parcel/polygon, long-press to close and measure area">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18"/></svg>
+          Parcel
+        </button>
+
+      </div>
+      <div id="satMeasureStatus" style="font-size:10px; color:var(--text-muted); margin-top:6px; min-height:14px;"></div>
+      <div id="satMeasureResults" style="font-size:10px; margin-top:4px; max-height:200px; overflow-y:auto;"></div>
+      <div class="sat-fp-row" style="margin-top:6px; gap:4px;">
+        <button class="pill-chip" id="satMeasureClear" style="font-size:9px;">Clear All</button>
+        <select class="sat-fp-select" id="satMeasureUnits" style="font-size:9px; padding:1px 4px;">
+          <option value="metric">km / m</option>
+          <option value="imperial">mi / ft</option>
+          <option value="feet">feet</option>
+          <option value="meters">meters</option>
+          <option value="yards">yards</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  <button class="edge-tab edge-tab-right" id="satMeasureToggle" title="Measurement Tools" style="top:280px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 2l20 20"/><path d="M6 2v4"/><path d="M10 2v2"/><path d="M14 2v4"/><path d="M18 2v2"/><path d="M22 6h-4"/><path d="M22 10h-2"/><path d="M22 14h-4"/><path d="M22 18h-2"/></svg>
+  </button>
+
   <div id="argus-chat-container" style="padding:16px 20px;"></div>
 
+  <script src="../shared/argus-geo.js"></script>
+  <script src="../data/location-dictionary.js"></script>
   <script src="../lib/vendor/leaflet.js"></script>
   <script src="../lib/vendor/purify.min.js"></script>
   <script src="../lib/vendor/marked.min.js"></script>
   <script src="../shared/text-it.js"></script>
   <script src="../shared/xmpp-chat.js"></script>
   <script src="../lib/argus-chat.js"></script>
+  <script src="wigle-cache-db.js"></script>
   <script src="domain-shell.js"></script>
   <script src="satellite.js"></script>
   <div id="xmpp-chat-container"></div>
-  <script>
-    if (typeof XmppChat !== "undefined") {
-      XmppChat.init({ container: document.getElementById("xmpp-chat-container"), pageId: "intel-satellite" });
-    }
-  </script>
+  <script src="satellite-xmpp-init.js"></script>
 </body>
 </html>

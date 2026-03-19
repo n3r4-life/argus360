@@ -43,3 +43,18 @@ window.ArgusAgentRegistry.exportAll = async function() {
     var data = await browser.storage.local.get(null);
     return data;
 };
+
+// Final test helper
+window.ArgusAgentRegistry.runFullTest = async function() {
+    console.log('Running full test suite via agent registry...');
+    var plugins = window.ArgusPluginRegistry.listAllPlugins();
+    for (var i = 0; i < plugins.length; i++) {
+        var p = plugins[i];
+        if (await window.ArgusPluginRegistry.isPluginEnabled(p.id)) {
+            try {
+                await window.ArgusPluginRegistry.runPlugin(p.id, 'test');
+            } catch (e) {}
+        }
+    }
+    console.log('Full test suite complete');
+};

@@ -1,21 +1,34 @@
+// plugins/feeds-rss.js
+// Real Feeds RSS plugin — wraps existing feed management
+// For use on the Feeds page (feeds/feeds.js)
+
 window.ArgusPluginRegistry.registerPlugin({
     id: 'feeds-rss',
     name: 'Feeds RSS',
-    version: '1.0',
+    version: '2.0',
     category: 'feeds',
-    requires: ['kg'],
-    run: async (input, context) => {
-        var response = await new Promise(function(resolve) {
-            browser.runtime.sendMessage({
-                type: 'EXTERNAL_API_CALL',
-                url: 'https://api.gdeltproject.org/api/v2/doc/doc',
-                options: { method: 'GET' }
-            }, resolve);
+    requires: [],
+
+    init: async function(context) {
+        console.log('[Feeds Plugin] initialized');
+    },
+
+    run: async function(input, context) {
+        // Get all feeds via existing message handler
+        var resp = await browser.runtime.sendMessage({
+            action: 'getFeeds'
         });
-        var feeds = [];
-        if (response && response.success) {
-            feeds = response.data.articles || [];
+        if (!resp || !resp.success) {
+            return { message: 'Feeds error: ' + ((resp && resp.error) || 'failed'), entities: [] };
         }
-        return { message: 'RSS feeds complete', entities: feeds };
+        var feeds = resp.feeds || [];
+        var entities = feeds.map(function(f) {
+            return { type: 'feed', title: f.title, url: f.url, lastRefresh: f.lastRefresh, unreadCount: f.unreadCount };
+        });
+        return { message: 'Feeds: ' + feeds.length + ' subscriptions', entities: entities };
+    },
+
+    cleanup: async function() {
+        console.log('[Feeds Plugin] cleaned up');
     }
 });

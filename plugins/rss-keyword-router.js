@@ -1,21 +1,28 @@
+// plugins/rss-keyword-router.js
+// Real RSS Keyword Router plugin — wraps existing feed routing/rescan logic
+// For use on feeds page — routes entries by keyword match
+
 window.ArgusPluginRegistry.registerPlugin({
     id: 'rss-keyword-router',
     name: 'RSS Keyword Router',
-    version: '1.0',
+    version: '2.0',
     category: 'feeds',
-    requires: ['kg'],
-    run: async (input, context) => {
-        var response = await new Promise(function(resolve) {
-            browser.runtime.sendMessage({
-                type: 'EXTERNAL_API_CALL',
-                url: 'https://api.gdeltproject.org/api/v2/doc/doc',
-                options: { method: 'GET' }
-            }, resolve);
-        });
-        var routed = [];
-        if (response && response.success) {
-            routed = response.data.articles || [];
+    requires: [],
+
+    init: async function(context) {
+        console.log('[RSS Router Plugin] initialized');
+    },
+
+    run: async function(input, context) {
+        var resp = await browser.runtime.sendMessage({ action: 'feedRouteRescan' });
+        if (!resp || !resp.success) {
+            return { message: 'RSS Router error: ' + ((resp && resp.error) || 'failed'), entities: [] };
         }
-        return { message: 'RSS keyword routing complete', entities: routed };
+        var routed = resp.routed || 0;
+        return { message: 'RSS Router: ' + routed + ' entries routed by keyword', entities: [] };
+    },
+
+    cleanup: async function() {
+        console.log('[RSS Router Plugin] cleaned up');
     }
 });

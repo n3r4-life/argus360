@@ -14,7 +14,7 @@ window.ArgusPluginRegistry = window.ArgusPluginRegistry || {
 
         // Security gate (pro-sec-paul) — register always, but only activate if deps met
         if (pluginDef.requires?.includes('vault') && !window.ArgusVault) {
-            console.warn(`Plugin ${pluginDef.id} requires Vault but it is locked — registered but not activated`);
+            // Vault-dependent plugin — registered but activation deferred until Vault unlocks
             return true;
         }
 
@@ -78,7 +78,8 @@ window.ArgusPluginRegistry = window.ArgusPluginRegistry || {
     },
 
     loadToggleState: async function(id) {
-        const settings = await browser.storage.local.get('pluginSettings') || {};
-        return settings.pluginSettings && settings.pluginSettings[id] !== false;
+        var settings = await browser.storage.local.get('pluginSettings');
+        if (!settings || !settings.pluginSettings) return true; // default enabled
+        return settings.pluginSettings[id] !== false;
     }
 };

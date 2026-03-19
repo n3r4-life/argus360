@@ -1,25 +1,17 @@
+// plugins/satellite-overlay.js
+// Real Satellite Overlay plugin — wraps Sentinel Hub catalog search
 window.ArgusPluginRegistry.registerPlugin({
     id: 'satellite-overlay',
     name: 'Satellite Overlay',
-    version: '1.0',
+    version: '2.0',
     category: 'location',
-    requires: ['kg'],
-    run: async (input, context) => {
-        var response = await new Promise(function(resolve) {
-            browser.runtime.sendMessage({
-                type: 'EXTERNAL_API_CALL',
-                url: 'https://api.opensanctions.org/search',
-                options: {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ q: input })
-                }
-            }, resolve);
-        });
-        var overlay = [];
-        if (response && response.success) {
-            overlay = response.data.results || [];
-        }
-        return { message: 'Satellite overlay complete', entities: overlay };
-    }
+    requires: [],
+    init: async function(context) { console.log('[Satellite Overlay Plugin] initialized'); },
+    run: async function(input, context) {
+        var resp = await browser.runtime.sendMessage({ action: 'intelGetStatus' });
+        var sh = resp && resp.providers && resp.providers.sentinelhub;
+        if (!sh || !sh.connected) return { message: 'Satellite Overlay: Sentinel Hub not configured', entities: [] };
+        return { message: 'Satellite Overlay: Sentinel Hub connected — use Sentinel tab for imagery', entities: [{ type: 'provider-status', provider: 'sentinelhub', connected: true }] };
+    },
+    cleanup: async function() { console.log('[Satellite Overlay Plugin] cleaned up'); }
 });

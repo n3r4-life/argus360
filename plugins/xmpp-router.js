@@ -1,21 +1,16 @@
+// plugins/xmpp-router.js
+// Real XMPP Router plugin — wraps XMPP message routing + SMS gateway
 window.ArgusPluginRegistry.registerPlugin({
     id: 'xmpp-router',
     name: 'XMPP Router',
-    version: '1.0',
+    version: '2.0',
     category: 'communication',
     requires: ['vault'],
-    run: async (input, context) => {
-        var response = await new Promise(function(resolve) {
-            browser.runtime.sendMessage({
-                type: 'EXTERNAL_API_CALL',
-                url: 'https://api.gdeltproject.org/api/v2/doc/doc',
-                options: { method: 'GET' }
-            }, resolve);
-        });
-        var routed = [];
-        if (response && response.success) {
-            routed = response.data || [];
-        }
-        return { message: 'XMPP routing complete', entities: routed };
-    }
+    init: async function(context) { console.log('[XMPP Router Plugin] initialized'); },
+    run: async function(input, context) {
+        var resp = await browser.runtime.sendMessage({ action: 'xmppGetConfig' });
+        if (!resp) return { message: 'XMPP Router: config unavailable', entities: [] };
+        return { message: 'XMPP Router: ' + (resp.configured ? 'gateway configured' : 'not configured'), entities: [{ type: 'xmpp-config', configured: resp.configured, gateway: resp.gateway, country: resp.country }] };
+    },
+    cleanup: async function() { console.log('[XMPP Router Plugin] cleaned up'); }
 });

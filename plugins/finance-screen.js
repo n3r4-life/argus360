@@ -1,25 +1,31 @@
+// plugins/finance-screen.js
+// Real Finance Screening plugin — wraps existing finance price refresh + watchlist
+// For use on finance page (finance/finance.js)
+
 window.ArgusPluginRegistry.registerPlugin({
     id: 'finance-screen',
     name: 'Finance Screening',
-    version: '1.0',
+    version: '2.0',
     category: 'finance',
-    requires: ['kg'],
-    run: async (input, context) => {
-        var response = await new Promise(function(resolve) {
-            browser.runtime.sendMessage({
-                type: 'EXTERNAL_API_CALL',
-                url: 'https://api.opensanctions.org/search',
-                options: {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ q: input })
-                }
-            }, resolve);
-        });
-        var screen = [];
-        if (response && response.success) {
-            screen = response.data.results || [];
+    requires: [],
+
+    init: async function(context) {
+        console.log('[Finance Plugin] initialized');
+    },
+
+    run: async function(input, context) {
+        var resp = await browser.runtime.sendMessage({ action: 'financeGetState' });
+        if (!resp || !resp.success) {
+            return { message: 'Finance error: ' + ((resp && resp.error) || 'failed'), entities: [] };
         }
-        return { message: 'Finance screening complete', entities: screen };
+        var watchlist = resp.watchlist || [];
+        var entities = watchlist.map(function(w) {
+            return { type: 'finance-item', symbol: w.symbol, name: w.name, price: w.price, change: w.change };
+        });
+        return { message: 'Finance: ' + watchlist.length + ' watchlist items', entities: entities };
+    },
+
+    cleanup: async function() {
+        console.log('[Finance Plugin] cleaned up');
     }
 });

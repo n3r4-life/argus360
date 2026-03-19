@@ -1,25 +1,18 @@
+// plugins/govintel-feature.js
+// Real GovIntel plugin — wraps sanctions + court records for government intelligence
 window.ArgusPluginRegistry.registerPlugin({
     id: 'govintel-feature',
     name: 'GovIntel Feature',
-    version: '1.0',
+    version: '2.0',
     category: 'govintel',
-    requires: ['kg'],
-    run: async (input, context) => {
-        var response = await new Promise(function(resolve) {
-            browser.runtime.sendMessage({
-                type: 'EXTERNAL_API_CALL',
-                url: 'https://api.opensanctions.org/search',
-                options: {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ q: input })
-                }
-            }, resolve);
-        });
-        var intel = [];
-        if (response && response.success) {
-            intel = response.data.results || [];
-        }
-        return { message: 'GovIntel complete', entities: intel };
-    }
+    requires: [],
+    init: async function(context) { console.log('[GovIntel Plugin] initialized'); },
+    run: async function(input, context) {
+        var query = (typeof input === 'string') ? input : '';
+        var resp = await browser.runtime.sendMessage({ action: 'intelSearch', provider: 'opensanctions', query: query, options: {} });
+        if (!resp || !resp.success) return { message: 'GovIntel error: ' + ((resp && resp.error) || 'failed'), entities: [] };
+        var results = (resp.results && resp.results.results) || [];
+        return { message: 'GovIntel: ' + results.length + ' matches', entities: results };
+    },
+    cleanup: async function() { console.log('[GovIntel Plugin] cleaned up'); }
 });

@@ -1,21 +1,34 @@
+// plugins/monitors-diff.js
+// Real Monitors Diff plugin — wraps existing monitor change tracking
+// For use on the Monitors page (monitors/monitor-history.js)
+
 window.ArgusPluginRegistry.registerPlugin({
     id: 'monitors-diff',
     name: 'Monitors Diff',
-    version: '1.0',
+    version: '2.0',
     category: 'monitors',
-    requires: ['kg'],
-    run: async (input, context) => {
-        var response = await new Promise(function(resolve) {
-            browser.runtime.sendMessage({
-                type: 'EXTERNAL_API_CALL',
-                url: 'https://opensky-network.org/api/states/all',
-                options: { method: 'GET' }
-            }, resolve);
+    requires: [],
+
+    init: async function(context) {
+        console.log('[Monitors Plugin] initialized');
+    },
+
+    run: async function(input, context) {
+        // Get all monitor changes via existing message handler
+        var resp = await browser.runtime.sendMessage({
+            action: 'getAllMonitorChanges'
         });
-        var diff = [];
-        if (response && response.success) {
-            diff = response.data.states || [];
+        if (!resp || !resp.success) {
+            return { message: 'Monitors error: ' + ((resp && resp.error) || 'failed'), entities: [] };
         }
-        return { message: 'Monitor diff complete', entities: diff };
+        var changes = resp.changes || [];
+        var entities = changes.map(function(c) {
+            return { type: 'monitor-change', url: c.url, title: c.title, changeType: c.type, ts: c.ts };
+        });
+        return { message: 'Monitors: ' + changes.length + ' changes detected', entities: entities };
+    },
+
+    cleanup: async function() {
+        console.log('[Monitors Plugin] cleaned up');
     }
 });

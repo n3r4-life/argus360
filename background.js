@@ -6,8 +6,32 @@
 const ARGUS_BG_VERSION = "2026-03-12a";
 console.log(`[Argus] background.js loaded — version ${ARGUS_BG_VERSION}`);
 
+// MV3 compat: executeScript helper — uses chrome.scripting.executeScript with file refs
+// Falls back to browser.tabs.executeScript for Firefox MV2/MV3
+async function _execScript(tabId, opts) {
+  // MV3 Chrome: use scripting API with files
+  if (typeof chrome !== 'undefined' && chrome.scripting && chrome.scripting.executeScript) {
+    if (opts.file) {
+      var target = { tabId: tabId };
+      if (opts.frameId != null) target.frameIds = [opts.frameId];
+      var results = await chrome.scripting.executeScript({ target: target, files: [opts.file] });
+      return results && results[0] ? [results[0].result] : [null];
+    }
+    if (opts.func) {
+      var results = await chrome.scripting.executeScript({ target: { tabId: tabId, frameIds: opts.frameId != null ? [opts.frameId] : undefined }, func: opts.func, args: opts.args || [] });
+      return results && results[0] ? [results[0].result] : [null];
+    }
+  }
+  // Fallback: MV2 browser.tabs.executeScript
+  if (typeof browser !== 'undefined' && browser.tabs && browser.tabs.executeScript) {
+    if (opts.code) return browser.tabs.executeScript(tabId, { code: opts.code, frameId: opts.frameId });
+    if (opts.file) return browser.tabs.executeScript(tabId, { file: opts.file, frameId: opts.frameId });
+  }
+  throw new Error('No script execution API available');
+}
+
 // Remind users to wipe data before uninstalling (Firefox doesn't auto-clear extension data)
-try { browser.runtime.setUninstallURL("about:blank"); } catch(e) { /* optional */ }
+try { browser.runtime.setUninstallURL(""); } catch(e) { /* optional — Chrome rejects about:blank */ }
 
 // Vault: on startup, remove any leftover plaintext copies of sensitive data
 if (typeof ArgusVault !== "undefined") {
@@ -25,7 +49,7 @@ if (typeof ArgusVault !== "undefined") {
 // ──────────────────────────────────────────────
 // In-memory conversation history (keyed by tab ID)
 // ──────────────────────────────────────────────
-const conversationHistory = new Map();
+let conversationHistory = new Map();
 
 // Clean up on tab close/navigate
 browser.tabs.onRemoved.addListener(tabId => {
@@ -34,7 +58,40 @@ browser.tabs.onRemoved.addListener(tabId => {
 });
 
 // ── RSS/Atom feed detection cache (tabId → { feedUrl, feedTitle }) ──
-const feedDetectionCache = new Map();
+let feedDetectionCache = new Map();
+
+// M2: Register first globals with state persistence (MV3 prep)
+if (typeof ArgusStatePersistence !== 'undefined') {
+  ArgusStatePersistence.register('conversationHistory',
+      function() { return conversationHistory; },
+      function(val) { conversationHistory = val; }
+  );
+  ArgusStatePersistence.register('feedDetectionCache',
+      function() { return feedDetectionCache; },
+      function(val) { feedDetectionCache = val; }
+  );
+}
+
+// M2: Debounced auto-save — hooks into Map mutations so no individual call sites needed
+var _stateSaveTimer = null;
+function _scheduleStateSave() {
+  if (typeof ArgusStatePersistence === 'undefined') return;
+  if (_stateSaveTimer) clearTimeout(_stateSaveTimer);
+  _stateSaveTimer = setTimeout(function() { ArgusStatePersistence.save(); }, 2000);
+}
+
+// Wrap Maps to auto-trigger save on mutation
+function _wrapMapForPersistence(map) {
+  var origSet = map.set.bind(map);
+  var origDelete = map.delete.bind(map);
+  var origClear = map.clear.bind(map);
+  map.set = function(k, v) { var r = origSet(k, v); _scheduleStateSave(); return r; };
+  map.delete = function(k) { var r = origDelete(k); _scheduleStateSave(); return r; };
+  map.clear = function() { var r = origClear(); _scheduleStateSave(); return r; };
+  return map;
+}
+_wrapMapForPersistence(conversationHistory);
+_wrapMapForPersistence(feedDetectionCache);
 
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.url) {
@@ -114,7 +171,7 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
           }
           tryMount(0);
         };
-        browser.tabs.executeScript(tabId, { code: "(" + mountFn.toString() + ")();" }).catch(() => {});
+        _execScript(tabId, { file: 'content-scripts/reader-mode.js' }).catch(() => {});
       }).catch(() => {});
     }
   }
@@ -193,8 +250,9 @@ async function trawlCollect(tabId, url) {
         if (incognitoSites.some(d => host === d || host.endsWith("." + d))) return;
       } catch {}
     }
-    const results = await browser.tabs.executeScript(tabId, {
-      code: `(function() {
+    const results = await _execScript(tabId, { file: 'content-scripts/trawl-extraction.js' });
+    /* Original trawl inline code replaced with extracted content script.
+     * Was: browser.tabs.executeScript(tabId, { code: `(function() {
         const data = { emails:[], phones:[], addresses:[], businessName:"", contacts:[], socialLinks:[], geo:null, schema:null, meta:{}, scrollDepth:0, extractedAt:Date.now() };
         // Strategy A: JSON-LD / Schema.org
         try {
@@ -256,8 +314,7 @@ async function trawlCollect(tabId, url) {
         // Scroll depth
         try { data.scrollDepth = Math.min(1, window.scrollY / Math.max(1, document.documentElement.scrollHeight - window.innerHeight)); } catch {}
         return data;
-      })();`
-    });
+      })(); */
     const data = results?.[0];
     if (!data) return;
     const hasData = data.emails.length || data.phones.length || data.addresses.length || data.businessName || data.contacts.length || data.socialLinks.length;
@@ -416,10 +473,10 @@ function updateBrowserActionForTab(tabId) {
                        tab.url.startsWith("about:") ||
                        tab.url.startsWith("chrome:");
     if (isInternal) {
-      browser.browserAction.disable(tabId);
-      browser.browserAction.setBadgeText({ text: "", tabId });
+      browser.action.disable(tabId);
+      browser.action.setBadgeText({ text: "", tabId });
     } else {
-      browser.browserAction.enable(tabId);
+      browser.action.enable(tabId);
     }
   }).catch(() => {});
 }
@@ -435,37 +492,7 @@ async function detectFeedOnTab(tabId) {
     // Phase 1: scan <link> tags and <a> tags in the page DOM
     let results = null;
     try {
-      results = await browser.tabs.executeScript(tabId, {
-        code: `(function() {
-          const feeds = [];
-          const seen = new Set();
-
-          // Standard <link> tags — match by type OR by rel=alternate with feed-like href
-          const links = document.querySelectorAll('link[type="application/rss+xml"], link[type="application/atom+xml"], link[type="application/feed+json"], link[rel="alternate"][href*="feed"], link[rel="alternate"][href*="rss"], link[rel="alternate"][href*=".xml"]');
-          for (const l of links) {
-            if (l.href && !seen.has(l.href)) {
-              seen.add(l.href);
-              feeds.push({ url: l.href, title: l.title || "", source: "link" });
-            }
-          }
-
-          // Scan <a> tags for common feed URL patterns
-          const feedRx = /(\\/feed\\/?$|\\/rss\\/?$|\\/atom\\/?$|\\.rss$|\\.xml$|\\/feeds?\\/|\\/rss\\/|feed\\.xml|rss\\.xml|atom\\.xml|index\\.rss|\\/syndication|feedburner\\.com|feeds\\.feedburner|google-publisher)/i;
-          const anchors = document.querySelectorAll('a[href]');
-          for (const a of anchors) {
-            try {
-              const href = a.href;
-              if (!href || seen.has(href) || href.startsWith("javascript:")) continue;
-              if (feedRx.test(href)) {
-                seen.add(href);
-                feeds.push({ url: href, title: a.textContent.trim().slice(0, 80) || "", source: "anchor" });
-              }
-            } catch {}
-          }
-
-          return feeds.length ? feeds : null;
-        })();`
-      });
+      results = await _execScript(tabId, { file: 'content-scripts/feed-detection.js' });
     } catch (e) {
       console.log("[Feed] Phase 1 script injection failed:", e.message);
     }
@@ -517,11 +544,11 @@ async function detectFeedOnTab(tabId) {
     if (feeds && feeds.length) {
       feedDetectionCache.set(tabId, feeds);
       // Show badge on toolbar icon
-      browser.browserAction.setBadgeText({ text: "RSS", tabId });
-      browser.browserAction.setBadgeBackgroundColor({ color: "#ff9800", tabId });
+      browser.action.setBadgeText({ text: "RSS", tabId });
+      browser.action.setBadgeBackgroundColor({ color: "#ff9800", tabId });
     } else {
       feedDetectionCache.delete(tabId);
-      browser.browserAction.setBadgeText({ text: "", tabId });
+      browser.action.setBadgeText({ text: "", tabId });
     }
   } catch { /* content script injection may fail on restricted pages */ }
 }
@@ -990,41 +1017,7 @@ browser.storage.onChanged.addListener((changes) => {
 // Content extraction from a specific frame
 // ──────────────────────────────────────────────
 async function extractFrameContent(tabId, frameId) {
-  const results = await browser.tabs.executeScript(tabId, {
-    frameId: frameId,
-    code: `
-      (function() {
-        const title = document.title || "";
-        const url = window.location.href;
-        const meta = document.querySelector('meta[name="description"]');
-        const description = meta ? meta.content : "";
-
-        // Try multiple selectors and pick the longest result
-        const candidates = [
-          "article",
-          "main",
-          '[role="main"]',
-          '[itemprop="articleBody"]',
-          ".article-body", ".article-content", ".article__body", ".article__content",
-          ".post-content", ".post-body", ".entry-content",
-          ".story-body", ".story-content",
-          "#article-body", "#article-content",
-          ".content-body", ".page-content"
-        ];
-        let bestText = "";
-        for (const sel of candidates) {
-          const el = document.querySelector(sel);
-          if (el) {
-            const t = el.innerText || "";
-            if (t.length > bestText.length) bestText = t;
-          }
-        }
-        // Fall back to document.body if no candidate found or too short
-        if (bestText.length < 200) bestText = document.body.innerText || "";
-        return { title, url, description, text: bestText };
-      })();
-    `
-  });
+  const results = await _execScript(tabId, { file: 'content-scripts/frame-extraction.js', frameId: frameId });
 
   if (!results || !results[0]) {
     throw new Error("Failed to extract content from the page frame.");
@@ -1251,9 +1244,8 @@ async function extractPageContent(tabId) {
     // Firefox renders PDFs (both file:// and https://) using its internal PDF.js viewer
     // which puts text in .textLayer span elements
     try {
-      const pdfViewerResults = await browser.tabs.executeScript(tab.id, {
-        code: `
-          (function() {
+      const pdfViewerResults = await _execScript(tab.id, { file: 'content-scripts/pdf-extraction.js' });
+      /* Was: browser.tabs.executeScript(tab.id, { code: `(function() {
             // Firefox's PDF.js viewer renders text in .textLayer span elements
             const spans = document.querySelectorAll(".textLayer span");
             if (spans.length > 0) {
@@ -1281,9 +1273,7 @@ async function extractPageContent(tabId) {
               text: document.body.innerText || "",
               pages: 0
             };
-          })();
-        `
-      });
+          })(); */
       if (pdfViewerResults && pdfViewerResults[0] && pdfViewerResults[0].text.trim().length > 20) {
         const r = pdfViewerResults[0];
         return {
@@ -1304,9 +1294,8 @@ async function extractPageContent(tabId) {
 
   let results;
   try {
-    results = await browser.tabs.executeScript(tab.id, {
-      code: `
-        (function() {
+    results = await _execScript(tab.id, { file: 'content-scripts/page-content.js' });
+    /* Was: browser.tabs.executeScript(tab.id, { code: `(function() {
           const title = document.title || "";
           const url = window.location.href;
           const meta = document.querySelector('meta[name="description"]');
@@ -1336,9 +1325,7 @@ async function extractPageContent(tabId) {
           // Fall back to document.body if no candidate found or too short
           if (bestText.length < 200) bestText = document.body.innerText || "";
           return { title, url, description, text: bestText, selection };
-        })();
-      `
-    });
+        })(); */
   } catch (scriptError) {
     console.log(`[Argus] executeScript FAILED: "${scriptError.message}" — URL: ${tab.url}, looksLikePdf: ${looksLikePdf}`);
     // executeScript fails on PDF viewer or restricted pages — always try PDF extraction
@@ -1382,9 +1369,7 @@ async function extractPageContent(tabId) {
 // ──────────────────────────────────────────────
 async function extractSelection(tabId) {
   try {
-    const results = await browser.tabs.executeScript(tabId || undefined, {
-      code: `window.getSelection().toString();`
-    });
+    const results = await _execScript(tabId || 0, { func: function() { return window.getSelection().toString(); } });
     return results && results[0] ? results[0] : "";
   } catch {
     // executeScript fails on PDF viewer and other restricted pages — no selection available
@@ -2068,6 +2053,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "aiGetStatus") return handleAiGetStatus();
   // ── Intelligence Providers ──
   if (message.action === "intelSaveConfig")    return IntelProviders.saveProviderConfig(message.provider, message.config).then(() => ({ success: true }));
+  if (message.action === "intelGetProviderConfig") return IntelProviders.getProviderConfig(message.provider).then(cfg => cfg).catch(() => ({}));
   if (message.action === "intelGetStatus")    return handleIntelGetStatus();
   if (message.action === "intelSearch")       return handleIntelSearch(message.provider, message.query, message.options);
   if (message.action === "intelEnrichEntity") return handleIntelEnrichEntity(message.entityId, message.providers);
@@ -2095,6 +2081,12 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "flightawareSearch")   return IntelProviders.flightaware.searchFlights(message.query, message.options).then(r => ({ success: true, ...r })).catch(e => ({ success: false, error: e.message }));
   if (message.action === "flightawareLastFlight") return IntelProviders.flightaware.getLastFlight(message.query).then(r => ({ success: true, ...r })).catch(e => ({ success: false, error: e.message }));
   if (message.action === "flightawareTrack")   return IntelProviders.flightaware.getFlightTrack(message.query).then(r => ({ success: true, ...r })).catch(e => ({ success: false, error: e.message }));
+
+  if (message.action === "weatherConditions")  return IntelProviders.openweathermap.getCurrentConditions(message.lat, message.lon).then(r => ({ success: true, conditions: r })).catch(e => ({ success: false, error: e.message }));
+  if (message.action === "weatherTileUrl")     return IntelProviders.openweathermap.getTileUrl(message.layer).then(url => ({ success: true, url, source: 'owm' })).catch(e => ({ success: false, error: e.message }));
+  if (message.action === "windyTileUrl")       return IntelProviders.windyforecast.getTileUrl(message.layer).then(url => ({ success: true, url, source: 'windy' })).catch(e => ({ success: false, error: e.message }));
+  if (message.action === "windyForecast")      return IntelProviders.windyforecast.getPointForecast(message.lat, message.lon, message.model).then(r => ({ success: true, forecast: r })).catch(e => ({ success: false, error: e.message }));
+  if (message.action === "webcamSearch")       return IntelProviders.windywebcams.searchByBbox(message.bbox, message.options || {}).then(r => ({ success: true, ...r })).catch(e => ({ success: false, error: e.message }));
   if (message.action === "vesselSearch")        return VesselLookup.search(message.query).then(r => ({ success: true, ...r })).catch(e => ({ success: false, error: e.message }));
   if (message.action === "aircraftLookup")     return AircraftLookup.lookupByTailNumber(message.query).then(r => ({ success: true, ...r })).catch(e => ({ success: false, error: e.message }));
   if (message.action === "aircraftLookupHex")  return AircraftLookup.lookupByHex(message.query).then(r => ({ success: true, ...r })).catch(e => ({ success: false, error: e.message }));
@@ -3763,6 +3755,26 @@ async function handleIntelSearch(providerKey, query, options) {
         // Test connection only — actual imagery uses sentinelGetImage action
         await provider.testConnection();
         results = { connected: true };
+        break;
+      case "stadiamaps":
+        await provider.testConnection();
+        results = { connected: true, styles: provider.getStyles() };
+        break;
+      case "windywebcams":
+        if (options?.bbox) {
+          results = await provider.searchByBbox(options.bbox, options);
+        } else {
+          await provider.testConnection();
+          results = { connected: true };
+        }
+        break;
+      case "windyforecast":
+        await provider.testConnection();
+        results = { connected: true, layers: provider.getLayers() };
+        break;
+      case "openweathermap":
+        await provider.testConnection();
+        results = { connected: true, layers: provider.getLayers() };
         break;
       default:
         return { success: false, error: `Provider ${providerKey} search not yet implemented` };
@@ -6102,21 +6114,7 @@ async function handleBookmarkPage(message) {
     // Extract page meta from content script (favicon, description, og tags, canonical)
     let pageMeta = null;
     try {
-      const metaResults = await browser.tabs.executeScript(tabId, {
-        code: `(function() {
-          const getMeta = (n) => { const el = document.querySelector('meta[property="' + n + '"],meta[name="' + n + '"]'); return el ? el.content : ''; };
-          return {
-            description: getMeta('description') || getMeta('og:description'),
-            ogImage: getMeta('og:image'),
-            ogTitle: getMeta('og:title'),
-            ogType: getMeta('og:type'),
-            canonical: (document.querySelector('link[rel="canonical"]') || {}).href || '',
-            favicon: (document.querySelector('link[rel="icon"],link[rel="shortcut icon"]') || {}).href || '',
-            author: getMeta('author'),
-            publishedTime: getMeta('article:published_time') || getMeta('datePublished'),
-          };
-        })()`
-      });
+      const metaResults = await _execScript(tabId, { file: 'content-scripts/meta-extraction.js' });
       pageMeta = metaResults?.[0] || null;
     } catch { /* content script injection failed — ok for some pages */ }
 
@@ -6179,30 +6177,7 @@ async function handleBookmarkPage(message) {
 // Non-blocking: detect tech stack and update bookmark
 async function bookmarkDetectTechStack(tabId, bookmarkId) {
   try {
-    const results = await browser.tabs.executeScript(tabId, {
-      code: `(function() {
-        const techs = [];
-        const gen = document.querySelector('meta[name="generator"]');
-        if (gen) techs.push({ source: 'meta', value: gen.getAttribute('content') || '' });
-        const scripts = Array.from(document.querySelectorAll('script[src]')).map(s => s.src);
-        techs.push({ source: 'scripts', value: scripts });
-        const links = Array.from(document.querySelectorAll('link[href]')).map(l => l.href);
-        techs.push({ source: 'links', value: links });
-        // JS globals — quick check for common frameworks
-        const globals = [];
-        try { if (window.React || document.querySelector('[data-reactroot]')) globals.push('React'); } catch {}
-        try { if (window.Vue || document.querySelector('[data-v-]')) globals.push('Vue'); } catch {}
-        try { if (window.angular || document.querySelector('[ng-app]')) globals.push('Angular'); } catch {}
-        try { if (window.jQuery || window.$?.fn?.jquery) globals.push('jQuery ' + (window.$?.fn?.jquery || '')); } catch {}
-        try { if (window.__NEXT_DATA__) globals.push('Next.js'); } catch {}
-        try { if (window.__NUXT__) globals.push('Nuxt.js'); } catch {}
-        try { if (window.Shopify) globals.push('Shopify'); } catch {}
-        try { if (document.querySelector('meta[name="generator"][content*="WordPress"]') || document.querySelector('link[href*="wp-content"]')) globals.push('WordPress'); } catch {}
-        try { if (document.querySelector('link[href*="drupal"]')) globals.push('Drupal'); } catch {}
-        techs.push({ source: 'globals', value: globals });
-        return techs;
-      })()`
-    });
+    const results = await _execScript(tabId, { file: 'content-scripts/tech-stack.js' });
     if (!results?.[0]) return;
 
     const techs = results[0];
@@ -6476,15 +6451,15 @@ async function clearMonitorUnread(monitorId) {
 async function updateBadge() {
   const { monitorUnreads, showBadge } = await browser.storage.local.get({ monitorUnreads: {}, showBadge: true });
   if (showBadge === false) {
-    browser.browserAction.setBadgeText({ text: "" });
+    browser.action.setBadgeText({ text: "" });
     return;
   }
   const total = Object.values(monitorUnreads).reduce((sum, n) => sum + n, 0);
   if (total > 0) {
-    browser.browserAction.setBadgeText({ text: String(total) });
-    browser.browserAction.setBadgeBackgroundColor({ color: "#e94560" });
+    browser.action.setBadgeText({ text: String(total) });
+    browser.action.setBadgeBackgroundColor({ color: "#e94560" });
   } else {
-    browser.browserAction.setBadgeText({ text: "" });
+    browser.action.setBadgeText({ text: "" });
   }
 }
 
@@ -7432,7 +7407,18 @@ registerArchiveRedirect();
 // ══════════════════════════════════════════════════════════════
 
 // Cache of archive check results: tabId -> { url, archiveUrl, timestamp }
-const archiveCheckCache = new Map();
+let archiveCheckCache = new Map();
+
+// M2: Register archiveCheckCache with state persistence (MV3 prep)
+if (typeof ArgusStatePersistence !== 'undefined') {
+  ArgusStatePersistence.register('archiveCheckCache',
+      function() { return archiveCheckCache; },
+      function(val) { archiveCheckCache = val; }
+  );
+}
+if (typeof _wrapMapForPersistence === 'function') {
+  _wrapMapForPersistence(archiveCheckCache);
+}
 
 browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status !== "complete" || !tab.url) return;
@@ -8626,6 +8612,14 @@ async function handleSaveConversationToProject(message) {
 // ──────────────────────────────────────────────
 let batchState = { running: false, projectId: null, total: 0, done: 0, current: "", errors: [], cancelled: false };
 
+// M6: Register batchState with state persistence (MV3 prep — survives SW unload)
+if (typeof ArgusStatePersistence !== 'undefined') {
+  ArgusStatePersistence.register('batchState',
+      function() { return batchState; },
+      function(val) { batchState = val; }
+  );
+}
+
 async function handleBatchAnalyzeProject(message) {
   if (batchState.running) return { success: false, error: "A batch analysis is already running." };
 
@@ -8947,10 +8941,18 @@ async function handleSaveTrawlAsProject(message) {
 // Manifest V2 safe external API proxy for all plugins
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'EXTERNAL_API_CALL') {
-        fetch(message.url, message.options || {})
-            .then(r => r.json())
-            .then(data => sendResponse({ success: true, data: data }))
-            .catch(e => sendResponse({ success: false, error: e.message }));
+        try {
+            if (!message.url || (!message.url.startsWith('http://') && !message.url.startsWith('https://'))) {
+                sendResponse({ success: false, error: 'Invalid URL: ' + message.url });
+                return;
+            }
+            fetch(message.url, message.options || {})
+                .then(r => r.json())
+                .then(data => sendResponse({ success: true, data: data }))
+                .catch(e => sendResponse({ success: false, error: e.message }));
+        } catch (e) {
+            sendResponse({ success: false, error: e.message });
+        }
         return true;
     }
     // Manifest V3 prep: broadcast prune request to active tabs

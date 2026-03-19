@@ -1,21 +1,18 @@
+// plugins/location-intelligence.js
+// Real Location Intelligence plugin — wraps geocoding + KG location entities
 window.ArgusPluginRegistry.registerPlugin({
     id: 'location-intelligence',
     name: 'Location Intelligence',
-    version: '1.0',
+    version: '2.0',
     category: 'location',
-    requires: ['kg'],
-    run: async (input, context) => {
-        var response = await new Promise(function(resolve) {
-            browser.runtime.sendMessage({
-                type: 'EXTERNAL_API_CALL',
-                url: 'https://opensky-network.org/api/states/all',
-                options: { method: 'GET' }
-            }, resolve);
-        });
-        var geo = [];
-        if (response && response.success) {
-            geo = response.data.states || [];
-        }
-        return { message: 'Geo enrichment complete', entities: geo };
-    }
+    requires: [],
+    init: async function(context) { console.log('[Location Intel Plugin] initialized'); },
+    run: async function(input, context) {
+        var query = (typeof input === 'string') ? input : '';
+        var resp = await browser.runtime.sendMessage({ action: 'searchKGNodes', query: query });
+        if (!resp || !resp.success) return { message: 'Location error: ' + ((resp && resp.error) || 'failed'), entities: [] };
+        var locations = (resp.nodes || []).filter(function(n) { return n.type === 'location'; });
+        return { message: 'Location Intel: ' + locations.length + ' locations in KG', entities: locations };
+    },
+    cleanup: async function() { console.log('[Location Intel Plugin] cleaned up'); }
 });

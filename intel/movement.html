@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="intel.css">
 </head>
 <body>
+  <script src="../lib/vendor/browser-polyfill.min.js"></script>
   <script src="../shared/ribbon.js"></script>
 
 
@@ -94,13 +95,10 @@
   <script src="../shared/xmpp-chat.js"></script>
   <script src="../lib/argus-chat.js"></script>
   <script src="domain-shell.js"></script>
-  <script>IntelDomainShell.init("movement", ["opensky", "adsbexchange", "marinetraffic", "broadcastify"]);</script>
+  
   <script src="movement.js"></script>
   <div id="xmpp-chat-container"></div>
-  <script>
-    if (typeof XmppChat !== "undefined") {
-      XmppChat.init({ container: document.getElementById("xmpp-chat-container"), pageId: "intel-movement" });
-    }
-  </script>
+  
+<script src="movement-init.js"></script>
 </body>
 </html>

@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="finance.css">
 </head>
 <body>
+  <script src="../lib/vendor/browser-polyfill.min.js"></script>
   <script src="../shared/ribbon.js"></script>
   <script src="../shared/panel-state.js"></script>
 
@@ -453,10 +454,7 @@
   <script src="../lib/argus-chat.js"></script>
   <script src="finance.js"></script>
   <div id="xmpp-chat-container"></div>
-  <script>
-    if (typeof XmppChat !== "undefined") {
-      XmppChat.init({ container: document.getElementById("xmpp-chat-container"), pageId: "finance" });
-    }
-  </script>
+  
+  <script src="finance-init.js"></script>
 </body>
 </html>

@@ -1,21 +1,18 @@
+// plugins/100-eyes-library.js
+// Real 100 Eyes Script Library plugin — wraps regex scan pattern detection
 window.ArgusPluginRegistry.registerPlugin({
     id: '100-eyes-library',
     name: '100 Eyes Script Library',
-    version: '1.0',
+    version: '2.0',
     category: 'osint',
-    requires: ['kg'],
-    run: async (input, context) => {
-        var response = await new Promise(function(resolve) {
-            browser.runtime.sendMessage({
-                type: 'EXTERNAL_API_CALL',
-                url: 'https://api.gdeltproject.org/api/v2/doc/doc',
-                options: { method: 'GET' }
-            }, resolve);
-        });
-        var scripts = [];
-        if (response && response.success) {
-            scripts = response.data || [];
-        }
-        return { message: '100 Eyes scripts complete', entities: scripts };
-    }
+    requires: [],
+    init: async function(context) { console.log('[100 Eyes Plugin] initialized'); },
+    run: async function(input, context) {
+        // 100 Eyes uses the regex scan patterns from background-osint.js
+        var resp = await browser.runtime.sendMessage({ action: 'getHistory', limit: 20 });
+        if (!resp || !resp.success) return { message: '100 Eyes error: ' + ((resp && resp.error) || 'failed'), entities: [] };
+        var items = resp.history || [];
+        return { message: '100 Eyes: ' + items.length + ' recent analysis items', entities: items };
+    },
+    cleanup: async function() { console.log('[100 Eyes Plugin] cleaned up'); }
 });

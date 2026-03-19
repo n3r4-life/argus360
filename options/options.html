@@ -812,6 +812,10 @@
               <button class="tab-btn" data-iprovider="vesselfinder">VesselFinder</button>
               <button class="tab-btn" data-iprovider="flightaware">FlightAware</button>
               <button class="tab-btn" data-iprovider="wigle">WiGLE</button>
+              <button class="tab-btn" data-iprovider="stadiamaps">Stadia Maps</button>
+              <button class="tab-btn" data-iprovider="windywebcams">Windy Webcams</button>
+              <button class="tab-btn" data-iprovider="windyforecast">Windy Forecast</button>
+              <button class="tab-btn" data-iprovider="openweathermap">OpenWeatherMap</button>
             </div>
           </div>
 
@@ -1038,6 +1042,62 @@
               <div class="dp-action-row">
                 <button id="intel-wigle-test-btn" class="pill-chip">Test Connection</button>
                 <span id="intel-wigle-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- Stadia Maps fields -->
+            <div id="intel-stadiamaps-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-stadiamaps-apikey">API Key</label>
+                <div class="input-row"><input type="password" id="intel-stadiamaps-apikey" placeholder="Stadia Maps API key"><button class="icon-btn intel-eye-toggle" data-target="intel-stadiamaps-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Stadia Maps provides premium map tiles including Stamen styles (Toner, Watercolor, Terrain), Alidade Satellite, and Outdoors. Sign up at <a href="https://client.stadiamaps.com/signup/" target="_blank" style="color:var(--accent);">client.stadiamaps.com ↗</a>, create a property, then generate an API key under Authentication. Used as basemap tile providers on the satellite page.</p>
+              <div class="dp-action-row">
+                <button id="intel-stadiamaps-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-stadiamaps-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- Windy Webcams fields -->
+            <div id="intel-windywebcams-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-windywebcams-apikey">API Key</label>
+                <div class="input-row"><input type="password" id="intel-windywebcams-apikey" placeholder="Windy Webcams API key"><button class="icon-btn intel-eye-toggle" data-target="intel-windywebcams-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Windy Webcams API v3 provides access to thousands of live webcams worldwide, searchable by location. Sign up at <a href="https://api.windy.com/" target="_blank" style="color:var(--accent);">api.windy.com ↗</a> and create a Webcams API key. Used to overlay live camera locations on the satellite map with thumbnail previews and live stream links.</p>
+              <div class="dp-action-row">
+                <button id="intel-windywebcams-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-windywebcams-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- Windy Forecast fields -->
+            <div id="intel-windyforecast-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-windyforecast-tilekey">Map Tiles Key <span class="hint">(tiles.windy.com)</span></label>
+                <div class="input-row"><input type="password" id="intel-windyforecast-tilekey" placeholder="Windy map tile API key"><button class="icon-btn intel-eye-toggle" data-target="intel-windyforecast-tilekey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <div class="form-group" style="margin-top:8px;">
+                <label for="intel-windyforecast-forecastkey">Point Forecast Key <span class="hint">(api.windy.com/api/point-forecast/v2)</span></label>
+                <div class="input-row"><input type="password" id="intel-windyforecast-forecastkey" placeholder="Windy point forecast API key"><button class="icon-btn intel-eye-toggle" data-target="intel-windyforecast-forecastkey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Windy provides two separate API keys. The <strong>Map Tiles key</strong> powers the weather tile overlay on the satellite map (wind, rain, temperature, etc). The <strong>Point Forecast key</strong> powers the right-click weather popup with 48h forecasts from GFS/ECMWF/ICON. Both are optional independently. Get keys at <a href="https://api.windy.com/" target="_blank" style="color:var(--accent);">api.windy.com ↗</a>.</p>
+              <div class="dp-action-row">
+                <button id="intel-windyforecast-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-windyforecast-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- OpenWeatherMap fields -->
+            <div id="intel-openweathermap-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-openweathermap-apikey">API Key</label>
+                <div class="input-row"><input type="password" id="intel-openweathermap-apikey" placeholder="OpenWeatherMap API key"><button class="icon-btn intel-eye-toggle" data-target="intel-openweathermap-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">OpenWeatherMap provides weather tile overlays (rain, wind, temperature, clouds, pressure) and current conditions at any lat/lon. Get a free API key at <a href="https://home.openweathermap.org/api_keys" target="_blank" style="color:var(--accent);">home.openweathermap.org/api_keys ↗</a>. Without a key, current conditions fall back to <strong>Open-Meteo</strong> (free, no key needed) but tile overlays require the OWM key.</p>
+              <div class="dp-action-row">
+                <button id="intel-openweathermap-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-openweathermap-status" class="dp-status"></span>
               </div>
             </div>
           </div>
@@ -3329,6 +3389,7 @@
     <!-- Help tab removed — documentation lives at GitHub README -->
   </div>
 
+  <script src="../lib/vendor/browser-polyfill.min.js"></script>
   <script src="../lib/vendor/marked.min.js"></script>
   <script src="../lib/vendor/purify.min.js"></script>
   <script src="../lib/storage-db.js"></script>

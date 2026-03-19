@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="../shared/xmpp-chat.css">
 </head>
 <body>
+  <script src="../lib/vendor/browser-polyfill.min.js"></script>
   <script src="../shared/ribbon.js"></script>
   <script src="../shared/panel-state.js"></script>
   <header class="header">
@@ -253,10 +254,7 @@
   <script src="../lib/argus-chat.js"></script>
   <script src="link-map.js"></script>
   <div id="xmpp-chat-container"></div>
-  <script>
-    if (typeof XmppChat !== "undefined") {
-      XmppChat.init({ container: document.getElementById("xmpp-chat-container"), pageId: "linkmap" });
-    }
-  </script>
+  
+  <script src="link-map-init.js"></script>
 </body>
 </html>

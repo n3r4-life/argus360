@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="../shared/asset-library.css">
 </head>
 <body>
+  <script src="../lib/vendor/browser-polyfill.min.js"></script>
   <script src="../shared/ribbon.js"></script>
   <script src="../shared/panel-state.js"></script>
   <script src="../shared/floating-panel.js"></script>
@@ -320,10 +321,7 @@
   <script src="../lib/argus-chat.js"></script>
   <script src="images.js"></script>
   <div id="xmpp-chat-container"></div>
-  <script>
-    if (typeof XmppChat !== "undefined") {
-      XmppChat.init({ container: document.getElementById("xmpp-chat-container"), pageId: "images" });
-    }
-  </script>
+  
+  <script src="images-init.js"></script>
 </body>
 </html>

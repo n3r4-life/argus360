@@ -57,8 +57,8 @@ async function handleExtractMetadata(message) {
       } catch { /* fall through to normal extraction */ }
     }
 
-    const results = await browser.tabs.executeScript(tabId, {
-      code: `(function() {
+    const results = await _execScript(tabId, { file: 'content-scripts/osint-metadata.js' });
+    /* Was: browser.tabs.executeScript(tabId, { code: `(function() {
         // ── Meta tags ──
         const meta = {};
         for (const el of document.querySelectorAll('meta[name], meta[property], meta[http-equiv]')) {
@@ -148,8 +148,7 @@ async function handleExtractMetadata(message) {
         const charset = charsetEl ? charsetEl.getAttribute('charset') : (meta['content-type'] || '');
 
         return { meta, og, twitter, jsonLd, links, author, dates, lang, charset };
-      })()`
-    });
+      })() */
 
     const metadata = results[0];
 
@@ -192,7 +191,7 @@ async function handleExtractMetadata(message) {
 async function handleExtractLinks(message) {
   try {
     const tabId = message.tabId;
-    const results = await browser.tabs.executeScript(tabId, {
+    const results = await _execScript(tabId, {
       code: `(function() {
         const pageHost = window.location.hostname.replace(/^www\\./, '');
         const pageOrigin = window.location.origin;
@@ -1622,7 +1621,7 @@ async function handleDetectTechStack(message) {
     }
 
     // 1. Inject content script for DOM + JS global detection
-    const results = await browser.tabs.executeScript(tabId, {
+    const results = await _execScript(tabId, {
       code: `(function() {
         const techs = [];
 
@@ -2082,8 +2081,8 @@ async function handleExtractImages(message) {
     const minWidth = message.minWidth || 50;
     const minHeight = message.minHeight || 50;
 
-    const results = await browser.tabs.executeScript(tabId, {
-      code: `(function() {
+    const results = await _execScript(tabId, { file: 'content-scripts/image-scraping.js' });
+    /* Was: browser.tabs.executeScript(tabId, { code: `(function() {
         const seen = new Set();
         const images = [];
 
@@ -2184,8 +2183,7 @@ async function handleExtractImages(message) {
           pageUrl: location.href,
           pageTitle: document.title,
         };
-      })();`
-    });
+      })(); */
 
     const data = results?.[0];
     if (!data || !data.images) return { success: false, error: "No image data returned" };
@@ -2251,8 +2249,8 @@ async function handleExtractImages(message) {
 async function handleRegexScanPage(message) {
   try {
     const tabId = message.tabId;
-    const results = await browser.tabs.executeScript(tabId, {
-      code: `(function() {
+    const results = await _execScript(tabId, { file: 'content-scripts/regex-scan.js' });
+    /* Was: browser.tabs.executeScript(tabId, { code: `(function() {
         const html = document.documentElement.outerHTML;
         const text = document.body.innerText;
         const patterns = {
@@ -2283,8 +2281,7 @@ async function handleRegexScanPage(message) {
           }
         }
         return { found, totalMatches, htmlLength: html.length, textLength: text.length, html, text };
-      })();`
-    });
+      })(); */
 
     const data = results?.[0];
     if (!data) return { success: false, error: "No data returned from page scan" };
@@ -2325,7 +2322,7 @@ async function handleRegexScanCustom(message) {
 
     const srcVar = source === "text" ? "document.body.innerText" : "document.documentElement.outerHTML";
     const escaped = pattern.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-    const results = await browser.tabs.executeScript(tab.id, {
+    const results = await _execScript(tab.id, {
       code: `(function() {
         try {
           const re = new RegExp('${escaped}', 'gi');

@@ -1,21 +1,16 @@
+// plugins/chat-xmpp.js
+// Real Chat XMPP plugin — wraps XMPP chat connection for messaging
 window.ArgusPluginRegistry.registerPlugin({
     id: 'chat-xmpp',
     name: 'Chat XMPP',
-    version: '1.0',
+    version: '2.0',
     category: 'communication',
     requires: ['vault'],
-    run: async (input, context) => {
-        var response = await new Promise(function(resolve) {
-            browser.runtime.sendMessage({
-                type: 'EXTERNAL_API_CALL',
-                url: 'https://api.gdeltproject.org/api/v2/doc/doc',
-                options: { method: 'GET' }
-            }, resolve);
-        });
-        var chat = [];
-        if (response && response.success) {
-            chat = response.data.articles || [];
-        }
-        return { message: 'XMPP chat complete', entities: chat };
-    }
+    init: async function(context) { console.log('[Chat XMPP Plugin] initialized'); },
+    run: async function(input, context) {
+        var resp = await browser.runtime.sendMessage({ action: 'xmppGetStatus' });
+        if (!resp) return { message: 'XMPP: unavailable', entities: [] };
+        return { message: 'XMPP: ' + (resp.connected ? 'connected as ' + resp.jid : 'disconnected'), entities: [{ type: 'xmpp-status', connected: resp.connected, jid: resp.jid }] };
+    },
+    cleanup: async function() { console.log('[Chat XMPP Plugin] cleaned up'); }
 });

@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="../shared/xmpp-chat.css">
 </head>
 <body>
+  <script src="../lib/vendor/browser-polyfill.min.js"></script>
   <script src="../shared/ribbon.js"></script>
   <header class="header">
     <div class="header-left">
@@ -135,10 +136,7 @@
   <script src="../shared/xmpp-chat.js"></script>
   <script src="results.js"></script>
   <div id="xmpp-chat-container"></div>
-  <script>
-    if (typeof XmppChat !== "undefined") {
-      XmppChat.init({ container: document.getElementById("xmpp-chat-container"), pageId: "results" });
-    }
-  </script>
+  
+  <script src="results-init.js"></script>
 </body>
 </html>

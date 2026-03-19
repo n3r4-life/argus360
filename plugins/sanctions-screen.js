@@ -1,25 +1,19 @@
+// plugins/sanctions-screen.js
+// Real Sanctions Screening plugin — wraps intelligence-providers.js OpenSanctions
 window.ArgusPluginRegistry.registerPlugin({
     id: 'sanctions-screen',
     name: 'Sanctions Screening',
-    version: '1.0',
+    version: '2.0',
     category: 'govintel',
-    requires: ['vault', 'kg'],
-    run: async (input, context) => {
-        var response = await new Promise(function(resolve) {
-            browser.runtime.sendMessage({
-                type: 'EXTERNAL_API_CALL',
-                url: 'https://api.opensanctions.org/search',
-                options: {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ q: input })
-                }
-            }, resolve);
-        });
-        var entities = [];
-        if (response && response.success) {
-            entities = response.data.results || [];
-        }
-        return { message: 'Sanctions check complete', entities: entities };
-    }
+    requires: ['vault'],
+    init: async function(context) { console.log('[Sanctions Plugin] initialized'); },
+    run: async function(input, context) {
+        var query = (typeof input === 'string') ? input : '';
+        var resp = await browser.runtime.sendMessage({ action: 'intelSearch', provider: 'opensanctions', query: query, options: {} });
+        if (!resp || !resp.success) return { message: 'Sanctions error: ' + ((resp && resp.error) || 'failed'), entities: [] };
+        var results = (resp.results && resp.results.results) || [];
+        var entities = results.map(function(r) { return { type: 'sanctions-match', name: r.caption || r.name, score: r.score, schema: r.schema, datasets: r.datasets }; });
+        return { message: 'Sanctions: ' + results.length + ' matches', entities: entities };
+    },
+    cleanup: async function() { console.log('[Sanctions Plugin] cleaned up'); }
 });
