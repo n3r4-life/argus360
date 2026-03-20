@@ -133,6 +133,7 @@ const AssetLibrary = (() => {
       case 'source':   return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
       case 'entity':   return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
       case 'snippet':  return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>';
+      case 'result':   return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
       default:         return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>';
     }
   }
@@ -167,6 +168,7 @@ const AssetLibrary = (() => {
         <button class="asset-lib-tab" data-al-tab="location">Locations</button>
         <button class="asset-lib-tab" data-al-tab="source">Sources</button>
         <button class="asset-lib-tab" data-al-tab="entity">Entities</button>
+        <button class="asset-lib-tab" data-al-tab="result">Results</button>
       </div>
       <div class="asset-lib-pane active" data-al-pane="all" id="alPaneAll"></div>
       <div class="asset-lib-pane" data-al-pane="image" id="alPaneImage"></div>
@@ -174,6 +176,7 @@ const AssetLibrary = (() => {
       <div class="asset-lib-pane" data-al-pane="location" id="alPaneLocation"></div>
       <div class="asset-lib-pane" data-al-pane="source" id="alPaneSource"></div>
       <div class="asset-lib-pane" data-al-pane="entity" id="alPaneEntity"></div>
+      <div class="asset-lib-pane" data-al-pane="result" id="alPaneResult"></div>
       <div class="asset-lib-footer">
         <select id="alProjectSelect" class="al-project-select" title="Active project"></select>
         <button class="pill-chip" id="alClearAll">Clear All</button>
@@ -388,7 +391,7 @@ const AssetLibrary = (() => {
     _panel.querySelector('#alTotalCount').textContent = total;
 
     // Update tab counts
-    const types = ['image', 'satellite', 'location', 'source', 'entity'];
+    const types = ['image', 'satellite', 'location', 'source', 'entity', 'result'];
     types.forEach(type => {
       const count = _items.filter(i => i.type === type).length;
       const tab = _panel.querySelector(`.asset-lib-tab[data-al-tab="${type}"]`);

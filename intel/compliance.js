@@ -14,51 +14,41 @@
     if (e.key === "Enter") unifiedSearch();
   });
 
-  // Update dataset/filter visibility based on provider
-  document.getElementById("compProvider").addEventListener("change", function() {
-    var provider = this.value;
-    var datasetRow = document.getElementById("compDataset").parentNode;
-    // Dataset filter only relevant for OpenSanctions
-    document.getElementById("compDataset").style.display = provider === "opensanctions" ? "" : "none";
-    // Type filter relevant for OpenSanctions + CSL
-    document.getElementById("compTypeFilter").style.display = (provider === "opensanctions" || provider === "csl") ? "" : "none";
-    // Country filter relevant for CSL
-    document.getElementById("compCountryFilter").style.display = provider === "csl" ? "" : "none";
-    // Fuzzy toggle relevant for CSL
-    document.getElementById("compFuzzyToggle").parentNode.style.display = provider === "csl" ? "" : "none";
-    // Update placeholder
-    var input = document.getElementById("compSearchInput");
-    if (provider === "courtlistener") {
-      input.placeholder = "Search case name, opinion, or docket...";
-    } else {
-      input.placeholder = "Search name, entity, or vessel...";
-    }
+  // Provider pill toggles
+  document.getElementById("compProviderPills")?.addEventListener("click", function(e) {
+    var pill = e.target.closest(".comp-provider-pill");
+    if (!pill) return;
+    pill.classList.toggle("active");
   });
-  // Trigger initial state
-  document.getElementById("compProvider").dispatchEvent(new Event("change"));
 
   async function unifiedSearch() {
     var query = document.getElementById("compSearchInput").value.trim();
     if (!query) return;
-    var provider = document.getElementById("compProvider").value;
-    lastProvider = provider;
+
+    // Get active providers from pills
+    var activePills = document.querySelectorAll(".comp-provider-pill.active");
+    var providers = [];
+    activePills.forEach(function(p) { providers.push(p.dataset.provider); });
+    if (!providers.length) {
+      renderError("No providers selected — click the provider pills below the search bar to enable them.", "");
+      return;
+    }
+
+    lastProvider = providers.length === 1 ? providers[0] : "multiple";
 
     var btn = document.getElementById("compSearchBtn");
     btn.disabled = true;
     btn.textContent = "Searching...";
 
     try {
-      var results;
-      if (provider === "opensanctions") {
-        results = await searchOpenSanctions(query);
-      } else if (provider === "csl") {
-        results = await searchCSL(query);
-      } else if (provider === "courtlistener") {
-        results = await searchCourtListener(query);
+      if (providers.length === 1) {
+        var results = await searchSingle(query, providers[0]);
+        renderResults(results, providers[0]);
+      } else {
+        await searchMultipleByPills(query, providers);
       }
-      renderResults(results, provider);
     } catch (e) {
-      renderError(e.message, provider);
+      renderError(e.message, providers[0] || "");
     }
 
     btn.disabled = false;
@@ -66,10 +56,107 @@
     refreshChatContext();
   }
 
+  // ── Single provider search ──
+
+  async function searchSingle(query, provider) {
+    if (provider === "opensanctions" || provider === "pepscreen") {
+      return await searchOpenSanctions(query, provider === "pepscreen" ? "peps" : undefined);
+    } else if (provider === "csl") {
+      return await searchCSL(query);
+    } else if (provider === "courtlistener") {
+      return await searchCourtListener(query);
+    } else {
+      return await searchGeneric(query, provider);
+    }
+  }
+
+  // ── Multi-provider search ──
+
+  async function searchMultipleByPills(query, providers) {
+    var container = document.getElementById("compResults");
+    var empty = document.getElementById("compEmpty");
+    var countEl = document.getElementById("compResultsCount");
+    var sourceEl = document.getElementById("compResultsSource");
+    var filterEl = document.getElementById("compResultsFilter");
+
+    // Clear
+    container.querySelectorAll(".comp-result-card, .comp-error, .comp-multi-header").forEach(function(el) { el.remove(); });
+    empty.style.display = "none";
+    sourceEl.textContent = "searching " + providers.length + " providers...";
+    countEl.textContent = "";
+    filterEl.style.display = "";
+    filterEl.value = "";
+
+    var totalResults = 0;
+    var completedProviders = [];
+
+    // Fan out all searches in parallel
+    var promises = providers.map(function(prov) {
+      return searchSingle(query, prov).then(function(data) {
+        return { provider: prov, data: data, error: null };
+      }).catch(function(e) {
+        return { provider: prov, data: null, error: e.message };
+      });
+    });
+
+    var results = await Promise.all(promises);
+
+    // Render each provider's results in sections
+    results.forEach(function(r) {
+      var provLabel = _providerLabels[r.provider] || r.provider;
+      if (r.error) {
+        // Show error but don't block other results
+        var isKeyError = r.error.includes("API key") || r.error.includes("not configured") || r.error.includes("subscription key");
+        if (!isKeyError) {
+          container.insertAdjacentHTML("beforeend", '<div class="comp-error" data-provider="' + r.provider + '" style="font-size:10px;padding:4px 8px;">' + escapeHtml(provLabel) + ': ' + escapeHtml(r.error) + '</div>');
+        }
+        return;
+      }
+      if (!r.data || !r.data.results || !r.data.results.length) return;
+
+      completedProviders.push(r.provider);
+      var count = r.data.results.length;
+      totalResults += count;
+
+      // Section header
+      container.insertAdjacentHTML("beforeend", '<div class="comp-multi-header" data-provider="' + r.provider + '" style="font-size:11px;font-weight:600;color:var(--text-primary);padding:8px 0 4px;border-bottom:1px solid var(--border);margin-top:8px;">' + escapeHtml(provLabel) + ' — ' + count + ' result' + (count !== 1 ? 's' : '') + '</div>');
+
+      // Render cards
+      var cards = r.data.results.map(function(item, i) {
+        if (r.provider === "courtlistener") return renderCourtCard(item, i);
+        if (r.provider === "csl") return renderCSLCard(item, i);
+        if (r.provider === "eusanctions") return renderEUCard(item, i);
+        if (r.provider === "samgov") return renderSAMCard(item, i);
+        if (r.provider === "patentsview" || r.provider === "uspto" || r.provider === "lensorg" || r.provider === "pqai") return renderPatentCard(item, i, provLabel);
+        return renderSanctionsCard(item, i);
+      }).join("");
+      container.insertAdjacentHTML("beforeend", cards);
+      wireCardActions(container, r.provider);
+    });
+
+    countEl.textContent = totalResults + " result" + (totalResults !== 1 ? "s" : "");
+    sourceEl.textContent = "via " + completedProviders.length + " provider" + (completedProviders.length !== 1 ? "s" : "");
+
+    if (totalResults === 0) {
+      empty.style.display = "";
+      empty.textContent = "No matches found across " + providers.length + " providers.";
+    }
+
+    searchResults = []; // mixed results, can't track single array
+    refreshChatContext();
+  }
+
+  var _providerLabels = {
+    opensanctions: "OpenSanctions", csl: "U.S. CSL", eusanctions: "EU Sanctions",
+    pepscreen: "PEP Screen", samgov: "SAM.gov", courtlistener: "CourtListener",
+    patentsview: "PatentsView", uspto: "USPTO", lensorg: "Lens.org", pqai: "PQAI"
+  };
+
   // ── OpenSanctions Search ──
 
-  async function searchOpenSanctions(query) {
-    var dataset = document.getElementById("compDataset").value;
+  async function searchOpenSanctions(query, datasetOverride) {
+    var datasetEl = document.getElementById("compDataset");
+    var dataset = datasetOverride || (datasetEl ? datasetEl.value : "default");
     var resp = await browser.runtime.sendMessage({
       action: "intelSearch", provider: "opensanctions", query, options: { dataset }
     });
@@ -100,8 +187,10 @@
 
   async function searchCSL(query) {
     var fuzzy = document.getElementById("compFuzzyToggle").checked;
-    var types = document.getElementById("compTypeFilter").value;
-    var countries = document.getElementById("compCountryFilter").value.trim();
+    var typesEl = document.getElementById("compTypeFilter");
+    var countriesEl = document.getElementById("compCountryFilter");
+    var types = typesEl ? typesEl.value : "";
+    var countries = countriesEl ? countriesEl.value.trim() : "";
 
     var resp = await browser.runtime.sendMessage({
       action: "intelSearch", provider: "csl", query,
@@ -172,6 +261,19 @@
     };
   }
 
+  // ── Generic Search (EU Sanctions, SAM.gov, Patents) ──
+
+  async function searchGeneric(query, provider) {
+    var resp = await browser.runtime.sendMessage({
+      action: "intelSearch", provider: provider, query: query, options: {}
+    });
+    if (!resp?.success) throw new Error(resp?.error || provider + " search failed");
+    var data = resp.results || {};
+    var raw = data.results || [];
+    searchResults = raw;
+    return { total: data.total || raw.length, results: raw, provider: provider };
+  }
+
   // ── Result Rendering ──
 
   function renderResults(data, provider) {
@@ -187,7 +289,12 @@
                         provider === "csl" ? "U.S. CSL" :
                         provider === "courtlistener" ? "CourtListener" : provider;
     sourceEl.textContent = "via " + providerLabel;
-    countEl.textContent = data.total + " result" + (data.total !== 1 ? "s" : "");
+    var totalNum = typeof data.total === "number" ? data.total : (data.results ? data.results.length : 0);
+    countEl.textContent = totalNum + " result" + (totalNum !== 1 ? "s" : "");
+
+    // Show filter if we have results
+    var filterEl = document.getElementById("compResultsFilter");
+    if (filterEl) { filterEl.style.display = totalNum > 0 ? "" : "none"; filterEl.value = ""; }
 
     if (!data.results.length) {
       empty.style.display = "";
@@ -199,7 +306,14 @@
     var cards = data.results.map(function(r, i) {
       if (provider === "courtlistener") return renderCourtCard(r, i);
       if (provider === "csl") return renderCSLCard(r, i);
-      return renderSanctionsCard(r, i);
+      if (provider === "eusanctions") return renderEUCard(r, i);
+      if (provider === "samgov") return renderSAMCard(r, i);
+      if (provider === "patentsview") return renderPatentCard(r, i, "PatentsView");
+      if (provider === "uspto") return renderPatentCard(r, i, "USPTO");
+      if (provider === "lensorg") return renderPatentCard(r, i, "Lens.org");
+      if (provider === "pqai") return renderPatentCard(r, i, "PQAI");
+      if (provider === "opensanctions" || provider === "pepscreen") return renderSanctionsCard(r, i);
+      return renderGenericCard(r, i);
     }).join("");
 
     container.insertAdjacentHTML("beforeend", cards);
@@ -303,6 +417,132 @@
     '</div>';
   }
 
+  function renderEUCard(r, i) {
+    var altNames = r.names ? r.names.slice(1, 4).join(", ") : "";
+    return '<div class="comp-result-card" data-idx="' + i + '" style="border-left:3px solid #fbbf24;">' +
+      '<div class="comp-result-header">' +
+        '<span class="comp-result-badge sanctioned">EU</span>' +
+        '<span class="comp-result-name">' + escapeHtml(r.name) + '</span>' +
+        '<span class="comp-result-schema">' + escapeHtml(r.type) + '</span>' +
+      '</div>' +
+      (r.programmes.length ? '<div class="comp-result-datasets">' + escapeHtml(r.programmes.join(", ")) + '</div>' : '') +
+      (altNames ? '<div style="font-size:10px;color:var(--text-muted);">AKA: ' + escapeHtml(altNames) + '</div>' : '') +
+      (r.remark ? '<div style="font-size:10px;color:var(--text-secondary);font-style:italic;margin-top:2px;">' + escapeHtml(r.remark.substring(0, 200)) + '</div>' : '') +
+      '<div class="comp-result-actions">' +
+        '<button class="pill-chip comp-add-kg" data-idx="' + i + '">Add to KG</button>' +
+        '<button class="pill-chip comp-add-asset" data-idx="' + i + '">+ Asset</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderSAMCard(r, i) {
+    var reg = r.entityRegistration || {};
+    var core = r.coreData || {};
+    var name = reg.legalBusinessName || reg.dbaName || "Unknown";
+    var dba = reg.dbaName && reg.dbaName !== name ? reg.dbaName : "";
+    var uei = reg.ueiSAM || "";
+    var cage = reg.cageCode || "";
+    var status = reg.registrationStatus || "";
+    var regDate = reg.registrationDate || "";
+    var expDate = reg.expirationDate || "";
+    var activeDate = reg.activeDate || "";
+    var purpose = reg.purposeOfRegistrationDesc || reg.purposeOfRegistrationCode || "";
+    var samUrl = uei ? "https://sam.gov/entity/" + encodeURIComponent(uei) : "";
+
+    // Physical address
+    var addr = core.physicalAddress || {};
+    var addrStr = [addr.addressLine1, addr.addressLine2, addr.city, addr.stateOrProvinceCode, addr.zipCode, addr.countryCode].filter(Boolean).join(", ");
+
+    // Mailing address (if different)
+    var mail = core.mailingAddress || {};
+    var mailStr = [mail.addressLine1, mail.city, mail.stateOrProvinceCode, mail.zipCode].filter(Boolean).join(", ");
+    if (mailStr === addrStr) mailStr = "";
+
+    // Business types
+    var bizTypes = core.businessTypes || {};
+    var typeList = bizTypes.businessTypeList || [];
+    var typeStr = typeList.map(function(t) { return t.businessTypeDescription || t.businessType || ""; }).filter(Boolean).join(", ");
+
+    // NAICS codes
+    var naicsList = core.naicsCode ? [core.naicsCode] : [];
+    if (core.naicsList) {
+      naicsList = core.naicsList.map(function(n) {
+        return (n.naicsCode || "") + (n.naicsDescription ? " — " + n.naicsDescription : "");
+      });
+    }
+
+    // SBA certifications
+    var sba = core.sbaBusinessTypeDesc || [];
+    var certStr = Array.isArray(sba) ? sba.join(", ") : (sba || "");
+
+    // Build detail rows
+    var details = [];
+    if (uei) details.push("UEI: " + escapeHtml(uei));
+    if (cage) details.push("CAGE: " + escapeHtml(cage));
+    if (purpose) details.push("Purpose: " + escapeHtml(purpose));
+    if (regDate) details.push("Registered: " + escapeHtml(regDate));
+    if (expDate) details.push("Expires: " + escapeHtml(expDate));
+
+    return '<div class="comp-result-card" data-idx="' + i + '" style="border-left:3px solid #10b981;">' +
+      '<div class="comp-result-header">' +
+        '<span class="comp-result-badge" style="background:#10b981;color:#fff;">SAM</span>' +
+        '<span class="comp-result-name">' + escapeHtml(name) + '</span>' +
+        '<span class="comp-result-schema">' + escapeHtml(status) + '</span>' +
+      '</div>' +
+      (dba ? '<div style="font-size:10px;color:var(--text-muted);">DBA: ' + escapeHtml(dba) + '</div>' : '') +
+      (details.length ? '<div class="comp-result-details">' + details.map(function(d) { return '<span class="comp-result-detail">' + d + '</span>'; }).join("") + '</div>' : '') +
+      (addrStr ? '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">📍 ' + escapeHtml(addrStr) + '</div>' : '') +
+      (mailStr ? '<div style="font-size:10px;color:var(--text-muted);">📬 ' + escapeHtml(mailStr) + '</div>' : '') +
+      (typeStr ? '<div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">Business Types: ' + escapeHtml(typeStr) + '</div>' : '') +
+      (naicsList.length ? '<div style="font-size:10px;color:var(--text-secondary);">NAICS: ' + escapeHtml(naicsList.slice(0, 5).join("; ")) + '</div>' : '') +
+      (certStr ? '<div style="font-size:10px;color:#22c55e;">SBA: ' + escapeHtml(certStr) + '</div>' : '') +
+      '<div class="comp-result-actions">' +
+        '<button class="pill-chip comp-add-kg" data-idx="' + i + '">Add to KG</button>' +
+        '<button class="pill-chip comp-add-asset" data-idx="' + i + '">+ Asset</button>' +
+        (samUrl ? '<a class="pill-chip" href="' + escapeHtml(samUrl) + '" target="_blank" rel="noopener" style="background:var(--accent);color:#fff;font-weight:600;">View on SAM.gov ↗</a>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderPatentCard(r, i, source) {
+    // Normalize fields across different patent APIs
+    var title = r.patent_title || r.inventionTitle || r.title || r.document?.title || "Untitled";
+    var date = r.patent_date || r.datePublished || r.date_published || "";
+    var number = r.patent_number || r.publicationNumber || r.publication_number || r.doc_number || "";
+    var abstract = r.patent_abstract || r.abstract || r.document?.abstract || "";
+    var url = r.url || r.lens_url || "";
+    if (!url && number) url = "https://patents.google.com/patent/" + number;
+    var isPdf = url && url.endsWith(".pdf");
+
+    return '<div class="comp-result-card" data-idx="' + i + '" style="border-left:3px solid #8b5cf6;">' +
+      '<div class="comp-result-header">' +
+        '<span class="comp-result-badge" style="background:#8b5cf6;color:#fff;">' + escapeHtml(source) + '</span>' +
+        '<span class="comp-result-name">' + escapeHtml(title) + '</span>' +
+      '</div>' +
+      '<div class="comp-result-datasets">' + escapeHtml(number) + (date ? " · " + escapeHtml(date) : "") + '</div>' +
+      (abstract ? '<div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">' + escapeHtml(abstract.substring(0, 250)) + (abstract.length > 250 ? "..." : "") + '</div>' : '') +
+      '<div class="comp-result-actions">' +
+        '<button class="pill-chip comp-add-kg" data-idx="' + i + '">Add to KG</button>' +
+        '<button class="pill-chip comp-add-asset" data-idx="' + i + '">+ Asset</button>' +
+        (url && isPdf ? '<button class="pill-chip comp-view-pdf" data-url="' + escapeAttr(url) + '">View PDF</button>' : '') +
+        (url && !isPdf ? '<a class="pill-chip" href="' + escapeHtml(url) + '" target="_blank" rel="noopener">View ↗</a>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderGenericCard(r, i) {
+    var name = r.name || r.title || r.label || JSON.stringify(r).substring(0, 100);
+    return '<div class="comp-result-card" data-idx="' + i + '">' +
+      '<div class="comp-result-header">' +
+        '<span class="comp-result-name">' + escapeHtml(name) + '</span>' +
+      '</div>' +
+      '<div class="comp-result-actions">' +
+        '<button class="pill-chip comp-add-kg" data-idx="' + i + '">Add to KG</button>' +
+        '<button class="pill-chip comp-add-asset" data-idx="' + i + '">+ Asset</button>' +
+      '</div>' +
+    '</div>';
+  }
+
   function wireCardActions(container, provider) {
     // Add to KG
     container.querySelectorAll(".comp-add-kg").forEach(function(btn) {
@@ -340,19 +580,52 @@
         var idx = parseInt(this.dataset.idx);
         var r = searchResults[idx];
         if (!r) return;
-        var name, assetType;
-        if (provider === "opensanctions") {
+        var name, description, category;
+        if (provider === "opensanctions" || provider === "pepscreen") {
           name = (r.properties?.name || [r.caption || "Unknown"])[0];
-          assetType = "entity";
+          description = (r.datasets || []).join(", ");
+          category = "screening";
         } else if (provider === "csl") {
           name = r.name || "Unknown";
-          assetType = "entity";
-        } else {
+          description = r.source || "U.S. CSL";
+          category = "screening";
+        } else if (provider === "eusanctions") {
+          name = r.name || "Unknown";
+          description = (r.programmes || []).join(", ") || "EU Sanctions";
+          category = "screening";
+        } else if (provider === "samgov") {
+          var reg = r.entityRegistration || r;
+          name = reg.legalBusinessName || r.name || "Unknown";
+          description = "UEI: " + (reg.ueiSAM || "N/A") + " · CAGE: " + (reg.cageCode || "N/A");
+          category = "entity";
+        } else if (provider === "courtlistener") {
           name = r.caseName || r.caseNameFull || "Untitled";
-          assetType = "source";
+          description = (r.court || "") + (r.dateFiled ? " · " + r.dateFiled : "");
+          category = "litigation";
+        } else {
+          name = r.patent_title || r.inventionTitle || r.title || "Untitled";
+          description = r.patent_number || r.publicationNumber || provider;
+          category = "patent";
         }
         if (typeof AssetLibrary !== "undefined") {
-          AssetLibrary.add({ type: assetType, label: name, source: provider, data: r, ts: Date.now() });
+          var query = document.getElementById("compSearchInput").value.trim();
+          AssetLibrary.add({
+            type: "result",
+            title: name,
+            description: description,
+            metadata: {
+              provider: provider,
+              category: category,
+              searchQuery: query,
+              searchParams: { fuzzy: document.getElementById("compFuzzyToggle")?.checked || false },
+              resultData: r,
+              pageUrl: r.absolute_url ? "https://www.courtlistener.com" + r.absolute_url : (r.source_information_url || ""),
+            },
+            sourcePage: "compliance",
+          });
+          // Open Asset Library panel so user sees the saved item
+          var alPanel = document.getElementById("assetLibPanel");
+          if (alPanel && alPanel.classList.contains("hidden")) alPanel.classList.remove("hidden");
           this.textContent = "Saved!";
           var self = this;
           setTimeout(function() { self.textContent = "+ Asset"; }, 2000);
@@ -570,47 +843,171 @@
     }
   }
 
-  // ── Side Dock ──
+  // ── Header badge click → toggle flagged list ──
+  document.getElementById("compScreeningBadges")?.addEventListener("click", function() {
+    var list = document.getElementById("compFlaggedList");
+    if (list) list.style.display = list.style.display === "none" ? "" : "none";
+  });
+
+  // ── Results Filter ──
+
+  document.getElementById("compResultsFilter")?.addEventListener("input", function() {
+    var filter = this.value.toLowerCase();
+    var cards = document.querySelectorAll("#compResults .comp-result-card");
+    var headers = document.querySelectorAll("#compResults .comp-multi-header");
+    cards.forEach(function(card) {
+      var text = card.textContent.toLowerCase();
+      card.style.display = text.includes(filter) ? "" : "none";
+    });
+    // Hide section headers if all their cards are hidden
+    headers.forEach(function(header) {
+      var prov = header.dataset.provider;
+      var next = header.nextElementSibling;
+      var anyVisible = false;
+      while (next && !next.classList.contains("comp-multi-header")) {
+        if (next.classList.contains("comp-result-card") && next.style.display !== "none") anyVisible = true;
+        next = next.nextElementSibling;
+      }
+      header.style.display = anyVisible ? "" : "none";
+    });
+  });
+
+  // ── Floating Panel Toggles ──
+
+  var _compPanelMap = {
+    compScreeningToggle: 'compScreeningPanel',
+    compEntitiesToggle: 'compEntitiesPanel',
+    compPatentsToggle: 'compPatentsPanel',
+    compLitigationToggle: 'compLitigationPanel'
+  };
+
+  Object.keys(_compPanelMap).forEach(function(toggleId) {
+    document.getElementById(toggleId)?.addEventListener('click', function() {
+      document.getElementById(_compPanelMap[toggleId]).classList.toggle('hidden');
+    });
+  });
+
+  // Close buttons
+  ['compScreeningClose', 'compEntitiesClose', 'compPatentsClose', 'compLitigationClose'].forEach(function(id) {
+    document.getElementById(id)?.addEventListener('click', function() {
+      this.closest('.fp').classList.add('hidden');
+    });
+  });
+
+  // ── Side Dock (satellite pattern) ──
 
   var _compDockOpen = false;
+  var _compDockPanelIds = ['assetLibPanel', 'compScreeningPanel', 'compEntitiesPanel', 'compPatentsPanel', 'compLitigationPanel'];
+  var _compDockParents = {};
+  var _compDockedPanels = {};
+  var _compActiveDockTab = 'compScreeningPanel';
 
   document.getElementById("compDockToggle")?.addEventListener("click", function() {
-    _compDockOpen = !_compDockOpen;
-    document.getElementById("compDockColumn").classList.toggle("open", _compDockOpen);
-    document.body.classList.toggle("comp-dock-open", _compDockOpen);
+    if (_compDockOpen) {
+      _compCloseDock();
+    } else {
+      _compOpenDock();
+    }
   });
 
   document.getElementById("compDockClose")?.addEventListener("click", function() {
+    _compCloseDock();
+  });
+
+  function _compOpenDock() {
+    _compDockOpen = true;
+    document.getElementById("compDockColumn").classList.add("open");
+    document.body.classList.add("comp-dock-open");
+    var dockBody = document.getElementById("compDockBody");
+    _compDockParents = {};
+    _compDockedPanels = {};
+
+    _compDockPanelIds.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      _compDockParents[id] = el.parentNode;
+      // Only dock hidden panels — leave floating ones alone
+      if (el.classList.contains('hidden')) {
+        el.classList.remove('hidden');
+        dockBody.appendChild(el);
+        el.style.display = 'none';
+        // Override floating styles for docked state
+        el.style.cssText = 'display:none;position:relative!important;right:auto!important;top:auto!important;bottom:auto!important;left:auto!important;width:100%!important;height:100%!important;max-height:none!important;border-radius:0!important;box-shadow:none!important;z-index:auto!important;';
+        var header = el.querySelector('.fp-header');
+        if (header) header.style.display = 'none';
+        _compDockedPanels[id] = true;
+      }
+    });
+    _compShowDockPanel(_compActiveDockTab);
+  }
+
+  function _compCloseDock() {
     _compDockOpen = false;
     document.getElementById("compDockColumn").classList.remove("open");
     document.body.classList.remove("comp-dock-open");
-  });
 
-  // Dock tab switching
-  document.getElementById("compDockTabs")?.addEventListener("click", function(e) {
-    var btn = e.target.closest("[data-dock-tab]");
-    if (!btn) return;
-    var tabId = btn.dataset.dockTab;
-    document.querySelectorAll("#compDockTabs [data-dock-tab]").forEach(function(b) {
-      b.classList.toggle("active", b.dataset.dockTab === tabId);
-    });
-    document.querySelectorAll(".comp-dock-pane").forEach(function(p) {
-      p.classList.toggle("active", p.dataset.dockPane === tabId);
-    });
-
-    // If Assets tab, dock the Asset Library panel into it
-    if (tabId === "compDockAssets") {
-      var alPanel = document.getElementById("assetLibPanel");
-      var pane = document.querySelector('[data-dock-pane="compDockAssets"]');
-      if (alPanel && pane && alPanel.parentNode !== pane) {
-        alPanel.classList.remove("hidden");
-        alPanel.style.cssText = "position:relative!important;right:auto!important;top:auto!important;bottom:auto!important;left:auto!important;width:100%!important;height:100%!important;max-height:none!important;border-radius:0!important;box-shadow:none!important;z-index:auto!important;display:flex;flex-direction:column;";
-        var header = alPanel.querySelector(".fp-header");
-        if (header) header.style.display = "none";
-        pane.innerHTML = "";
-        pane.appendChild(alPanel);
+    _compDockPanelIds.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      if (_compDockedPanels[id]) {
+        el.style.cssText = '';
+        el.style.display = '';
+        var header = el.querySelector('.fp-header');
+        if (header) header.style.display = '';
+        var origParent = _compDockParents[id];
+        if (origParent) origParent.appendChild(el);
+        el.classList.add('hidden');
       }
+    });
+    var redock = document.getElementById('compDockRedock');
+    if (redock) redock.remove();
+    _compDockParents = {};
+    _compDockedPanels = {};
+  }
+
+  function _compShowDockPanel(id) {
+    _compActiveDockTab = id;
+    var dockBody = document.getElementById("compDockBody");
+
+    _compDockPanelIds.forEach(function(pid) {
+      var el = document.getElementById(pid);
+      if (el && _compDockedPanels[pid]) {
+        el.style.display = pid === id ? '' : 'none';
+      }
+    });
+
+    var redock = document.getElementById('compDockRedock');
+    if (redock) redock.remove();
+
+    if (!_compDockedPanels[id]) {
+      var rd = document.createElement('div');
+      rd.id = 'compDockRedock';
+      rd.style.cssText = 'display:flex;align-items:center;justify-content:center;height:100%;';
+      rd.innerHTML = '<button class="pill-chip" style="font-size:12px;padding:8px 20px;">Redock</button>';
+      rd.querySelector('button').addEventListener('click', function() {
+        var panel = document.getElementById(id);
+        if (!panel) return;
+        _compDockParents[id] = _compDockParents[id] || panel.parentNode;
+        panel.classList.remove('hidden');
+        panel.style.cssText = 'position:relative!important;right:auto!important;top:auto!important;bottom:auto!important;left:auto!important;width:100%!important;height:100%!important;max-height:none!important;border-radius:0!important;box-shadow:none!important;z-index:auto!important;';
+        var header = panel.querySelector('.fp-header');
+        if (header) header.style.display = 'none';
+        dockBody.appendChild(panel);
+        _compDockedPanels[id] = true;
+        rd.remove();
+        _compShowDockPanel(id);
+      });
+      dockBody.appendChild(rd);
     }
+
+    document.querySelectorAll('#compDockTabs [data-dock-tab]').forEach(function(btn) {
+      btn.classList.toggle('active', btn.dataset.dockTab === id);
+    });
+  }
+
+  document.getElementById('compDockTabs')?.addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-dock-tab]');
+    if (btn) _compShowDockPanel(btn.dataset.dockTab);
   });
 
   // ── AI Chat Context ──
@@ -668,29 +1065,32 @@
     await loadScreeningSummary();
 
     // Init floating panels
-    var settingsPanel = document.getElementById("compSettingsPanel");
-    if (settingsPanel && typeof FloatingPanel !== "undefined") {
-      FloatingPanel.init(settingsPanel, "compliance");
+    if (typeof FloatingPanel !== "undefined") {
+      ['compScreeningPanel', 'compEntitiesPanel', 'compPatentsPanel', 'compLitigationPanel'].forEach(function(id) {
+        var panel = document.getElementById(id);
+        if (panel) FloatingPanel.init(panel, "compliance");
+      });
     }
 
-    // Check provider status and update dots
+    // Check provider status and update pill dots + dock panel dots
     try {
       var statusResp = await browser.runtime.sendMessage({ action: "intelGetStatus" });
       if (statusResp?.providers) {
+        // Update pill dots
+        document.querySelectorAll(".comp-provider-pill").forEach(function(pill) {
+          var key = pill.dataset.provider;
+          var info = statusResp.providers[key];
+          if (info) {
+            pill.dataset.status = info.status;
+          }
+        });
+        // Update dock panel status dots
         document.querySelectorAll(".comp-provider-status").forEach(function(dot) {
           var key = dot.dataset.provider;
           var info = statusResp.providers[key];
           if (info) {
             var color = info.status === "connected" ? "#22c55e" : info.status === "error" ? "#f59e0b" : "#6b7280";
             dot.innerHTML = '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + color + ';"></span>';
-          }
-        });
-        // Update provider dropdown — disable unconfigured ones
-        var select = document.getElementById("compProvider");
-        Array.from(select.options).forEach(function(opt) {
-          var info = statusResp.providers[opt.value];
-          if (info && info.status !== "connected") {
-            opt.textContent = opt.textContent.replace(/ \(.*\)$/, "") + " (no key)";
           }
         });
       }

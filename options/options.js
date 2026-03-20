@@ -3940,7 +3940,7 @@ function attachListeners() {
     }
   });
   // ── Intelligence provider tabs ──
-  const INTEL_PROVIDER_KEYS = ["opensanctions", "secedgar", "courtlistener", "opensky", "adsbexchange", "marinetraffic", "gdelt", "sentinelhub", "opencorporates", "gleif", "blockstream", "broadcastify", "vesselfinder", "flightaware", "wigle", "stadiamaps", "windywebcams", "windyforecast", "openweathermap"];
+  const INTEL_PROVIDER_KEYS = ["opensanctions", "csl", "eusanctions", "samgov", "patentsview", "lensorg", "pqai", "secedgar", "courtlistener", "opensky", "adsbexchange", "marinetraffic", "gdelt", "sentinelhub", "opencorporates", "gleif", "blockstream", "broadcastify", "vesselfinder", "flightaware", "wigle", "stadiamaps", "windywebcams", "windyforecast", "openweathermap"];
 
   document.getElementById("intel-provider-tab-list")?.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -3982,14 +3982,8 @@ function attachListeners() {
         statusEl.textContent = "Testing...";
         try {
           let resp;
-          if (key === "opensanctions" || key === "secedgar") {
-            // Test via background — all live providers support intelSearch
-            resp = await browser.runtime.sendMessage({ action: "intelSearch", provider: key, query: "test", options: {} });
-          } else if (["courtlistener", "opensky", "opencorporates", "gleif", "gdelt", "flightaware", "vesselfinder", "sentinelhub", "wigle", "windywebcams", "windyforecast", "openweathermap"].includes(key)) {
-            resp = await browser.runtime.sendMessage({ action: "intelSearch", provider: key, query: "test", options: {} });
-          } else {
-            resp = { success: false, error: "Provider not yet implemented" };
-          }
+          // Test via background — all providers support intelSearch
+          resp = await browser.runtime.sendMessage({ action: "intelSearch", provider: key, query: "test", options: {} });
           if (resp?.success) {
             statusEl.className = "dp-status connected";
             statusEl.textContent = "Connected!";

@@ -72,15 +72,52 @@
         return;
       }
 
-      const recent = intelActivityLog.slice(0, 10);
+      const CATEGORY_COLORS = {
+        screening: '#f87171', entity: '#10b981', patent: '#8b5cf6',
+        litigation: '#3b82f6', finance: '#fbbf24', tracking: '#06b6d4',
+        events: '#f97316', satellite: '#22d3ee'
+      };
+      const recent = intelActivityLog.slice(0, 20);
       feed.innerHTML = recent.map(item => {
         const time = new Date(item.ts).toLocaleString();
+        const cat = item.category || item.type || 'search';
+        const catColor = CATEGORY_COLORS[cat] || 'var(--text-muted)';
+        const catLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
         return `<div class="intel-activity-item">
-          <span class="intel-activity-type">${item.type}</span>
+          <span class="intel-activity-cat" style="color:${catColor};border-color:${catColor};">${catLabel}</span>
           <span class="intel-activity-label">${item.label}</span>
           <span class="intel-activity-time">${time}</span>
+          <button class="pill-chip intel-save-search" data-search='${encodeURIComponent(JSON.stringify(item))}' style="font-size:8px;padding:1px 6px;margin-left:auto;">+ Asset</button>
         </div>`;
       }).join("");
+
+      // Wire save-to-asset buttons
+      feed.querySelectorAll('.intel-save-search').forEach(btn => {
+        btn.addEventListener('click', () => {
+          try {
+            const item = JSON.parse(decodeURIComponent(btn.dataset.search));
+            if (typeof AssetLibrary !== 'undefined') {
+              AssetLibrary.add({
+                type: 'source',
+                title: item.label,
+                description: (item.category || 'search') + ' via ' + (item.type || 'unknown'),
+                metadata: {
+                  provider: item.type,
+                  category: item.category,
+                  searchQuery: item.label,
+                  ts: item.ts
+                },
+                sourcePage: 'hub',
+              });
+              // Open the Asset Library panel so user sees the saved item
+              var alPanel = document.getElementById('assetLibPanel');
+              if (alPanel && alPanel.classList.contains('hidden')) alPanel.classList.remove('hidden');
+              btn.textContent = 'Saved!';
+              setTimeout(() => { btn.textContent = '+ Asset'; }, 2000);
+            }
+          } catch(e) { console.warn('Save error:', e); }
+        });
+      });
     } catch (e) {
       console.warn("[Intel Hub] Failed to load activity:", e);
     }

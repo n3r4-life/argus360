@@ -3719,6 +3719,27 @@ async function handleIntelSearch(providerKey, query, options) {
       case "csl":
         results = await provider.search(query, options);
         break;
+      case "eusanctions":
+        results = await provider.search(query);
+        break;
+      case "pepscreen":
+        results = await provider.search(query);
+        break;
+      case "samgov":
+        results = await provider.search(query, options);
+        break;
+      case "uspto":
+        results = await provider.search(query, options);
+        break;
+      case "patentsview":
+        results = await provider.search(query, options);
+        break;
+      case "lensorg":
+        results = await provider.search(query, options);
+        break;
+      case "pqai":
+        results = await provider.search(query, options);
+        break;
       case "secedgar":
         results = await provider.searchCompany(query);
         break;

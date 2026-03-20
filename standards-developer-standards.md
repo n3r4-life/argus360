@@ -433,35 +433,147 @@ Each page gets its own icon rendered at 320px, 7% opacity, fixed centered. The S
 
 **stroke-width:** Always `0.5` for watermarks (thinner than the 16px header icon which uses `2`).
 
-### Edge Tabs & Side Dock
+### Floating Panels, Edge Tabs & Side Dock
 
-Pages with floating panels use **edge tabs** — fixed buttons on the right edge of the viewport that toggle panel visibility.
+Every page that needs tool panels follows a **three-layer** pattern. All three layers are built the same way on every page. Do NOT invent page-specific panel systems.
+
+#### Layer 1: Floating Panels (primary)
+
+Each panel is a `.fp` element with `.fp-header` (drag handle + close button) and `.fp-body` (content). Panels start `hidden` and are toggled visible by their edge tab.
+
+```html
+<div class="fp my-panel hidden" id="myPanel" data-panel-id="my-panel">
+  <div class="fp-header">
+    <span class="fp-title">Panel Name</span>
+    <button class="fp-close" id="myPanelClose">&times;</button>
+  </div>
+  <div class="fp-body" style="padding:10px;">
+    <!-- panel content -->
+  </div>
+</div>
+```
+
+**Initialization:** Call `FloatingPanel.init(panelElement, 'pageId')` in the page's init function. This adds drag, resize, z-stacking, and position persistence via `PanelState`.
+
+**Required scripts:** `shared/panel-state.js`, `shared/floating-panel.js`.
+
+**Toggle from JS:**
+```javascript
+document.getElementById('myToggle').addEventListener('click', function() {
+  document.getElementById('myPanel').classList.toggle('hidden');
+});
+document.getElementById('myPanelClose').addEventListener('click', function() {
+  this.closest('.fp').classList.add('hidden');
+});
+```
+
+#### Layer 2: Edge Tabs (launchers)
+
+Edge tabs are fixed buttons on the right edge of the viewport that toggle their associated floating panel.
+
+**CSS class:** `.edge-tab .edge-tab-right` from `shared/argus-std.css`. 28×52px, `position: fixed`, right edge.
 
 **Edge tab stack (right side, top-to-bottom):**
-1. **Asset Library** (shared, from `shared/asset-library.js`) — always first. Position set in `asset-library.css` via `.asset-lib-toggle { top: 330px !important; }`.
-2. **Page-specific tabs** — below Asset Library, 70px apart. Each is a `<button class="edge-tab edge-tab-right" style="top:XXXpx;">` in the page HTML.
+1. **Asset Library** (shared) — always first. Position: `top: 330px` (set in `asset-library.css` via `.asset-lib-toggle { top: 330px !important; }`).
+2. **Page-specific tabs** — below Asset Library, **70px apart**. Start at `top: 400px`.
 
-**CSS class:** `.edge-tab` from `shared/argus-std.css`. 28×52px, `position: fixed`, right edge. Use `.edge-tab-right` for right side.
+```html
+<button class="edge-tab edge-tab-right" id="myToggle" title="My Panel" style="top:400px;">
+  <svg width="16" height="16" viewBox="0 0 24 24" ...>...</svg>
+</button>
+```
 
-**Side Dock pattern** (satellite page reference implementation):
-- Dock button in the page toolbar opens a `sat-dock-column` fixed panel on the right
-- Dock has tab buttons at the top to switch between panels (Assets, Imagery, Pins, Measure)
-- Panels are moved into the dock body via `appendChild` when docking, moved back on undock
-- Hidden panels auto-dock; floating/visible panels stay floating with a "Redock" button in their tab
-- Close button (▶ arrow) on the left side of the dock tab bar
-- Dock overlays content — does NOT push content left
+**Spacing rule:** Each tab is 52px tall. Use 70px intervals (52px tab + 18px gap). Stack: 400, 470, 540, 610, 680...
 
-**Adding to a new page:**
-1. Include `shared/panel-state.js`, `shared/floating-panel.js`, `shared/asset-library.js`, and `shared/asset-library.css`
-2. Add page-specific edge tabs with explicit `top` values below Asset Library (start at ~400px, 70px apart)
-3. Add a settings/controls floating panel (`.fp` class) for the page's API toggles
-4. The Asset Library edge tab + panel are auto-created by `asset-library.js` on any page that includes it
+**Last tab in the stack** should always be the **Side Dock** toggle (panel-with-divider icon):
+```html
+<button class="edge-tab edge-tab-right" id="myDockToggle" title="Side Dock" style="top:XXXpx;">
+  <svg ...><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+</button>
+```
+
+#### Layer 3: Side Dock (optional docking)
+
+The dock is a fixed column on the right side that can pull floating panels into a tabbed view. It is **secondary** to floating panels — panels float first, dock is opt-in.
+
+**Dock column HTML:**
+```html
+<div class="XXX-dock-column" id="myDockColumn">
+  <div class="XXX-dock-tabs" id="myDockTabs">
+    <button id="myDockClose" title="Close Dock" style="flex:none; padding:6px 10px; color:var(--text-muted);">▶</button>
+    <button class="active" data-dock-tab="panelId1">Tab 1</button>
+    <button data-dock-tab="panelId2">Tab 2</button>
+  </div>
+  <div class="XXX-dock-body" id="myDockBody"></div>
+</div>
+```
+
+**Dock behavior:**
+- Opening the dock moves **hidden** panels into the dock body via `appendChild`. Floating/visible panels stay where they are.
+- For panels not in the dock, their dock tab shows a **"Redock"** pill button that pulls the panel back in.
+- Close button (▶ arrow) is always on the **left side** of the dock tab bar.
+- Dock **overlays** content — does NOT push content left or resize anything.
+- When closing the dock, panels move back to their original parent and get re-hidden.
+- Docked panels get their `.fp-header` hidden (no duplicate title/close).
+- CSS: `position: fixed; right: 0; top: 178px; bottom: 0; width: 360px; display: none/flex;`
+
+**Dock CSS must include:**
+```css
+body.XXX-dock-open .edge-tab,
+body.XXX-dock-open .asset-lib-toggle {
+  display: none !important;
+}
+```
+
+#### Adding panels to a new page — checklist
+
+1. **Include shared scripts** in HTML `<head>`/`<body>`:
+   - `shared/panel-state.js`
+   - `shared/floating-panel.js`
+   - `shared/asset-library.js`
+   - `shared/asset-library.css`
+
+2. **Init Asset Library** in the page's init script:
+   ```javascript
+   AssetLibrary.init({ pageId: 'mypage', tabs: ['source', 'entity'] });
+   // tabs array controls which tabs are visible — omit for all tabs
+   ```
+
+3. **Create floating panels** (`.fp` elements with `.fp-header` + `.fp-body`) in HTML.
+
+4. **Add edge tabs** with explicit `top` values (start 400px, 70px apart). Last tab = dock toggle.
+
+5. **Init FloatingPanel** for each panel in JS:
+   ```javascript
+   FloatingPanel.init(document.getElementById('myPanel'), 'mypage');
+   ```
+
+6. **Wire toggle/close** handlers for each edge tab → panel pair.
+
+7. **Add dock column** HTML with tab buttons matching panel IDs.
+
+8. **Wire dock JS** — open/close, tab switching, redock pattern.
+
+**Reference implementations:**
+- Satellite: `intel/satellite.html` + `intel/satellite.js` (full pattern with map)
+- Compliance: `intel/compliance.html` + `intel/compliance.js` (full pattern without map)
+
+---
 
 ### Asset Library (Shared)
 
 The Asset Library (`shared/asset-library.js` + `shared/asset-library.css`) provides cross-page collection storage for entities, sources, locations, images, and snippets. It auto-creates its own edge tab and floating panel.
 
-**Tabs inside the panel:** All, Images, Satellite, Locations, Sources, Entities.
+**Tabs inside the panel:** All, Images, Satellite, Locations, Sources, Entities. Pages control which tabs are visible via the `tabs` option in `init()`.
+
+**Initialization:**
+```javascript
+// Show all tabs (satellite, images pages)
+AssetLibrary.init({ pageId: 'satellite' });
+
+// Show only relevant tabs (compliance, finance pages)
+AssetLibrary.init({ pageId: 'compliance', tabs: ['source', 'entity'] });
+```
 
 **Adding items from any page:**
 ```javascript
@@ -472,6 +584,8 @@ AssetLibrary.add({ type: 'entity', label: 'Name', source: 'provider', data: rawO
 
 Pages should include `+ Asset` buttons on search results to let users collect items into the library for use on Workbench, Publisher, and KG pages.
 
+---
+
 ### Intel Provider Pattern
 
 Intelligence pages (compliance, finance, movement, events, satellite) use a shared provider system:
@@ -481,6 +595,19 @@ Intelligence pages (compliance, finance, movement, events, satellite) use a shar
 3. **Page init:** Call `IntelDomainShell.init("domain", ["provider1", "provider2"])` in the page's init script
 4. **API keys:** Stored in `browser.storage.local` under `argusIntelProviders.{providerKey}.apiKey`
 5. **Search from page:** `browser.runtime.sendMessage({ action: "intelSearch", provider: "key", query, options })`
+
+**Provider interface:**
+```javascript
+const myprovider = {
+  async isConnected() { /* check if API key is configured */ },
+  async connect(apiKey) { /* save credentials, test connection */ },
+  async disconnect() { /* clear credentials */ },
+  async testConnection() { /* verify API access */ },
+  async search(query, options) { /* provider-specific search */ },
+};
+```
+
+Use `makeStub(key)` for placeholder providers that only need connect/disconnect.
 
 ### Discuss with AI (Chat Toggle)
 Fixed to viewport bottom-left, aligned with the 1200px content area. Chat panel opens upward above the toggle. Uses `backdrop-filter: blur(8px)` for the toggle button. This is the ONLY element that uses the accent color prominently.

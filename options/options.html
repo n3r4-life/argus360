@@ -798,6 +798,12 @@
           <div class="provider-tabs">
             <div id="intel-provider-tab-list" class="tab-list">
               <button class="tab-btn active" data-iprovider="opensanctions">OpenSanctions</button>
+              <button class="tab-btn" data-iprovider="csl">U.S. CSL</button>
+              <button class="tab-btn" data-iprovider="eusanctions">EU Sanctions</button>
+              <button class="tab-btn" data-iprovider="samgov">SAM.gov</button>
+              <button class="tab-btn" data-iprovider="patentsview">PatentsView</button>
+              <button class="tab-btn" data-iprovider="lensorg">Lens.org</button>
+              <button class="tab-btn" data-iprovider="pqai">PQAI</button>
               <button class="tab-btn" data-iprovider="secedgar">SEC EDGAR</button>
               <button class="tab-btn" data-iprovider="courtlistener">CourtListener</button>
               <button class="tab-btn" data-iprovider="opensky">OpenSky</button>
@@ -853,6 +859,80 @@
               <div class="dp-action-row">
                 <button id="intel-courtlistener-test-btn" class="pill-chip">Test Connection</button>
                 <span id="intel-courtlistener-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- U.S. CSL fields -->
+            <div id="intel-csl-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-csl-apikey">Subscription Key <span class="hint">(free — developer.trade.gov)</span></label>
+                <div class="input-row"><input type="password" id="intel-csl-apikey" placeholder="Azure subscription key"><button class="icon-btn intel-eye-toggle" data-target="intel-csl-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Free subscription key required. Sign up at <a href="https://developer.trade.gov" target="_blank" style="color:var(--accent);">developer.trade.gov ↗</a>, subscribe to "Data Services Platform APIs", then copy your key from your profile. Covers SDN, Entity List, Denied Persons, and 10 more U.S. sanctions lists.</p>
+              <div class="dp-action-row">
+                <button id="intel-csl-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-csl-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- EU Sanctions fields -->
+            <div id="intel-eusanctions-fields" class="hidden">
+              <p class="info-text">EU Consolidated Financial Sanctions List requires no credentials. The full list is downloaded from the European Commission and searched locally. Updated within one working day of new Official Journal publications.</p>
+              <div class="dp-action-row">
+                <button id="intel-eusanctions-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-eusanctions-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- SAM.gov fields -->
+            <div id="intel-samgov-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-samgov-apikey">API Key <span class="hint">(free — sam.gov)</span></label>
+                <div class="input-row"><input type="password" id="intel-samgov-apikey" placeholder="SAM.gov API key"><button class="icon-btn intel-eye-toggle" data-target="intel-samgov-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Free API key required. Register at <a href="https://sam.gov" target="_blank" style="color:var(--accent);">sam.gov ↗</a>, then request a public API key from your profile. Searches U.S. federal entity registrations by name, UEI, or CAGE code. Note: rate limited to ~1,000 requests/day.</p>
+              <div class="dp-action-row">
+                <button id="intel-samgov-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-samgov-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- PatentsView fields -->
+            <div id="intel-patentsview-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-patentsview-apikey">API Key <span class="hint">(free — patentsview.org)</span></label>
+                <div class="input-row"><input type="password" id="intel-patentsview-apikey" placeholder="PatentsView API key"><button class="icon-btn intel-eye-toggle" data-target="intel-patentsview-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Free API key required. Request at <a href="https://patentsview.org/apis/keyrequest" target="_blank" style="color:var(--accent);">patentsview.org/apis/keyrequest ↗</a>. Searches U.S. patent data — titles, inventors, assignees, CPC classifications. Rate limit: 45 requests/minute.</p>
+              <div class="dp-action-row">
+                <button id="intel-patentsview-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-patentsview-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- Lens.org fields -->
+            <div id="intel-lensorg-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-lensorg-apikey">API Token <span class="hint">(free academic — lens.org)</span></label>
+                <div class="input-row"><input type="password" id="intel-lensorg-apikey" placeholder="Lens.org Bearer token"><button class="icon-btn intel-eye-toggle" data-target="intel-lensorg-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Free academic access available. Apply at <a href="https://www.lens.org/lens/user/subscriptions" target="_blank" style="color:var(--accent);">lens.org/subscriptions ↗</a>. Searches global patents across 100+ jurisdictions plus scholarly works. Free tier: 500 requests/day, 50,000 records/month.</p>
+              <div class="dp-action-row">
+                <button id="intel-lensorg-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-lensorg-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- PQAI fields -->
+            <div id="intel-pqai-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-pqai-apikey">Token <span class="hint">(optional — email sam@projectpq.ai)</span></label>
+                <div class="input-row"><input type="password" id="intel-pqai-apikey" placeholder="PQAI token (optional)"><button class="icon-btn intel-eye-toggle" data-target="intel-pqai-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">AI-powered semantic patent search. Works without a token for basic use. For higher limits, email <strong>sam@projectpq.ai</strong> for a free academic/non-commercial token. Finds prior art using natural language queries.</p>
+              <div class="dp-action-row">
+                <button id="intel-pqai-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-pqai-status" class="dp-status"></span>
               </div>
             </div>
 

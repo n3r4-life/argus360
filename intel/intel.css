@@ -192,15 +192,18 @@ body {
 }
 
 .intel-activity-type {
+  display: none; /* replaced by category badge */
+}
+.intel-activity-cat {
   font-weight: 700;
   text-transform: uppercase;
-  font-size: 9px;
+  font-size: 8px;
   letter-spacing: 0.5px;
-  color: var(--accent);
-  background: rgba(167, 139, 250, 0.1);
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid;
   flex-shrink: 0;
+  background: rgba(255,255,255,0.03);
 }
 
 .intel-activity-label {
@@ -292,6 +295,39 @@ body {
   align-items: center;
   gap: 8px;
 }
+/* Provider pill buttons */
+.comp-provider-pill {
+  font-size: 10px !important;
+  padding: 2px 8px !important;
+  opacity: 0.4;
+  transition: all 0.12s;
+}
+.comp-provider-pill.active {
+  opacity: 1;
+  border-color: var(--accent);
+}
+.comp-pill-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #6b7280;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.comp-provider-pill.active .comp-pill-dot {
+  background: var(--accent);
+}
+.comp-provider-pill[data-status="connected"] .comp-pill-dot {
+  background: #22c55e;
+}
+.comp-provider-pill[data-status="error"] .comp-pill-dot {
+  background: #f59e0b;
+}
+.comp-provider-pill[data-status="unconfigured"] .comp-pill-dot {
+  background: #ef4444;
+}
+
 .comp-provider-select {
   background: var(--bg-primary);
   color: var(--text-primary);
@@ -300,6 +336,12 @@ body {
   padding: 5px 8px;
   font-size: 11px;
   min-width: 130px;
+  max-width: 180px;
+  flex-shrink: 0;
+}
+.comp-search-strip .comp-search-input {
+  flex: 1;
+  min-width: 200px;
 }
 .comp-provider-select:focus {
   border-color: var(--accent);
@@ -323,6 +365,14 @@ body {
 }
 .comp-result-card.csl {
   border-left: 3px solid #3b82f6;
+}
+/* Prominent view/link-out buttons on result cards */
+.comp-result-actions a.pill-chip[target="_blank"],
+.comp-result-actions .comp-view-pdf {
+  background: rgba(233, 69, 96, 0.15);
+  color: var(--accent);
+  font-weight: 600;
+  border-color: var(--accent);
 }
 
 /* Compliance dock column */
