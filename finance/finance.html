@@ -13,10 +13,12 @@
 </head>
 <body>
   <script src="../lib/vendor/browser-polyfill.min.js"></script>
+  <script src="../shared/theme.js"></script>
   <script src="../shared/ribbon.js"></script>
   <script src="../shared/panel-state.js"></script>
   <script src="../shared/floating-panel.js"></script>
   <script src="../shared/asset-library.js"></script>
+  <script src="../shared/stock-chart.js"></script>
 
   <!-- Page Header -->
   <header class="fin-header">
@@ -43,10 +45,12 @@
       <span class="fin-search-status" id="finSearchStatus"></span>
     </div>
     <div class="fin-search-row fin-provider-pills" id="finProviderPills" style="gap:4px; flex-wrap:wrap;">
+      <!-- Charts (ticker resolver + OHLCV) -->
+      <button class="pill-chip fin-provider-pill" data-provider="charts"><span class="fin-pill-dot"></span>Charts</button>
+      <span style="width:1px;height:16px;background:var(--border);margin:0 2px;"></span>
       <!-- Corporate -->
-      <button class="pill-chip fin-provider-pill active" data-provider="secedgar"><span class="fin-pill-dot"></span>SEC EDGAR</button>
-      <button class="pill-chip fin-provider-pill active" data-provider="opencorporates"><span class="fin-pill-dot"></span>OpenCorporates</button>
-      <button class="pill-chip fin-provider-pill active" data-provider="gleif"><span class="fin-pill-dot"></span>GLEIF</button>
+      <button class="pill-chip fin-provider-pill" data-provider="secedgar"><span class="fin-pill-dot"></span>SEC EDGAR</button>
+      <button class="pill-chip fin-provider-pill" data-provider="gleif"><span class="fin-pill-dot"></span>GLEIF</button>
       <span style="width:1px;height:16px;background:var(--border);margin:0 2px;"></span>
       <!-- Government -->
       <button class="pill-chip fin-provider-pill" data-provider="usaspending"><span class="fin-pill-dot"></span>USAspending</button>
@@ -60,8 +64,18 @@
       <button class="pill-chip fin-provider-pill" data-provider="openpayments"><span class="fin-pill-dot"></span>OpenPayments</button>
       <button class="pill-chip fin-provider-pill" data-provider="propublica990"><span class="fin-pill-dot"></span>ProPublica 990</button>
       <span style="width:1px;height:16px;background:var(--border);margin:0 2px;"></span>
-      <!-- Labor -->
-      <button class="pill-chip fin-provider-pill" data-provider="dol"><span class="fin-pill-dot"></span>DOL (MSHA)</button>
+      <!-- Labor (WHD + OSHA + MSHA) -->
+      <button class="pill-chip fin-provider-pill" data-provider="dol"><span class="fin-pill-dot"></span>DOL</button>
+    </div>
+    <!-- Chart range pills (visible only when Charts pill is active) -->
+    <div class="fin-search-row fin-chart-range-strip" id="finChartRangeStrip" style="display:none;gap:3px;padding:2px 0;">
+      <button class="pill-chip chart-range-pill" data-range="1d">1D</button>
+      <button class="pill-chip chart-range-pill" data-range="5d">5D</button>
+      <button class="pill-chip chart-range-pill active" data-range="1mo">1M</button>
+      <button class="pill-chip chart-range-pill" data-range="3mo">3M</button>
+      <button class="pill-chip chart-range-pill" data-range="6mo">6M</button>
+      <button class="pill-chip chart-range-pill" data-range="1y">1Y</button>
+      <button class="pill-chip chart-range-pill" data-range="5y">5Y</button>
     </div>
   </div>
 
@@ -78,6 +92,14 @@
       <span class="fin-results-source" id="finResultsSource"></span>
       <span style="flex:1;"></span>
       <input type="text" id="finResultsFilter" class="fin-search-input" placeholder="Filter results..." style="max-width:200px;font-size:10px;padding:3px 8px;display:none;">
+    </div>
+    <!-- Chart area (renders at top when Charts pill active) -->
+    <div id="finChartArea" class="fin-chart-area" style="display:none;">
+      <div id="chartQuoteSummary" class="chart-quote-summary"></div>
+      <div id="chartContainer" class="chart-canvas-wrap">
+        <canvas id="stockChartCanvas"></canvas>
+      </div>
+      <div id="chartResolvedInfo" style="font-size:9px;color:var(--text-muted);margin-top:2px;"></div>
     </div>
     <div id="finResults" class="fin-results-list">
       <div class="fin-empty" id="finEmpty">
@@ -189,6 +211,9 @@
 
 
 
+  <!-- ═══ Sub-source popup (shared, repositions per pill) ═══ -->
+  <div id="subSourcePopup" class="sub-src-popup hidden"></div>
+
   <!-- ═══ Side Dock ═══ -->
   <div class="fin-dock-column" id="finDockColumn">
     <div class="fin-dock-tabs" id="finDockTabs">
@@ -197,6 +222,7 @@
       <button data-dock-tab="finMarketsPanel">Markets</button>
       <button data-dock-tab="finCorporatePanel">Corporate</button>
       <button data-dock-tab="finBlockchainPanel">Blockchain</button>
+      <button data-dock-tab="searchTogglesPane">Toggles</button>
     </div>
     <div class="fin-dock-body" id="finDockBody"></div>
   </div>
@@ -211,7 +237,6 @@
   <button class="edge-tab edge-tab-right" id="finBlockchainToggle" title="Blockchain" style="top:470px;">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
   </button>
-
   <!-- Add Item Modal -->
   <div class="fin-modal-overlay hidden" id="addModal">
     <div class="fin-modal">

@@ -19,7 +19,7 @@
     usaspending: "USAspending", fdic: "FDIC", secenforcement: "SEC Enforcement",
     osha: "OSHA", epaecho: "EPA ECHO", fec: "FEC",
     openpayments: "OpenPayments", propublica990: "ProPublica 990",
-    dol: "DOL (MSHA)",
+    dol: "DOL",
   };
   const _providerBadgeClass = {
     secedgar: "sec", opencorporates: "corp", gleif: "gleif",
@@ -54,8 +54,151 @@
   document.getElementById("finProviderPills")?.addEventListener("click", function (e) {
     var pill = e.target.closest(".fin-provider-pill");
     if (!pill) return;
+    var provider = pill.dataset.provider;
+    // Charts pill: first click toggles on/off, subsequent clicks when active open config popup
+    if (provider === "charts") {
+      if (!pill.classList.contains("active")) {
+        // Turn ON with defaults
+        pill.classList.add("active");
+        _subSourceState.charts.resolve_yahoo = true;
+        _subSourceState.charts.mode_candle = true;
+        document.getElementById("finChartRangeStrip").style.display = "";
+        updatePillLabel("charts");
+      } else if (_activePopupProvider === "charts" && !_subSrcPopup.classList.contains("hidden")) {
+        // Popup already open — toggle OFF
+        hideSubSourcePopup();
+        pill.classList.remove("active");
+        // Reset all chart sub-sources
+        Object.keys(_subSourceState.charts).forEach(function (k) { _subSourceState.charts[k] = false; });
+        document.getElementById("finChartRangeStrip").style.display = "none";
+        var badge = pill.querySelector(".pill-sub-count");
+        if (badge) badge.remove();
+        pill.title = "Charts: click to enable";
+      } else {
+        // Already active — open popup to configure
+        showSubSourcePopup(pill, "charts");
+      }
+      return;
+    }
+    // Other providers with sub-sources: show popup
+    if (SUB_SOURCES[provider]) {
+      showSubSourcePopup(pill, provider);
+      return;
+    }
     pill.classList.toggle("active");
   });
+
+  // ── Chart resolver: maps input → { symbol, companyName, resolver } ──
+  async function resolveTickerForChart(query) {
+    var state = _subSourceState.charts || {};
+    // Determine active resolver
+    var resolver = "yahoo"; // default
+    if (state.resolve_edgar) resolver = "edgar";
+    else if (state.resolve_openfigi) resolver = "openfigi";
+    else if (state.resolve_gleif) resolver = "gleif";
+
+    var symbol = query.toUpperCase();
+    var companyName = query;
+
+    if (resolver === "yahoo") {
+      var resp = await browser.runtime.sendMessage({
+        action: "intelSearch", provider: "yahoo", query: query, options: { _method: "searchTicker" }
+      });
+      if (resp?.success && resp.results?.length) {
+        symbol = resp.results[0].symbol;
+        companyName = resp.results[0].name || query;
+      }
+    } else if (resolver === "edgar") {
+      var resp = await browser.runtime.sendMessage({
+        action: "intelSearch", provider: "secedgar", query: query
+      });
+      if (resp?.success) {
+        var hits = resp.results?.hits?.hits || resp.results?.results || [];
+        if (hits.length) {
+          var first = hits[0]._source || hits[0];
+          companyName = first.entity_name || first.display_names?.[0] || query;
+          // EDGAR gives CIK, not ticker — try to extract ticker from display
+          symbol = first.tickers?.[0] || query.toUpperCase();
+        }
+      }
+    } else if (resolver === "gleif") {
+      var resp = await browser.runtime.sendMessage({
+        action: "intelSearch", provider: "gleif", query: query
+      });
+      if (resp?.success && resp.results?.results?.length) {
+        companyName = resp.results.results[0].legalName || query;
+        symbol = query.toUpperCase(); // GLEIF doesn't give tickers
+      }
+    } else if (resolver === "openfigi") {
+      // OpenFIGI: POST https://api.openfigi.com/v3/search
+      try {
+        var figiResp = await fetch("https://api.openfigi.com/v3/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: query, exchCode: "US" }),
+        });
+        if (figiResp.ok) {
+          var figiData = await figiResp.json();
+          var figiResults = figiData.data || [];
+          if (figiResults.length) {
+            symbol = figiResults[0].ticker || query.toUpperCase();
+            companyName = figiResults[0].name || query;
+          }
+        }
+      } catch (e) { /* fallback to raw query */ }
+    }
+
+    return { symbol: symbol, companyName: companyName, resolver: resolver };
+  }
+
+  // ── Render chart from resolved ticker ──
+  async function renderChartFromResolution(resolved) {
+    var state = _subSourceState.charts || {};
+    var range = _activeChartRange || "1mo";
+    var mode = state.mode_line ? "line" : "candle";
+
+    // Fetch quote
+    console.log("[Chart] Fetching quote for", resolved.symbol);
+    var quoteResp = await browser.runtime.sendMessage({
+      action: "intelSearch", provider: "yahoo", query: resolved.symbol, options: { _method: "getQuote" }
+    });
+    console.log("[Chart] Quote response:", quoteResp?.success, quoteResp?.error);
+    if (quoteResp?.success) {
+      var q = quoteResp.results;
+      var chgClass = q.change >= 0 ? "up" : "down";
+      var chgSign = q.change >= 0 ? "+" : "";
+      document.getElementById("chartQuoteSummary").innerHTML =
+        '<span class="chart-quote-symbol">' + escapeHtml(q.symbol) + '</span>' +
+        '<span class="chart-quote-price">' + (q.currency || "$") + ' ' + Number(q.price).toFixed(2) + '</span>' +
+        '<span class="chart-quote-change ' + chgClass + '">' + chgSign + Number(q.change).toFixed(2) + ' (' + chgSign + Number(q.changePct).toFixed(2) + '%)</span>' +
+        '<span class="chart-quote-detail">Vol: ' + formatChartVol(q.volume) + '</span>' +
+        '<span class="chart-quote-detail">H: ' + Number(q.high).toFixed(2) + ' L: ' + Number(q.low).toFixed(2) + '</span>' +
+        (q.marketCap ? '<span class="chart-quote-detail">MCap: ' + formatChartVol(q.marketCap) + '</span>' : '') +
+        '<span class="chart-quote-detail" style="font-size:9px;color:var(--text-muted);">' + escapeHtml(q.exchange || "") + '</span>';
+    }
+
+    // Fetch chart
+    console.log("[Chart] Fetching chart for", resolved.symbol, "range:", range);
+    var chartResp = await browser.runtime.sendMessage({
+      action: "intelSearch", provider: "yahoo", query: resolved.symbol, options: { _method: "getChart", range: range }
+    });
+    console.log("[Chart] Chart response:", chartResp?.success, chartResp?.error, chartResp?.results?.candles?.length, "candles");
+    if (chartResp?.success && chartResp.results?.candles?.length) {
+      var canvas = document.getElementById("stockChartCanvas");
+      if (canvas && typeof StockChart !== "undefined") {
+        StockChart.render(canvas, chartResp.results.candles, { mode: mode });
+      }
+    }
+  }
+
+  function formatChartVol(v) {
+    if (v == null) return "--";
+    if (v >= 1e12) return (v / 1e12).toFixed(1) + "T";
+    if (v >= 1e9) return (v / 1e9).toFixed(1) + "B";
+    if (v >= 1e6) return (v / 1e6).toFixed(1) + "M";
+    if (v >= 1e3) return (v / 1e3).toFixed(1) + "K";
+    return String(v);
+  }
 
   async function unifiedSearch() {
     var query = document.getElementById("finSearchInput").value.trim();
@@ -79,10 +222,12 @@
     var countEl = document.getElementById("finResultsCount");
     var sourceEl = document.getElementById("finResultsSource");
     var filterEl = document.getElementById("finResultsFilter");
+    var chartArea = document.getElementById("finChartArea");
 
     // Clear previous results
     container.querySelectorAll(".fin-result-card, .fin-error, .fin-multi-header").forEach(function (el) { el.remove(); });
     empty.style.display = "none";
+    chartArea.style.display = "none";
     sourceEl.textContent = "searching " + providers.length + " provider" + (providers.length !== 1 ? "s" : "") + "...";
     countEl.textContent = "";
     filterEl.style.display = "";
@@ -90,10 +235,33 @@
 
     var totalResults = 0;
     var completedProviders = [];
+    var searchQuery = query; // may be overridden by chart resolver
 
-    // Fan out all searches in parallel
+    // ── Charts: resolve ticker first, render chart, get company name for other providers ──
+    var chartsActive = providers.indexOf("charts") !== -1;
+    if (chartsActive) {
+      providers = providers.filter(function (p) { return p !== "charts"; });
+      try {
+        var resolved = await resolveTickerForChart(query);
+        if (resolved) {
+          searchQuery = resolved.companyName || query;
+          // Show chart area FIRST so canvas has dimensions for rendering
+          chartArea.style.display = "";
+          document.getElementById("chartResolvedInfo").textContent =
+            "Resolved: " + resolved.symbol + " — " + (resolved.companyName || query) +
+            " (via " + resolved.resolver + ")";
+          await renderChartFromResolution(resolved);
+        }
+      } catch (e) {
+        chartArea.style.display = "none";
+        container.insertAdjacentHTML("afterbegin",
+          '<div class="fin-error">Charts: ' + escapeHtml(e.message) + '</div>');
+      }
+    }
+
+    // Fan out remaining provider searches with resolved name
     var promises = providers.map(function (prov) {
-      return searchProvider(query, prov).then(function (data) {
+      return searchProvider(searchQuery, prov).then(function (data) {
         return { provider: prov, data: data, error: null };
       }).catch(function (e) {
         return { provider: prov, data: null, error: e.message };
@@ -163,12 +331,14 @@
   // ══════════════════════════════════════
 
   async function searchProvider(query, provider) {
+    // Sub-source providers: search only active sub-sources sequentially (skip charts — handled in unifiedSearch)
+    if (SUB_SOURCES[provider] && !SUB_SOURCES[provider]._isCharts) return await searchSubSourceProvider(query, provider);
+
     if (provider === "secedgar") return await searchSECEdgar(query);
     if (provider === "opencorporates") return await searchOpenCorporates(query);
     if (provider === "gleif") return await searchGLEIF(query);
     if (provider === "fdic") return await searchFDIC(query);
     if (provider === "usaspending") return await searchUSAspending(query);
-    if (provider === "dol") return await searchDOL(query);
 
     // Stub providers — will be wired as we add them
     throw new Error("not implemented");
@@ -329,7 +499,7 @@
     };
   }
 
-  // ── DOL (MSHA) ──
+  // ── DOL (WHD + OSHA + MSHA) ──
   async function searchDOL(query) {
     var resp = await browser.runtime.sendMessage({
       action: "intelSearch", provider: "dol", query: query, options: { limit: 25 }
@@ -340,10 +510,70 @@
       total: resp.results?.total || results.length,
       results: results.map(function (r) {
         var dataset = r._dolDataset || "mines";
+
+        if (dataset === "whd") {
+          var bw = parseFloat(r.flsa_bw_atp_amt || r.FLSA_BW_ATP_AMT || 0);
+          return {
+            name: r.trade_nm || r.TRADE_NM || "Unknown Employer",
+            type: "WHD Case",
+            _dolSection: "whd",
+            caseId: r.case_id || r.CASE_ID || "",
+            backWages: bw ? "$" + bw.toLocaleString() : "",
+            employees: r.flsa_ee_atp_cnt || r.FLSA_EE_ATP_CNT || "",
+            actViolated: r.act_id || r.ACT_ID || "",
+            startDate: r.findings_start_date || r.FINDINGS_START_DATE || "",
+            endDate: r.findings_end_date || r.FINDINGS_END_DATE || "",
+            naics: r.naic_cd || r.NAIC_CD || "",
+            city: r.cty_nm || r.CTY_NM || "",
+            state: r.st_cd || r.ST_CD || "",
+            sourceUrl: "",
+            raw: r,
+          };
+        }
+
+        if (dataset === "osha_inspection") {
+          var pen = parseFloat(r.total_current_penalty || r.TOTAL_CURRENT_PENALTY || r.tot_penl || 0);
+          return {
+            name: r.estab_name || r.ESTAB_NAME || "Unknown Establishment",
+            type: "OSHA Inspection",
+            _dolSection: "osha",
+            activityNr: r.activity_nr || r.ACTIVITY_NR || "",
+            openDate: r.open_date || r.OPEN_DATE || "",
+            closeDate: r.close_conf_date || r.CLOSE_CONF_DATE || "",
+            penalty: pen ? "$" + pen.toLocaleString() : "",
+            violations: r.total_violations || r.nr_in_viol || "",
+            inspType: r.insp_type || r.INSP_TYPE || "",
+            sic: r.sic_code || r.SIC_CODE || r.sic_cd || "",
+            city: r.site_city || r.SITE_CITY || "",
+            state: r.site_state || r.SITE_STATE || "",
+            sourceUrl: r.activity_nr ? "https://www.osha.gov/pls/imis/establishment.inspection_detail?id=" + (r.activity_nr || r.ACTIVITY_NR) : "",
+            raw: r,
+          };
+        }
+
+        if (dataset === "msha_violation") {
+          var vpen = parseFloat(r.proposed_penalty || r.PROPOSED_PENALTY || 0);
+          return {
+            name: r.operator_name || r.OPERATOR_NAME || "Unknown Operator",
+            type: "MSHA Violation",
+            _dolSection: "msha_violation",
+            violationNo: r.violation_no || r.VIOLATION_NO || "",
+            issueDate: r.violation_issue_dt || r.VIOLATION_ISSUE_DT || "",
+            penalty: vpen ? "$" + vpen.toLocaleString() : "",
+            mineName: r.mine_name || r.MINE_NAME || "",
+            mineId: r.mine_id || r.MINE_ID || "",
+            sigSub: r.sig_sub || r.SIG_SUB || "",
+            sectionOfAct: r.section_of_act || r.SECTION_OF_ACT || "",
+            sourceUrl: r.mine_id ? "https://www.msha.gov/mine-data-retrieval-system?mineId=" + (r.mine_id || r.MINE_ID) : "",
+            raw: r,
+          };
+        }
+
         if (dataset === "mines") {
           return {
             name: r.mine_name || r.MINE_NAME || "Unknown Mine",
             type: "Mine",
+            _dolSection: "mines",
             operator: r.operator_name || r.OPERATOR_NAME || "",
             city: r.city || r.CITY || "",
             state: r.state || r.STATE || "",
@@ -353,19 +583,197 @@
             sourceUrl: r.mine_id ? "https://www.msha.gov/mine-data-retrieval-system?mineId=" + (r.mine_id || r.MINE_ID) : "",
             raw: r,
           };
-        } else {
-          return {
-            name: r.mine_name || r.MINE_NAME || "Unknown Mine",
-            type: "Accident",
-            date: r.accident_date || r.ACCIDENT_DATE || r.cal_yr || "",
-            injuryType: r.degree_injury || r.DEGREE_INJURY || "",
-            classification: r.classification || r.CLASSIFICATION || "",
-            mineId: r.mine_id || r.MINE_ID || "",
-            occupation: r.occupation || r.OCCUPATION || "",
-            sourceUrl: "",
-            raw: r,
-          };
         }
+
+        // accidents (default fallback)
+        return {
+          name: r.mine_name || r.MINE_NAME || "Unknown Mine",
+          type: "Accident",
+          _dolSection: "accidents",
+          date: r.accident_date || r.ACCIDENT_DATE || r.cal_yr || "",
+          injuryType: r.degree_injury || r.DEGREE_INJURY || "",
+          classification: r.classification || r.CLASSIFICATION || "",
+          mineId: r.mine_id || r.MINE_ID || "",
+          occupation: r.occupation || r.OCCUPATION || "",
+          sourceUrl: "",
+          raw: r,
+        };
+      })
+    };
+  }
+
+  // ── Sub-source provider search (sequential, respects toggle state) ──
+  async function searchSubSourceProvider(query, provider) {
+    var cfg = SUB_SOURCES[provider];
+    var state = _subSourceState[provider];
+    if (!cfg || !state) throw new Error(provider + ": no sub-source config");
+
+    var activeSources = cfg.sources.filter(function (s) { return state[s.id]; });
+    if (!activeSources.length) throw new Error(provider + ": no sources toggled on");
+
+    var allResults = [];
+    for (var i = 0; i < activeSources.length; i++) {
+      var src = activeSources[i];
+      try {
+        var resp = await browser.runtime.sendMessage({
+          action: "intelSearch", provider: provider, query: query,
+          options: { limit: 25, _subMethod: src.method }
+        });
+        if (resp?.success && resp.results?.results) {
+          resp.results.results.forEach(function (r) {
+            r._dolDataset = src.id;
+            r._subSourceLabel = src.label;
+            allResults.push(r);
+          });
+        }
+      } catch (e) {
+        console.warn("[SubSrc] " + provider + "/" + src.id + " failed:", e.message);
+      }
+      // Rate limit delay between sub-source calls
+      if (i < activeSources.length - 1) {
+        await new Promise(function (resolve) { setTimeout(resolve, 400); });
+      }
+    }
+
+    // Parse results through provider-specific mappers
+    if (provider === "dol") return searchDOLParseResults(allResults);
+    if (provider === "fdic") return parseFDICResults(allResults);
+    if (provider === "usaspending") return parseUSAspendingResults(allResults);
+    if (provider === "opencorporates") return parseOpenCorporatesResults(allResults);
+    return { total: allResults.length, results: allResults };
+  }
+
+  function parseFDICResults(results) {
+    return { total: results.length, results: results.map(function (r) {
+      // Failures have different fields than institutions
+      if (r.INSTNAME || r.FAILDATE) {
+        return { name: r.INSTNAME || "Unknown", type: "Failed Bank",
+          cert: r.CERT || "", city: r.CITYST || "", failDate: r.FAILDATE || "",
+          acquirer: r.ACQUIRER || "", fund: r.FUND || "",
+          totalDep: r.TOTALDEPOSITS ? "$" + (r.TOTALDEPOSITS / 1000).toLocaleString("en") + "K" : "",
+          sourceUrl: r.CERT ? "https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/banksearch.html?cert=" + r.CERT : "",
+          raw: r };
+      }
+      var assets = r.ASSET ? "$" + (r.ASSET / 1000).toLocaleString("en") + "K" : "";
+      var deposits = r.DEP ? "$" + (r.DEP / 1000).toLocaleString("en") + "K" : "";
+      return { name: r.NAME || "Unknown", type: r.ACTIVE === 1 ? "Active Bank" : "Inactive",
+        cert: r.CERT || "", city: r.CITY || "", stateCode: r.STALP || "", state: r.STNAME || "",
+        zip: r.ZIP || "", address: r.ADDRESS || "", assets: assets, deposits: deposits,
+        charterClass: r.CHARTER_CLASS || "", website: r.WEBADDR || "",
+        sourceUrl: r.CERT ? "https://www.fdic.gov/resources/resolutions/bank-failures/failed-bank-list/banksearch.html?cert=" + r.CERT : "",
+        raw: r };
+    })};
+  }
+
+  function parseUSAspendingResults(results) {
+    return { total: results.length, results: results.map(function (r) {
+      var amount = r["Award Amount"];
+      var amountStr = amount ? "$" + Number(amount).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
+      return { name: r["Recipient Name"] || "Unknown", type: r["Award Type"] || "Award",
+        awardId: r["Award ID"] || "", amount: amountStr, amountRaw: amount,
+        startDate: r["Start Date"] || "", endDate: r["End Date"] || "",
+        agency: r["Awarding Agency"] || "", subAgency: r["Awarding Sub Agency"] || "",
+        description: r["Description"] || "",
+        sourceUrl: r.generated_internal_id ? "https://www.usaspending.gov/award/" + r.generated_internal_id : "",
+        raw: r };
+    })};
+  }
+
+  function parseOpenCorporatesResults(results) {
+    return { total: results.length, results: results.map(function (r) {
+      // Officers have different fields
+      if (r.officer) { var o = r.officer; return { name: o.name || "Unknown", type: "Officer",
+        position: o.position || "", companyName: o.company?.name || "",
+        jurisdiction: o.company?.jurisdiction_code || "", startDate: o.start_date || "",
+        sourceUrl: o.opencorporates_url || "", raw: r }; }
+      var c = r.company || r;
+      return { name: c.name || "Unknown", type: c.company_type || "Company",
+        jurisdiction: c.jurisdiction_code || "", companyNumber: c.company_number || "",
+        status: c.current_status || "", incorporationDate: c.incorporation_date || "",
+        registeredAddress: c.registered_address_in_full || "",
+        sourceUrl: c.opencorporates_url || "", raw: r };
+    })};
+  }
+
+  // Extracted DOL result parser (reused by sub-source search)
+  function searchDOLParseResults(results) {
+    return {
+      total: results.length,
+      results: results.map(function (r) {
+        var dataset = r._dolDataset || "mines";
+
+        // EBSA — pension enforcement cases
+        if (dataset.startsWith("ebsa")) {
+          var ebPen = parseFloat(r.penalty_amount || 0);
+          return { name: r.plan_admin || "Unknown Administrator", type: r._subSourceLabel || "EBSA Case", _dolSection: "ebsa",
+            planName: r.plan_name || "", caseType: r.case_type || "",
+            penalty: ebPen ? "$" + ebPen.toLocaleString() : "", ein: r.ein || "",
+            planYear: r.plan_year || "", closeDate: r.final_close_date || "",
+            closeReason: r.final_close_reason || "",
+            state: r.plan_admin_state || "", sourceUrl: "", raw: r };
+        }
+        // All WHD sub-filters return enforcement records — same shape
+        if (dataset.startsWith("whd")) {
+          var bw = parseFloat(r.flsa_bw_atp_amt || r.bw_atp_amt || 0);
+          var totalViols = parseInt(r.case_violtn_cnt || 0);
+          var cmp = parseFloat(r.cmp_assd || 0);
+          return { name: r.legal_name || r.trade_nm || "Unknown", type: r._subSourceLabel || "WHD Case", _dolSection: "whd",
+            caseId: r.case_id || "", backWages: bw ? "$" + bw.toLocaleString() : "",
+            penalty: cmp ? "$" + cmp.toLocaleString() : "",
+            employees: r.ee_atp_cnt || r.flsa_ee_atp_cnt || "",
+            totalViolations: totalViols || "",
+            startDate: r.findings_start_date || "", endDate: r.findings_end_date || "",
+            naics: r.naics_code_description || r.naic_cd || "",
+            city: r.cty_nm || "", state: r.st_cd || "", sourceUrl: "", raw: r };
+        }
+        // OSHA inspections
+        if (dataset === "osha_insp") {
+          var pen = parseFloat(r.total_current_penalty || 0);
+          return { name: r.estab_name || "Unknown", type: "OSHA Inspection", _dolSection: "osha",
+            activityNr: r.activity_nr || "", openDate: r.open_date || "", penalty: pen ? "$" + pen.toLocaleString() : "",
+            violations: r.total_violations || r.nr_in_viol || "", inspType: r.insp_type || "",
+            city: r.site_city || "", state: r.site_state || "",
+            sourceUrl: r.activity_nr ? "https://www.osha.gov/pls/imis/establishment.inspection_detail?id=" + r.activity_nr : "", raw: r };
+        }
+        // OSHA violations (detail records)
+        if (dataset === "osha_viol") {
+          var vPen = parseFloat(r.current_penalty || r.initial_penalty || 0);
+          return { name: r._estab_name || "Violation #" + (r.citation_id || ""), type: "OSHA Violation", _dolSection: "osha_viol",
+            activityNr: r.activity_nr || "", standard: r.standard || "", description: r.violation_desc || "",
+            severity: r.gravity || "", penalty: vPen ? "$" + vPen.toLocaleString() : "",
+            violType: r.viol_type || "", sourceUrl: "", raw: r };
+        }
+        // OSHA accidents
+        if (dataset === "osha_acc") {
+          return { name: r.estab_name || "Unknown", type: "OSHA Accident", _dolSection: "osha_acc",
+            summaryNr: r.summary_nr || "", eventDate: r.event_date || "",
+            injuryNature: r.nature_of_inj || "", bodyPart: r.part_of_body || "",
+            hospitalized: r.hospitalized || "", amputation: r.amputation || "",
+            city: r.site_city || "", state: r.site_state || "", sourceUrl: "", raw: r };
+        }
+        // OSHA accident abstracts (narratives)
+        if (dataset === "osha_abstract") {
+          return { name: r._estab_name || "Accident Narrative", type: "OSHA Narrative", _dolSection: "osha_abstract",
+            summaryNr: r.summary_nr || "", abstract: r.abstract_text || r.abstract || "",
+            sourceUrl: "", raw: r };
+        }
+        if (dataset === "msha_violations") {
+          var vpen = parseFloat(r.proposed_penalty || r.PROPOSED_PENALTY || 0);
+          return { name: r.operator_name || r.OPERATOR_NAME || "Unknown", type: "MSHA Violation", _dolSection: "msha_violation",
+            violationNo: r.violation_no || "", penalty: vpen ? "$" + vpen.toLocaleString() : "",
+            mineName: r.mine_name || "", sigSub: r.sig_sub || "", issueDate: r.violation_issue_dt || "",
+            sourceUrl: r.mine_id ? "https://www.msha.gov/mine-data-retrieval-system?mineId=" + r.mine_id : "", raw: r };
+        }
+        if (dataset === "msha_mines") {
+          return { name: r.mine_name || r.MINE_NAME || "Unknown Mine", type: "Mine", _dolSection: "mines",
+            operator: r.operator_name || "", city: r.city || "", state: r.state || "",
+            mineId: r.mine_id || "", mineType: r.mine_type || "", status: r.mine_status || "",
+            sourceUrl: r.mine_id ? "https://www.msha.gov/mine-data-retrieval-system?mineId=" + r.mine_id : "", raw: r };
+        }
+        // msha_accidents / fallback
+        return { name: r.mine_name || r.MINE_NAME || "Unknown Mine", type: "Accident", _dolSection: "accidents",
+          date: r.accident_date || r.cal_yr || "", injuryType: r.degree_injury || "",
+          classification: r.classification || "", mineId: r.mine_id || "", sourceUrl: "", raw: r };
       })
     };
   }
@@ -385,34 +793,97 @@
       if (item.location) details.push(escapeHtml(item.location));
       else if (item.state) details.push("State: " + escapeHtml(item.state));
     } else if (provider === "opencorporates") {
-      if (item.jurisdiction) details.push("Jurisdiction: " + escapeHtml(item.jurisdiction));
-      if (item.companyNumber) details.push("#" + escapeHtml(item.companyNumber));
-      if (item.incorporationDate) details.push("Inc: " + escapeHtml(item.incorporationDate));
-      if (item.status) details.push("Status: " + escapeHtml(item.status));
+      if (item.type === "Officer") {
+        if (item.position) details.push(escapeHtml(item.position));
+        if (item.companyName) details.push("at " + escapeHtml(item.companyName));
+        if (item.jurisdiction) details.push(escapeHtml(item.jurisdiction));
+        if (item.startDate) details.push("Since: " + escapeHtml(item.startDate));
+      } else {
+        if (item.jurisdiction) details.push("Jurisdiction: " + escapeHtml(item.jurisdiction));
+        if (item.companyNumber) details.push("#" + escapeHtml(item.companyNumber));
+        if (item.incorporationDate) details.push("Inc: " + escapeHtml(item.incorporationDate));
+        if (item.status) details.push("Status: " + escapeHtml(item.status));
+      }
     } else if (provider === "gleif") {
       if (item.lei) details.push("LEI: " + escapeHtml(item.lei));
       if (item.status) details.push("Status: " + escapeHtml(item.status));
       if (item.headquarters) details.push(escapeHtml(item.headquarters));
     } else if (provider === "fdic") {
-      if (item.cert) details.push("CERT: " + escapeHtml(String(item.cert)));
-      if (item.assets) details.push("Assets: " + escapeHtml(item.assets));
-      if (item.deposits) details.push("Deposits: " + escapeHtml(item.deposits));
-      if (item.city && item.stateCode) details.push(escapeHtml(item.city + ", " + item.stateCode + " " + item.zip));
-      if (item.charterClass) details.push("Charter: " + escapeHtml(item.charterClass));
+      if (item.type === "Failed Bank") {
+        if (item.cert) details.push("CERT: " + escapeHtml(String(item.cert)));
+        if (item.failDate) details.push("Failed: " + escapeHtml(item.failDate));
+        if (item.acquirer) details.push("Acquirer: " + escapeHtml(item.acquirer));
+        if (item.totalDep) details.push("Deposits: " + escapeHtml(item.totalDep));
+        if (item.city) details.push(escapeHtml(item.city));
+      } else {
+        if (item.cert) details.push("CERT: " + escapeHtml(String(item.cert)));
+        if (item.assets) details.push("Assets: " + escapeHtml(item.assets));
+        if (item.deposits) details.push("Deposits: " + escapeHtml(item.deposits));
+        if (item.city && item.stateCode) details.push(escapeHtml(item.city + ", " + item.stateCode + " " + (item.zip || "")));
+        if (item.charterClass) details.push("Charter: " + escapeHtml(item.charterClass));
+      }
     } else if (provider === "usaspending") {
       if (item.awardId) details.push("Award: " + escapeHtml(item.awardId));
       if (item.amount) details.push(escapeHtml(item.amount));
       if (item.agency) details.push(escapeHtml(item.agency));
       if (item.startDate) details.push(escapeHtml(item.startDate) + (item.endDate ? " → " + escapeHtml(item.endDate) : ""));
     } else if (provider === "dol") {
-      if (item.mineId) details.push("Mine ID: " + escapeHtml(String(item.mineId)));
-      if (item.operator) details.push("Operator: " + escapeHtml(item.operator));
-      if (item.mineType) details.push(escapeHtml(item.mineType));
-      if (item.status) details.push("Status: " + escapeHtml(item.status));
-      if (item.city && item.state) details.push(escapeHtml(item.city + ", " + item.state));
-      if (item.date) details.push("Date: " + escapeHtml(item.date));
-      if (item.injuryType) details.push("Injury: " + escapeHtml(item.injuryType));
-      if (item.classification) details.push(escapeHtml(item.classification));
+      var sec = item._dolSection || "";
+      if (sec === "ebsa") {
+        if (item.planName) details.push(escapeHtml(item.planName));
+        if (item.penalty) details.push("Penalty: " + escapeHtml(item.penalty));
+        if (item.caseType) details.push(escapeHtml(item.caseType));
+        if (item.planYear) details.push("Plan Year: " + escapeHtml(item.planYear));
+        if (item.closeDate) details.push("Closed: " + escapeHtml(item.closeDate));
+        if (item.state) details.push(escapeHtml(item.state));
+      } else if (sec === "whd") {
+        if (item.caseId) details.push("Case: " + escapeHtml(String(item.caseId)));
+        if (item.backWages) details.push("Back Wages: " + escapeHtml(item.backWages));
+        if (item.penalty) details.push("CMP: " + escapeHtml(item.penalty));
+        if (item.employees) details.push("Employees: " + escapeHtml(String(item.employees)));
+        if (item.totalViolations) details.push("Violations: " + escapeHtml(String(item.totalViolations)));
+        if (item.naics) details.push(escapeHtml(String(item.naics)));
+        if (item.startDate) details.push(escapeHtml(item.startDate) + (item.endDate ? " → " + escapeHtml(item.endDate) : ""));
+        if (item.city && item.state) details.push(escapeHtml(item.city + ", " + item.state));
+      } else if (sec === "osha") {
+        if (item.activityNr) details.push("Insp: " + escapeHtml(String(item.activityNr)));
+        if (item.penalty) details.push("Penalty: " + escapeHtml(item.penalty));
+        if (item.violations) details.push("Violations: " + escapeHtml(String(item.violations)));
+        if (item.inspType) details.push("Type: " + escapeHtml(item.inspType));
+        if (item.openDate) details.push(escapeHtml(item.openDate));
+        if (item.city && item.state) details.push(escapeHtml(item.city + ", " + item.state));
+      } else if (sec === "osha_viol") {
+        if (item.standard) details.push("Std: " + escapeHtml(item.standard));
+        if (item.penalty) details.push("Penalty: " + escapeHtml(item.penalty));
+        if (item.violType) details.push("Type: " + escapeHtml(item.violType));
+        if (item.severity) details.push("Gravity: " + escapeHtml(String(item.severity)));
+        if (item.description) details.push(escapeHtml(item.description.substring(0, 80)));
+      } else if (sec === "osha_acc") {
+        if (item.eventDate) details.push(escapeHtml(item.eventDate));
+        if (item.injuryNature) details.push(escapeHtml(item.injuryNature));
+        if (item.bodyPart) details.push(escapeHtml(item.bodyPart));
+        if (item.hospitalized === "Y") details.push("Hospitalized");
+        if (item.amputation === "Y") details.push("Amputation");
+        if (item.city && item.state) details.push(escapeHtml(item.city + ", " + item.state));
+      } else if (sec === "osha_abstract") {
+        if (item.abstract) details.push(escapeHtml(item.abstract.substring(0, 150)) + (item.abstract.length > 150 ? "..." : ""));
+      } else if (sec === "msha_violation") {
+        if (item.violationNo) details.push("Viol: " + escapeHtml(String(item.violationNo)));
+        if (item.penalty) details.push("Penalty: " + escapeHtml(item.penalty));
+        if (item.mineName) details.push(escapeHtml(item.mineName));
+        if (item.sigSub) details.push("S&S: " + escapeHtml(item.sigSub));
+        if (item.issueDate) details.push(escapeHtml(item.issueDate));
+      } else {
+        // mines + accidents (existing)
+        if (item.mineId) details.push("Mine ID: " + escapeHtml(String(item.mineId)));
+        if (item.operator) details.push("Operator: " + escapeHtml(item.operator));
+        if (item.mineType) details.push(escapeHtml(item.mineType));
+        if (item.status) details.push("Status: " + escapeHtml(item.status));
+        if (item.city && item.state) details.push(escapeHtml(item.city + ", " + item.state));
+        if (item.date) details.push("Date: " + escapeHtml(item.date));
+        if (item.injuryType) details.push("Injury: " + escapeHtml(item.injuryType));
+        if (item.classification) details.push(escapeHtml(item.classification));
+      }
     }
 
     return '<div class="fin-result-card" data-idx="' + idx + '" data-provider="' + provider + '">' +
@@ -546,14 +1017,490 @@
   document.querySelectorAll(".fp-sub-tab").forEach(function (tab) {
     tab.addEventListener("click", function () {
       var target = tab.dataset.fpSub;
-      document.querySelectorAll(".fp-sub-tab").forEach(function (t) { t.classList.toggle("active", t.dataset.fpSub === target); });
+      document.querySelectorAll(".fp-sub-tab").forEach(function (t) { if (!t.dataset.dolTab) t.classList.toggle("active", t.dataset.fpSub === target); });
       document.querySelectorAll(".fp-sub-pane").forEach(function (p) { p.classList.toggle("active", p.dataset.fpPane === target); });
     });
   });
 
+  // ── Chart range strip (below provider pills) ──
+  var _activeChartRange = "1mo";
+
+  document.querySelectorAll(".chart-range-pill").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      _activeChartRange = btn.dataset.range;
+      document.querySelectorAll(".chart-range-pill").forEach(function (b) {
+        b.classList.toggle("active", b.dataset.range === _activeChartRange);
+      });
+    });
+  });
+
+  // ══════════════════════════════════════
+  // SUB-SOURCE TOGGLE SYSTEM
+  // ══════════════════════════════════════
+
+  // Config: which providers have sub-sources and what method each calls
+  var SUB_SOURCES = {
+    charts: {
+      label: "Charts",
+      _isCharts: true, // special handling — not a search provider, configures the chart
+      groups: [
+        { key: "resolver",  label: "Ticker lookup via",  radio: true },
+        { key: "datasrc",   label: "Chart data via",     radio: true },
+        { key: "mode",      label: "Style",              radio: true },
+      ],
+      sources: [
+        // Resolvers — how to map input → ticker + company name
+        { id: "resolve_yahoo",    label: "Yahoo",      group: "resolver", title: "Yahoo Finance — broadest ticker coverage" },
+        { id: "resolve_edgar",    label: "SEC EDGAR",  group: "resolver", title: "SEC EDGAR — authoritative US company names" },
+        { id: "resolve_openfigi", label: "OpenFIGI",   group: "resolver", title: "Bloomberg Open Symbology — ISIN, CUSIP, FIGI" },
+        { id: "resolve_gleif",    label: "GLEIF",      group: "resolver", title: "LEI registry — legal entity identifier" },
+        { id: "resolve_coingecko",label: "CoinGecko",  group: "resolver", title: "Crypto — tokens, coins, DeFi" },
+        // Chart data sources
+        { id: "data_yahoo",       label: "Yahoo",        group: "datasrc", title: "Yahoo Finance — free, no key, 15min delay" },
+        { id: "data_alphavantage",label: "Alpha Vantage", group: "datasrc", title: "Free key — 25 calls/day" },
+        { id: "data_twelvedata",  label: "Twelve Data",  group: "datasrc", title: "Free key — 8/min, 800/day" },
+        { id: "data_finnhub",     label: "Finnhub",      group: "datasrc", title: "Free key — 60/min, real-time quotes" },
+        { id: "data_polygon",     label: "Polygon",      group: "datasrc", title: "Free key — 5/min" },
+        { id: "data_coingecko",   label: "CoinGecko",    group: "datasrc", title: "Crypto OHLCV — free, no key" },
+        // Modes
+        { id: "mode_candle", label: "Candle", group: "mode", title: "Candlestick chart" },
+        { id: "mode_line",   label: "Line",   group: "mode", title: "Line chart with fill" },
+      ],
+    },
+    dol: {
+      label: "DOL",
+      groups: [
+        { key: "ebsa", label: "EBSA — Pension & Benefits" },
+        { key: "whd",  label: "WHD — Wage & Hour" },
+        { key: "osha", label: "OSHA — Safety" },
+        { key: "msha", label: "MSHA — Mining" },
+      ],
+      sources: [
+        // EBSA — finance angle: penalty amounts on plan administrators
+        { id: "ebsa_5500",      label: "Form 5500",        group: "ebsa", method: "searchEBSA",           title: "ERISA/Form 5500 enforcement cases — plan admin penalties" },
+        { id: "ebsa_delinquent",label: "Delinquent Filers", group: "ebsa", method: "searchEBSADelinquent", title: "Delinquent filers with assessed penalties" },
+        // WHD — finance angle: back wages and civil money penalties
+        { id: "whd_all",        label: "All Cases",   group: "whd",  method: "searchWHD",           title: "All WHD enforcement cases" },
+        { id: "whd_flsa",       label: "FLSA",        group: "whd",  method: "searchWHD_FLSA",      title: "Fair Labor Standards — wage theft, overtime, min wage" },
+        { id: "whd_fmla",       label: "FMLA",        group: "whd",  method: "searchWHD_FMLA",      title: "Family & Medical Leave Act violations" },
+        { id: "whd_h1b",        label: "H-1B",        group: "whd",  method: "searchWHD_H1B",       title: "H-1B visa worker violations" },
+        { id: "whd_h2",         label: "H-2A/H-2B",   group: "whd",  method: "searchWHD_H2",        title: "H-2A/H-2B visa worker exploitation" },
+        { id: "whd_child",      label: "Child Labor",  group: "whd",  method: "searchWHD_ChildLabor", title: "FLSA child labor violations" },
+        { id: "whd_sca",        label: "SCA",         group: "whd",  method: "searchWHD_SCA",       title: "Service Contract Act — fed service workers" },
+        { id: "whd_mspa",       label: "MSPA",        group: "whd",  method: "searchWHD_MSPA",      title: "Migrant & Seasonal worker protection" },
+        // OSHA — finance angle: penalty dollar amounts
+        { id: "osha_viol",      label: "Violations",   group: "osha", method: "searchOSHAViolations",  title: "Violation penalties — standards cited, $ amounts" },
+        { id: "osha_acc",       label: "Accidents",    group: "osha", method: "searchOSHAAccidents",   title: "Accident records — injury, hospitalization" },
+        // MSHA — finance angle: penalty dollar amounts
+        { id: "msha_violations",label: "Violations",   group: "msha", method: "searchMSHAViolations",  title: "Violations — penalties, S&S flags" },
+        { id: "msha_accidents", label: "Accidents",    group: "msha", method: "searchAccidents",       title: "Accident/injury records" },
+      ],
+    },
+    fdic: {
+      label: "FDIC",
+      sources: [
+        { id: "institutions", label: "Institutions", method: "search",      title: "Active bank/institution lookup" },
+        { id: "failures",     label: "Failures",     method: "getFailures", title: "Failed banks — closure date, acquirer, assets" },
+      ],
+    },
+    usaspending: {
+      label: "USAspending",
+      sources: [
+        { id: "contracts",       label: "Contracts",       method: "searchContracts",      title: "Federal contracts — procurement, defense, services" },
+        { id: "grants",          label: "Grants",          method: "searchGrants",         title: "Federal grants — research, education, health" },
+        { id: "loans",           label: "Loans",           method: "searchLoans",          title: "Federal loans — SBA, agriculture, housing" },
+        { id: "direct_payments", label: "Direct Payments", method: "searchDirectPayments", title: "Direct payments — subsidies, benefits, transfers" },
+      ],
+    },
+  };
+
+  // State: which sub-sources are active per provider  { dol: { whd: true, osha: false, ... } }
+  var _subSourceState = {};
+  // Initialize defaults — all off until user chooses
+  // Charts is fully off by default (activated on first click with defaults)
+  Object.keys(SUB_SOURCES).forEach(function (prov) {
+    _subSourceState[prov] = {};
+    SUB_SOURCES[prov].sources.forEach(function (s) {
+      _subSourceState[prov][s.id] = false;
+    });
+  });
+
+  // ── Popup: show/hide anchored below a pill ──
+  var _activePopupProvider = null;
+  var _subSrcPopup = document.getElementById("subSourcePopup");
+
+  function showSubSourcePopup(pill, provider) {
+    var cfg = SUB_SOURCES[provider];
+    if (!cfg) return;
+    if (_activePopupProvider === provider && !_subSrcPopup.classList.contains("hidden")) {
+      hideSubSourcePopup();
+      return;
+    }
+    _activePopupProvider = provider;
+    var state = _subSourceState[provider];
+
+    var allOn = cfg.sources.every(function (s) { return state[s.id]; });
+    var allRadio = cfg.groups && cfg.groups.every(function (g) { return g.radio; });
+    var html = '<div class="sub-src-title">' + escapeHtml(cfg.label) + '</div>';
+    if (!allRadio) {
+      html += '<button class="sub-src-chip sub-src-all' + (allOn ? ' active' : '') + '" data-sub-prov="' + provider + '" title="Toggle all sources" style="margin-bottom:6px;">All</button>';
+    }
+
+    if (cfg.groups) {
+      cfg.groups.forEach(function (g) {
+        var groupSources = cfg.sources.filter(function (s) { return s.group === g.key; });
+        html += '<div class="sub-src-group">';
+        html += '<div class="sub-src-group-label">' + escapeHtml(g.label) + '</div>';
+        html += '<div class="sub-src-grid">';
+        groupSources.forEach(function (s) {
+          html += '<button class="sub-src-chip' + (state[s.id] ? ' active' : '') + '" data-sub-src="' + s.id + '" data-sub-prov="' + provider + '" title="' + escapeHtml(s.title || '') + '">' + escapeHtml(s.label) + '</button>';
+        });
+        html += '</div></div>';
+      });
+    } else {
+      html += '<div class="sub-src-grid">';
+      cfg.sources.forEach(function (s) {
+        html += '<button class="sub-src-chip' + (state[s.id] ? ' active' : '') + '" data-sub-src="' + s.id + '" data-sub-prov="' + provider + '" title="' + escapeHtml(s.title || '') + '">' + escapeHtml(s.label) + '</button>';
+      });
+      html += '</div>';
+    }
+    _subSrcPopup.innerHTML = html;
+    _subSrcPopup.classList.remove("hidden");
+
+    // Position below the pill
+    var rect = pill.getBoundingClientRect();
+    var stripRect = pill.closest(".fin-provider-pills")?.getBoundingClientRect() || { left: 0 };
+    _subSrcPopup.style.top = (rect.bottom + 4) + "px";
+    _subSrcPopup.style.left = Math.max(rect.left, stripRect.left) + "px";
+  }
+
+  function hideSubSourcePopup() {
+    _subSrcPopup.classList.add("hidden");
+    _activePopupProvider = null;
+  }
+
+  // Click handler on sub-source chips inside popup
+  _subSrcPopup?.addEventListener("click", function (e) {
+    var chip = e.target.closest(".sub-src-chip");
+    if (!chip) return;
+    var prov = chip.dataset.subProv;
+
+    // "All" toggle
+    if (chip.classList.contains("sub-src-all")) {
+      var cfg = SUB_SOURCES[prov];
+      var allOn = cfg.sources.every(function (s) { return _subSourceState[prov][s.id]; });
+      var newVal = !allOn;
+      cfg.sources.forEach(function (s) { _subSourceState[prov][s.id] = newVal; });
+      // Refresh popup chips
+      _subSrcPopup.querySelectorAll(".sub-src-chip").forEach(function (c) {
+        if (c.classList.contains("sub-src-all")) c.classList.toggle("active", newVal);
+        else if (c.dataset.subSrc) c.classList.toggle("active", newVal);
+      });
+      updatePillLabel(prov);
+      updateDockTogglesPane();
+      return;
+    }
+
+    var srcId = chip.dataset.subSrc;
+    var cfg2 = SUB_SOURCES[prov];
+    var src = cfg2.sources.find(function (s) { return s.id === srcId; });
+
+    // Radio group: deactivate siblings, force this one on
+    var group = src && cfg2.groups && cfg2.groups.find(function (g) { return g.key === src.group; });
+    if (group && group.radio) {
+      cfg2.sources.forEach(function (s) {
+        if (s.group === group.key) {
+          _subSourceState[prov][s.id] = (s.id === srcId);
+        }
+      });
+      // Update all chips in popup for this group
+      _subSrcPopup.querySelectorAll(".sub-src-chip").forEach(function (c) {
+        var cSrc = cfg2.sources.find(function (s) { return s.id === c.dataset.subSrc; });
+        if (cSrc && cSrc.group === group.key) {
+          c.classList.toggle("active", c.dataset.subSrc === srcId);
+        }
+      });
+    } else {
+      _subSourceState[prov][srcId] = !_subSourceState[prov][srcId];
+      chip.classList.toggle("active", _subSourceState[prov][srcId]);
+    }
+
+    // Sync "All" chip state (skip for all-radio providers)
+    var hasNonRadio = cfg2.groups ? cfg2.groups.some(function (g) { return !g.radio; }) : true;
+    if (hasNonRadio) {
+      var allNow = cfg2.sources.every(function (s) { return _subSourceState[prov][s.id]; });
+      var allChip = _subSrcPopup.querySelector(".sub-src-all");
+      if (allChip) allChip.classList.toggle("active", allNow);
+    }
+    updatePillLabel(prov);
+    updateDockTogglesPane();
+  });
+
+  // Close popup on click outside
+  document.addEventListener("click", function (e) {
+    if (_activePopupProvider && !_subSrcPopup.contains(e.target) && !e.target.closest(".fin-provider-pill")) {
+      hideSubSourcePopup();
+    }
+  });
+
+  // ── Update pill label with count ──
+  function updatePillLabel(provider) {
+    var cfg = SUB_SOURCES[provider];
+    if (!cfg) return;
+    var pill = document.querySelector('.fin-provider-pill[data-provider="' + provider + '"]');
+    if (!pill) return;
+    var activeNames = [];
+    cfg.sources.forEach(function (s) {
+      if (_subSourceState[provider][s.id]) activeNames.push(s.label);
+    });
+    var count = activeNames.length;
+    var badge = pill.querySelector(".pill-sub-count");
+
+    // Charts pill: managed by its own click handler, just update badge/title here
+    if (cfg._isCharts) {
+      if (!pill.classList.contains("active")) {
+        if (badge) badge.remove();
+        pill.title = "Charts: click to enable";
+      } else {
+        if (!badge) {
+          badge = document.createElement("span");
+          badge.className = "pill-sub-count";
+          pill.appendChild(badge);
+        }
+        // Show resolver + mode: e.g. "Y·C" (Yahoo, Candle)
+        var resolverMap = { resolve_yahoo: "Y", resolve_edgar: "S", resolve_openfigi: "F", resolve_gleif: "G" };
+        var modeMap = { mode_candle: "C", mode_line: "L" };
+        var rKey = "", mKey = "";
+        Object.keys(resolverMap).forEach(function (k) { if (_subSourceState.charts[k]) rKey = resolverMap[k]; });
+        Object.keys(modeMap).forEach(function (k) { if (_subSourceState.charts[k]) mKey = modeMap[k]; });
+        badge.textContent = (rKey || "Y") + "/" + (mKey || "C");
+        pill.title = cfg.label + ": " + activeNames.join(", ");
+      }
+      return;
+    }
+
+    // Normal providers: show count
+    if (count > 0) {
+      pill.classList.add("active");
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "pill-sub-count";
+        pill.appendChild(badge);
+      }
+      badge.textContent = count;
+      pill.title = cfg.label + ": " + activeNames.join(", ");
+    } else {
+      pill.classList.remove("active");
+      if (badge) badge.remove();
+      pill.title = cfg.label + ": click for options";
+    }
+  }
+
+  // ── Dock: Search Toggles pane ──
+  function buildSearchTogglesPane() {
+    var pane = document.createElement("div");
+    pane.className = "search-toggles-pane";
+    pane.id = "searchTogglesPane";
+    var html = '';
+    Object.keys(SUB_SOURCES).forEach(function (prov) {
+      var cfg = SUB_SOURCES[prov];
+      var state = _subSourceState[prov];
+      var anyOn = Object.values(state).some(function (v) { return v; });
+      html += '<div class="search-toggles-section" data-toggles-prov="' + prov + '">';
+      html += '<div class="search-toggles-section-title"><span class="pill-dot ' + (anyOn ? 'on' : '') + '"></span>' + escapeHtml(cfg.label) + '</div>';
+      var allOn = cfg.sources.every(function (s) { return state[s.id]; });
+      var allRadio = cfg.groups && cfg.groups.every(function (g) { return g.radio; });
+      if (!allRadio) {
+        html += '<button class="sub-src-chip sub-src-all' + (allOn ? ' active' : '') + '" data-sub-prov="' + prov + '" title="Toggle all sources" style="margin-bottom:4px;">All</button>';
+      }
+      if (cfg.groups) {
+        cfg.groups.forEach(function (g) {
+          var groupSources = cfg.sources.filter(function (s) { return s.group === g.key; });
+          html += '<div class="sub-src-group">';
+          html += '<div class="sub-src-group-label">' + escapeHtml(g.label) + '</div>';
+          html += '<div class="search-toggles-chips">';
+          groupSources.forEach(function (s) {
+            html += '<button class="sub-src-chip' + (state[s.id] ? ' active' : '') + '" data-sub-src="' + s.id + '" data-sub-prov="' + prov + '" title="' + escapeHtml(s.title || '') + '">' + escapeHtml(s.label) + '</button>';
+          });
+          html += '</div></div>';
+        });
+      } else {
+        html += '<div class="search-toggles-chips">';
+        cfg.sources.forEach(function (s) {
+          html += '<button class="sub-src-chip' + (state[s.id] ? ' active' : '') + '" data-sub-src="' + s.id + '" data-sub-prov="' + prov + '" title="' + escapeHtml(s.title || '') + '">' + escapeHtml(s.label) + '</button>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+    });
+    pane.innerHTML = html;
+
+    // Wire clicks in dock pane
+    pane.addEventListener("click", function (e) {
+      var chip = e.target.closest(".sub-src-chip");
+      if (!chip) return;
+      var prov = chip.dataset.subProv;
+      var section = chip.closest(".search-toggles-section");
+
+      // "All" toggle
+      if (chip.classList.contains("sub-src-all")) {
+        var cfg2 = SUB_SOURCES[prov];
+        var allOn2 = cfg2.sources.every(function (s) { return _subSourceState[prov][s.id]; });
+        var newVal = !allOn2;
+        cfg2.sources.forEach(function (s) { _subSourceState[prov][s.id] = newVal; });
+        if (section) section.querySelectorAll(".sub-src-chip").forEach(function (c) {
+          if (c.classList.contains("sub-src-all")) c.classList.toggle("active", newVal);
+          else if (c.dataset.subSrc) c.classList.toggle("active", newVal);
+        });
+        updatePillLabel(prov);
+        syncPopupFromDock(prov);
+        if (section) { var dot = section.querySelector(".pill-dot"); if (dot) dot.classList.toggle("on", newVal); }
+        return;
+      }
+
+      var srcId = chip.dataset.subSrc;
+      var cfg3 = SUB_SOURCES[prov];
+      var src = cfg3.sources.find(function (s) { return s.id === srcId; });
+      var group = src && cfg3.groups && cfg3.groups.find(function (g) { return g.key === src.group; });
+
+      if (group && group.radio) {
+        cfg3.sources.forEach(function (s) {
+          if (s.group === group.key) _subSourceState[prov][s.id] = (s.id === srcId);
+        });
+        if (section) section.querySelectorAll(".sub-src-chip").forEach(function (c) {
+          var cSrc = cfg3.sources.find(function (s) { return s.id === c.dataset.subSrc; });
+          if (cSrc && cSrc.group === group.key) c.classList.toggle("active", c.dataset.subSrc === srcId);
+        });
+      } else {
+        _subSourceState[prov][srcId] = !_subSourceState[prov][srcId];
+        chip.classList.toggle("active", _subSourceState[prov][srcId]);
+        var allNow = cfg3.sources.every(function (s) { return _subSourceState[prov][s.id]; });
+        if (section) { var allC = section.querySelector(".sub-src-all"); if (allC) allC.classList.toggle("active", allNow); }
+      }
+
+      updatePillLabel(prov);
+      syncPopupFromDock(prov);
+      if (section) {
+        var anyOn = Object.values(_subSourceState[prov]).some(function (v) { return v; });
+        var dot = section.querySelector(".pill-dot");
+        if (dot) dot.classList.toggle("on", anyOn);
+      }
+    });
+
+    function syncPopupFromDock(prov) {
+      if (_activePopupProvider === prov) {
+        var cfg = SUB_SOURCES[prov];
+        _subSrcPopup.querySelectorAll(".sub-src-chip").forEach(function (c) {
+          if (c.classList.contains("sub-src-all")) {
+            c.classList.toggle("active", cfg.sources.every(function (s) { return _subSourceState[prov][s.id]; }));
+          } else if (c.dataset.subSrc) {
+            c.classList.toggle("active", !!_subSourceState[prov][c.dataset.subSrc]);
+          }
+        });
+      }
+    }
+
+    return pane;
+  }
+
+  function updateDockTogglesPane() {
+    var existing = document.getElementById("searchTogglesPane");
+    if (!existing) return;
+    // Sync chip states
+    Object.keys(SUB_SOURCES).forEach(function (prov) {
+      var state = _subSourceState[prov];
+      var section = existing.querySelector('[data-toggles-prov="' + prov + '"]');
+      if (!section) return;
+      var allOn = SUB_SOURCES[prov].sources.every(function (s) { return state[s.id]; });
+      section.querySelectorAll(".sub-src-chip").forEach(function (chip) {
+        if (chip.classList.contains("sub-src-all")) chip.classList.toggle("active", allOn);
+        else chip.classList.toggle("active", !!state[chip.dataset.subSrc]);
+      });
+      var anyOn = Object.values(state).some(function (v) { return v; });
+      var dot = section.querySelector(".pill-dot");
+      if (dot) dot.classList.toggle("on", anyOn);
+    });
+  }
+
+  // Register the toggles pane for the dock system
+  // Append search toggles pane to DOM (hidden, dockable)
+  var _searchTogglesPane = buildSearchTogglesPane();
+  _searchTogglesPane.classList.add("hidden");
+  document.body.appendChild(_searchTogglesPane);
+
+  // Initialize pill labels on load
+  Object.keys(SUB_SOURCES).forEach(function (prov) { updatePillLabel(prov); });
+
+  function renderDolCard(r, idx, tab) {
+    var name = "", type = "", details = [], sourceUrl = "";
+
+    if (tab === "whd") {
+      name = r.legal_name || r.trade_nm || r.LEGAL_NAME || r.TRADE_NM || "Unknown";
+      type = "WHD Case";
+      var bw = parseFloat(r.flsa_bw_atp_amt || r.bw_atp_amt || 0);
+      if (r.case_id) details.push("Case: <strong>" + escapeHtml(String(r.case_id)) + "</strong>");
+      if (bw) details.push("Back Wages: <strong class='dol-penalty'>$" + bw.toLocaleString() + "</strong>");
+      if (r.flsa_ee_atp_cnt || r.ee_atp_cnt) details.push("Employees: " + escapeHtml(String(r.flsa_ee_atp_cnt || r.ee_atp_cnt)));
+      if (r.flsa_violtn_cnt || r.case_violtn_cnt) details.push("Violations: " + escapeHtml(String(r.flsa_violtn_cnt || r.case_violtn_cnt)));
+      if (r.findings_start_date) details.push(escapeHtml(r.findings_start_date));
+      if (r.cty_nm && r.st_cd) details.push(escapeHtml(r.cty_nm + ", " + r.st_cd));
+    } else if (tab === "osha") {
+      name = r.estab_name || r.ESTAB_NAME || "Unknown";
+      type = "OSHA Inspection";
+      var pen = parseFloat(r.total_current_penalty || r.TOTAL_CURRENT_PENALTY || 0);
+      if (r.activity_nr) details.push("Insp: <strong>" + escapeHtml(String(r.activity_nr)) + "</strong>");
+      if (pen) details.push("Penalty: <strong class='dol-penalty'>$" + pen.toLocaleString() + "</strong>");
+      if (r.total_violations) details.push("Violations: " + escapeHtml(String(r.total_violations)));
+      if (r.insp_type) details.push("Type: " + escapeHtml(r.insp_type));
+      if (r.open_date) details.push(escapeHtml(r.open_date));
+      if (r.site_city && r.site_state) details.push(escapeHtml(r.site_city + ", " + r.site_state));
+      if (r.activity_nr) sourceUrl = "https://www.osha.gov/pls/imis/establishment.inspection_detail?id=" + r.activity_nr;
+    } else if (tab === "msha_mines") {
+      name = r.mine_name || r.MINE_NAME || "Unknown Mine";
+      type = "Mine";
+      if (r.operator_name) details.push("Operator: <strong>" + escapeHtml(r.operator_name) + "</strong>");
+      if (r.mine_id) details.push("Mine ID: " + escapeHtml(String(r.mine_id)));
+      if (r.mine_type) details.push(escapeHtml(r.mine_type));
+      if (r.mine_status) details.push("Status: " + escapeHtml(r.mine_status));
+      if (r.city && r.state) details.push(escapeHtml(r.city + ", " + r.state));
+      if (r.mine_id) sourceUrl = "https://www.msha.gov/mine-data-retrieval-system?mineId=" + r.mine_id;
+    } else if (tab === "msha_violations") {
+      name = r.operator_name || r.OPERATOR_NAME || "Unknown";
+      type = "MSHA Violation";
+      var vpen = parseFloat(r.proposed_penalty || r.PROPOSED_PENALTY || 0);
+      if (r.violation_no) details.push("Viol: <strong>" + escapeHtml(String(r.violation_no)) + "</strong>");
+      if (vpen) details.push("Penalty: <strong class='dol-penalty'>$" + vpen.toLocaleString() + "</strong>");
+      if (r.mine_name) details.push(escapeHtml(r.mine_name));
+      if (r.sig_sub === "Y") details.push("<span class='dol-ss-flag'>S&amp;S</span>");
+      if (r.violation_issue_dt) details.push(escapeHtml(r.violation_issue_dt));
+      if (r.mine_id) sourceUrl = "https://www.msha.gov/mine-data-retrieval-system?mineId=" + r.mine_id;
+    } else if (tab === "msha_accidents") {
+      name = r.mine_name || r.MINE_NAME || "Unknown Mine";
+      type = "Accident";
+      if (r.accident_date) details.push("Date: " + escapeHtml(r.accident_date));
+      if (r.degree_injury) details.push("Injury: " + escapeHtml(r.degree_injury));
+      if (r.classification) details.push(escapeHtml(r.classification));
+      if (r.occupation) details.push(escapeHtml(r.occupation));
+      if (r.mine_id) details.push("Mine ID: " + escapeHtml(String(r.mine_id)));
+    }
+
+    return '<div class="dol-result-card">' +
+      '<div class="dol-result-header">' +
+        '<span class="dol-result-type">' + escapeHtml(type) + '</span>' +
+        '<span class="dol-result-name">' + escapeHtml(name) + '</span>' +
+      '</div>' +
+      (details.length ? '<div class="dol-result-details">' + details.map(function (d) { return '<span class="dol-result-detail">' + d + '</span>'; }).join("") + '</div>' : '') +
+      '<div class="dol-result-actions">' +
+        '<button class="pill-chip dol-add-asset" data-idx="' + idx + '">+ Asset</button>' +
+        '<button class="pill-chip dol-add-kg" data-idx="' + idx + '">+ KG</button>' +
+        (sourceUrl ? '<a class="pill-chip" href="' + escapeHtml(sourceUrl) + '" target="_blank" rel="noopener">View &#8599;</a>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
   // ── Side Dock (compliance pattern) ──
   var _finDockOpen = false;
-  var _finDockPanelIds = ['assetLibPanel', 'finMarketsPanel', 'finCorporatePanel', 'finBlockchainPanel'];
+  var _finDockPanelIds = ['assetLibPanel', 'finMarketsPanel', 'finCorporatePanel', 'finBlockchainPanel', 'searchTogglesPane'];
   var _finDockParents = {};
   var _finDockedPanels = {};
   var _finActiveDockTab = 'finMarketsPanel';
@@ -1166,14 +2113,14 @@
           pill.classList.remove("unconfigured");
           pill.style.pointerEvents = "";
           pill.style.opacity = "";
-          pill.title = _providerLabels[provider] || provider;
+          if (!SUB_SOURCES[provider]) pill.title = _providerLabels[provider] || provider;
         } else {
           dot.style.background = "var(--red)";
           pill.classList.remove("active");
           pill.classList.add("unconfigured");
           pill.style.pointerEvents = "none";
           pill.style.opacity = "0.4";
-          pill.title = "API key needed — configure in panel";
+          if (!SUB_SOURCES[provider]) pill.title = "API key needed — configure in panel";
         }
       } catch {
         dot.style.background = "var(--red)";

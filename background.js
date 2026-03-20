@@ -3753,7 +3753,11 @@ async function handleIntelSearch(providerKey, query, options) {
         results = await provider.searchOpinions(query, options);
         break;
       case "opencorporates":
-        results = await provider.searchCompanies(query, options);
+        if (options?._subMethod && typeof provider[options._subMethod] === "function") {
+          results = await provider[options._subMethod](query, options);
+        } else {
+          results = await provider.searchCompanies(query, options);
+        }
         break;
       case "gleif":
         results = await provider.searchByName(query, options);
@@ -3801,13 +3805,26 @@ async function handleIntelSearch(providerKey, query, options) {
         results = { connected: true, layers: provider.getLayers() };
         break;
       case "fdic":
-        results = await provider.search(query, options);
-        break;
       case "usaspending":
-        results = await provider.search(query, options);
-        break;
       case "dol":
-        results = await provider.search(query, options);
+        if (options?._subMethod && typeof provider[options._subMethod] === "function") {
+          results = await provider[options._subMethod](query, options);
+        } else if (options?._dolMethod && typeof provider[options._dolMethod] === "function") {
+          results = await provider[options._dolMethod](query, options);
+        } else {
+          results = await provider.search(query, options);
+        }
+        break;
+      case "yahoo":
+        if (options?._method === "getQuote") {
+          results = await provider.getQuote(query);
+        } else if (options?._method === "getChart") {
+          results = await provider.getChart(query, options.range, options.interval);
+        } else if (options?._method === "searchTicker") {
+          results = await provider.searchTicker(query);
+        } else {
+          results = await provider.searchTicker(query);
+        }
         break;
       default:
         return { success: false, error: `Provider ${providerKey} search not yet implemented` };

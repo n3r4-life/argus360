@@ -85,6 +85,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   } catch (_) { /* vault unavailable — proceed */ }
 
+  // ── Theme toggle ──
+  initThemeToggle();
+
   const provResp = await browser.runtime.sendMessage({ action: "getProviders" });
   if (provResp && provResp.success) {
     provResp.providers.forEach(p => { providerData[p.key] = p; });
@@ -975,6 +978,42 @@ async function loadOpenTabs() {
 // ──────────────────────────────────────────────
 // Event listeners
 // ──────────────────────────────────────────────
+// ── Theme toggle (light/dark) ──
+function initThemeToggle() {
+  const btn = document.getElementById("theme-toggle");
+  const moonIcon = document.getElementById("theme-icon-moon");
+  const sunIcon = document.getElementById("theme-icon-sun");
+  if (!btn) return;
+
+  function updateIcon(theme) {
+    if (theme === "light") {
+      moonIcon.style.display = "none";
+      sunIcon.style.display = "";
+    } else {
+      moonIcon.style.display = "";
+      sunIcon.style.display = "none";
+    }
+  }
+
+  // Set initial icon from storage
+  browser.storage.local.get({ argusTheme: "dark" }).then(r => updateIcon(r.argusTheme));
+
+  btn.addEventListener("click", async () => {
+    const { argusTheme } = await browser.storage.local.get({ argusTheme: "dark" });
+    const next = argusTheme === "dark" ? "light" : "dark";
+    await browser.storage.local.set({ argusTheme: next });
+    updateIcon(next);
+    // theme.js handles applying data-theme on <html> via storage listener
+  });
+
+  // Keep icon in sync if changed elsewhere
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes.argusTheme) {
+      updateIcon(changes.argusTheme.newValue);
+    }
+  });
+}
+
 function attachEventListeners() {
   elements.settingsToggle.addEventListener("click", () => {
     const hasAnyKey = Object.values(currentProviders).some(p => p.apiKey);

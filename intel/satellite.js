@@ -42,15 +42,57 @@
   document.getElementById('satDateB').value = defaultDate;
 
   // ── Init map ──
-  function initMap() {
+  // Track whether user manually picked a basemap (disables auto-switch on theme change)
+  var _userPickedBasemap = false;
+
+  async function initMap() {
     if (map) return;
     map = L.map('satMap', { center: [34.05, -118.25], zoom: 12 });
 
-    baseTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    // Choose initial basemap based on app theme
+    var _initTile = 'carto-dark';
+    try {
+      var themeStore = await browser.storage.local.get({ argusTheme: 'dark' });
+      if (themeStore.argusTheme === 'light') _initTile = 'carto-light';
+    } catch (_) {}
+
+    var INIT_TILES = {
+      'carto-dark':  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      'carto-light': 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+    };
+
+    baseTileLayer = L.tileLayer(INIT_TILES[_initTile], {
       attribution: '&copy; OSM &copy; CARTO',
       subdomains: 'abcd',
       maxZoom: 19,
     }).addTo(map);
+
+    // Sync the active pill button to match
+    document.querySelectorAll('.sat-tile-source').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.tile === _initTile);
+    });
+
+    // Auto-switch basemap when theme changes (unless user manually picked one)
+    browser.storage.onChanged.addListener(function(changes, area) {
+      if (area !== 'local' || !changes.argusTheme || _userPickedBasemap) return;
+      var newTheme = changes.argusTheme.newValue;
+      var tileId = newTheme === 'light' ? 'carto-light' : 'carto-dark';
+      var activeBtn = document.querySelector('.sat-tile-source.active');
+      if (activeBtn) activeBtn.click(); // reuse existing click handler? No — just simulate
+      // Directly switch tile
+      if (baseTileLayer && map.hasLayer(baseTileLayer)) map.removeLayer(baseTileLayer);
+      baseTileLayer = L.tileLayer(INIT_TILES[tileId], {
+        attribution: '&copy; OSM &copy; CARTO', subdomains: 'abcd', maxZoom: 19
+      }).addTo(map);
+      if (imageLayerA || imageLayerB) {
+        baseTileLayer.setOpacity(parseFloat(document.getElementById('satBasemapSlider')?.value || 100) / 100);
+        baseTileLayer.bringToFront();
+      }
+      setTimeout(applyBasemapFilter, 100);
+      document.querySelectorAll('.sat-tile-source').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.tile === tileId);
+      });
+    });
 
     map.on('moveend', updateMapInfo);
     map.on('moveend', _onMapMoveEndWigle);
@@ -1187,6 +1229,7 @@
 
     document.querySelectorAll('.sat-tile-source').forEach(function(btn) {
       btn.addEventListener('click', async function() {
+        _userPickedBasemap = true;  // user manually chose — stop auto-switching on theme change
         var tileId = this.dataset.tile;
         var src = TILE_SOURCES[tileId];
         if (!src || !map) return;

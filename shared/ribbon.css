@@ -351,3 +351,90 @@
   margin-left: auto;
   font-size: 10px;
 }
+
+/* ── Light Theme ── */
+html[data-theme="light"] .argus-ribbon {
+  background: #ffffff;
+  border-bottom-color: #c8cbd4;
+  color: #555568;
+}
+html[data-theme="light"] .argus-ribbon .ribbon-brand {
+  color: #1a1a2e;
+}
+html[data-theme="light"] .argus-ribbon .ribbon-icon {
+  color: #8888a0;
+}
+html[data-theme="light"] .argus-ribbon .ribbon-icon:hover {
+  color: #1a1a2e;
+  background: #e0e3eb;
+}
+html[data-theme="light"] .argus-ribbon .ribbon-icon-sep {
+  background: #c8cbd4;
+}
+
+/* App tabs */
+html[data-theme="light"] .argus-app-tabs {
+  background: #ffffff;
+  border-bottom-color: #c8cbd4;
+}
+html[data-theme="light"] .app-tab-btn {
+  color: #555568;
+  border-color: #c8cbd4;
+}
+html[data-theme="light"] .app-tab-btn:hover {
+  color: #1a1a2e;
+  background: #e0e3eb;
+}
+html[data-theme="light"] .app-tab-btn.active {
+  color: #1a1a2e;
+  background: #eaecf2;
+  border-color: #d63050;
+}
+html[data-theme="light"] .app-tab-manage-btn {
+  color: #8888a0;
+  border-color: #c8cbd4;
+}
+html[data-theme="light"] .app-tab-manage-btn:hover {
+  color: #d63050;
+  border-color: #d63050;
+  background: rgba(214, 48, 80, 0.06);
+}
+
+/* Entry picker overlay */
+html[data-theme="light"] .ribbon-entry-picker,
+html[data-theme="light"] .app-tab-picker {
+  background: #ffffff;
+  border-color: #c8cbd4;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+html[data-theme="light"] .ribbon-entry-picker-title,
+html[data-theme="light"] .app-tab-picker-title {
+  color: #8888a0;
+}
+html[data-theme="light"] .app-tab-picker-hint {
+  color: #8888a0;
+}
+html[data-theme="light"] .ribbon-entry-item,
+html[data-theme="light"] .app-tab-picker-item {
+  color: #555568;
+}
+html[data-theme="light"] .ribbon-entry-item:hover,
+html[data-theme="light"] .app-tab-picker-item:hover:not([disabled]) {
+  background: #e0e3eb;
+  color: #1a1a2e;
+}
+html[data-theme="light"] .ribbon-entry-item.ribbon-entry-active {
+  color: #d63050;
+  border-color: #d63050;
+  background: rgba(214, 48, 80, 0.1);
+}
+html[data-theme="light"] .app-tab-picker-item.app-tab-picker-active {
+  color: #1a1a2e;
+  border-color: #c8cbd4;
+  background: rgba(0, 0, 0, 0.04);
+}
+html[data-theme="light"] .app-tab-picker-item.app-tab-picker-pinned {
+  color: #d63050;
+  border-color: rgba(214, 48, 80, 0.25);
+  background: rgba(214, 48, 80, 0.06);
+}
