@@ -2333,7 +2333,7 @@
 
     // Init shared asset library
     if (typeof AssetLibrary !== 'undefined') {
-      AssetLibrary.init({ pageId: 'satellite' });
+      AssetLibrary.init({ pageId: 'satellite', tabs: ['image', 'satellite', 'location'] });
 
       // Add "Pins" button to asset library header
       AssetLibrary.addHeaderButton('Pins', 'Show pinned locations', () => {

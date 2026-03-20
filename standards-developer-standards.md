@@ -562,27 +562,134 @@ body.XXX-dock-open .asset-lib-toggle {
 
 ### Asset Library (Shared)
 
-The Asset Library (`shared/asset-library.js` + `shared/asset-library.css`) provides cross-page collection storage for entities, sources, locations, images, and snippets. It auto-creates its own edge tab and floating panel.
+The Asset Library (`shared/asset-library.js` + `shared/asset-library.css`) is a **cross-page portable collection**. Assets are temporary carry items — they have a type and provenance but no permanent home. An asset can become a Source, KG entity, project attachment, or bookmark when the user decides.
 
-**Tabs inside the panel:** All, Images, Satellite, Locations, Sources, Entities. Pages control which tabs are visible via the `tabs` option in `init()`.
+**Three-layer data model:**
+- **Asset** = grabbed item, no home yet. Lives in Asset Library.
+- **Source** = permanent record with type, tags, folder. Filed in the Sources system.
+- **KG Entity** = graph node with relationships. Connected to other entities.
 
-**Initialization:**
+**Flow:** Search result → `+ Asset` (grab) → Asset Library → `+ Source` (file) or `+ KG` (graph)
+
+**Rule:** `+ KG` automatically also adds as an asset. `+ Asset` does NOT auto-add to KG. The user decides when something graduates to the graph.
+
+#### Dynamic Tabs
+
+Tabs are **generated dynamically** based on what's in the library. If you save a person, a People tab appears. If you save an aircraft entity, an Aircraft tab appears. Empty types have no tab.
+
+Pages can **pin tabs** that should always show even if empty (so users know they can collect those types on this page):
+
 ```javascript
-// Show all tabs (satellite, images pages)
-AssetLibrary.init({ pageId: 'satellite' });
+// Satellite — always show Images, Satellite, Locations + any types with items
+AssetLibrary.init({ pageId: 'satellite', tabs: ['image', 'satellite', 'location'] });
 
-// Show only relevant tabs (compliance, finance pages)
-AssetLibrary.init({ pageId: 'compliance', tabs: ['source', 'entity'] });
+// Compliance — always show People, Orgs, Links, Sources + dynamic
+AssetLibrary.init({ pageId: 'compliance', tabs: ['person', 'organization', 'link', 'source'] });
+
+// Images — always show Images, Sources + dynamic
+AssetLibrary.init({ pageId: 'images', tabs: ['image', 'source'] });
 ```
 
-**Adding items from any page:**
+#### Asset Types
+
+Types describe **what the thing IS**, not where it came from. The type mirrors Source types:
+
+| Type | Description | Example |
+|------|-------------|---------|
+| `person` | A human being | "Vladimir Putin" from OpenSanctions |
+| `organization` | Company, agency, group | "Boeing" from SAM.gov |
+| `vessel` | Ship, boat | Vessel from CSL sanctions |
+| `aircraft` | Airplane | Aircraft from OpenSanctions |
+| `document` | Actual document/file | A PDF, filing |
+| `link` | Link to external resource | CourtListener case URL, patent link |
+| `image` | Image file | Grabbed from Image Grabber |
+| `satellite` | Satellite imagery | Sentinel-2 capture |
+| `location` | Geographic point | Pinned coordinate |
+| `source` | Generic source record | RSS feed, contact, reference |
+| `entity` | Generic entity (fallback) | Untyped entity |
+
+#### Adding Items
+
 ```javascript
-AssetLibrary.add({ type: 'entity', label: 'Name', source: 'provider', data: rawObj, ts: Date.now() });
+AssetLibrary.add({
+  type: 'person',           // what the thing IS
+  title: 'Vladimir Putin',  // display name
+  description: 'us_ofac_sdn, eu_sanctions',  // summary line
+  metadata: {
+    provider: 'opensanctions',    // which API produced it
+    category: 'screening',        // domain category
+    searchQuery: 'putin',         // exact query used
+    pageUrl: 'https://opensanctions.org/entities/...',  // link to source
+    // any other provenance data
+  },
+  sourcePage: 'compliance',  // which page added it
+});
 ```
 
-**Types:** `image`, `satellite`, `location`, `source`, `entity`, `snippet`.
+**Every asset must have `metadata.provider`** so the Asset Library shows "via opensanctions" for traceability. Users can see at a glance where each item came from.
 
-Pages should include `+ Asset` buttons on search results to let users collect items into the library for use on Workbench, Publisher, and KG pages.
+#### Asset Library Item Actions
+
+Each item in the library has pill-chip buttons in a 2x2 grid:
+
+| View ↗ | + Source |
+|--------|----------|
+| + KG | Remove |
+
+- **View ↗** — opens the source URL (only if `metadata.pageUrl` exists)
+- **+ Source** — files the asset as a permanent Source record
+- **+ KG** — adds to Knowledge Graph as an entity
+- **Remove** — removes from library
+
+#### Wiring Checklist (for any page)
+
+1. Include in HTML `<head>`:
+   ```html
+   <link rel="stylesheet" href="../shared/asset-library.css">
+   ```
+
+2. Include in HTML `<body>` (before page scripts):
+   ```html
+   <script src="../shared/panel-state.js"></script>
+   <script src="../shared/floating-panel.js"></script>
+   <script src="../shared/asset-library.js"></script>
+   ```
+
+3. Initialize in the page's init script:
+   ```javascript
+   AssetLibrary.init({ pageId: 'mypage', tabs: ['relevant', 'types'] });
+   ```
+
+4. Add `+ Asset` buttons on result cards:
+   ```html
+   <button class="pill-chip comp-add-asset">+ Asset</button>
+   ```
+
+5. Wire the button handler to call `AssetLibrary.add({...})` with proper type and metadata.
+
+6. If the page has `+ KG` buttons, those should ALSO call `AssetLibrary.add()` after the KG message.
+
+**Currently wired on:** `intel/satellite.html`, `intel/compliance.html`, `intel/hub.html`, `osint/images.html`
+
+#### Storage
+
+Assets stored in `browser.storage.local` under key `assetLibrary` as a flat array. Shared across all pages — changes on one page reflect on others via `storage.onChanged` listener.
+
+---
+
+### Header Screening Badges
+
+Compact status pills for KG screening results. Live in the page header bar, right side after `.header-spacer`.
+
+```html
+<span class="header-screen-badges" id="myScreeningBadges">
+  <span class="header-badge flagged"><span id="myFlaggedCount">0</span> Flagged</span>
+  <span class="header-badge clean"><span id="myCleanCount">0</span> Clean</span>
+  <span class="header-badge adjacent"><span id="myAdjacentCount">0</span> Adjacent</span>
+</span>
+```
+
+CSS classes in `shared/argus-std.css`: `.header-screen-badges`, `.header-badge`, `.header-badge.flagged/.clean/.adjacent`. Click to expand flagged entity list. Replaces the old full-width screening bar.
 
 ---
 

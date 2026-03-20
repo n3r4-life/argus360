@@ -33,6 +33,7 @@ const AssetLibrary = (() => {
   let _onSelect = null;
   let _activeTab = 'all';
   let _initialized = false;
+  let _pinnedTabs = []; // tabs to always show even if empty
 
   // ── Storage ──
 
@@ -133,7 +134,11 @@ const AssetLibrary = (() => {
       case 'source':   return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
       case 'entity':   return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
       case 'snippet':  return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>';
-      case 'result':   return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
+      case 'person':   return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+      case 'organization': return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>';
+      case 'document': return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
+      case 'vessel':   return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20l2-2h16l2 2"/><path d="M4 18l-2-6h20l-2 6"/><path d="M12 4v8"/><path d="M8 8h8"/></svg>';
+      case 'link':     return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
       default:         return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>';
     }
   }
@@ -161,22 +166,9 @@ const AssetLibrary = (() => {
         <span id="alHeaderActions" style="display:flex;gap:3px;"></span>
         <button class="fp-close" id="alClose">&times;</button>
       </div>
-      <div class="asset-lib-tabs">
-        <button class="asset-lib-tab active" data-al-tab="all">All</button>
-        <button class="asset-lib-tab" data-al-tab="image">Images</button>
-        <button class="asset-lib-tab" data-al-tab="satellite">Satellite</button>
-        <button class="asset-lib-tab" data-al-tab="location">Locations</button>
-        <button class="asset-lib-tab" data-al-tab="source">Sources</button>
-        <button class="asset-lib-tab" data-al-tab="entity">Entities</button>
-        <button class="asset-lib-tab" data-al-tab="result">Results</button>
-      </div>
-      <div class="asset-lib-pane active" data-al-pane="all" id="alPaneAll"></div>
-      <div class="asset-lib-pane" data-al-pane="image" id="alPaneImage"></div>
-      <div class="asset-lib-pane" data-al-pane="satellite" id="alPaneSatellite"></div>
-      <div class="asset-lib-pane" data-al-pane="location" id="alPaneLocation"></div>
-      <div class="asset-lib-pane" data-al-pane="source" id="alPaneSource"></div>
-      <div class="asset-lib-pane" data-al-pane="entity" id="alPaneEntity"></div>
-      <div class="asset-lib-pane" data-al-pane="result" id="alPaneResult"></div>
+      <div class="asset-lib-tabs" id="alTabs"></div>
+      <!-- category filter reserved for future use -->
+      <div class="asset-lib-panes" id="alPanes"></div>
       <div class="asset-lib-footer">
         <select id="alProjectSelect" class="al-project-select" title="Active project"></select>
         <button class="pill-chip" id="alClearAll">Clear All</button>
@@ -199,25 +191,12 @@ const AssetLibrary = (() => {
       _saveVisibility(false);
     });
 
-    // Tab switching (persisted)
-    panel.querySelectorAll('.asset-lib-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        _activeTab = tab.dataset.alTab;
-        panel.querySelectorAll('.asset-lib-tab').forEach(t => t.classList.toggle('active', t === tab));
-        panel.querySelectorAll('.asset-lib-pane').forEach(p => p.classList.toggle('active', p.dataset.alPane === _activeTab));
-        try { browser.storage.local.set({ _assetLibActiveTab: _activeTab }); } catch {}
-      });
-    });
-
+    // Tab switching is handled dynamically in _render()
     // Restore saved tab
     (async () => {
       try {
         const { _assetLibActiveTab } = await browser.storage.local.get('_assetLibActiveTab');
-        if (_assetLibActiveTab) {
-          _activeTab = _assetLibActiveTab;
-          panel.querySelectorAll('.asset-lib-tab').forEach(t => t.classList.toggle('active', t.dataset.alTab === _activeTab));
-          panel.querySelectorAll('.asset-lib-pane').forEach(p => p.classList.toggle('active', p.dataset.alPane === _activeTab));
-        }
+        if (_assetLibActiveTab) _activeTab = _assetLibActiveTab;
       } catch {}
     })();
 
@@ -304,68 +283,60 @@ const AssetLibrary = (() => {
 
       const desc = item.description || item.sourcePage || '';
       const date = new Date(item.created).toLocaleDateString();
+      const providerLabel = item.metadata?.provider || item.sourcePage || '';
 
       el.innerHTML = `
         ${thumbHtml}
         <div class="asset-lib-meta">
           <span class="asset-lib-title">${_esc(item.title)}</span>
           <span class="asset-lib-desc">${_esc(desc)} · ${date}</span>
+          ${providerLabel ? '<span class="asset-lib-provider">via ' + _esc(providerLabel) + '</span>' : ''}
         </div>
         <span class="${_badgeClass(item.type)}">${item.type}</span>
-        <div class="asset-lib-item-actions">
-          <button class="asset-lib-item-btn al-use-btn" title="Use on this page">&#x2794;</button>
-          ${item.sourcePage ? '<button class="asset-lib-item-btn al-goto-btn" title="Go to ' + _esc(item.sourcePage) + ' page">&#x21AA;</button>' : ''}
-          ${item.metadata?.pageUrl ? '<button class="asset-lib-item-btn al-source-btn" title="Open source page">&#x2197;</button>' : ''}
-          ${item.metadata?.src && !item.metadata.src.startsWith('data:') ? '<button class="asset-lib-item-btn al-open-btn" title="Open original">&#x1F517;</button>' : ''}
-          <button class="asset-lib-item-btn al-remove-btn" title="Remove">&times;</button>
+        <div class="asset-lib-item-actions" style="display:grid;grid-template-columns:1fr 1fr;gap:2px;">
+          ${item.metadata?.pageUrl ? '<a class="pill-chip al-source-btn" href="' + _esc(item.metadata.pageUrl) + '" target="_blank" rel="noopener" style="font-size:8px;padding:1px 6px;text-align:center;">View ↗</a>' : '<span></span>'}
+          <button class="pill-chip al-to-source-btn" style="font-size:8px;padding:1px 6px;">+ Source</button>
+          <button class="pill-chip al-to-kg-btn" style="font-size:8px;padding:1px 6px;">+ KG</button>
+          <button class="pill-chip al-remove-btn" style="font-size:8px;padding:1px 6px;color:#e94560;">Remove</button>
         </div>
       `;
 
-      // Use button — triggers the page-specific onSelect callback
-      el.querySelector('.al-use-btn').addEventListener('click', (e) => {
+      // +S — Save as Source
+      el.querySelector('.al-to-source-btn')?.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (_onSelect) _onSelect(item);
+        const btn = e.currentTarget;
+        browser.runtime.sendMessage({
+          action: 'saveSource',
+          source: {
+            name: item.title,
+            type: item.type || 'other',
+            notes: item.description || '',
+            tags: item.metadata?.category ? [item.metadata.category] : [],
+            addresses: item.metadata?.pageUrl ? [{ type: 'url', value: item.metadata.pageUrl }] : [],
+            metadata: item.metadata || {},
+          }
+        }).then(() => {
+          btn.textContent = 'Saved!';
+          setTimeout(() => { btn.textContent = '+ Source'; }, 2000);
+        }).catch(err => { console.warn('[AssetLib] save source error:', err); });
       });
 
-      // Go to extension page where this asset originated
-      const gotoBtn = el.querySelector('.al-goto-btn');
-      if (gotoBtn) {
-        gotoBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const pageMap = {
-            'satellite': '/intel/satellite.html',
-            'images': '/osint/images.html',
-            'sources': '/osint/sources.html',
-            'reporting': '/reporting/reporting.html',
-            'graph': '/osint/graph.html',
-            'link-map': '/osint/link-map.html',
-          };
-          const path = pageMap[item.sourcePage];
-          if (path) {
-            // Store the asset ID so the target page can auto-load it
-            browser.storage.local.set({ _assetLibraryAutoLoad: item.id });
-            window.location.href = '..' + path;
-          }
-        });
-      }
+      // + KG
+      el.querySelector('.al-to-kg-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const btn = e.currentTarget;
+        browser.runtime.sendMessage({
+          action: 'extractAndUpsert',
+          text: item.title,
+          pageUrl: item.metadata?.pageUrl || ('asset:' + item.id),
+          pageTitle: (item.metadata?.provider || 'Asset') + ' — ' + item.title
+        }).then(() => {
+          btn.textContent = 'Added!';
+          setTimeout(() => { btn.textContent = '+ KG'; }, 2000);
+        }).catch(err => { console.warn('[AssetLib] KG add error:', err); });
+      });
 
-      // Open source page button
-      const sourceBtn = el.querySelector('.al-source-btn');
-      if (sourceBtn) {
-        sourceBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          window.open(item.metadata.pageUrl, '_blank');
-        });
-      }
-
-      // Open original URL button
-      const openBtn = el.querySelector('.al-open-btn');
-      if (openBtn) {
-        openBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          window.open(item.metadata.src, '_blank');
-        });
-      }
+      // View button is an <a> tag — no JS handler needed
 
       // Remove button
       el.querySelector('.al-remove-btn').addEventListener('click', (e) => {
@@ -383,36 +354,78 @@ const AssetLibrary = (() => {
     });
   }
 
+  // Tab display labels
+  const TYPE_LABELS = {
+    image: 'Images', satellite: 'Satellite', location: 'Locations', source: 'Sources',
+    entity: 'Entities', person: 'People', organization: 'Orgs', document: 'Docs',
+    vessel: 'Vessels', link: 'Links', aircraft: 'Aircraft', address: 'Addresses',
+    feed: 'Feeds', snippet: 'Snippets', ip: 'IPs'
+  };
+  const CATEGORY_LABELS = {
+    screening: 'Screening', legal: 'Legal', litigation: 'Litigation', patent: 'Patent',
+    entity: 'Entity', finance: 'Financial', tracking: 'Tracking', satellite: 'Satellite',
+    events: 'Events'
+  };
+
+  var _activeCategory = 'all'; // category filter state
+
   function _render() {
     if (!_panel) return;
 
-    // Update counts
     const total = _items.length;
     _panel.querySelector('#alTotalCount').textContent = total;
 
-    // Update tab counts
-    const types = ['image', 'satellite', 'location', 'source', 'entity', 'result'];
-    types.forEach(type => {
-      const count = _items.filter(i => i.type === type).length;
-      const tab = _panel.querySelector(`.asset-lib-tab[data-al-tab="${type}"]`);
-      if (tab) {
-        const existing = tab.querySelector('.al-count');
-        if (existing) existing.textContent = count ? `(${count})` : '';
-        else if (count) {
-          const span = document.createElement('span');
-          span.className = 'al-count';
-          span.textContent = `(${count})`;
-          tab.appendChild(span);
-        }
-      }
+    // Discover types that have items
+    const typeCounts = {};
+    const categoryCounts = {};
+    _items.forEach(item => {
+      const t = item.type || 'other';
+      typeCounts[t] = (typeCounts[t] || 0) + 1;
+      const c = item.metadata?.category || 'other';
+      categoryCounts[c] = (categoryCounts[c] || 0) + 1;
     });
 
-    // Render each pane
-    _renderItems(_panel.querySelector('#alPaneAll'), _items);
-    types.forEach(type => {
-      const pane = _panel.querySelector(`#alPane${type.charAt(0).toUpperCase() + type.slice(1)}`);
-      if (pane) _renderItems(pane, _items.filter(i => i.type === type));
+    // Build type tabs dynamically
+    const tabsContainer = _panel.querySelector('#alTabs');
+    tabsContainer.innerHTML = '';
+    // "All" tab always present
+    const allTab = document.createElement('button');
+    allTab.className = 'asset-lib-tab' + (_activeTab === 'all' ? ' active' : '');
+    allTab.dataset.alTab = 'all';
+    allTab.textContent = 'All';
+    if (total) { const s = document.createElement('span'); s.className = 'al-count'; s.textContent = '(' + total + ')'; allTab.appendChild(s); }
+    tabsContainer.appendChild(allTab);
+
+    // Merge pinned tabs (always visible) with types that have items
+    const allTypes = new Set([..._pinnedTabs, ...Object.keys(typeCounts)]);
+    const sortedTypes = Array.from(allTypes).sort();
+    sortedTypes.forEach(type => {
+      const tab = document.createElement('button');
+      tab.className = 'asset-lib-tab' + (_activeTab === type ? ' active' : '');
+      tab.dataset.alTab = type;
+      tab.textContent = TYPE_LABELS[type] || type.charAt(0).toUpperCase() + type.slice(1);
+      const count = typeCounts[type] || 0;
+      if (count) { const s = document.createElement('span'); s.className = 'al-count'; s.textContent = '(' + count + ')'; tab.appendChild(s); }
+      tabsContainer.appendChild(tab);
     });
+
+    // Wire tab clicks
+    tabsContainer.querySelectorAll('.asset-lib-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        _activeTab = tab.dataset.alTab;
+        _renderContent();
+        tabsContainer.querySelectorAll('.asset-lib-tab').forEach(t => t.classList.toggle('active', t.dataset.alTab === _activeTab));
+        try { browser.storage.local.set({ _assetLibActiveTab: _activeTab }); } catch {}
+      });
+    });
+
+    _renderContent();
+  }
+
+  function _renderContent() {
+    const panesContainer = _panel.querySelector('#alPanes');
+    let filtered = _activeTab === 'all' ? _items : _items.filter(i => i.type === _activeTab);
+    _renderItems(panesContainer, filtered);
   }
 
   function _esc(str) {
@@ -428,22 +441,8 @@ const AssetLibrary = (() => {
     _initialized = true;
     _pageId = opts.pageId || 'default';
 
+    _pinnedTabs = opts.tabs || [];
     _createPanel();
-
-    // Hide tabs not relevant to this page
-    if (opts.tabs && Array.isArray(opts.tabs)) {
-      document.querySelectorAll('.asset-lib-tab').forEach(btn => {
-        if (btn.dataset.alTab !== 'all' && opts.tabs.indexOf(btn.dataset.alTab) < 0) {
-          btn.style.display = 'none';
-        }
-      });
-      document.querySelectorAll('.asset-lib-pane').forEach(pane => {
-        if (pane.dataset.alPane !== 'all' && opts.tabs.indexOf(pane.dataset.alPane) < 0) {
-          pane.style.display = 'none';
-        }
-      });
-    }
-
     _load().then(() => _render());
 
     // Listen for storage changes from other pages

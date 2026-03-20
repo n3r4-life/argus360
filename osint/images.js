@@ -2315,7 +2315,7 @@
 
   // ── Shared Asset Library ──
   if (typeof AssetLibrary !== 'undefined') {
-    AssetLibrary.init({ pageId: 'images' });
+    AssetLibrary.init({ pageId: 'images', tabs: ['image', 'source'] });
 
     // Track which srcs are in the asset library
     const librarySrcs = new Set();

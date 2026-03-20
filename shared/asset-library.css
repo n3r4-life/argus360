@@ -136,6 +136,28 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.asset-lib-category-filter {
+  display: flex;
+  gap: 3px;
+  padding: 4px 8px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.al-cat-pill.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.asset-lib-panes {
+  flex: 1;
+  overflow-y: auto;
+}
+.asset-lib-provider {
+  font-size: 8px;
+  color: var(--accent);
+  opacity: 0.7;
+  white-space: nowrap;
+}
 .asset-lib-badge {
   font-size: 8px;
   font-weight: 700;

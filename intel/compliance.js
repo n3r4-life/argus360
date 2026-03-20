@@ -176,7 +176,7 @@
           topics: (props.topics || []).join(", "),
           dob: props.birthDate ? props.birthDate[0] : "",
           idNumber: props.idNumber ? props.idNumber[0] : "",
-          sourceUrl: r.referents?.[0] ? "https://opensanctions.org/entities/" + r.referents[0] : "",
+          sourceUrl: r.id ? "https://opensanctions.org/entities/" + r.id : (r.referents?.[0] ? "https://opensanctions.org/entities/" + r.referents[0] : ""),
           raw: r
         };
       })
@@ -431,6 +431,7 @@
       '<div class="comp-result-actions">' +
         '<button class="pill-chip comp-add-kg" data-idx="' + i + '">Add to KG</button>' +
         '<button class="pill-chip comp-add-asset" data-idx="' + i + '">+ Asset</button>' +
+        '<a class="pill-chip" href="https://webgate.ec.europa.eu/fsd/fsf#!/search" target="_blank" rel="noopener">EU List ↗</a>' +
       '</div>' +
     '</div>';
   }
@@ -544,92 +545,127 @@
   }
 
   function wireCardActions(container, provider) {
-    // Add to KG
+    // Add to KG (also adds as asset automatically)
     container.querySelectorAll(".comp-add-kg").forEach(function(btn) {
+      if (btn.dataset.alWired) return;
+      btn.dataset.alWired = "1";
+      var card = btn.closest(".comp-result-card");
+      if (!card) return;
+      var nameEl = card.querySelector(".comp-result-name");
+      var datasetsEl = card.querySelector(".comp-result-datasets");
+      var schemaEl = card.querySelector(".comp-result-schema");
+      var cardName = nameEl ? nameEl.textContent.trim() : "Unknown";
+      var cardDesc = datasetsEl ? datasetsEl.textContent.trim() : "";
+      var cardSchema = schemaEl ? schemaEl.textContent.trim() : "";
+      var viewLink = card.querySelector("a[target='_blank']");
+      var sourceUrl = viewLink ? viewLink.href : "";
+
       btn.addEventListener("click", function() {
-        var idx = parseInt(this.dataset.idx);
-        var r = searchResults[idx];
-        if (!r) return;
-        var name, url, title;
-        if (provider === "opensanctions") {
-          name = (r.properties?.name || [r.caption || "Unknown"])[0];
-          url = "opensanctions:" + (r.id || "");
-          title = "OpenSanctions — " + name;
-        } else if (provider === "csl") {
-          name = r.name || "Unknown";
-          url = "csl:" + (r.entity_number || r.id || "");
-          title = "U.S. CSL — " + name;
-        } else if (provider === "courtlistener") {
-          name = r.caseName || r.caseNameFull || "Untitled";
-          url = r.absolute_url ? "https://www.courtlistener.com" + r.absolute_url : "courtlistener:";
-          title = "CourtListener — " + name;
-        }
         var self = this;
+        var pageUrl = sourceUrl || (provider + ":" + cardName);
+        var pageTitle = (_providerLabels[provider] || provider) + " — " + cardName;
+
+        // Add to KG
         browser.runtime.sendMessage({
-          action: "extractAndUpsert", text: name, pageUrl: url, pageTitle: title
+          action: "extractAndUpsert", text: cardName, pageUrl: pageUrl, pageTitle: pageTitle
         }).then(function() {
           self.textContent = "Added!";
           setTimeout(function() { self.textContent = "Add to KG"; }, 2000);
         });
-      });
-    });
 
-    // Add to Asset Library
-    container.querySelectorAll(".comp-add-asset").forEach(function(btn) {
-      btn.addEventListener("click", function() {
-        var idx = parseInt(this.dataset.idx);
-        var r = searchResults[idx];
-        if (!r) return;
-        var name, description, category;
-        if (provider === "opensanctions" || provider === "pepscreen") {
-          name = (r.properties?.name || [r.caption || "Unknown"])[0];
-          description = (r.datasets || []).join(", ");
-          category = "screening";
-        } else if (provider === "csl") {
-          name = r.name || "Unknown";
-          description = r.source || "U.S. CSL";
-          category = "screening";
-        } else if (provider === "eusanctions") {
-          name = r.name || "Unknown";
-          description = (r.programmes || []).join(", ") || "EU Sanctions";
-          category = "screening";
-        } else if (provider === "samgov") {
-          var reg = r.entityRegistration || r;
-          name = reg.legalBusinessName || r.name || "Unknown";
-          description = "UEI: " + (reg.ueiSAM || "N/A") + " · CAGE: " + (reg.cageCode || "N/A");
-          category = "entity";
-        } else if (provider === "courtlistener") {
-          name = r.caseName || r.caseNameFull || "Untitled";
-          description = (r.court || "") + (r.dateFiled ? " · " + r.dateFiled : "");
-          category = "litigation";
-        } else {
-          name = r.patent_title || r.inventionTitle || r.title || "Untitled";
-          description = r.patent_number || r.publicationNumber || provider;
-          category = "patent";
-        }
+        // Also add as asset
         if (typeof AssetLibrary !== "undefined") {
-          var query = document.getElementById("compSearchInput").value.trim();
+          var naturalType = "entity";
+          if (provider === "courtlistener") naturalType = "link";
+          else if (provider === "patentsview" || provider === "uspto" || provider === "lensorg" || provider === "pqai") naturalType = "link";
+          else if (provider === "samgov") naturalType = "organization";
+          else if (cardSchema === "Person") naturalType = "person";
+          else if (cardSchema === "Company") naturalType = "organization";
+          else if (cardSchema === "Vessel") naturalType = "vessel";
+          else if (cardSchema === "Individual") naturalType = "person";
+
           AssetLibrary.add({
-            type: "result",
-            title: name,
-            description: description,
+            type: naturalType,
+            title: cardName,
+            description: cardDesc,
             metadata: {
               provider: provider,
-              category: category,
-              searchQuery: query,
-              searchParams: { fuzzy: document.getElementById("compFuzzyToggle")?.checked || false },
-              resultData: r,
-              pageUrl: r.absolute_url ? "https://www.courtlistener.com" + r.absolute_url : (r.source_information_url || ""),
+              category: provider === "courtlistener" ? "litigation" : provider === "samgov" ? "entity" : "screening",
+              searchQuery: document.getElementById("compSearchInput").value.trim(),
+              pageUrl: sourceUrl,
+              addedVia: "kg",
             },
             sourcePage: "compliance",
           });
-          // Open Asset Library panel so user sees the saved item
-          var alPanel = document.getElementById("assetLibPanel");
-          if (alPanel && alPanel.classList.contains("hidden")) alPanel.classList.remove("hidden");
-          this.textContent = "Saved!";
-          var self = this;
-          setTimeout(function() { self.textContent = "+ Asset"; }, 2000);
         }
+      });
+    });
+
+    // Add to Asset Library — encode data directly on buttons during rendering
+    container.querySelectorAll(".comp-add-asset").forEach(function(btn) {
+      if (btn.dataset.alWired) return; // already wired by a previous provider
+      btn.dataset.alWired = "1";
+      // Find the card this button belongs to and extract its text content for the asset
+      var card = btn.closest(".comp-result-card");
+      if (!card) return;
+      var nameEl = card.querySelector(".comp-result-name");
+      var datasetsEl = card.querySelector(".comp-result-datasets");
+      var badgeEl = card.querySelector(".comp-result-badge");
+      var cardName = nameEl ? nameEl.textContent.trim() : "Unknown";
+      var cardDesc = datasetsEl ? datasetsEl.textContent.trim() : "";
+      var cardBadge = badgeEl ? badgeEl.textContent.trim() : "";
+      // Grab source URL from View link on the card
+      var viewLink = card.querySelector("a[target='_blank']");
+      var sourceUrl = viewLink ? viewLink.href : "";
+
+      btn.addEventListener("click", function() {
+        if (typeof AssetLibrary === "undefined") return;
+
+        // Determine type from provider and badge
+        var naturalType = "entity";
+        if (provider === "courtlistener") naturalType = "link";
+        else if (provider === "patentsview" || provider === "uspto" || provider === "lensorg" || provider === "pqai") naturalType = "link";
+        else if (provider === "samgov") naturalType = "organization";
+        else if (cardBadge === "CSL" || provider === "csl") {
+          var schemaEl = card.querySelector(".comp-result-schema");
+          var schemaText = schemaEl ? schemaEl.textContent.trim() : "";
+          naturalType = schemaText === "Individual" ? "person" : schemaText === "Vessel" ? "vessel" : "organization";
+        } else if (provider === "opensanctions" || provider === "pepscreen") {
+          var schEl = card.querySelector(".comp-result-schema");
+          var schText = schEl ? schEl.textContent.trim() : "";
+          naturalType = schText === "Person" ? "person" : schText === "Company" ? "organization" : schText === "Vessel" ? "vessel" : "entity";
+        } else if (provider === "eusanctions") {
+          var euSchEl = card.querySelector(".comp-result-schema");
+          var euSchText = euSchEl ? euSchEl.textContent.trim().toLowerCase() : "";
+          naturalType = euSchText === "person" ? "person" : "organization";
+        }
+
+        var category = "screening";
+        if (provider === "courtlistener") category = "litigation";
+        else if (provider === "samgov") category = "entity";
+        else if (provider === "patentsview" || provider === "uspto" || provider === "lensorg" || provider === "pqai") category = "patent";
+
+        var query = document.getElementById("compSearchInput").value.trim();
+
+        AssetLibrary.add({
+          type: naturalType,
+          title: cardName,
+          description: cardDesc,
+          metadata: {
+            provider: provider,
+            category: category,
+            searchQuery: query,
+            badge: cardBadge,
+            pageUrl: sourceUrl,
+          },
+          sourcePage: "compliance",
+        });
+
+        var alPanel = document.getElementById("assetLibPanel");
+        if (alPanel && alPanel.classList.contains("hidden")) alPanel.classList.remove("hidden");
+        this.textContent = "Saved!";
+        var self = this;
+        setTimeout(function() { self.textContent = "+ Asset"; }, 2000);
       });
     });
 
