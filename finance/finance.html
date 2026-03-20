@@ -50,7 +50,7 @@
       <span style="width:1px;height:16px;background:var(--border);margin:0 2px;"></span>
       <!-- Corporate -->
       <button class="pill-chip fin-provider-pill" data-provider="secedgar"><span class="fin-pill-dot"></span>SEC EDGAR</button>
-      <button class="pill-chip fin-provider-pill" data-provider="gleif"><span class="fin-pill-dot"></span>GLEIF</button>
+      <button class="pill-chip fin-provider-pill" data-provider="gleif" title="LEI registry — current state, date range not applied"><span class="fin-pill-dot"></span>GLEIF</button>
       <span style="width:1px;height:16px;background:var(--border);margin:0 2px;"></span>
       <!-- Government -->
       <button class="pill-chip fin-provider-pill" data-provider="usaspending"><span class="fin-pill-dot"></span>USAspending</button>
@@ -67,15 +67,23 @@
       <!-- Labor (WHD + OSHA + MSHA) -->
       <button class="pill-chip fin-provider-pill" data-provider="dol"><span class="fin-pill-dot"></span>DOL</button>
     </div>
-    <!-- Chart range pills (visible only when Charts pill is active) -->
-    <div class="fin-search-row fin-chart-range-strip" id="finChartRangeStrip" style="display:none;gap:3px;padding:2px 0;">
+    <!-- Range pills (global date window — charts + date-aware providers) -->
+    <div class="fin-search-row fin-chart-range-strip" id="finChartRangeStrip" style="gap:3px;padding:2px 0;">
+      <button class="pill-chip chart-range-pill active" data-range="off">Off</button>
       <button class="pill-chip chart-range-pill" data-range="1d">1D</button>
       <button class="pill-chip chart-range-pill" data-range="5d">5D</button>
-      <button class="pill-chip chart-range-pill active" data-range="1mo">1M</button>
+      <button class="pill-chip chart-range-pill" data-range="1mo">1M</button>
       <button class="pill-chip chart-range-pill" data-range="3mo">3M</button>
       <button class="pill-chip chart-range-pill" data-range="6mo">6M</button>
       <button class="pill-chip chart-range-pill" data-range="1y">1Y</button>
       <button class="pill-chip chart-range-pill" data-range="5y">5Y</button>
+      <button class="pill-chip chart-range-pill" data-range="max">All</button>
+      <button class="pill-chip chart-range-pill" data-range="custom" id="rangeCustomBtn">Custom</button>
+      <span id="rangeCustomDates" class="range-custom-dates disabled">
+        <input type="date" id="rangeFromDate" class="fin-range-date" title="From date" disabled>
+        <span style="color:var(--text-muted);font-size:9px;">→</span>
+        <input type="date" id="rangeToDate" class="fin-range-date" title="To date" disabled>
+      </span>
     </div>
   </div>
 

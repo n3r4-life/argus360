@@ -490,6 +490,13 @@ body.fin-dock-open .asset-lib-toggle { display: none !important; }
   font-weight: 700;
   color: var(--success);
   margin-left: 3px;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  letter-spacing: -0.5px;
+}
+/* Fixed width for Charts pill so layout doesn't shift */
+.fin-provider-pill[data-provider="charts"] {
+  min-width: 80px;
+  justify-content: center;
 }
 
 /* ── Search Toggles dock pane ── */
@@ -575,6 +582,32 @@ body.fin-dock-open .asset-lib-toggle { display: none !important; }
 .fin-chart-range-strip .chart-range-pill {
   font-size: 9px;
   padding: 2px 8px;
+}
+
+/* ── Custom date range (inline) ── */
+.range-custom-dates {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: opacity 0.15s;
+}
+.range-custom-dates.disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+.fin-range-date {
+  font-size: 10px;
+  padding: 2px 5px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--font);
+  width: auto;
+}
+.fin-range-date:focus {
+  border-color: var(--accent);
+  outline: none;
 }
 
 /* ── Stock Chart (top of results) ── */

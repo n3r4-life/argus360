@@ -3741,7 +3741,7 @@ async function handleIntelSearch(providerKey, query, options) {
         results = await provider.search(query, options);
         break;
       case "secedgar":
-        results = await provider.searchCompany(query);
+        results = await provider.searchCompany(query, options);
         break;
       case "gdelt":
         results = await provider.searchArticles(query, options);

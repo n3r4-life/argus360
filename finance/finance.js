@@ -61,19 +61,16 @@
         // Turn ON with defaults
         pill.classList.add("active");
         _subSourceState.charts.resolve_yahoo = true;
+        _subSourceState.charts.data_yahoo = true;
         _subSourceState.charts.mode_candle = true;
-        document.getElementById("finChartRangeStrip").style.display = "";
+        // Range strip always visible now
         updatePillLabel("charts");
       } else if (_activePopupProvider === "charts" && !_subSrcPopup.classList.contains("hidden")) {
         // Popup already open — toggle OFF
         hideSubSourcePopup();
         pill.classList.remove("active");
-        // Reset all chart sub-sources
         Object.keys(_subSourceState.charts).forEach(function (k) { _subSourceState.charts[k] = false; });
-        document.getElementById("finChartRangeStrip").style.display = "none";
-        var badge = pill.querySelector(".pill-sub-count");
-        if (badge) badge.remove();
-        pill.title = "Charts: click to enable";
+        updatePillLabel("charts");
       } else {
         // Already active — open popup to configure
         showSubSourcePopup(pill, "charts");
@@ -154,7 +151,21 @@
   // ── Render chart from resolved ticker ──
   async function renderChartFromResolution(resolved) {
     var state = _subSourceState.charts || {};
+    // For charts: custom date range uses period1/period2 params, but Yahoo's simple API uses range strings
+    // "custom" maps to the closest Yahoo range, or falls back to "max"
     var range = _activeChartRange || "1mo";
+    if (range === "custom" && _customDateFrom && _customDateTo) {
+      // Calculate approximate range from date span
+      var days = Math.round((new Date(_customDateTo) - new Date(_customDateFrom)) / 86400000);
+      if (days <= 1) range = "1d";
+      else if (days <= 7) range = "5d";
+      else if (days <= 35) range = "1mo";
+      else if (days <= 100) range = "3mo";
+      else if (days <= 200) range = "6mo";
+      else if (days <= 400) range = "1y";
+      else if (days <= 1900) range = "5y";
+      else range = "max";
+    }
     var mode = state.mode_line ? "line" : "candle";
 
     // Fetch quote
@@ -259,9 +270,12 @@
       }
     }
 
+    // Compute global date window
+    var _dateWindow = getDateWindow();
+
     // Fan out remaining provider searches with resolved name
     var promises = providers.map(function (prov) {
-      return searchProvider(searchQuery, prov).then(function (data) {
+      return searchProvider(searchQuery, prov, _dateWindow).then(function (data) {
         return { provider: prov, data: data, error: null };
       }).catch(function (e) {
         return { provider: prov, data: null, error: e.message };
@@ -330,24 +344,28 @@
   // PROVIDER SEARCH DISPATCH
   // ══════════════════════════════════════
 
-  async function searchProvider(query, provider) {
+  async function searchProvider(query, provider, dateWindow) {
     // Sub-source providers: search only active sub-sources sequentially (skip charts — handled in unifiedSearch)
-    if (SUB_SOURCES[provider] && !SUB_SOURCES[provider]._isCharts) return await searchSubSourceProvider(query, provider);
+    if (SUB_SOURCES[provider] && !SUB_SOURCES[provider]._isCharts) return await searchSubSourceProvider(query, provider, dateWindow);
 
-    if (provider === "secedgar") return await searchSECEdgar(query);
-    if (provider === "opencorporates") return await searchOpenCorporates(query);
-    if (provider === "gleif") return await searchGLEIF(query);
-    if (provider === "fdic") return await searchFDIC(query);
-    if (provider === "usaspending") return await searchUSAspending(query);
+    if (provider === "secedgar") return await searchSECEdgar(query, dateWindow);
+    if (provider === "gleif") return await searchGLEIF(query); // Tier 3: no date support
+    if (provider === "fdic") return await searchFDIC(query, dateWindow);
+    if (provider === "usaspending") return await searchUSAspending(query, dateWindow);
 
     // Stub providers — will be wired as we add them
     throw new Error("not implemented");
   }
 
   // ── SEC EDGAR ──
-  async function searchSECEdgar(query) {
+  async function searchSECEdgar(query, dateWindow) {
+    var opts = {};
+    if (dateWindow) {
+      opts.dateFrom = dateWindow.from;
+      opts.dateTo = dateWindow.to;
+    }
     var resp = await browser.runtime.sendMessage({
-      action: "intelSearch", provider: "secedgar", query: query, options: {}
+      action: "intelSearch", provider: "secedgar", query: query, options: opts
     });
     if (!resp?.success) throw new Error(resp?.error || "SEC EDGAR search failed");
     var hits = resp.results?.hits?.hits || [];
@@ -434,7 +452,7 @@
   }
 
   // ── FDIC BankFind ──
-  async function searchFDIC(query) {
+  async function searchFDIC(query, dateWindow) {
     var resp = await browser.runtime.sendMessage({
       action: "intelSearch", provider: "fdic", query: query, options: { limit: 25 }
     });
@@ -603,7 +621,7 @@
   }
 
   // ── Sub-source provider search (sequential, respects toggle state) ──
-  async function searchSubSourceProvider(query, provider) {
+  async function searchSubSourceProvider(query, provider, dateWindow) {
     var cfg = SUB_SOURCES[provider];
     var state = _subSourceState[provider];
     if (!cfg || !state) throw new Error(provider + ": no sub-source config");
@@ -617,7 +635,7 @@
       try {
         var resp = await browser.runtime.sendMessage({
           action: "intelSearch", provider: provider, query: query,
-          options: { limit: 25, _subMethod: src.method }
+          options: { limit: 25, _subMethod: src.method, dateFrom: dateWindow?.from, dateTo: dateWindow?.to }
         });
         if (resp?.success && resp.results?.results) {
           resp.results.results.forEach(function (r) {
@@ -637,15 +655,28 @@
 
     // Parse results through provider-specific mappers
     if (provider === "dol") return searchDOLParseResults(allResults);
-    if (provider === "fdic") return parseFDICResults(allResults);
+    if (provider === "fdic") return parseFDICResults(allResults, dateWindow);
     if (provider === "usaspending") return parseUSAspendingResults(allResults);
     if (provider === "opencorporates") return parseOpenCorporatesResults(allResults);
     return { total: allResults.length, results: allResults };
   }
 
-  function parseFDICResults(results) {
+  function parseFDICResults(results, dateWindow) {
+    // Client-side date filter for failures (Tier 2)
+    if (dateWindow) {
+      results = results.filter(function (r) {
+        var failDate = r.FAILDATE;
+        if (!failDate) return true; // institutions — no date field, keep them
+        // FAILDATE format: "March 4, 2023" or similar — parse it
+        var d = new Date(failDate);
+        if (isNaN(d)) return true;
+        var ds = d.toISOString().slice(0, 10);
+        if (dateWindow.from && ds < dateWindow.from) return false;
+        if (dateWindow.to && ds > dateWindow.to) return false;
+        return true;
+      });
+    }
     return { total: results.length, results: results.map(function (r) {
-      // Failures have different fields than institutions
       if (r.INSTNAME || r.FAILDATE) {
         return { name: r.INSTNAME || "Unknown", type: "Failed Bank",
           cert: r.CERT || "", city: r.CITYST || "", failDate: r.FAILDATE || "",
@@ -1022,8 +1053,10 @@
     });
   });
 
-  // ── Chart range strip (below provider pills) ──
-  var _activeChartRange = "1mo";
+  // ── Range strip (global date window) ──
+  var _activeChartRange = "off";
+  var _customDateFrom = null;
+  var _customDateTo = null;
 
   document.querySelectorAll(".chart-range-pill").forEach(function (btn) {
     btn.addEventListener("click", function () {
@@ -1031,8 +1064,50 @@
       document.querySelectorAll(".chart-range-pill").forEach(function (b) {
         b.classList.toggle("active", b.dataset.range === _activeChartRange);
       });
+      var customDates = document.getElementById("rangeCustomDates");
+      var fromInput = document.getElementById("rangeFromDate");
+      var toInput = document.getElementById("rangeToDate");
+      if (_activeChartRange === "custom") {
+        customDates.classList.remove("disabled");
+        fromInput.disabled = false;
+        toInput.disabled = false;
+        // Default to last year → today
+        var today = new Date().toISOString().slice(0, 10);
+        var yearAgo = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
+        if (!fromInput.value) fromInput.value = yearAgo;
+        if (!toInput.value) toInput.value = today;
+        _customDateFrom = fromInput.value;
+        _customDateTo = toInput.value;
+      } else {
+        customDates.classList.add("disabled");
+        fromInput.disabled = true;
+        toInput.disabled = true;
+        _customDateFrom = null;
+        _customDateTo = null;
+      }
     });
   });
+
+  // Custom dates update on change
+  document.getElementById("rangeFromDate")?.addEventListener("change", function () { _customDateFrom = this.value; });
+  document.getElementById("rangeToDate")?.addEventListener("change", function () { _customDateTo = this.value; });
+
+  // Compute date window from active range
+  function getDateWindow() {
+    if (_activeChartRange === "off") return null;
+    if (_activeChartRange === "max") return null; // "All" = no date filter
+    if (_activeChartRange === "custom") {
+      if (_customDateFrom && _customDateTo) return { from: _customDateFrom, to: _customDateTo };
+      return null;
+    }
+    var now = new Date();
+    var to = now.toISOString().slice(0, 10);
+    var daysMap = { "1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "5y": 1825 };
+    var days = daysMap[_activeChartRange];
+    if (!days) return null;
+    var from = new Date(now.getTime() - days * 86400000).toISOString().slice(0, 10);
+    return { from: from, to: to };
+  }
 
   // ══════════════════════════════════════
   // SUB-SOURCE TOGGLE SYSTEM
@@ -1099,8 +1174,8 @@
     fdic: {
       label: "FDIC",
       sources: [
-        { id: "institutions", label: "Institutions", method: "search",      title: "Active bank/institution lookup" },
-        { id: "failures",     label: "Failures",     method: "getFailures", title: "Failed banks — closure date, acquirer, assets" },
+        { id: "institutions", label: "Institutions", method: "search",      title: "Current registry — date range not applied" },
+        { id: "failures",     label: "Failures",     method: "getFailures", title: "Failed banks — dates filtered locally by FAILDATE" },
       ],
     },
     usaspending: {
@@ -1259,7 +1334,13 @@
     // Charts pill: managed by its own click handler, just update badge/title here
     if (cfg._isCharts) {
       if (!pill.classList.contains("active")) {
-        if (badge) badge.remove();
+        if (!badge) {
+          badge = document.createElement("span");
+          badge.className = "pill-sub-count";
+          pill.appendChild(badge);
+        }
+        badge.textContent = "-/-/-";
+        badge.style.color = "var(--text-muted)";
         pill.title = "Charts: click to enable";
       } else {
         if (!badge) {
@@ -1267,13 +1348,15 @@
           badge.className = "pill-sub-count";
           pill.appendChild(badge);
         }
-        // Show resolver + mode: e.g. "Y·C" (Yahoo, Candle)
-        var resolverMap = { resolve_yahoo: "Y", resolve_edgar: "S", resolve_openfigi: "F", resolve_gleif: "G" };
+        var resolverMap = { resolve_yahoo: "Y", resolve_edgar: "S", resolve_openfigi: "F", resolve_gleif: "G", resolve_coingecko: "C" };
+        var dataMap = { data_yahoo: "Y", data_alphavantage: "A", data_twelvedata: "T", data_finnhub: "H", data_polygon: "P", data_coingecko: "C" };
         var modeMap = { mode_candle: "C", mode_line: "L" };
-        var rKey = "", mKey = "";
+        var rKey = "", dKey = "", mKey = "";
         Object.keys(resolverMap).forEach(function (k) { if (_subSourceState.charts[k]) rKey = resolverMap[k]; });
+        Object.keys(dataMap).forEach(function (k) { if (_subSourceState.charts[k]) dKey = dataMap[k]; });
         Object.keys(modeMap).forEach(function (k) { if (_subSourceState.charts[k]) mKey = modeMap[k]; });
-        badge.textContent = (rKey || "Y") + "/" + (mKey || "C");
+        badge.textContent = (rKey || "Y") + "/" + (dKey || "Y") + "/" + (mKey || "C");
+        badge.style.color = "";
         pill.title = cfg.label + ": " + activeNames.join(", ");
       }
       return;
