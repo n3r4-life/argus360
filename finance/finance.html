@@ -6,6 +6,7 @@
   <title>Finance Monitor</title>
   <link rel="stylesheet" href="../shared/argus-std.css">
   <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../shared/asset-library.css">
   <link rel="stylesheet" href="../lib/argus-chat.css">
   <link rel="stylesheet" href="../shared/xmpp-chat.css">
   <link rel="stylesheet" href="finance.css">
@@ -14,12 +15,8 @@
   <script src="../lib/vendor/browser-polyfill.min.js"></script>
   <script src="../shared/ribbon.js"></script>
   <script src="../shared/panel-state.js"></script>
-
-  <!-- Ticker Tape Ribbon -->
-  <div class="fin-ticker-tape" id="tickerTape">
-    <!-- Populated by JS -->
-    <button class="fin-ticker-add" id="tickerAddBtn" title="Pin item to ticker tape">+</button>
-  </div>
+  <script src="../shared/floating-panel.js"></script>
+  <script src="../shared/asset-library.js"></script>
 
   <!-- Page Header -->
   <header class="fin-header">
@@ -27,21 +24,45 @@
       <line x1="12" y1="1" x2="12" y2="23"/>
       <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
     </svg>
-    <span class="fin-header-title">Finance Monitor</span>
+    <a href="https://grokipedia.com/search?q=financial%20investigation" target="_blank" class="fin-header-title-link" title="Learn about financial investigation"><span class="fin-header-title">Finance Monitor</span></a>
     <span class="fin-header-spacer"></span>
-    <button class="btn-sm" id="viewWatchlist">Watchlist</button>
-    <button class="btn-sm" id="viewWallets">Wallets</button>
-    <button class="btn-sm" id="viewAlerts">Alerts</button>
-    <button class="btn-sm" id="refreshBtn" title="Refresh prices">Refresh</button>
-    <span id="lastRefreshed" style="font-size:10px;color:#6a6a80;"></span>
-    <button class="btn-sm" id="addItemBtn">+ Add</button>
+    <span class="fin-header-badges" id="finBadges">
+      <span class="fin-badge"><span id="finResultCount">0</span> Results</span>
+      <span class="fin-badge"><span id="finProviderCount">0</span> Providers</span>
+    </span>
+    <button class="fin-dock-btn" id="finDockToggle" title="Side Dock">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+    </button>
   </header>
 
-  <!-- Finance Tab Bar -->
-  <div class="fin-tab-bar" id="finTabBar">
-    <button class="fin-tab active" data-fin-tab="markets">Markets</button>
-    <button class="fin-tab" data-fin-tab="corporate">Corporate</button>
-    <button class="fin-tab" data-fin-tab="blockchain">Blockchain</button>
+  <!-- ═══ Unified Search Bar ═══ -->
+  <div class="fin-search-strip">
+    <div class="fin-search-row">
+      <input type="text" id="finSearchInput" class="fin-search-input" placeholder="Search name, entity, ticker, or case..." autocomplete="off">
+      <button class="pill-chip" id="finSearchBtn">Search</button>
+      <span class="fin-search-status" id="finSearchStatus"></span>
+    </div>
+    <div class="fin-search-row fin-provider-pills" id="finProviderPills" style="gap:4px; flex-wrap:wrap;">
+      <!-- Corporate -->
+      <button class="pill-chip fin-provider-pill active" data-provider="secedgar"><span class="fin-pill-dot"></span>SEC EDGAR</button>
+      <button class="pill-chip fin-provider-pill active" data-provider="opencorporates"><span class="fin-pill-dot"></span>OpenCorporates</button>
+      <button class="pill-chip fin-provider-pill active" data-provider="gleif"><span class="fin-pill-dot"></span>GLEIF</button>
+      <span style="width:1px;height:16px;background:var(--border);margin:0 2px;"></span>
+      <!-- Government -->
+      <button class="pill-chip fin-provider-pill" data-provider="usaspending"><span class="fin-pill-dot"></span>USAspending</button>
+      <button class="pill-chip fin-provider-pill" data-provider="fdic"><span class="fin-pill-dot"></span>FDIC</button>
+      <span style="width:1px;height:16px;background:var(--border);margin:0 2px;"></span>
+      <!-- Enforcement -->
+      <button class="pill-chip fin-provider-pill" data-provider="secenforcement"><span class="fin-pill-dot"></span>SEC Enforcement</button>
+      <span style="width:1px;height:16px;background:var(--border);margin:0 2px;"></span>
+      <!-- Political/Nonprofit -->
+      <button class="pill-chip fin-provider-pill" data-provider="fec"><span class="fin-pill-dot"></span>FEC</button>
+      <button class="pill-chip fin-provider-pill" data-provider="openpayments"><span class="fin-pill-dot"></span>OpenPayments</button>
+      <button class="pill-chip fin-provider-pill" data-provider="propublica990"><span class="fin-pill-dot"></span>ProPublica 990</button>
+      <span style="width:1px;height:16px;background:var(--border);margin:0 2px;"></span>
+      <!-- Labor -->
+      <button class="pill-chip fin-provider-pill" data-provider="dol"><span class="fin-pill-dot"></span>DOL (MSHA)</button>
+    </div>
   </div>
 
   <!-- Background watermark -->
@@ -49,371 +70,147 @@
     <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
   </svg>
 
-  <!-- ═══════════════ MARKETS TAB ═══════════════ -->
-  <main class="fin-main fin-tab-panel active" id="finMain" data-fin-panel="markets">
-
-    <!-- Watchlist Card -->
-    <div class="fin-card full-width" id="watchlistCard">
-      <div class="fin-card-header">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-        </svg>
-        Watchlist
-        <span class="fin-card-badge" id="watchlistCount">0</span>
+  <main class="fin-main">
+    <!-- Results area -->
+    <div class="fin-results-header">
+      <h2 class="fin-section-title">Results</h2>
+      <span class="fin-results-count" id="finResultsCount"></span>
+      <span class="fin-results-source" id="finResultsSource"></span>
+      <span style="flex:1;"></span>
+      <input type="text" id="finResultsFilter" class="fin-search-input" placeholder="Filter results..." style="max-width:200px;font-size:10px;padding:3px 8px;display:none;">
+    </div>
+    <div id="finResults" class="fin-results-list">
+      <div class="fin-empty" id="finEmpty">
+        Search a name to check across SEC filings, corporate registries, government contracts, enforcement actions, and more.
       </div>
-      <div class="fin-card-body">
-        <table class="fin-watchlist" id="watchlistTable">
-          <thead>
-            <tr>
-              <th>Type</th>
-              <th>Symbol</th>
-              <th>Name</th>
-              <th class="col-price">Price</th>
-              <th class="col-change">Change</th>
-              <th class="col-vol">Volume</th>
-              <th></th>
-            </tr>
-          </thead>
+    </div>
+  </main>
+
+  <!-- ═══ Floating Panels ═══ -->
+
+  <!-- Markets Panel (Watchlist, Wallets, Alerts) -->
+  <div class="fp fin-panel hidden" id="finMarketsPanel" data-panel-id="fin-markets">
+    <div class="fp-header">
+      <span class="fp-title">Markets</span>
+      <span class="fp-count" id="fpWatchlistCount">0</span>
+      <button class="fp-close" id="finMarketsClose">&times;</button>
+    </div>
+    <div class="fp-body" style="padding:10px;overflow-y:auto;">
+      <div style="font-size:10px; color:var(--text-muted); margin-bottom:8px;">Watchlist, wallet monitor, and price alerts.</div>
+      <div style="display:flex;gap:4px;margin-bottom:8px;">
+        <button class="pill-chip fp-sub-tab active" data-fp-sub="watchlist">Watchlist</button>
+        <button class="pill-chip fp-sub-tab" data-fp-sub="wallets">Wallets</button>
+        <button class="pill-chip fp-sub-tab" data-fp-sub="alerts">Alerts</button>
+      </div>
+      <div class="fp-sub-pane active" data-fp-pane="watchlist">
+        <table class="fin-watchlist" id="watchlistTable" style="font-size:11px;">
+          <thead><tr><th>Type</th><th>Symbol</th><th>Name</th><th class="col-price">Price</th><th></th></tr></thead>
           <tbody id="watchlistBody"></tbody>
         </table>
-        <div class="fin-empty hidden" id="watchlistEmpty">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-          </svg>
-          <div>No items in your watchlist yet.</div>
-          <div style="margin-top:4px;">Click <strong>+ Add</strong> to track stocks, crypto, commodities, and more.</div>
-        </div>
+        <div class="fin-empty" id="watchlistEmpty" style="padding:12px;">No items in watchlist. Click + Add below.</div>
+      </div>
+      <div class="fp-sub-pane" data-fp-pane="wallets">
+        <div id="walletsList"></div>
+        <div class="fin-empty" id="walletsEmpty" style="padding:12px;">No wallets being monitored.</div>
+      </div>
+      <div class="fp-sub-pane" data-fp-pane="alerts">
+        <div id="alertsList"></div>
+        <div class="fin-empty" id="alertsEmpty" style="padding:12px;">No alerts configured.</div>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:4px;">
+        <button class="pill-chip" id="addItemBtn">+ Add</button>
+        <button class="pill-chip" id="refreshBtn">Refresh</button>
+        <span id="lastRefreshed" style="font-size:9px;color:var(--text-muted);align-self:center;"></span>
       </div>
     </div>
+  </div>
 
-    <!-- Wallet Monitor Card -->
-    <div class="fin-card" id="walletsCard">
-      <div class="fin-card-header">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="1" y="4" width="22" height="16" rx="2"/>
-          <line x1="1" y1="10" x2="23" y2="10"/>
-        </svg>
-        Wallet Monitor
-        <span class="fin-card-badge" id="walletCount">0</span>
+  <!-- Corporate Panel (SEC tools, structured lookup) -->
+  <div class="fp fin-panel hidden" id="finCorporatePanel" data-panel-id="fin-corporate">
+    <div class="fp-header">
+      <span class="fp-title">Corporate</span>
+      <button class="fp-close" id="finCorporateClose">&times;</button>
+    </div>
+    <div class="fp-body" style="padding:10px;overflow-y:auto;">
+      <div style="font-size:10px; color:var(--text-muted); margin-bottom:8px;">SEC EDGAR deep lookup, CIK search, OpenCorporates, GLEIF.</div>
+      <div class="fin-corp-lookup">
+        <input type="text" id="corpLookupInput" class="fin-search-input" placeholder="Company name or CIK..." style="font-size:11px;padding:5px 8px;">
+        <button class="pill-chip" id="corpLookupBtn" style="font-size:10px;">Lookup</button>
       </div>
-      <div class="fin-card-body" id="walletsList">
-        <div class="fin-empty" id="walletsEmpty">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="1" y="4" width="22" height="16" rx="2"/>
-            <line x1="1" y1="10" x2="23" y2="10"/>
-          </svg>
-          <div>No wallets being monitored.</div>
-        </div>
+      <div class="fin-corp-company-info hidden" id="corpCompanyInfo" style="margin-top:8px;">
+        <div class="fin-corp-company-name" id="corpCompanyName"></div>
+        <div class="fin-corp-company-meta" id="corpCompanyMeta"></div>
+      </div>
+      <div id="corpOfficersList" style="margin-top:8px;max-height:200px;overflow-y:auto;"></div>
+      <div class="fin-kg-actions" style="margin-top:8px;">
+        <button class="pill-chip" id="corpAddToKg" disabled style="font-size:9px;">+ KG</button>
+        <button class="pill-chip" id="corpAddOfficersToKg" disabled style="font-size:9px;">+ Officers to KG</button>
+        <button class="pill-chip" id="corpScreenSanctions" disabled style="font-size:9px;">Screen Sanctions</button>
       </div>
     </div>
+  </div>
 
-    <!-- Alerts Card -->
-    <div class="fin-card" id="alertsCard">
-      <div class="fin-card-header">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-        </svg>
-        Alerts
-        <span class="fin-card-badge" id="alertCount">0</span>
+  <!-- Blockchain Panel (Wallet lookup) -->
+  <div class="fp fin-panel hidden" id="finBlockchainPanel" data-panel-id="fin-blockchain">
+    <div class="fp-header">
+      <span class="fp-title">Blockchain</span>
+      <button class="fp-close" id="finBlockchainClose">&times;</button>
+    </div>
+    <div class="fp-body" style="padding:10px;overflow-y:auto;">
+      <div style="font-size:10px; color:var(--text-muted); margin-bottom:8px;">Wallet lookup, balance check, transaction history.</div>
+      <div class="fin-search-row" style="gap:4px;">
+        <select id="chainSelect" class="fin-chain-select" style="font-size:11px;padding:5px;">
+          <option value="btc">BTC</option>
+          <option value="eth">ETH</option>
+        </select>
+        <input type="text" id="walletSearchInput" class="fin-search-input" placeholder="Wallet address..." style="font-size:11px;padding:5px 8px;">
+        <button class="pill-chip" id="walletSearchBtn" style="font-size:10px;">Lookup</button>
       </div>
-      <div class="fin-card-body" id="alertsList">
-        <div class="fin-empty" id="alertsEmpty">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-          </svg>
-          <div>No alerts configured.</div>
-          <div style="margin-top:4px;">Set price thresholds to get notified.</div>
-        </div>
+      <div class="fin-search-row" style="gap:4px;margin-top:4px;">
+        <button class="pill-chip fin-chain-pill active" data-chain-provider="blockstream" style="font-size:9px;">Blockstream</button>
+        <button class="pill-chip fin-chain-pill" data-chain-provider="etherscan" style="font-size:9px;">Etherscan</button>
+        <button class="pill-chip fin-chain-pill" data-chain-provider="blockchair" style="font-size:9px;">Blockchair</button>
+      </div>
+      <div class="fin-wallet-detail hidden" id="chainWalletDetail" style="margin-top:8px;">
+        <div class="fin-wallet-balance-row"><span class="fin-wallet-balance-label">Balance</span><span class="fin-wallet-balance-value" id="chainWalletBalance">--</span></div>
+        <div class="fin-wallet-balance-row"><span class="fin-wallet-balance-label">Total Received</span><span class="fin-wallet-balance-value" id="chainWalletReceived">--</span></div>
+        <div class="fin-wallet-balance-row"><span class="fin-wallet-balance-label">Total Sent</span><span class="fin-wallet-balance-value" id="chainWalletSent">--</span></div>
+        <div class="fin-wallet-balance-row"><span class="fin-wallet-balance-label">Transactions</span><span class="fin-wallet-balance-value" id="chainWalletTxCount">--</span></div>
+      </div>
+      <div class="fin-empty" id="chainWalletEmpty" style="padding:12px;">Enter a wallet address to view balance and transactions.</div>
+      <div id="chainTxList" style="margin-top:8px;max-height:250px;overflow-y:auto;font-size:10px;"></div>
+      <div class="fin-kg-actions" style="margin-top:8px;">
+        <button class="pill-chip" id="chainAddWalletToKg" disabled style="font-size:9px;">+ Wallet to KG</button>
+        <button class="pill-chip" id="chainAddWalletAsset" disabled style="font-size:9px;">+ Asset</button>
       </div>
     </div>
+  </div>
 
-    <!-- Calendar / Events Card -->
-    <div class="fin-card" id="calendarCard">
-      <div class="fin-card-header">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="4" width="18" height="18" rx="2"/>
-          <line x1="16" y1="2" x2="16" y2="6"/>
-          <line x1="8" y1="2" x2="8" y2="6"/>
-          <line x1="3" y1="10" x2="21" y2="10"/>
-        </svg>
-        Calendar
-      </div>
-      <div class="fin-card-body" id="calendarList">
-        <div class="fin-empty" id="calendarEmpty">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="4" width="18" height="18" rx="2"/>
-            <line x1="16" y1="2" x2="16" y2="6"/>
-            <line x1="8" y1="2" x2="8" y2="6"/>
-            <line x1="3" y1="10" x2="21" y2="10"/>
-          </svg>
-          <div>No upcoming events.</div>
-        </div>
-      </div>
+
+
+
+  <!-- ═══ Side Dock ═══ -->
+  <div class="fin-dock-column" id="finDockColumn">
+    <div class="fin-dock-tabs" id="finDockTabs">
+      <button id="finDockClose" title="Close Dock" style="flex:none; padding:6px 10px; color:var(--text-muted);">&#9654;</button>
+      <button class="active" data-dock-tab="assetLibPanel">Assets</button>
+      <button data-dock-tab="finMarketsPanel">Markets</button>
+      <button data-dock-tab="finCorporatePanel">Corporate</button>
+      <button data-dock-tab="finBlockchainPanel">Blockchain</button>
     </div>
+    <div class="fin-dock-body" id="finDockBody"></div>
+  </div>
 
-    <!-- Sentiment Gauge -->
-    <div class="fin-card" id="sentimentCard">
-      <div class="fin-card-header">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-          <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
-          <line x1="9" y1="9" x2="9.01" y2="9"/>
-          <line x1="15" y1="9" x2="15.01" y2="9"/>
-        </svg>
-        Market Sentiment
-      </div>
-      <div class="fin-card-body">
-        <div class="fin-sentiment-gauge" id="sentimentGauge">
-          <div class="fin-sentiment-label" id="sentimentValue">--</div>
-          <div class="fin-sentiment-text" id="sentimentText">No data</div>
-          <div class="fin-sentiment-bar">
-            <div class="fin-sentiment-needle" id="sentimentNeedle" style="left:50%;"></div>
-          </div>
-          <div style="display:flex;justify-content:space-between;width:100%;font-size:10px;color:var(--text-muted);">
-            <span>Extreme Fear</span>
-            <span>Neutral</span>
-            <span>Extreme Greed</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </main>
-
-  <!-- ═══════════════ CORPORATE TAB ═══════════════ -->
-  <main class="fin-main fin-tab-panel" data-fin-panel="corporate">
-
-    <!-- Company Search -->
-    <div class="fin-card full-width">
-      <div class="fin-card-header">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        Company Search
-      </div>
-      <div class="fin-card-body">
-        <div class="fin-search-row">
-          <input type="text" id="corpSearchInput" class="fin-search-input" placeholder="Search company name (e.g. Apple, Tesla, Goldman Sachs)...">
-          <button class="pill-chip" id="corpSearchBtn">Search</button>
-        </div>
-        <div class="fin-search-provider-row">
-          <button class="fin-provider-pill active" data-corp-provider="secedgar">SEC EDGAR</button>
-          <button class="fin-provider-pill" data-corp-provider="opencorporates">OpenCorporates</button>
-          <button class="fin-provider-pill" data-corp-provider="gleif">GLEIF (LEI)</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- SEC EDGAR Results -->
-    <div class="fin-card full-width" id="corpEdgarCard">
-      <div class="fin-card-header">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-        </svg>
-        SEC Filings
-        <span class="fin-card-badge" id="corpEdgarCount">0</span>
-      </div>
-      <div class="fin-card-body">
-        <div class="fin-corp-company-info hidden" id="corpCompanyInfo">
-          <div class="fin-corp-company-name" id="corpCompanyName"></div>
-          <div class="fin-corp-company-meta" id="corpCompanyMeta"></div>
-        </div>
-        <table class="fin-watchlist" id="corpFilingsTable">
-          <thead>
-            <tr>
-              <th>Form</th>
-              <th>Filed</th>
-              <th>Description</th>
-              <th>Accession</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="corpFilingsBody"></tbody>
-        </table>
-        <div class="fin-empty" id="corpEdgarEmpty">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-          </svg>
-          <div>Search for a company to view SEC filings.</div>
-          <div style="margin-top:4px;">10-K annual reports, 10-Q quarterly, 8-K material events, insider transactions.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Insider Transactions -->
-    <div class="fin-card" id="corpInsiderCard">
-      <div class="fin-card-header">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-          <circle cx="9" cy="7" r="4"/>
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-        </svg>
-        Insider Transactions
-        <span class="fin-card-badge" id="corpInsiderCount">0</span>
-      </div>
-      <div class="fin-card-body" id="corpInsiderList">
-        <div class="fin-empty" id="corpInsiderEmpty">
-          <div>Insider buy/sell transactions appear here after company search.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Officers & Directors -->
-    <div class="fin-card" id="corpOfficersCard">
-      <div class="fin-card-header">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-          <circle cx="12" cy="7" r="4"/>
-        </svg>
-        Officers &amp; Directors
-      </div>
-      <div class="fin-card-body" id="corpOfficersList">
-        <div class="fin-empty" id="corpOfficersEmpty">
-          <div>Company officers and directors appear here after search.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- KG Integration -->
-    <div class="fin-card" id="corpKgCard">
-      <div class="fin-card-header">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/>
-          <circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/>
-          <line x1="9" y1="6" x2="15" y2="6"/><line x1="6" y1="9" x2="6" y2="15"/>
-        </svg>
-        KG Actions
-      </div>
-      <div class="fin-card-body">
-        <div class="fin-kg-actions">
-          <button class="pill-chip" id="corpAddToKg" disabled>Add Company to KG</button>
-          <button class="pill-chip" id="corpAddOfficersToKg" disabled>Add Officers to KG</button>
-          <button class="pill-chip" id="corpScreenSanctions" disabled>Screen Sanctions</button>
-        </div>
-      </div>
-    </div>
-
-  </main>
-
-  <!-- ═══════════════ BLOCKCHAIN TAB ═══════════════ -->
-  <main class="fin-main fin-tab-panel" data-fin-panel="blockchain">
-
-    <!-- Wallet Lookup -->
-    <div class="fin-card full-width">
-      <div class="fin-card-header">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="1" y="4" width="22" height="16" rx="2"/>
-          <line x1="1" y1="10" x2="23" y2="10"/>
-        </svg>
-        Wallet Lookup
-      </div>
-      <div class="fin-card-body">
-        <div class="fin-search-row">
-          <select id="chainSelect" class="fin-chain-select">
-            <option value="btc">Bitcoin</option>
-            <option value="eth">Ethereum</option>
-          </select>
-          <input type="text" id="walletSearchInput" class="fin-search-input" placeholder="Enter wallet address...">
-          <button class="pill-chip" id="walletSearchBtn">Lookup</button>
-        </div>
-        <div class="fin-search-provider-row">
-          <button class="fin-provider-pill active" data-chain-provider="blockstream">Blockstream (BTC)</button>
-          <button class="fin-provider-pill" data-chain-provider="etherscan">Etherscan (ETH)</button>
-          <button class="fin-provider-pill" data-chain-provider="blockchair">Blockchair (Multi)</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Wallet Balance -->
-    <div class="fin-card full-width" id="chainWalletCard">
-      <div class="fin-card-header">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="12" y1="1" x2="12" y2="23"/>
-          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-        </svg>
-        Wallet Details
-      </div>
-      <div class="fin-card-body">
-        <div class="fin-wallet-detail hidden" id="chainWalletDetail">
-          <div class="fin-wallet-balance-row">
-            <span class="fin-wallet-balance-label">Balance</span>
-            <span class="fin-wallet-balance-value" id="chainWalletBalance">--</span>
-          </div>
-          <div class="fin-wallet-balance-row">
-            <span class="fin-wallet-balance-label">Total Received</span>
-            <span class="fin-wallet-balance-value" id="chainWalletReceived">--</span>
-          </div>
-          <div class="fin-wallet-balance-row">
-            <span class="fin-wallet-balance-label">Total Sent</span>
-            <span class="fin-wallet-balance-value" id="chainWalletSent">--</span>
-          </div>
-          <div class="fin-wallet-balance-row">
-            <span class="fin-wallet-balance-label">Transactions</span>
-            <span class="fin-wallet-balance-value" id="chainWalletTxCount">--</span>
-          </div>
-        </div>
-        <div class="fin-empty" id="chainWalletEmpty">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="1" y="4" width="22" height="16" rx="2"/>
-            <line x1="1" y1="10" x2="23" y2="10"/>
-          </svg>
-          <div>Enter a wallet address above to view balance and transaction history.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Transaction History -->
-    <div class="fin-card full-width" id="chainTxCard">
-      <div class="fin-card-header">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-        </svg>
-        Recent Transactions
-        <span class="fin-card-badge" id="chainTxCount">0</span>
-      </div>
-      <div class="fin-card-body">
-        <table class="fin-watchlist" id="chainTxTable">
-          <thead>
-            <tr>
-              <th>TXID</th>
-              <th>Date</th>
-              <th>Amount</th>
-              <th>Confirmations</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="chainTxBody"></tbody>
-        </table>
-        <div class="fin-empty" id="chainTxEmpty">
-          <div>Transaction history will appear after wallet lookup.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- KG Integration -->
-    <div class="fin-card" id="chainKgCard">
-      <div class="fin-card-header">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/>
-          <circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/>
-          <line x1="9" y1="6" x2="15" y2="6"/><line x1="6" y1="9" x2="6" y2="15"/>
-        </svg>
-        KG Actions
-      </div>
-      <div class="fin-card-body">
-        <div class="fin-kg-actions">
-          <button class="pill-chip" id="chainAddWalletToKg" disabled>Add Wallet to KG</button>
-          <button class="pill-chip" id="chainTraceFlow" disabled>Trace Transaction Flow</button>
-        </div>
-      </div>
-    </div>
-
-  </main>
+  <!-- ═══ Edge Tabs (right side) ═══ -->
+  <button class="edge-tab edge-tab-right" id="finMarketsToggle" title="Markets" style="top:330px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+  </button>
+  <button class="edge-tab edge-tab-right" id="finCorporateToggle" title="Corporate" style="top:400px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+  </button>
+  <button class="edge-tab edge-tab-right" id="finBlockchainToggle" title="Blockchain" style="top:470px;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+  </button>
 
   <!-- Add Item Modal -->
   <div class="fin-modal-overlay hidden" id="addModal">
@@ -435,7 +232,6 @@
             <option value="alert">Price Alert</option>
           </select>
         </div>
-        <!-- Dynamic fields based on type -->
         <div id="addFields"></div>
       </div>
       <div class="fin-modal-footer">
@@ -454,7 +250,7 @@
   <script src="../lib/argus-chat.js"></script>
   <script src="finance.js"></script>
   <div id="xmpp-chat-container"></div>
-  
+
   <script src="finance-init.js"></script>
 </body>
 </html>

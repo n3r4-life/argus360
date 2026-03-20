@@ -3800,6 +3800,15 @@ async function handleIntelSearch(providerKey, query, options) {
         await provider.testConnection();
         results = { connected: true, layers: provider.getLayers() };
         break;
+      case "fdic":
+        results = await provider.search(query, options);
+        break;
+      case "usaspending":
+        results = await provider.search(query, options);
+        break;
+      case "dol":
+        results = await provider.search(query, options);
+        break;
       default:
         return { success: false, error: `Provider ${providerKey} search not yet implemented` };
     }

@@ -3940,7 +3940,7 @@ function attachListeners() {
     }
   });
   // ── Intelligence provider tabs ──
-  const INTEL_PROVIDER_KEYS = ["opensanctions", "csl", "eusanctions", "samgov", "patentsview", "lensorg", "pqai", "secedgar", "courtlistener", "opensky", "adsbexchange", "marinetraffic", "gdelt", "sentinelhub", "opencorporates", "gleif", "blockstream", "broadcastify", "vesselfinder", "flightaware", "wigle", "stadiamaps", "windywebcams", "windyforecast", "openweathermap"];
+  const INTEL_PROVIDER_KEYS = ["opensanctions", "csl", "eusanctions", "samgov", "patentsview", "lensorg", "pqai", "secedgar", "courtlistener", "opensky", "adsbexchange", "marinetraffic", "gdelt", "sentinelhub", "opencorporates", "gleif", "blockstream", "broadcastify", "vesselfinder", "flightaware", "wigle", "stadiamaps", "windywebcams", "windyforecast", "openweathermap", "dol", "fec", "propublica990"];
 
   document.getElementById("intel-provider-tab-list")?.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {

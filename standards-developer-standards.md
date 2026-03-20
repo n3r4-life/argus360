@@ -485,12 +485,15 @@ Edge tabs are fixed buttons on the right edge of the viewport that toggle their 
 
 **Spacing rule:** Each tab is 52px tall. Use 70px intervals (52px tab + 18px gap). Stack: 400, 470, 540, 610, 680...
 
-**Last tab in the stack** should always be the **Side Dock** toggle (panel-with-divider icon):
+**Dock toggle button:** The Side Dock toggle goes in the **page header bar**, NOT as an edge tab. It sits on the right side of the header alongside any badges or action buttons. Same dock icon (rectangle with vertical divider):
 ```html
-<button class="edge-tab edge-tab-right" id="myDockToggle" title="Side Dock" style="top:XXXpx;">
-  <svg ...><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+<button class="fin-dock-btn" id="finDockToggle" title="Side Dock">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="15" y1="3" x2="15" y2="21"/>
+  </svg>
 </button>
 ```
+Style: `background: none; border: 1px solid var(--border); border-radius: var(--radius); padding: 5px 8px;` with `.active` class for accent highlight when dock is open. Toggle the `.active` class in JS when opening/closing.
 
 #### Layer 3: Side Dock (optional docking)
 
@@ -515,7 +518,9 @@ The dock is a fixed column on the right side that can pull floating panels into 
 - Dock **overlays** content — does NOT push content left or resize anything.
 - When closing the dock, panels move back to their original parent and get re-hidden.
 - Docked panels get their `.fp-header` hidden (no duplicate title/close).
-- CSS: `position: fixed; right: 0; top: 178px; bottom: 0; width: 360px; display: none/flex;`
+- CSS: `position: fixed; right: 0; top: 158px; bottom: 0; width: 360px; display: none/flex;`
+- **Dock tab row height:** Set `height: 46px` on the dock tabs container to match the page header bar height. This makes the dock tabs visually blend with the header area above them. Use `padding: 0 4px` on buttons so they fill the 46px height. The `top: 158px` value accounts for the taller tab row — the dock content body aligns at ~204px (158 + 46), which matches where page content starts below the ribbon (46px) + strips (~22px) + app tabs (~48px) + page header (46px) + search strip (~42px).
+- **Calculating dock top:** Start from the standard `178px` content line. Subtract the extra height added to the dock tab row beyond the default 24px. Default tabs are ~24px; at 46px that's 22px taller, so `178 - 20 = 158px` (with 2px fine-tuning for border alignment).
 
 **Dock CSS must include:**
 ```css

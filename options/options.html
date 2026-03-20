@@ -822,6 +822,9 @@
               <button class="tab-btn" data-iprovider="windywebcams">Windy Webcams</button>
               <button class="tab-btn" data-iprovider="windyforecast">Windy Forecast</button>
               <button class="tab-btn" data-iprovider="openweathermap">OpenWeatherMap</button>
+              <button class="tab-btn" data-iprovider="dol">DOL (MSHA)</button>
+              <button class="tab-btn" data-iprovider="fec">FEC</button>
+              <button class="tab-btn" data-iprovider="propublica990">ProPublica</button>
             </div>
           </div>
 
@@ -1178,6 +1181,45 @@
               <div class="dp-action-row">
                 <button id="intel-openweathermap-test-btn" class="pill-chip">Test Connection</button>
                 <span id="intel-openweathermap-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- DOL (MSHA) -->
+            <div id="intel-dol-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-dol-apikey">API Key <span class="hint">(required — register at dataportal.dol.gov)</span></label>
+                <div class="input-row"><input type="password" id="intel-dol-apikey" placeholder="DOL Data Portal API key"><button class="icon-btn intel-eye-toggle" data-target="intel-dol-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Department of Labor Data Portal. Currently provides MSHA mine safety data (accidents, mine addresses). OSHA inspections will be available when DOL publishes them to the v4 API. Register for a free key at <a href="https://dataportal.dol.gov/registration" target="_blank" style="color:var(--accent);">dataportal.dol.gov/registration ↗</a>.</p>
+              <div class="dp-action-row">
+                <button id="intel-dol-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-dol-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- FEC Campaign Finance -->
+            <div id="intel-fec-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-fec-apikey">API Key <span class="hint">(free — api.open.fec.gov)</span></label>
+                <div class="input-row"><input type="password" id="intel-fec-apikey" placeholder="FEC API key"><button class="icon-btn intel-eye-toggle" data-target="intel-fec-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Federal Election Commission campaign finance data — political donations, PAC spending, candidate committees. Get a free API key at <a href="https://api.open.fec.gov/developers/" target="_blank" style="color:var(--accent);">api.open.fec.gov/developers ↗</a>.</p>
+              <div class="dp-action-row">
+                <button id="intel-fec-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-fec-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- ProPublica Nonprofit Explorer -->
+            <div id="intel-propublica990-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-propublica990-apikey">API Key <span class="hint">(free — propublica.org)</span></label>
+                <div class="input-row"><input type="password" id="intel-propublica990-apikey" placeholder="ProPublica API key"><button class="icon-btn intel-eye-toggle" data-target="intel-propublica990-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">ProPublica Nonprofit Explorer — 990 filings for every US nonprofit, including revenue, expenses, officer salaries. Get a free API key at <a href="https://www.propublica.org/datastore/api/nonprofit-explorer-api" target="_blank" style="color:var(--accent);">propublica.org/datastore/api ↗</a>.</p>
+              <div class="dp-action-row">
+                <button id="intel-propublica990-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-propublica990-status" class="dp-status"></span>
               </div>
             </div>
           </div>
