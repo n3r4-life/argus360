@@ -3,7 +3,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 20px;
+  padding: 8px calc(max(20px, (100% - 1200px) / 2));
   height: 46px;
   background: #1a1a2e;
   border-bottom: 1px solid #2a2a4a;
@@ -113,10 +113,9 @@
 .argus-app-tabs {
   display: flex;
   gap: 0;
-  padding: 12px 20px 0;
+  padding: 12px calc(max(20px, (100% - 1200px) / 2)) 0;
   background: #1a1a2e;
   border-bottom: 1px solid #2a2a4a;
-  margin-bottom: 24px;
   position: relative;
   z-index: 100;
   opacity: 0;

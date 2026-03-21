@@ -82,7 +82,7 @@ function updateMultiAgentVisibility() {
   const xaiModel = providers.xai?.model || "";
   const isDefault = el.defaultProvider.value === "xai";
   const isMultiAgent = isDefault && xaiModel.includes("multi-agent");
-  el.multiAgentCard.style.display = isMultiAgent ? "" : "none";
+  if (el.multiAgentCard) el.multiAgentCard.style.display = isMultiAgent ? "" : "none";
 }
 
 function isOpenaiReasoningModel(model) {
@@ -91,7 +91,7 @@ function isOpenaiReasoningModel(model) {
 
 function updateThinkingBudgetState() {
   const isClaudeDefault = el.defaultProvider.value === "anthropic";
-  el.thinkingBudget.disabled = !isClaudeDefault;
+  if (el.thinkingBudget) el.thinkingBudget.disabled = !isClaudeDefault;
   if (el.thinkingBudgetHint) {
     el.thinkingBudgetHint.textContent = isClaudeDefault
       ? "Claude native thinking token budget."
@@ -104,8 +104,8 @@ function updateOpenaiReasoningVisibility() {
   const openaiModel = providers.openai?.model || "";
   const supportsReasoning = isOpenaiReasoningModel(openaiModel);
 
-  el.openaiReasoningCard.style.display = isOpenaiDefault ? "" : "none";
-  el.openaiReasoningEffort.disabled = !supportsReasoning;
+  if (el.openaiReasoningCard) el.openaiReasoningCard.style.display = isOpenaiDefault ? "" : "none";
+  if (el.openaiReasoningEffort) el.openaiReasoningEffort.disabled = !supportsReasoning;
 
   if (el.openaiReasoningHint) {
     if (!isOpenaiDefault) {

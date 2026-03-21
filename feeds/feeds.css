@@ -42,7 +42,7 @@ body {
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   position: sticky;
-  top: 136px;
+  top: 114px; /* ribbon 46px + AI strip 22px + app tabs 46px */
   z-index: 100;
 }
 

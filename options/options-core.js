@@ -482,20 +482,9 @@ const el = {
   incognitoAddBtn: document.getElementById("incognito-add-btn"),
   incognitoSitesList: document.getElementById("incognito-sites-list"),
   responseLanguage: document.getElementById("response-language"),
-  reasoningEffort: document.getElementById("reasoning-effort"),
   openaiReasoningEffort: document.getElementById("openai-reasoning-effort"),
   openaiReasoningHint: document.getElementById("openai-reasoning-hint"),
   openaiReasoningCard: document.getElementById("openai-reasoning-card"),
-  multiAgentCard: document.getElementById("multi-agent-card"),
-  defaultPreset: document.getElementById("default-preset"),
-  tabList: document.getElementById("prompt-tab-list"),
-  promptProvider: document.getElementById("prompt-provider"),
-  promptSystem: document.getElementById("prompt-system"),
-  promptUser: document.getElementById("prompt-user"),
-  resetPrompt: document.getElementById("reset-prompt"),
-  deletePreset: document.getElementById("delete-preset"),
-  addPreset: document.getElementById("add-preset"),
-  promptStatus: document.getElementById("prompt-status"),
   saveIndicator: document.getElementById("save-indicator"),
   versionNumber: document.getElementById("version-number"),
   // Extended thinking
@@ -503,22 +492,8 @@ const el = {
   thinkingBudget: document.getElementById("thinking-budget"),
   thinkingBudgetHint: document.getElementById("thinking-budget-hint"),
   // Auto-analyze
-  autoRulesList: document.getElementById("auto-rules-list"),
-  ruleUrl: document.getElementById("rule-url"),
-  rulePreset: document.getElementById("rule-preset"),
-  ruleProvider: document.getElementById("rule-provider"),
-  ruleDelay: document.getElementById("rule-delay"),
-  addRule: document.getElementById("add-rule"),
   // Bookmark tagging prompt
-  bookmarkTagPrompt: document.getElementById("bookmark-tag-prompt"),
-  resetBookmarkTagPrompt: document.getElementById("reset-bookmark-tag-prompt"),
-  bookmarkTagPromptStatus: document.getElementById("bookmark-tag-prompt-status"),
   // Advanced prompts
-  advPromptSelect: document.getElementById("adv-prompt-select"),
-  advPromptSystem: document.getElementById("adv-prompt-system"),
-  advPromptUser: document.getElementById("adv-prompt-user"),
-  advPromptReset: document.getElementById("adv-prompt-reset"),
-  advPromptStatus: document.getElementById("adv-prompt-status"),
   // Import/Export
   exportSettings: document.getElementById("export-settings"),
   importSettings: document.getElementById("import-settings"),
@@ -546,22 +521,7 @@ const el = {
   monitorStorageLabel: document.getElementById("monitor-storage-label"),
   monitorStorageFill: document.getElementById("monitor-storage-fill"),
   // RSS Feeds
-  feedList: document.getElementById("feed-list"),
-  feedUrl: document.getElementById("feed-url"),
-  feedInterval: document.getElementById("feed-interval"),
-  feedTitle: document.getElementById("feed-title"),
-  feedAiSummarize: document.getElementById("feed-ai-summarize"),
-  feedMonitorBridge: document.getElementById("feed-monitor-bridge"),
-  addFeed: document.getElementById("add-feed"),
-  openFeedReader: document.getElementById("open-feed-reader"),
-  feedStatus: document.getElementById("feed-status"),
   // Feed Keyword Routes
-  feedRouteList: document.getElementById("feed-route-list"),
-  routeKeywords: document.getElementById("route-keywords"),
-  routeProject: document.getElementById("route-project"),
-  routeFeed: document.getElementById("route-feed"),
-  routeNotify: document.getElementById("route-notify"),
-  addFeedRoute: document.getElementById("add-feed-route"),
   // Archive Redirect
   archiveEnabled: document.getElementById("archive-enabled"),
   archiveProvider: document.getElementById("archive-provider"),
@@ -581,19 +541,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   initIntervalStepper("monitor-interval-stepper", "monitor-interval", "monitor-interval-display", 60);
   initIntervalStepper("feed-interval-stepper", "feed-interval", "feed-interval-display", 60);
 
-  await loadAllSettings();
-  selectProviderTab("xai");
-  selectDataProviderTab("gdrive");
-  renderMonitors();
-  attachListeners();
-  updateReasoningControls();
-  updateConsoleStatusStrip();
-  loadVersion();
-  initMainTabs();
-  initHelpExtLinks();
-  initStorageManagement();
-  initCloudBackup();
-  initUserProfile();
+  try { await loadAllSettings(); } catch(e) { console.error("[Argus init] loadAllSettings failed:", e); }
+  try { selectProviderTab("xai"); } catch(e) { console.error("[Argus init] selectProviderTab failed:", e); }
+  try { selectDataProviderTab("gdrive"); } catch(e) { console.error("[Argus init] selectDataProviderTab failed:", e); }
+  try { renderMonitors(); } catch(e) { console.error("[Argus init] renderMonitors failed:", e); }
+  try { attachListeners(); } catch(e) { console.error("[Argus init] attachListeners failed:", e); }
+  try { updateReasoningControls(); } catch(e) { console.error("[Argus init] updateReasoningControls failed:", e); }
+  try { updateConsoleStatusStrip(); } catch(e) { console.error("[Argus init] updateConsoleStatusStrip failed:", e); }
+  try { loadVersion(); } catch(e) { console.error("[Argus init] loadVersion failed:", e); }
+  try { initMainTabs(); } catch(e) { console.error("[Argus init] initMainTabs failed:", e); }
+  try { initHelpExtLinks(); } catch(e) { console.error("[Argus init] initHelpExtLinks failed:", e); }
+  try { initStorageManagement(); } catch(e) { console.error("[Argus init] initStorageManagement failed:", e); }
+  try { initCloudBackup(); } catch(e) { console.error("[Argus init] initCloudBackup failed:", e); }
+  try { initUserProfile(); } catch(e) { console.error("[Argus init] initUserProfile failed:", e); }
 
   // Refresh buttons on data tabs
   document.getElementById("bm-refresh")?.addEventListener("click", () => {
@@ -734,7 +694,8 @@ async function loadAllSettings() {
   el.incognitoForceEnabled.checked = settings.incognitoForceEnabled === true;
   renderIncognitoSites(settings.incognitoSites || []);
   el.responseLanguage.value = settings.responseLanguage ?? "auto";
-  el.reasoningEffort.value = settings.reasoningEffort;
+  // Graduated tab element - guard against null
+  if (el.reasoningEffort) el.reasoningEffort.value = settings.reasoningEffort;
   el.openaiReasoningEffort.value = settings.openaiReasoningEffort || "medium";
   el.extendedThinkingEnabled.checked = settings.extendedThinking.enabled;
   el.thinkingBudget.value = settings.extendedThinking.budgetTokens || 10000;
@@ -745,8 +706,10 @@ async function loadAllSettings() {
   advancedPrompts = settings.advancedPrompts || {};
 
   populateDefaultPresetDropdown();
-  el.defaultPreset.value = settings.defaultPreset || "summary";
-  el.bookmarkTagPrompt.value = settings.bookmarkTagPrompt || DEFAULT_BOOKMARK_TAG_PROMPT;
+  // Graduated tab element - guard against null
+  if (el.defaultPreset) el.defaultPreset.value = settings.defaultPreset || "summary";
+  // Graduated tab element - guard against null
+  if (el.bookmarkTagPrompt) el.bookmarkTagPrompt.value = settings.bookmarkTagPrompt || DEFAULT_BOOKMARK_TAG_PROMPT;
 
   updateProviderTabIndicators();
   loadDataProviderFields();
@@ -833,15 +796,16 @@ function flashSaved() {
 async function saveAllSettings() {
   await browser.storage.local.set({
     defaultProvider: el.defaultProvider.value,
-    defaultPreset: el.defaultPreset.value,
+    defaultPreset: el.defaultPreset?.value || "summary",
     providers,
     maxTokens: parseInt(el.maxTokens.value, 10) || 2048,
     maxInputChars: parseInt(el.maxInputChars.value, 10) || 100000,
     temperature: parseFloat(el.temperature.value),
-    reasoningEffort: el.reasoningEffort.value,
-    openaiReasoningEffort: el.openaiReasoningEffort.value,
+    reasoningEffort: el.reasoningEffort?.value || "medium",
+    openaiReasoningEffort: el.openaiReasoningEffort?.value || "medium",
     customPresets,
-    bookmarkTagPrompt: el.bookmarkTagPrompt.value !== DEFAULT_BOOKMARK_TAG_PROMPT ? el.bookmarkTagPrompt.value : "",
+    // Graduated tab element - guard against null
+    bookmarkTagPrompt: (el.bookmarkTagPrompt?.value || "") !== DEFAULT_BOOKMARK_TAG_PROMPT ? (el.bookmarkTagPrompt?.value || "") : "",
     extendedThinking: {
       enabled: el.extendedThinkingEnabled.checked,
       budgetTokens: parseInt(el.thinkingBudget.value, 10) || 10000
@@ -977,9 +941,11 @@ function initMainTabs() {
   if (prefillRule && el.ruleUrl) {
     try {
       const u = new URL(prefillRule);
-      el.ruleUrl.value = `*${u.hostname}${u.pathname}*`;
+      // Graduated tab element - guard against null
+      if (el.ruleUrl) el.ruleUrl.value = `*${u.hostname}${u.pathname}*`;
     } catch {
-      el.ruleUrl.value = prefillRule;
+      // Graduated tab element - guard against null
+      if (el.ruleUrl) el.ruleUrl.value = prefillRule;
     }
   }
 
@@ -1027,7 +993,7 @@ function initMainTabs() {
       // Console entry tab — switch to whichever section is the entry point
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
-        const { consoleEntryTab } = await browser.storage.local.get({ consoleEntryTab: "projects" });
+        const { consoleEntryTab } = await browser.storage.local.get({ consoleEntryTab: "home" });
         const navTabs = document.querySelectorAll(".nav-tab[data-tab]");
         const navPanels = document.querySelectorAll(".tab-panel[data-panel]");
         switchMainTab(consoleEntryTab, navTabs, navPanels);
@@ -1130,17 +1096,15 @@ function initMainTabs() {
 
   // Console tab label mapping (same as ribbon.js)
   const CONSOLE_ENTRY_LABELS = {
-    bookmarks: "Bookmarks", projects: "Projects", monitors: "Monitors",
-    feeds: "Feeds", osint: "OSINT", automation: "Automate",
-    archive: "Redirects", tracker: "Tracker", sources: "Sources",
-    prompts: "Prompts", providers: "Providers",
+    bookmarks: "Bookmarks", monitors: "Monitors",
+    archive: "Redirects", providers: "Providers",
     resources: "Resources", settings: "Settings"
   };
 
   // Update the console entry tab button label from storage
   (async function updateConsoleEntryLabel() {
     try {
-      const { consoleEntryTab } = await browser.storage.local.get({ consoleEntryTab: "projects" });
+      const { consoleEntryTab } = await browser.storage.local.get({ consoleEntryTab: "home" });
       if (consoleEntryTab && CONSOLE_ENTRY_LABELS[consoleEntryTab]) {
         const btn = document.getElementById("open-projects-nav");
         if (btn) {
@@ -1165,328 +1129,7 @@ function initMainTabs() {
     }
   });
 
-  // ── Console Entry Tab Picker ──
-  const entryPickerBtn = document.getElementById("nav-entry-picker");
-  const entryPickerOverlay = document.getElementById("entry-picker-overlay");
-
-  async function renderEntryPicker() {
-    const { consoleEntryTab } = await browser.storage.local.get({ consoleEntryTab: "projects" });
-    const navBtns = document.querySelectorAll("#main-nav .nav-tab[data-tab]");
-    let html = '<div class="entry-picker-title">Swappable tab</div>';
-    for (const [id, label] of Object.entries(CONSOLE_ENTRY_LABELS)) {
-      const navBtn = [...navBtns].find(b => b.dataset.tab === id);
-      const svg = navBtn ? navBtn.querySelector("svg")?.outerHTML || "" : "";
-      const active = id === consoleEntryTab ? " entry-active" : "";
-      html += `<button class="entry-picker-item${active}" data-entry-id="${id}">${svg} ${label}</button>`;
-    }
-    entryPickerOverlay.innerHTML = html;
-
-    entryPickerOverlay.querySelectorAll(".entry-picker-item").forEach(item => {
-      item.addEventListener("click", async () => {
-        const id = item.dataset.entryId;
-        await browser.storage.local.set({ consoleEntryTab: id });
-        entryPickerOverlay.classList.add("hidden");
-        // Update console entry button label
-        window.dispatchEvent(new CustomEvent("consoleEntryChanged", { detail: { tabId: id } }));
-      });
-    });
-  }
-
-  entryPickerBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const isHidden = entryPickerOverlay.classList.contains("hidden");
-    entryPickerOverlay.classList.toggle("hidden");
-    if (isHidden) renderEntryPicker();
-  });
-
-  document.addEventListener("click", (e) => {
-    if (!entryPickerOverlay.contains(e.target) && e.target !== entryPickerBtn) {
-      entryPickerOverlay.classList.add("hidden");
-    }
-  });
-
-  // ── Console app-nav: visibility, quick-jump, config, drag-to-reorder ──
-  const consoleAppNav = document.getElementById("console-app-nav");
-  const CONSOLE_ALL_IDS = ["open-projects-nav", "open-reader-nav", "open-history-nav", "open-kg-nav", "open-workbench-nav", "open-draft-nav", "open-images-nav", "open-chat-nav", "open-terminal-nav"];
-  const CONSOLE_DEFAULT_VISIBLE = ["open-projects-nav", "open-reader-nav", "open-history-nav", "open-kg-nav", "open-workbench-nav", "open-chat-nav", "open-terminal-nav"];
-  const CONSOLE_MAX_VISIBLE = 8;
-  const CONSOLE_PINNED = ["open-projects-nav"];
-  // Mapping from ribbon tab IDs to console nav IDs
-  const ribbonToConsole = {
-    "app-projects": "open-projects-nav", "app-reader": "open-reader-nav",
-    "app-reports": "open-history-nav", "app-kg": "open-kg-nav",
-    "app-workbench": "open-workbench-nav", "app-draft": "open-draft-nav",
-    "app-images": "open-images-nav", "app-chat": "open-chat-nav",
-    "app-terminal": "open-terminal-nav"
-  };
-  const consoleToRibbon = Object.fromEntries(Object.entries(ribbonToConsole).map(([k, v]) => [v, k]));
-
-  // Cache SVG + label from each HTML button before any are hidden
-  const consoleTabMeta = {};
-  for (const cid of CONSOLE_ALL_IDS) {
-    const btn = document.getElementById(cid);
-    if (btn) {
-      consoleTabMeta[cid] = {
-        svg: btn.querySelector("svg")?.outerHTML || "",
-        label: btn.querySelector("span")?.textContent || cid
-      };
-    }
-  }
-
-  let consoleCurrentOrder = [...CONSOLE_ALL_IDS];
-  let consoleVisibleTabs = [...CONSOLE_DEFAULT_VISIBLE];
-  let consoleSessionVisible = null; // ephemeral swap state
-
-  function consoleGetEffective() {
-    return consoleSessionVisible || consoleVisibleTabs;
-  }
-
-  function consoleApplyVisibility() {
-    const effective = new Set(consoleGetEffective());
-    const quickJumpBtn = document.getElementById("console-quick-jump");
-    for (const cid of CONSOLE_ALL_IDS) {
-      const btn = document.getElementById(cid);
-      if (!btn) continue;
-      btn.style.display = effective.has(cid) ? "" : "none";
-      // Reorder: insert visible tabs before the quick-jump button
-      if (effective.has(cid)) {
-        consoleAppNav.insertBefore(btn, quickJumpBtn);
-      }
-    }
-  }
-
-  // Quick-jump button + overlay
-  const cQuickJumpBtn = document.getElementById("console-quick-jump");
-  const cQuickJumpOverlay = document.getElementById("console-quick-jump-overlay");
-
-  function renderConsoleQuickJump() {
-    const effective = consoleGetEffective();
-    const visibleSet = new Set(effective);
-    const hidden = consoleCurrentOrder.filter(id => !visibleSet.has(id) && consoleTabMeta[id]);
-    if (hidden.length === 0) {
-      cQuickJumpOverlay.innerHTML = '<div class="console-picker-title">All tabs visible</div>';
-      return;
-    }
-    let html = '<div class="console-picker-title">Jump to</div>';
-    for (const cid of hidden) {
-      const m = consoleTabMeta[cid];
-      html += `<button class="console-picker-item" data-jump-id="${cid}">${m.svg} <span>${m.label}</span></button>`;
-    }
-    cQuickJumpOverlay.innerHTML = html;
-
-    cQuickJumpOverlay.querySelectorAll("[data-jump-id]").forEach(item => {
-      item.addEventListener("click", () => {
-        const cid = item.dataset.jumpId;
-        cQuickJumpOverlay.classList.add("hidden");
-
-        // Swap: bump leftmost non-pinned tab, add this one at the end
-        const swapped = [...consoleGetEffective()];
-        const bumpIdx = swapped.findIndex(t => !CONSOLE_PINNED.includes(t));
-        if (bumpIdx >= 0) {
-          swapped.splice(bumpIdx, 1);
-          swapped.push(cid);
-          consoleSessionVisible = swapped;
-          consoleApplyVisibility();
-        }
-
-        // Navigate — click the actual tab button
-        const btn = document.getElementById(cid);
-        if (btn) btn.click();
-      });
-    });
-  }
-
-  function positionConsoleOverlay(overlay, e) {
-    overlay.style.opacity = "0";
-    overlay.style.left = "auto";
-    overlay.style.right = "auto";
-    requestAnimationFrame(() => {
-      const x = e.clientX;
-      const y = e.clientY;
-      const right = Math.max(0, window.innerWidth - x - 20);
-      overlay.style.top = (y + 16) + "px";
-      overlay.style.right = right + "px";
-      overlay.style.opacity = "1";
-    });
-  }
-
-  cQuickJumpBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    document.getElementById("console-tab-config-overlay").classList.add("hidden");
-    const isHidden = cQuickJumpOverlay.classList.contains("hidden");
-    cQuickJumpOverlay.classList.toggle("hidden");
-    if (isHidden) {
-      renderConsoleQuickJump();
-      positionConsoleOverlay(cQuickJumpOverlay, e);
-    }
-  });
-
-  // Tab config button + overlay
-  const cTabConfigBtn = document.getElementById("console-tab-config");
-  const cTabConfigOverlay = document.getElementById("console-tab-config-overlay");
-
-  function renderConsoleTabConfig() {
-    const visibleSet = new Set(consoleVisibleTabs);
-    let html = '<div class="console-picker-title">Visible Tabs</div>';
-    html += '<div class="console-picker-hint">Max ' + CONSOLE_MAX_VISIBLE + ' tabs. Drag to reorder.</div>';
-    for (const cid of CONSOLE_ALL_IDS) {
-      const m = consoleTabMeta[cid];
-      if (!m) continue;
-      const isPinned = CONSOLE_PINNED.includes(cid);
-      const isVisible = visibleSet.has(cid);
-      const pinnedCls = isPinned ? " console-picker-pinned" : "";
-      const activeCls = isVisible ? " console-picker-active" : "";
-      html += `<button class="console-picker-item${activeCls}${pinnedCls}" data-pick-id="${cid}" ${isPinned ? 'disabled' : ''}>`;
-      html += `${m.svg} <span>${m.label}</span>`;
-      if (isPinned) html += '<span class="console-picker-pin" title="Always visible">&#128274;</span>';
-      else if (isVisible) html += '<span class="console-picker-toggle">✕</span>';
-      else html += '<span class="console-picker-toggle">+</span>';
-      html += '</button>';
-    }
-    cTabConfigOverlay.innerHTML = html;
-
-    cTabConfigOverlay.querySelectorAll(".console-picker-item:not([disabled])").forEach(item => {
-      item.addEventListener("click", async () => {
-        const cid = item.dataset.pickId;
-        const idx = consoleVisibleTabs.indexOf(cid);
-        if (idx >= 0) {
-          consoleVisibleTabs.splice(idx, 1);
-        } else if (consoleVisibleTabs.length < CONSOLE_MAX_VISIBLE) {
-          consoleVisibleTabs.push(cid);
-        } else {
-          return;
-        }
-        // Save as ribbon-format IDs so ribbon.js stays in sync
-        // Preserve any ribbon-only tabs (e.g. app-finance) that have no console equivalent
-        const { appVisibleTabs: prevRibbon } = await browser.storage.local.get({ appVisibleTabs: [] });
-        const mappedRibbonIds = new Set(Object.keys(ribbonToConsole));
-        const ribbonOnlyTabs = (prevRibbon || []).filter(rid => !mappedRibbonIds.has(rid));
-        const ribbonVis = [...consoleVisibleTabs.map(c => consoleToRibbon[c]).filter(Boolean), ...ribbonOnlyTabs];
-        await browser.storage.local.set({ appVisibleTabs: ribbonVis });
-        consoleSessionVisible = null;
-        consoleApplyVisibility();
-        renderConsoleTabConfig();
-      });
-    });
-  }
-
-  cTabConfigBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    cQuickJumpOverlay.classList.add("hidden");
-    const isHidden = cTabConfigOverlay.classList.contains("hidden");
-    cTabConfigOverlay.classList.toggle("hidden");
-    if (isHidden) {
-      renderConsoleTabConfig();
-      positionConsoleOverlay(cTabConfigOverlay, e);
-    }
-  });
-
-  // Close overlays on outside click
-  document.addEventListener("click", (e) => {
-    if (!cQuickJumpOverlay.contains(e.target) && e.target !== cQuickJumpBtn) {
-      cQuickJumpOverlay.classList.add("hidden");
-    }
-    if (!cTabConfigOverlay.contains(e.target) && e.target !== cTabConfigBtn && !cTabConfigBtn.contains(e.target)) {
-      cTabConfigOverlay.classList.add("hidden");
-    }
-  });
-
-  (async function initConsoleAppNav() {
-    try {
-      const stored = await browser.storage.local.get(["appTabOrder", "appVisibleTabs"]);
-      if (Array.isArray(stored.appTabOrder) && stored.appTabOrder.length > 0) {
-        const mapped = stored.appTabOrder.map(rid => ribbonToConsole[rid]).filter(Boolean);
-        const missing = CONSOLE_ALL_IDS.filter(id => !mapped.includes(id));
-        consoleCurrentOrder = [...mapped, ...missing];
-      }
-      if (Array.isArray(stored.appVisibleTabs) && stored.appVisibleTabs.length > 0) {
-        consoleVisibleTabs = stored.appVisibleTabs.map(rid => ribbonToConsole[rid]).filter(Boolean);
-        // Ensure pinned tabs are always included
-        for (const pin of CONSOLE_PINNED) {
-          if (!consoleVisibleTabs.includes(pin)) consoleVisibleTabs.unshift(pin);
-        }
-        if (consoleVisibleTabs.length > CONSOLE_MAX_VISIBLE) consoleVisibleTabs = consoleVisibleTabs.slice(0, CONSOLE_MAX_VISIBLE);
-      }
-    } catch (e) { /* use defaults */ }
-
-    consoleApplyVisibility();
-    // Fade in the tab bar once visibility is applied
-    consoleAppNav.classList.add("ready");
-
-    // Setup drag-to-reorder for console app-nav (custom mouse-based, threshold to avoid eating clicks)
-    const DRAG_THRESHOLD = 8;
-    let dragState = null;
-
-    consoleAppNav.addEventListener("mousedown", (e) => {
-      const tab = e.target.closest(".app-tab");
-      if (!tab || e.button !== 0) return;
-      dragState = { tab, startX: e.clientX, startY: e.clientY, active: false };
-    });
-
-    window.addEventListener("mousemove", (e) => {
-      if (!dragState) return;
-      if (!dragState.active) {
-        const dx = Math.abs(e.clientX - dragState.startX);
-        const dy = Math.abs(e.clientY - dragState.startY);
-        if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return;
-        dragState.active = true;
-        dragState.tab.classList.add("dragging");
-      }
-      const target = document.elementFromPoint(e.clientX, e.clientY)?.closest(".app-tab");
-      consoleAppNav.querySelectorAll(".app-tab").forEach(t => t.classList.remove("drag-over"));
-      if (target && target !== dragState.tab) target.classList.add("drag-over");
-    });
-
-    window.addEventListener("mouseup", (e) => {
-      if (!dragState) return;
-      const { tab, active } = dragState;
-      if (active) {
-        const target = document.elementFromPoint(e.clientX, e.clientY)?.closest(".app-tab");
-        if (target && target !== tab) {
-          const tabs = [...consoleAppNav.querySelectorAll(".app-tab")];
-          const dragIdx = tabs.indexOf(tab);
-          const dropIdx = tabs.indexOf(target);
-          if (dragIdx < dropIdx) {
-            target.insertAdjacentElement("afterend", tab);
-          } else {
-            target.insertAdjacentElement("beforebegin", tab);
-          }
-          const newOrder = [...consoleAppNav.querySelectorAll(".app-tab")].map(t => consoleToRibbon[t.dataset.tabId]).filter(Boolean);
-          browser.storage.local.set({ appTabOrder: newOrder });
-        }
-        tab.classList.remove("dragging");
-        consoleAppNav.querySelectorAll(".app-tab").forEach(t => t.classList.remove("drag-over"));
-        tab.addEventListener("click", (ev) => { ev.stopImmediatePropagation(); ev.preventDefault(); }, { once: true, capture: true });
-      }
-      dragState = null;
-    });
-  })();
-
-  // Sync visibility when storage changes (e.g. from an MFT page's ribbon)
-  browser.storage.onChanged.addListener((changes, area) => {
-    if (area !== "local") return;
-    if (changes.appVisibleTabs) {
-      const vis = changes.appVisibleTabs.newValue;
-      if (Array.isArray(vis)) {
-        consoleVisibleTabs = vis.map(rid => ribbonToConsole[rid]).filter(Boolean);
-        for (const pin of CONSOLE_PINNED) {
-          if (!consoleVisibleTabs.includes(pin)) consoleVisibleTabs.unshift(pin);
-        }
-        consoleSessionVisible = null;
-        consoleApplyVisibility();
-      }
-    }
-    if (changes.appTabOrder) {
-      const ord = changes.appTabOrder.newValue;
-      if (Array.isArray(ord)) {
-        const mapped = ord.map(rid => ribbonToConsole[rid]).filter(Boolean);
-        const missing = CONSOLE_ALL_IDS.filter(id => !mapped.includes(id));
-        consoleCurrentOrder = [...mapped, ...missing];
-        consoleApplyVisibility();
-      }
-    }
-  });
-
+  // Console entry picker + app-nav removed — now handled by shared/ribbon.js
   // Wipe icon — quick link to Settings wipe section
   const wipeNavBtn = document.getElementById("wipe-nav");
   if (wipeNavBtn) {
@@ -1513,14 +1156,28 @@ function initMainTabs() {
     });
   }
 
-  // Home landing: icon guide + quick link clicks → navigate to that tab
+  // Home landing: icon guide + quick link clicks → navigate to that tab or graduated page
+  const GRADUATED_PAGES = {
+    projects: "projects/projects.html",
+    automation: "automations/automations.html",
+    sources: "sources/sources.html",
+    prompts: "prompts/prompts.html",
+    osint: "osint/graph.html",
+    feeds: "feeds/feeds.html",
+    tracker: "trawl/trawl.html",
+    finance: "finance/finance.html",
+  };
   document.querySelectorAll("[data-goto]").forEach(el => {
     el.style.cursor = "pointer";
     el.addEventListener("click", () => {
       const target = el.dataset.goto;
-      switchMainTab(target, tabs, panels);
-      sessionStorage.setItem("argus-activeTab", target);
-      window.location.hash = target;
+      if (GRADUATED_PAGES[target]) {
+        window.location.href = browser.runtime.getURL(GRADUATED_PAGES[target]);
+      } else {
+        switchMainTab(target, tabs, panels);
+        sessionStorage.setItem("argus-activeTab", target);
+        window.location.hash = target;
+      }
     });
   });
 
@@ -2292,16 +1949,28 @@ function initHelpExtLinks() {
 }
 
 function switchMainTab(tabName, tabs, panels) {
+  // Redirect graduated tabs to their new pages
+  const GRADUATED = {
+    projects: "projects/projects.html",
+    automation: "automations/automations.html",
+    sources: "sources/sources.html",
+    prompts: "prompts/prompts.html",
+    osint: "osint/graph.html",
+    feeds: "feeds/feeds.html",
+    tracker: "trawl/trawl.html",
+    finance: "finance/finance.html",
+  };
+  if (GRADUATED[tabName]) {
+    window.location.href = browser.runtime.getURL(GRADUATED[tabName]);
+    return;
+  }
+
   tabs.forEach(t => t.classList.toggle("active", t.dataset.tab === tabName));
   panels.forEach(p => p.classList.toggle("active", p.dataset.panel === tabName));
 
   // Lazy-load bookmarks when tab is first shown
   if (tabName === "bookmarks" && !bmState.initialized) {
     initBookmarks();
-  }
-  // Check for detected feeds when switching to feeds tab
-  if (tabName === "feeds") {
-    checkDetectedFeeds();
   }
 }
 
@@ -2310,6 +1979,22 @@ function handleHashNav(hash, tabs, panels) {
   if (hash === "help" || hash.startsWith("help-")) {
     browser.tabs.create({ url: ARGUS_HELP_URL });
     history.replaceState(null, "", "#home");
+    return;
+  }
+
+  // Redirect graduated tab hashes to their new pages
+  const GRADUATED_HASHES = {
+    projects: "projects/projects.html",
+    automation: "automations/automations.html",
+    sources: "sources/sources.html",
+    prompts: "prompts/prompts.html",
+    osint: "osint/graph.html",
+    feeds: "feeds/feeds.html",
+    tracker: "trawl/trawl.html",
+    finance: "finance/finance.html",
+  };
+  if (GRADUATED_HASHES[hash]) {
+    window.location.href = browser.runtime.getURL(GRADUATED_HASHES[hash]);
     return;
   }
 
@@ -2339,7 +2024,7 @@ const AI_STRIP_LABELS = { xai: "xAI", openai: "GPT", anthropic: "Claude", gemini
 let _statusStripTimer = null;
 function updateConsoleStatusStrip() {
   clearTimeout(_statusStripTimer);
-  _statusStripTimer = setTimeout(() => { _doUpdateConsoleStatusStrip(); _doUpdateConsoleAiStrip(); }, 80);
+  _statusStripTimer = setTimeout(() => { _doUpdateConsoleStatusStrip(); }, 80);
 }
 
 async function _doUpdateConsoleStatusStrip() {
@@ -2382,32 +2067,7 @@ async function _doUpdateConsoleStatusStrip() {
   });
 }
 
-const AI_STATUS_TIPS = { live: "last call succeeded", error: "last call failed", idle: "configured, not yet used" };
-
-async function _doUpdateConsoleAiStrip() {
-  const strip = document.getElementById("console-ai-strip");
-  if (!strip) return;
-  try {
-    const resp = await browser.runtime.sendMessage({ action: "aiGetStatus" });
-    const pills = [];
-    for (const [key, info] of Object.entries(resp?.providers || {})) {
-      const label = AI_STRIP_LABELS[key] || key;
-      const isDefault = key === resp.defaultProvider;
-      const cls = isDefault ? "ribbon-ai-pill default" : "ribbon-ai-pill";
-      const tip = `${label}${isDefault ? " (default)" : ""} · ${AI_STATUS_TIPS[info.status] || ""} — click to manage`;
-      pills.push(`<button class="${cls}" data-goto="settings" title="${tip}"><span class="ribbon-ai-dot ${info.status}"></span>${label}</button>`);
-    }
-    const modelTag = resp.defaultModel
-      ? `<span class="ribbon-ai-model">${resp.defaultModel}</span>`
-      : "";
-    strip.innerHTML = pills.length
-      ? `<span class="ribbon-ai-strip-label">AI</span>` + pills.join("") + modelTag
-      : "";
-    strip.querySelectorAll("[data-goto]").forEach(btn => {
-      btn.addEventListener("click", () => showTab(btn.dataset.goto));
-    });
-  } catch { /* silent */ }
-}
+// Console AI strip removed — now handled by shared/ribbon.js
 
 function debounce(fn, ms) {
   let t;

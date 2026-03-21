@@ -127,24 +127,6 @@
     ["line", { x1: "12", y1: "17", x2: "12.01", y2: "17" }]
   ]));
 
-  // 4-square entry tab picker
-  const entryPickerBtn = document.createElement("button");
-  entryPickerBtn.className = "ribbon-icon";
-  entryPickerBtn.id = "ribbon-entry-picker";
-  entryPickerBtn.title = "Swappable tab";
-  entryPickerBtn.appendChild(makeSvg([
-    ["rect", { x: "3", y: "3", width: "7", height: "7", rx: "1" }],
-    ["rect", { x: "14", y: "3", width: "7", height: "7", rx: "1" }],
-    ["rect", { x: "3", y: "14", width: "7", height: "7", rx: "1" }],
-    ["rect", { x: "14", y: "14", width: "7", height: "7", rx: "1" }]
-  ]));
-  icons.appendChild(entryPickerBtn);
-
-  const entryPickerOverlay = document.createElement("div");
-  entryPickerOverlay.id = "ribbon-entry-picker-overlay";
-  entryPickerOverlay.className = "ribbon-entry-picker hidden";
-  icons.appendChild(entryPickerOverlay);
-
   const sep2 = document.createElement("span");
   sep2.className = "ribbon-icon-sep";
   icons.appendChild(sep2);
@@ -162,17 +144,81 @@
   ribbon.appendChild(icons);
   document.body.insertBefore(ribbon, document.body.firstChild);
 
-  // ── AI provider sub-strip (below ribbon) ──
+  // ── AI + Intel combined strip (below ribbon) ──
   const aiStrip = document.createElement("div");
   aiStrip.className = "ribbon-ai-strip";
   aiStrip.id = "ribbon-ai-strip";
   document.body.insertBefore(aiStrip, ribbon.nextSibling);
 
-  // ── Intel provider sub-strip (below AI strip) ──
-  const intelStrip = document.createElement("div");
-  intelStrip.className = "ribbon-intel-strip";
-  intelStrip.id = "ribbon-intel-strip";
-  document.body.insertBefore(intelStrip, aiStrip.nextSibling);
+  const gridSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>`;
+
+  // AI side: + icon | AI label | default pill (always visible) | tray slides right on click
+  const aiSlideout = document.createElement("span");
+  aiSlideout.className = "provider-slideout";
+
+  const aiIcon = document.createElement("button");
+  aiIcon.className = "provider-slideout-trigger";
+  aiIcon.title = "AI providers";
+  aiIcon.innerHTML = gridSvg;
+  aiSlideout.appendChild(aiIcon);
+
+  const aiLabel = document.createElement("span");
+  aiLabel.className = "ribbon-ai-strip-label";
+  aiLabel.textContent = "AI";
+  aiSlideout.appendChild(aiLabel);
+
+  const aiDefaultPill = document.createElement("span");
+  aiDefaultPill.className = "ribbon-ai-default-pill";
+  aiDefaultPill.id = "ribbon-ai-default-pill";
+  aiSlideout.appendChild(aiDefaultPill);
+
+  const aiTray = document.createElement("span");
+  aiTray.className = "provider-slideout-tray";
+  aiTray.id = "ribbon-ai-strip-content";
+  aiSlideout.appendChild(aiTray);
+
+  aiStrip.appendChild(aiSlideout);
+
+  // Intel side: grid icon + slide-out tray
+  const intelSlideout = document.createElement("span");
+  intelSlideout.className = "provider-slideout";
+  intelSlideout.style.marginLeft = "auto";
+
+  const intelLabel = document.createElement("span");
+  intelLabel.className = "ribbon-intel-strip-label";
+  intelLabel.textContent = "INTEL";
+  intelSlideout.appendChild(intelLabel);
+
+  const intelTray = document.createElement("span");
+  intelTray.className = "provider-slideout-tray";
+  intelTray.id = "ribbon-intel-strip";
+  intelSlideout.appendChild(intelTray);
+
+  const intelIcon = document.createElement("button");
+  intelIcon.className = "provider-slideout-trigger";
+  intelIcon.title = "Intel providers";
+  intelIcon.innerHTML = gridSvg;
+  intelSlideout.appendChild(intelIcon);
+
+  aiStrip.appendChild(intelSlideout);
+
+  // ── Slide-out toggle logic (mutual exclusion + 30s auto-collapse) ──
+  let slideoutTimer = null;
+  function openSlideout(target, other) {
+    if (slideoutTimer) clearTimeout(slideoutTimer);
+    other.classList.remove("open");
+    target.classList.toggle("open");
+    if (target.classList.contains("open")) {
+      slideoutTimer = setTimeout(() => {
+        target.classList.remove("open");
+        slideoutTimer = null;
+      }, 30000);
+    } else {
+      slideoutTimer = null;
+    }
+  }
+  aiIcon.addEventListener("click", () => openSlideout(aiSlideout, intelSlideout));
+  intelIcon.addEventListener("click", () => openSlideout(intelSlideout, aiSlideout));
 
   // ── App launcher tab bar (below ribbon) ──
   const appBar = document.createElement("nav");
@@ -199,7 +245,6 @@
     "app-workbench":{ label: "Workbench",icon: [["rect", { x: "2", y: "3", width: "20", height: "14", rx: "2" }], ["line", { x1: "8", y1: "21", x2: "16", y2: "21" }], ["line", { x1: "12", y1: "17", x2: "12", y2: "21" }]], path: "workbench/workbench.html" },
     "app-draft":    { label: "Publisher",    icon: [["path", { d: "M12 20h9" }], ["path", { d: "M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" }]], path: "reporting/reporting.html" },
     "app-images":   { label: "Images",   icon: [["rect", { x: "3", y: "3", width: "18", height: "18", rx: "2" }], ["circle", { cx: "8.5", cy: "8.5", r: "1.5" }], ["polyline", { points: "21 15 16 10 5 21" }]], path: "osint/images.html" },
-    "app-chat":     { label: "Chat",     icon: [["path", { d: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" }]], path: "chat/chat.html" },
     "app-terminal": { label: "Terminal", icon: [["polyline", { points: "4 17 10 11 4 5" }], ["line", { x1: "12", y1: "19", x2: "20", y2: "19" }]], path: "ssh/ssh.html" },
     "app-finance":  { label: "Finance",  icon: [["line", { x1: "12", y1: "1", x2: "12", y2: "23" }], ["path", { d: "M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" }]], path: "finance/finance.html" },
     "app-results":  { label: "Results",  icon: [["path", { d: "M9 11l3 3L22 4" }], ["path", { d: "M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" }]], path: "results/results.html" },
@@ -209,26 +254,31 @@
     "app-compliance": { label: "Compliance", icon: [["path", { d: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" }], ["path", { d: "M9 12l2 2 4-4" }]], path: "intel/compliance.html" },
     "app-movement":   { label: "Tracking",   icon: [["path", { d: "M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.9.3 1.1L11 12l-2 3H6l-1 1 3 2 2 3 1-1v-3l3-2 3.7 7.3c.2.4.7.5 1.1.3l.5-.3c.4-.2.6-.6.5-1.1z" }]], path: "intel/movement.html" },
     "app-events":     { label: "Events",     icon: [["circle", { cx: "12", cy: "12", r: "10" }], ["polyline", { points: "12 6 12 12 16 14" }]], path: "intel/events.html" },
-    "app-satellite":  { label: "Satellite",  icon: [["circle", { cx: "12", cy: "12", r: "10" }], ["line", { x1: "2", y1: "12", x2: "22", y2: "12" }], ["path", { d: "M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" }]], path: "intel/satellite.html" }
+    "app-satellite":  { label: "Satellite",  icon: [["circle", { cx: "12", cy: "12", r: "10" }], ["line", { x1: "2", y1: "12", x2: "22", y2: "12" }], ["path", { d: "M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" }]], path: "intel/satellite.html" },
+    "app-bookmarks":  { label: "Bookmarks",  icon: [["path", { d: "M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" }]], path: "options/options.html#bookmarks" },
+    "app-monitors":   { label: "Monitors",   icon: [["path", { d: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" }], ["circle", { cx: "12", cy: "12", r: "3" }]], path: "options/options.html#monitors" },
+    "app-archive":    { label: "Redirects",   icon: [["polyline", { points: "16 3 21 3 21 8" }], ["line", { x1: "4", y1: "20", x2: "21", y2: "3" }], ["polyline", { points: "21 16 21 21 16 21" }], ["line", { x1: "15", y1: "15", x2: "21", y2: "21" }]], path: "options/options.html#archive" },
+    "app-providers":  { label: "Providers",  icon: [["path", { d: "M12 2L2 7l10 5 10-5-10-5z" }], ["path", { d: "M2 17l10 5 10-5" }], ["path", { d: "M2 12l10 5 10-5" }]], path: "options/options.html#providers" },
+    "app-resources":  { label: "Resources",  icon: [["path", { d: "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" }], ["path", { d: "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" }]], path: "options/options.html#resources" },
+    "app-settings":   { label: "Settings",   icon: [["path", { d: "M12 20h9" }], ["path", { d: "M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" }]], path: "options/options.html#settings" }
   };
 
   // MFT (tool) tabs — selectable in pickers, can be pinned/visible
-  const ALL_TAB_IDS = ["app-projects", "app-reader", "app-reports", "app-kg", "app-workbench", "app-draft", "app-images", "app-chat", "app-terminal", "app-finance", "app-link-map", "app-trawl", "app-intel", "app-compliance", "app-movement", "app-events", "app-satellite"];
+  const ALL_TAB_IDS = ["app-projects", "app-reader", "app-reports", "app-kg", "app-workbench", "app-draft", "app-images", "app-terminal", "app-finance", "app-link-map", "app-trawl", "app-intel", "app-compliance", "app-movement", "app-events", "app-satellite", "app-bookmarks", "app-monitors", "app-archive", "app-providers", "app-resources", "app-settings"];
   const DEFAULT_TAB_ORDER = [...ALL_TAB_IDS];
-  const DEFAULT_VISIBLE_TABS = ["app-projects", "app-reader", "app-reports", "app-kg", "app-workbench", "app-chat", "app-terminal", "app-trawl"];
+  const DEFAULT_VISIBLE_TABS = ["app-projects", "app-reader", "app-reports", "app-kg", "app-workbench", "app-terminal", "app-trawl"];
   const MAX_VISIBLE_TABS = 8;
   const PINNED_TABS = ["app-projects"]; // always visible, non-negotiable
 
   // Active-state detection map (pathname fragment → tab id)
   const ACTIVE_MAP = {
-    "/options/options": "app-projects",
+    "/projects/": "app-projects",
     "/feeds/": "app-reader",
     "/history/": "app-reports",
     "/osint/graph": "app-kg",
     "/workbench/": "app-workbench",
     "/reporting/": "app-draft",
     "/osint/images": "app-images",
-    "/chat/": "app-chat",
     "/ssh/": "app-terminal",
     "/finance/": "app-finance",
     "/results/": "app-results",
@@ -418,10 +468,8 @@
 
   // Console tab → label mapping for dynamic entry point
   const CONSOLE_TAB_LABELS = {
-    bookmarks: "Bookmarks", projects: "Projects", monitors: "Monitors",
-    feeds: "Feeds", osint: "OSINT", automation: "Automate",
-    archive: "Redirects", tracker: "Tracker", sources: "Sources",
-    prompts: "Prompts", providers: "Providers",
+    bookmarks: "Bookmarks", monitors: "Monitors",
+    archive: "Redirects", providers: "Providers",
     resources: "Resources", settings: "Settings"
   };
 
@@ -446,12 +494,8 @@
         }
         if (visible.length > MAX_VISIBLE_TABS) visible = visible.slice(0, MAX_VISIBLE_TABS);
       }
-      // Apply dynamic console entry tab
-      const entryTab = stored.consoleEntryTab || "projects";
-      if (CONSOLE_TAB_LABELS[entryTab]) {
-        APP_TAB_DEFS["app-projects"].label = CONSOLE_TAB_LABELS[entryTab];
-        APP_TAB_DEFS["app-projects"].hash = entryTab;
-      }
+      // Console entry tab swap disabled — Projects is now a standalone page
+      // Bookmarks and Monitors still live in console; they'll get own app tabs in Phase 3b
     } catch (e) { /* use defaults */ }
 
     currentTabOrder = order;
@@ -467,23 +511,20 @@
     highlightActiveTab();
     setupTabDragReorder();
 
-    // Listen for entry tab changes from the console picker
-    window.addEventListener("consoleEntryChanged", (e) => {
-      const tabId = e.detail?.tabId;
-      if (tabId && CONSOLE_TAB_LABELS[tabId]) {
-        APP_TAB_DEFS["app-projects"].label = CONSOLE_TAB_LABELS[tabId];
-        APP_TAB_DEFS["app-projects"].hash = tabId;
-        const btn = document.getElementById("app-projects");
-        if (btn) {
-          const span = btn.querySelector("span");
-          if (span) span.textContent = CONSOLE_TAB_LABELS[tabId];
-        }
-      }
-    });
+    // Console entry tab swap disabled — Projects is now a standalone page
   }
 
   function highlightActiveTab() {
     const loc = window.location.pathname;
+    const hash = window.location.hash.replace("#", "");
+    // Console hash-based tabs
+    if (loc.includes("/options/options") && hash) {
+      const hashTabMap = { bookmarks: "app-bookmarks", monitors: "app-monitors", archive: "app-archive", providers: "app-providers", resources: "app-resources", settings: "app-settings" };
+      if (hashTabMap[hash]) {
+        document.getElementById(hashTabMap[hash])?.classList.add("active");
+        return;
+      }
+    }
     for (const [fragment, tabId] of Object.entries(ACTIVE_MAP)) {
       if (loc.includes(fragment)) {
         document.getElementById(tabId)?.classList.add("active");
@@ -550,7 +591,7 @@
   }
 
   initAppTabs();
-  intelStrip.insertAdjacentElement("afterend", appBar);
+  aiStrip.insertAdjacentElement("afterend", appBar);
 
   // ── Single-tab navigation — all Argus pages share the current tab ──
   function navigateTo(urlPath, hash) {
@@ -578,8 +619,12 @@
     window.location.href = browser.runtime.getURL("projects/projects.html");
   });
   document.getElementById("ribbon-monitors").addEventListener("click", () => nav("monitors"));
-  document.getElementById("ribbon-feeds").addEventListener("click", () => nav("feeds"));
-  document.getElementById("ribbon-osint").addEventListener("click", () => nav("osint"));
+  document.getElementById("ribbon-feeds").addEventListener("click", () => {
+    window.location.href = browser.runtime.getURL("feeds/feeds.html");
+  });
+  document.getElementById("ribbon-osint").addEventListener("click", () => {
+    window.location.href = browser.runtime.getURL("osint/graph.html");
+  });
   document.getElementById("ribbon-intel").addEventListener("click", () => navigateTo("intel/hub.html"));
   document.getElementById("ribbon-automate").addEventListener("click", () => {
     window.location.href = browser.runtime.getURL("automations/automations.html");
@@ -589,7 +634,9 @@
   document.getElementById("ribbon-sources").addEventListener("click", () => {
     window.location.href = browser.runtime.getURL("sources/sources.html");
   });
-  document.getElementById("ribbon-prompts").addEventListener("click", () => nav("prompts"));
+  document.getElementById("ribbon-prompts").addEventListener("click", () => {
+    window.location.href = browser.runtime.getURL("prompts/prompts.html");
+  });
   document.getElementById("ribbon-providers").addEventListener("click", () => nav("providers"));
   document.getElementById("ribbon-resources").addEventListener("click", () => nav("resources"));
   document.getElementById("ribbon-settings").addEventListener("click", () => nav("settings"));
@@ -606,67 +653,7 @@
     window.location.reload();
   });
 
-  // ── Entry tab picker (4-square button) ──
-  const ENTRY_PICKER_TABS = [
-    { id: "bookmarks", label: "Bookmarks", ribbonId: "ribbon-bookmarks" },
-    { id: "projects", label: "Projects", ribbonId: "ribbon-projects" },
-    { id: "monitors", label: "Monitors", ribbonId: "ribbon-monitors" },
-    { id: "feeds", label: "Feeds", ribbonId: "ribbon-feeds" },
-    { id: "osint", label: "OSINT", ribbonId: "ribbon-osint" },
-    { id: "automation", label: "Automate", ribbonId: "ribbon-automate" },
-    { id: "archive", label: "Redirects", ribbonId: "ribbon-redirects" },
-    { id: "tracker", label: "Page Tracker", ribbonId: "ribbon-tracker" },
-    { id: "sources", label: "Sources", ribbonId: "ribbon-sources" },
-    { id: "prompts", label: "Prompts", ribbonId: "ribbon-prompts" },
-    { id: "providers", label: "Providers", ribbonId: "ribbon-providers" },
-    { id: "resources", label: "Resources", ribbonId: "ribbon-resources" },
-    { id: "settings", label: "Settings", ribbonId: "ribbon-settings" }
-  ];
-
-  async function renderEntryPicker() {
-    const { consoleEntryTab } = await browser.storage.local.get({ consoleEntryTab: "projects" });
-    let html = '<div class="ribbon-entry-picker-title">Swappable tab</div>';
-    for (const opt of ENTRY_PICKER_TABS) {
-      const ribbonBtn = document.getElementById(opt.ribbonId);
-      const svg = ribbonBtn?.querySelector("svg")?.outerHTML || "";
-      const active = opt.id === consoleEntryTab ? " ribbon-entry-active" : "";
-      html += `<button class="ribbon-entry-item${active}" data-entry-id="${opt.id}">${svg} ${opt.label}</button>`;
-    }
-    entryPickerOverlay.innerHTML = html;
-
-    entryPickerOverlay.querySelectorAll(".ribbon-entry-item").forEach(item => {
-      item.addEventListener("click", async () => {
-        const id = item.dataset.entryId;
-        await browser.storage.local.set({ consoleEntryTab: id });
-        entryPickerOverlay.classList.add("hidden");
-        // Update the ribbon tab label + hash live
-        if (CONSOLE_TAB_LABELS[id]) {
-          APP_TAB_DEFS["app-projects"].label = CONSOLE_TAB_LABELS[id];
-          APP_TAB_DEFS["app-projects"].hash = id;
-          const btn = document.getElementById("app-projects");
-          if (btn) {
-            const span = btn.querySelector("span");
-            if (span) span.textContent = CONSOLE_TAB_LABELS[id];
-          }
-        }
-        // Also fire event for console page if we're on it
-        window.dispatchEvent(new CustomEvent("consoleEntryChanged", { detail: { tabId: id } }));
-      });
-    });
-  }
-
-  entryPickerBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const isHidden = entryPickerOverlay.classList.contains("hidden");
-    entryPickerOverlay.classList.toggle("hidden");
-    if (isHidden) renderEntryPicker();
-  });
-
-  document.addEventListener("click", (e) => {
-    if (!entryPickerOverlay.contains(e.target) && e.target !== entryPickerBtn && !entryPickerBtn.contains(e.target)) {
-      entryPickerOverlay.classList.add("hidden");
-    }
-  });
+  // Entry tab picker removed — console tabs are now app tabs in the tab bar
 
   // App tab navigation — event delegation (tabs are rendered async)
   appBar.addEventListener("click", (e) => {
@@ -746,27 +733,40 @@
   };
 
   async function _doUpdateAiStrip() {
-    const strip = document.getElementById("ribbon-ai-strip");
-    if (!strip) return;
+    const defaultPill = document.getElementById("ribbon-ai-default-pill");
+    const tray = document.getElementById("ribbon-ai-strip-content");
+    if (!defaultPill || !tray) return;
     try {
       const resp = await browser.runtime.sendMessage({ action: "aiGetStatus" });
-      const pills = [];
-      for (const [key, info] of Object.entries(resp?.providers || {})) {
-        const label = AI_PILL_LABELS[key] || key;
-        const isDefault = key === resp.defaultProvider;
-        const cls = isDefault ? "ribbon-ai-pill default" : "ribbon-ai-pill";
-        const tip = `${label}${isDefault ? " (default)" : ""} · ${AI_STATUS_TIPS[info.status] || ""} — click to manage`;
-        pills.push(`<button class="${cls}" data-nav="settings" title="${tip}"><span class="ribbon-ai-dot ${info.status}"></span>${label}</button>`);
+      const providers = Object.entries(resp?.providers || {});
+      const defaultKey = resp.defaultProvider;
+      const defaultInfo = resp?.providers?.[defaultKey];
+      const defaultLabel = AI_PILL_LABELS[defaultKey] || defaultKey;
+
+      // Always-visible: current default provider pill
+      if (defaultInfo) {
+        const statusClass = defaultInfo.status || "idle";
+        defaultPill.innerHTML = `<button class="ribbon-ai-pill default" data-nav="settings" title="${defaultLabel} (default) · ${AI_STATUS_TIPS[statusClass] || ''}""><span class="ribbon-ai-dot ${statusClass}"></span>${defaultLabel}</button>`;
+      } else {
+        defaultPill.innerHTML = `<a class="ribbon-ai-pill provider-pill-link" href="${browser.runtime.getURL("options/options.html#providers")}" title="Configure AI providers">Set AI</a>`;
       }
-      const modelTag = resp.defaultModel
-        ? `<span class="ribbon-ai-model">${resp.defaultModel}</span>`
-        : "";
-      strip.innerHTML = pills.length
-        ? `<span class="ribbon-ai-strip-label">AI</span>` + pills.join("") + modelTag
-        : "";
-      strip.querySelectorAll("[data-nav]").forEach(btn => {
+      defaultPill.querySelectorAll("[data-nav]").forEach(btn => {
         btn.addEventListener("click", () => nav(btn.dataset.nav));
       });
+
+      // Slide-out tray: non-default providers + Set Providers link
+      const pills = [];
+      for (const [key, info] of providers) {
+        if (key === defaultKey) continue;
+        const label = AI_PILL_LABELS[key] || key;
+        const cls = "ribbon-ai-pill";
+        const tip = `${label} · ${AI_STATUS_TIPS[info.status] || ""} — click to switch`;
+        pills.push(`<button class="${cls}" data-provider="${key}" title="${tip}"><span class="ribbon-ai-dot ${info.status}"></span>${label}</button>`);
+      }
+      const provLink = `<a class="ribbon-ai-pill provider-pill-link" href="${browser.runtime.getURL("options/options.html#providers")}" title="Manage AI providers">Set Providers</a>`;
+      tray.innerHTML = pills.length
+        ? pills.join("") + `<span class="ribbon-ai-sep">|</span>` + provLink
+        : provLink;
     } catch { /* background not ready */ }
   }
 
@@ -810,9 +810,10 @@
         }
       }
 
+      const provLink = `<a class="ribbon-intel-pill provider-pill-link" href="${browser.runtime.getURL("options/options.html#providers")}" title="Manage providers">Set Providers</a>`;
       strip.innerHTML = sections.length
-        ? `<span class="ribbon-intel-strip-label">INTEL</span>` + sections.join('<span class="ribbon-intel-sep">|</span>')
-        : "";
+        ? sections.join('<span class="ribbon-intel-sep">|</span>') + `<span class="ribbon-intel-sep">|</span>` + provLink
+        : provLink;
       strip.querySelectorAll("[data-nav]").forEach(btn => {
         btn.addEventListener("click", () => nav(btn.dataset.nav));
       });
@@ -852,18 +853,7 @@
   // Sync tab state when storage changes (e.g. from another page/tab)
   browser.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
-    if (changes.consoleEntryTab) {
-      const tabId = changes.consoleEntryTab.newValue || "projects";
-      if (CONSOLE_TAB_LABELS[tabId]) {
-        APP_TAB_DEFS["app-projects"].label = CONSOLE_TAB_LABELS[tabId];
-        APP_TAB_DEFS["app-projects"].hash = tabId;
-        const btn = document.getElementById("app-projects");
-        if (btn) {
-          const span = btn.querySelector("span");
-          if (span) span.textContent = CONSOLE_TAB_LABELS[tabId];
-        }
-      }
-    }
+    // consoleEntryTab swap disabled — Projects is now a standalone page
     if (changes.appVisibleTabs) {
       const vis = changes.appVisibleTabs.newValue;
       if (Array.isArray(vis)) {

@@ -16,7 +16,7 @@
   const saveBtn = document.getElementById("rp-save");
   const exportBtn = document.getElementById("rp-export");
   const emailBtn = document.getElementById("rp-email");
-  const projectSelect = document.getElementById("rp-project");
+  const projectSelect = document.getElementById("rp-project"); // removed from UI, kept for draft compat
   const templateSelect = document.getElementById("rp-template");
 
   // Asset Library panel
@@ -94,14 +94,14 @@
       const opt = document.createElement("option");
       opt.value = p.id;
       opt.textContent = label + suffix;
-      projectSelect.appendChild(opt);
+      if (projectSelect) projectSelect.appendChild(opt);
       // Asset Library project filter
       const opt2 = document.createElement("option");
       opt2.value = p.id;
       opt2.textContent = label + suffix;
       assetProjectSelect.appendChild(opt2);
     }
-    if (defaultId && !projectSelect.value) projectSelect.value = defaultId;
+    if (defaultId && projectSelect && !projectSelect.value) projectSelect.value = defaultId;
   }
 
   // Re-filter assets when the Asset Library project selector changes
@@ -614,7 +614,7 @@
     if (!resp?.draft) return;
     currentDraftId = id;
     editor.value = resp.draft.content || "";
-    if (resp.draft.projectId) projectSelect.value = resp.draft.projectId;
+    if (resp.draft.projectId && projectSelect) projectSelect.value = resp.draft.projectId;
     updatePreview();
     updateWordCount();
     draftInfoEl.textContent = `Draft: ${resp.draft.title || "Untitled"}`;
@@ -624,7 +624,7 @@
 
   async function saveDraft() {
     const content = editor.value;
-    const projectId = projectSelect.value || null;
+    const projectId = projectSelect?.value || null;
 
     // Auto-title from first heading or first line
     let title = "Untitled Draft";

@@ -1081,14 +1081,13 @@ function attachEventListeners() {
   // ── App page navigation map ──
   const APP_NAV = {
     // MFT pages
-    "app-projects": { type: "console", hash: "projects" },
+    "app-projects": { type: "page", path: "projects/projects.html" },
     "app-reader":   { type: "page", path: "feeds/feeds.html" },
     "app-reports":  { type: "page", path: "history/history.html" },
     "app-kg":       { type: "page", path: "osint/graph.html?mode=global" },
     "app-workbench":{ type: "page", path: "workbench/workbench.html" },
     "app-draft":    { type: "page", path: "reporting/reporting.html" },
     "app-images":   { type: "page", path: "osint/images.html" },
-    "app-chat":     { type: "page", path: "chat/chat.html" },
     "app-terminal": { type: "page", path: "ssh/ssh.html" },
     "app-finance":  { type: "page", path: "finance/finance.html" },
     "app-trawl":    { type: "page", path: "trawl/trawl.html" },
@@ -1096,13 +1095,13 @@ function attachEventListeners() {
     // Console tabs
     "con-bookmarks":  { type: "console", hash: "bookmarks" },
     "con-monitors":   { type: "console", hash: "monitors" },
-    "con-feeds":      { type: "console", hash: "feeds" },
-    "con-osint":      { type: "console", hash: "osint" },
-    "con-automate":   { type: "console", hash: "automation" },
+    "con-feeds":      { type: "page", path: "feeds/feeds.html" },
+    "con-osint":      { type: "page", path: "osint/graph.html" },
+    "con-automate":   { type: "page", path: "automations/automations.html" },
     "con-redirects":  { type: "console", hash: "archive" },
-    "con-tracker":    { type: "console", hash: "tracker" },
-    "con-sources":    { type: "console", hash: "sources" },
-    "con-prompts":    { type: "console", hash: "prompts" },
+    "con-tracker":    { type: "page", path: "trawl/trawl.html" },
+    "con-sources":    { type: "page", path: "sources/sources.html" },
+    "con-prompts":    { type: "page", path: "prompts/prompts.html" },
     "con-providers":  { type: "console", hash: "providers" },
     "con-resources":  { type: "console", hash: "resources" },
     "con-settings":   { type: "console", hash: "settings" }
@@ -1118,7 +1117,6 @@ function attachEventListeners() {
     "app-workbench": { label: "Workbench", svg: '<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>' },
     "app-draft":     { label: "Publisher", svg: '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>' },
     "app-images":    { label: "Images",    svg: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>' },
-    "app-chat":      { label: "Chat",      svg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>' },
     "app-terminal":  { label: "Terminal",  svg: '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>' },
     "app-finance":   { label: "Finance",   svg: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
     "app-trawl":     { label: "Trawl Net", svg: '<path d="M2 4c4 3 8 3 12 0s8-3 12 0"/><path d="M2 12c4 3 8 3 12 0s8-3 12 0"/><path d="M2 20c4 3 8 3 12 0s8-3 12 0"/>' },
@@ -1140,7 +1138,7 @@ function attachEventListeners() {
   // Canonical order for picker display: MFTs first, then console tabs
   const POPUP_ALL_IDS = [
     "app-projects", "app-reader", "app-reports", "app-kg", "app-workbench",
-    "app-draft", "app-images", "app-chat", "app-terminal", "app-finance", "app-trawl",
+    "app-draft", "app-images", "app-terminal", "app-finance", "app-trawl",
     "con-bookmarks", "con-monitors", "con-feeds", "con-osint", "con-automate",
     "con-redirects", "con-tracker", "con-sources", "con-prompts", "con-providers",
     "con-resources", "con-settings"

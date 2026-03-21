@@ -1,3 +1,8 @@
+// ── Stubs for removed KG/Feed functions still referenced by storage management ──
+async function updateKGStats() {}
+async function loadPendingMerges() {}
+function renderFeeds() {}
+
 // ── Resources Tab (dynamic from JSON) ──
 function initResourcesTab() {
   const ipEl = document.getElementById("res-ip-value");
@@ -591,7 +596,7 @@ function attachListeners() {
     scheduleSave();
   });
 
-  el.defaultPreset.addEventListener("change", scheduleSave);
+  el.defaultPreset?.addEventListener("change", scheduleSave);
 
   el.providerTabList.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => selectProviderTab(btn.dataset.provider));
@@ -610,7 +615,7 @@ function attachListeners() {
 
   el.maxTokens.addEventListener("input", scheduleSave);
   el.maxInputChars.addEventListener("input", scheduleSave);
-  el.reasoningEffort.addEventListener("change", scheduleSave);
+  el.reasoningEffort?.addEventListener("change", scheduleSave);
   el.openaiReasoningEffort.addEventListener("change", scheduleSave);
 
   el.temperature.addEventListener("input", () => {

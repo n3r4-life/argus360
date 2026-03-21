@@ -811,11 +811,12 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
 }
 
 /* ── AI provider sub-strip (sits below ribbon / page-header) ── */
+/* ── AI strip (always visible) ── */
 .ribbon-ai-strip {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 20px;
+  padding: 3px calc(max(20px, (100% - 1200px) / 2));
   height: 22px;
   background: #161626;
   border-bottom: 1px solid #222240;
@@ -824,6 +825,23 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
   position: sticky;
   top: 46px;
   z-index: 998;
+}
+.provider-slideout-icon {
+  display: flex;
+  align-items: center;
+  color: #3a3a58;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+.ribbon-ai-default-pill {
+  display: flex;
+  align-items: center;
+  margin-right: 2px;
+}
+.ribbon-ai-strip-content {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 .ribbon-ai-strip-label {
   font-size: 9px;
@@ -834,72 +852,51 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
   margin-right: 4px;
   flex-shrink: 0;
 }
-.ribbon-ai-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 1px 7px;
-  font-size: 10px;
-  font-weight: 700;
-  color: #5a5a78;
-  background: transparent;
-  border: 1px solid #252545;
-  border-radius: 8px;
-  cursor: pointer;
-  font-family: inherit;
-  transition: all 0.15s;
-  white-space: nowrap;
-  line-height: 1;
-  letter-spacing: 0.3px;
-}
-.ribbon-ai-pill:hover {
-  color: #c0c0d8;
-  border-color: #4a4a6a;
-  background: rgba(255, 255, 255, 0.04);
-}
-.ribbon-ai-pill.default {
-  color: #a78bfa;
-  border-color: rgba(167, 139, 250, 0.35);
-  background: rgba(167, 139, 250, 0.08);
-}
-.ribbon-ai-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  background: #f59e0b; /* idle = amber */
-}
-.ribbon-ai-dot.live  { background: #22c55e; }
-.ribbon-ai-dot.error { background: #f87171; }
-.ribbon-ai-model {
-  font-size: 10px;
-  font-weight: 500;
-  color: #4a4a68;
-  margin-left: 6px;
-  white-space: nowrap;
-  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
-  letter-spacing: 0.2px;
-}
 
-/* ── Intel provider sub-strip (sits below AI strip) ── */
-.ribbon-intel-strip {
+/* Shared slide-out wrapper (used for both AI and Intel) */
+.provider-slideout {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.provider-slideout-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #5a5a78;
+  padding: 0;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+.provider-slideout-trigger:hover {
+  color: #a78bfa;
+}
+.provider-slideout-trigger svg {
+  pointer-events: none;
+}
+.provider-slideout-tray {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 20px;
-  height: 22px;
-  background: #161626;
-  border-bottom: 1px solid #222240;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-width 0.6s ease, opacity 0.4s ease;
+  white-space: nowrap;
   font-family: var(--font);
   font-size: 10px;
-  position: sticky;
-  top: 68px; /* ribbon 46px + AI strip 22px */
-  z-index: 997;
+  margin-left: 6px;
 }
-.ribbon-intel-strip:empty {
-  display: none;
+.provider-slideout.open .provider-slideout-tray {
+  max-width: 800px;
+  opacity: 1;
 }
-.ribbon-intel-strip-label {
+.provider-slideout-label {
   font-size: 9px;
   font-weight: 600;
   color: #3a3a58;
@@ -908,6 +905,9 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
   margin-right: 4px;
   flex-shrink: 0;
 }
+
+/* Provider pills (shared by AI + Intel) */
+.ribbon-ai-pill,
 .ribbon-intel-pill {
   display: inline-flex;
   align-items: center;
@@ -926,10 +926,47 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
   line-height: 1;
   letter-spacing: 0.3px;
 }
+.ribbon-ai-pill:hover,
 .ribbon-intel-pill:hover {
   color: #c0c0d8;
   border-color: #4a4a6a;
   background: rgba(255, 255, 255, 0.04);
+}
+.ribbon-ai-pill.default {
+  color: #a78bfa;
+  border-color: rgba(167, 139, 250, 0.35);
+  background: rgba(167, 139, 250, 0.08);
+}
+.provider-pill-link {
+  color: #a78bfa;
+  border-color: rgba(167, 139, 250, 0.3);
+  text-decoration: none;
+}
+.provider-pill-link:hover {
+  color: #c4b5fd;
+  border-color: rgba(167, 139, 250, 0.5);
+  background: rgba(167, 139, 250, 0.08);
+}
+.ribbon-ai-dot,
+.ribbon-intel-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #f59e0b;
+}
+.ribbon-ai-dot.live,
+.ribbon-intel-dot.live  { background: #22c55e; }
+.ribbon-ai-dot.error,
+.ribbon-intel-dot.error { background: #f87171; }
+.ribbon-ai-model {
+  font-size: 10px;
+  font-weight: 500;
+  color: #4a4a68;
+  margin-left: 6px;
+  white-space: nowrap;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+  letter-spacing: 0.2px;
 }
 .ribbon-intel-dot {
   width: 5px;
@@ -942,6 +979,7 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
 .ribbon-intel-dot.connected { background: #22c55e; }
 .ribbon-intel-dot.error     { background: #f87171; }
 .ribbon-intel-dot.idle      { background: #f59e0b; }
+.ribbon-ai-sep,
 .ribbon-intel-sep {
   color: #2a2a4a;
   font-size: 10px;
