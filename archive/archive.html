@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Archive Redirect - Argus</title>
+  <link rel="stylesheet" href="../shared/argus-std.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../shared/options-ui.css">
+  <link rel="stylesheet" href="archive.css">
+</head>
+<body>
+  <script src="../lib/vendor/browser-polyfill.min.js"></script>
+  <script src="../shared/theme.js"></script>
+  <script src="../shared/ribbon.js"></script>
+
+  <div class="settings-container" style="padding-top: 12px;">
+    <section class="card">
+      <h2 class="card-title">Archive Redirect
+        <span class="badge">Bypass</span>
+      </h2>
+      <div class="card-body">
+        <p class="info-text">Automatically redirect paywalled or annoying news sites through an archive service for clean, ad-free reading. Manage your Trouble List below.</p>
+
+        <div class="form-row" style="margin-bottom:12px;">
+          <div class="form-group flex-1">
+            <label class="toggle-label">
+              <input type="checkbox" id="archive-enabled">
+              <span>Enable Archive Redirect</span>
+            </label>
+          </div>
+          <div class="form-group flex-1">
+            <label for="archive-provider">Archive Provider</label>
+            <select id="archive-provider">
+              <option value="https://archive.is/">archive.is</option>
+              <option value="https://archive.ph/">archive.ph</option>
+              <option value="https://webcache.googleusercontent.com/search?q=cache:">Google Cache</option>
+              <option value="custom">Custom...</option>
+            </select>
+          </div>
+          <div class="form-group flex-1" id="archive-custom-group" style="display:none;">
+            <label for="archive-custom-url">Custom URL Prefix</label>
+            <input type="text" id="archive-custom-url" placeholder="https://example.com/?url=">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="archive-domains">Trouble List <span class="rule-meta">(one per line — e.g. nytimes.com)</span></label>
+          <textarea id="archive-domains" rows="12" style="width:100%;font-family:monospace;font-size:13px;background:var(--bg-primary);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius);padding:10px;resize:vertical;"></textarea>
+        </div>
+
+        <div style="margin-top:8px;display:flex;align-items:center;gap:8px;">
+          <button id="archive-save" class="pill-chip btn-primary">Save</button>
+          <button id="archive-reset" class="pill-chip">Reset to Defaults</button>
+          <span id="archive-status" class="prompt-status" style="margin-left:4px;"></span>
+        </div>
+
+        <hr style="border-color:var(--border);margin:16px 0;">
+        <p class="info-text">Automatically check if an archive.is snapshot exists when you visit a page. Shows a subtle indicator in the Argus popup.</p>
+        <div class="form-row" style="margin-top:8px;">
+          <div class="form-group flex-1">
+            <label for="archive-check-mode">Archive Availability Check</label>
+            <select id="archive-check-mode">
+              <option value="off">Off</option>
+              <option value="redirect-list">Trouble List domains only</option>
+              <option value="all">All sites</option>
+            </select>
+            <span class="hint">When enabled, Argus checks archive.is in the background as you browse</span>
+          </div>
+          <div class="form-group flex-1">
+            <label for="wayback-check-mode">Wayback Machine Check</label>
+            <select id="wayback-check-mode">
+              <option value="off">Off</option>
+              <option value="redirect-list">Trouble List domains only</option>
+              <option value="all">All sites</option>
+            </select>
+            <span class="hint">Also check Internet Archive's Wayback Machine for snapshots</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="archive.js"></script>
+</body>
+</html>

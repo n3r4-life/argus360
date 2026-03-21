@@ -255,12 +255,12 @@
     "app-movement":   { label: "Tracking",   icon: [["path", { d: "M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.9.3 1.1L11 12l-2 3H6l-1 1 3 2 2 3 1-1v-3l3-2 3.7 7.3c.2.4.7.5 1.1.3l.5-.3c.4-.2.6-.6.5-1.1z" }]], path: "intel/movement.html" },
     "app-events":     { label: "Events",     icon: [["circle", { cx: "12", cy: "12", r: "10" }], ["polyline", { points: "12 6 12 12 16 14" }]], path: "intel/events.html" },
     "app-satellite":  { label: "Satellite",  icon: [["circle", { cx: "12", cy: "12", r: "10" }], ["line", { x1: "2", y1: "12", x2: "22", y2: "12" }], ["path", { d: "M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" }]], path: "intel/satellite.html" },
-    "app-bookmarks":  { label: "Bookmarks",  icon: [["path", { d: "M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" }]], path: "options/options.html#bookmarks" },
-    "app-monitors":   { label: "Monitors",   icon: [["path", { d: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" }], ["circle", { cx: "12", cy: "12", r: "3" }]], path: "options/options.html#monitors" },
-    "app-archive":    { label: "Redirects",   icon: [["polyline", { points: "16 3 21 3 21 8" }], ["line", { x1: "4", y1: "20", x2: "21", y2: "3" }], ["polyline", { points: "21 16 21 21 16 21" }], ["line", { x1: "15", y1: "15", x2: "21", y2: "21" }]], path: "options/options.html#archive" },
-    "app-providers":  { label: "Providers",  icon: [["path", { d: "M12 2L2 7l10 5 10-5-10-5z" }], ["path", { d: "M2 17l10 5 10-5" }], ["path", { d: "M2 12l10 5 10-5" }]], path: "options/options.html#providers" },
-    "app-resources":  { label: "Resources",  icon: [["path", { d: "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" }], ["path", { d: "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" }]], path: "options/options.html#resources" },
-    "app-settings":   { label: "Settings",   icon: [["path", { d: "M12 20h9" }], ["path", { d: "M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" }]], path: "options/options.html#settings" }
+    "app-bookmarks":  { label: "Bookmarks",  icon: [["path", { d: "M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" }]], path: "bookmarks/bookmarks.html" },
+    "app-monitors":   { label: "Monitors",   icon: [["path", { d: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" }], ["circle", { cx: "12", cy: "12", r: "3" }]], path: "monitors/monitors.html" },
+    "app-archive":    { label: "Redirects",   icon: [["polyline", { points: "16 3 21 3 21 8" }], ["line", { x1: "4", y1: "20", x2: "21", y2: "3" }], ["polyline", { points: "21 16 21 21 16 21" }], ["line", { x1: "15", y1: "15", x2: "21", y2: "21" }]], path: "archive/archive.html" },
+    "app-providers":  { label: "Providers",  icon: [["path", { d: "M12 2L2 7l10 5 10-5-10-5z" }], ["path", { d: "M2 17l10 5 10-5" }], ["path", { d: "M2 12l10 5 10-5" }]], path: "providers/providers.html" },
+    "app-resources":  { label: "Resources",  icon: [["path", { d: "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" }], ["path", { d: "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" }]], path: "resources/resources.html" },
+    "app-settings":   { label: "Settings",   icon: [["path", { d: "M12 20h9" }], ["path", { d: "M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" }]], path: "settings/settings.html" }
   };
 
   // MFT (tool) tabs — selectable in pickers, can be pinned/visible
@@ -290,6 +290,12 @@
     "/intel/movement":   "app-movement",
     "/intel/events":     "app-events",
     "/intel/satellite":  "app-satellite",
+    "/bookmarks/": "app-bookmarks",
+    "/archive/": "app-archive",
+    "/monitors/": "app-monitors",
+    "/resources/": "app-resources",
+    "/settings/": "app-settings",
+    "/providers/": "app-providers",
   };
 
   // ── Quick-jump button (⋯) — shows hidden/non-visible MFT tabs ──
@@ -748,7 +754,7 @@
         const statusClass = defaultInfo.status || "idle";
         defaultPill.innerHTML = `<button class="ribbon-ai-pill default" data-nav="settings" title="${defaultLabel} (default) · ${AI_STATUS_TIPS[statusClass] || ''}""><span class="ribbon-ai-dot ${statusClass}"></span>${defaultLabel}</button>`;
       } else {
-        defaultPill.innerHTML = `<a class="ribbon-ai-pill provider-pill-link" href="${browser.runtime.getURL("options/options.html#providers")}" title="Configure AI providers">Set AI</a>`;
+        defaultPill.innerHTML = `<a class="ribbon-ai-pill provider-pill-link" href="${browser.runtime.getURL("providers/providers.html")}" title="Configure AI providers">Set AI</a>`;
       }
       defaultPill.querySelectorAll("[data-nav]").forEach(btn => {
         btn.addEventListener("click", () => nav(btn.dataset.nav));
@@ -763,7 +769,7 @@
         const tip = `${label} · ${AI_STATUS_TIPS[info.status] || ""} — click to switch`;
         pills.push(`<button class="${cls}" data-provider="${key}" title="${tip}"><span class="ribbon-ai-dot ${info.status}"></span>${label}</button>`);
       }
-      const provLink = `<a class="ribbon-ai-pill provider-pill-link" href="${browser.runtime.getURL("options/options.html#providers")}" title="Manage AI providers">Set Providers</a>`;
+      const provLink = `<a class="ribbon-ai-pill provider-pill-link" href="${browser.runtime.getURL("providers/providers.html")}" title="Manage AI providers">Set Providers</a>`;
       tray.innerHTML = pills.length
         ? pills.join("") + `<span class="ribbon-ai-sep">|</span>` + provLink
         : provLink;
@@ -810,7 +816,7 @@
         }
       }
 
-      const provLink = `<a class="ribbon-intel-pill provider-pill-link" href="${browser.runtime.getURL("options/options.html#providers")}" title="Manage providers">Set Providers</a>`;
+      const provLink = `<a class="ribbon-intel-pill provider-pill-link" href="${browser.runtime.getURL("providers/providers.html")}" title="Manage providers">Set Providers</a>`;
       strip.innerHTML = sections.length
         ? sections.join('<span class="ribbon-intel-sep">|</span>') + `<span class="ribbon-intel-sep">|</span>` + provLink
         : provLink;

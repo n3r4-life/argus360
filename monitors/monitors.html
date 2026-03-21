@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitors - Argus</title>
+  <link rel="stylesheet" href="../shared/argus-std.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../shared/options-ui.css">
+  <link rel="stylesheet" href="monitors.css">
+</head>
+<body>
+  <script src="../lib/vendor/browser-polyfill.min.js"></script>
+  <script src="../shared/theme.js"></script>
+  <script src="../shared/ribbon.js"></script>
+
+  <div class="settings-container" style="padding-top: 12px;">
+
+    <!-- Page Monitors -->
+    <section class="card">
+      <h2 class="card-title">Page Monitors
+        <span class="badge">Alerts</span>
+        <button id="mon-refresh" class="pill-chip" title="Refresh monitors" style="margin-left:auto;">Refresh</button>
+      </h2>
+      <div class="card-body">
+        <p class="info-text">Monitor pages for changes. Argus will periodically check for updates and notify you when content changes. Optionally uses AI to summarize what changed.</p>
+
+        <div class="form-row" style="margin-bottom:8px;">
+          <div class="form-group flex-1">
+            <label for="monitor-default-project">Default Project Override</label>
+            <select id="monitor-default-project">
+              <option value="">Use global default</option>
+            </select>
+            <small class="info-text" style="margin-top:2px;">Overrides the global default project for all monitors</small>
+          </div>
+        </div>
+
+        <div class="rule-form">
+          <div class="form-row">
+            <div class="form-group flex-2">
+              <label for="monitor-url">Page URL</label>
+              <input type="text" id="monitor-url" placeholder="https://example.com/page-to-watch">
+            </div>
+            <div class="form-group flex-1">
+              <label for="monitor-interval">Check Interval</label>
+              <div class="interval-stepper" id="monitor-interval-stepper">
+                <button type="button" class="interval-step-btn" data-dir="-1">&#9662;</button>
+                <span class="interval-display" id="monitor-interval-display">1h</span>
+                <button type="button" class="interval-step-btn" data-dir="1">&#9652;</button>
+                <input type="hidden" id="monitor-interval" value="60">
+              </div>
+            </div>
+            <div class="form-group flex-1">
+              <label for="monitor-duration">Duration</label>
+              <select id="monitor-duration">
+                <option value="0">Indefinite</option>
+                <option value="12">12 hours</option>
+                <option value="24">1 day</option>
+                <option value="72" selected>3 days</option>
+                <option value="168">7 days</option>
+                <option value="720">30 days</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="monitor-title">Label (optional)</label>
+              <input type="text" id="monitor-title" placeholder="My Monitored Page">
+            </div>
+            <div class="form-group flex-1">
+              <label for="monitor-preset">Auto-Analyze Preset</label>
+              <select id="monitor-preset">
+                <option value="">None</option>
+              </select>
+            </div>
+            <div class="form-group flex-1">
+              <label for="monitor-automation">Run Automation</label>
+              <select id="monitor-automation">
+                <option value="">None</option>
+              </select>
+            </div>
+            <div class="form-group flex-1">
+              <label for="monitor-project-select">Attach to Project</label>
+              <select id="monitor-project-select">
+                <option value="">None</option>
+              </select>
+            </div>
+            <div class="form-group flex-1">
+              <label class="toggle-label">
+                <input type="checkbox" id="monitor-ai" checked>
+                <span>AI Change Analysis</span>
+              </label>
+            </div>
+            <div class="form-group flex-1">
+              <label class="toggle-label">
+                <input type="checkbox" id="monitor-auto-open">
+                <span>Auto-open on change</span>
+              </label>
+            </div>
+            <div class="form-group flex-1">
+              <label class="toggle-label">
+                <input type="checkbox" id="monitor-auto-bookmark" checked>
+                <span>Auto-bookmark</span>
+              </label>
+            </div>
+            <div class="form-group flex-1" style="justify-content:flex-end;">
+              <button id="add-monitor" class="pill-chip btn-primary">Add Monitor</button>
+            </div>
+          </div>
+        </div>
+
+        <span id="monitor-status" class="prompt-status"></span>
+
+        <div id="monitor-list" class="monitor-grid"></div>
+
+        <div id="monitor-storage-bar" style="margin-top:12px;display:none;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <span class="rule-meta" style="font-size:12px;">Storage Usage</span>
+            <span id="monitor-storage-label" class="rule-meta" style="font-size:12px;"></span>
+          </div>
+          <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;">
+            <div id="monitor-storage-fill" style="height:100%;border-radius:3px;transition:width .3s;"></div>
+          </div>
+          <a href="#" id="monitor-storage-manage" style="font-size:11px;color:var(--accent);margin-top:4px;display:inline-block;">Manage Storage &rarr;</a>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <script src="monitors.js"></script>
+</body>
+</html>

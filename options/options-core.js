@@ -1992,6 +1992,12 @@ function handleHashNav(hash, tabs, panels) {
     feeds: "feeds/feeds.html",
     tracker: "trawl/trawl.html",
     finance: "finance/finance.html",
+    bookmarks: "bookmarks/bookmarks.html",
+    archive: "archive/archive.html",
+    monitors: "monitors/monitors.html",
+    resources: "resources/resources.html",
+    settings: "settings/settings.html",
+    providers: "providers/providers.html",
   };
   if (GRADUATED_HASHES[hash]) {
     window.location.href = browser.runtime.getURL(GRADUATED_HASHES[hash]);

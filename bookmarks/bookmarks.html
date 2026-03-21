@@ -3,73 +3,89 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Smart Bookmarks - Argus</title>
+  <title>Bookmarks - Argus</title>
+  <link rel="stylesheet" href="../shared/argus-std.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../shared/options-ui.css">
   <link rel="stylesheet" href="bookmarks.css">
 </head>
 <body>
-  <header class="header">
-    <div class="header-left">
-      <img src="../icons/icon-32.png" alt="" class="header-icon">
-      <h1 class="header-title">Argus Bookmarks</h1>
-    </div>
-    <div class="header-right">
-      <button id="analyze-selected" class="pill-chip hidden">Analyze Selected</button>
-      <button id="select-toggle" class="btn btn-secondary btn-small">Select</button>
-      <button id="export-bookmarks" class="btn btn-secondary btn-small">Export JSON</button>
-    </div>
-  </header>
-
-  <div class="layout">
-    <aside class="sidebar">
-      <div class="search-box">
-        <input type="text" id="search-input" placeholder="Search bookmarks..." class="search-input">
-      </div>
-
-      <div class="sidebar-section">
-        <h3 class="sidebar-heading">Categories</h3>
-        <div id="category-list" class="filter-list"></div>
-      </div>
-
-      <div class="sidebar-section">
-        <h3 class="sidebar-heading">Tags</h3>
-        <div id="tag-cloud" class="tag-cloud"></div>
-      </div>
-    </aside>
-
-    <main class="main-content">
-      <div id="active-filters" class="active-filters hidden"></div>
-      <div id="bookmark-count" class="bookmark-count"></div>
-      <div id="bookmark-list" class="bookmark-list"></div>
-      <div id="empty-state" class="empty-state hidden">
-        <p>No bookmarks yet. Right-click any page and choose <strong>Argus &gt; Bookmark with AI Tags</strong> to get started.</p>
-      </div>
-    </main>
-  </div>
-
-  <!-- Edit modal -->
-  <div id="edit-modal" class="modal-overlay hidden">
-    <div class="modal">
-      <div class="modal-header">
-        <h2 class="modal-title">Edit Bookmark</h2>
-        <button id="modal-close" class="modal-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <label class="field-label">Tags (comma-separated)</label>
-        <input type="text" id="edit-tags" class="field-input">
-        <label class="field-label">Category</label>
-        <input type="text" id="edit-category" class="field-input">
-        <label class="field-label">Notes</label>
-        <textarea id="edit-notes" class="field-textarea" rows="4"></textarea>
-      </div>
-      <div class="modal-footer">
-        <button id="edit-save" class="pill-chip">Save</button>
-        <button id="edit-cancel" class="btn btn-secondary">Cancel</button>
-      </div>
-    </div>
-  </div>
-
   <script src="../lib/vendor/browser-polyfill.min.js"></script>
   <script src="../shared/theme.js"></script>
+  <script src="../shared/ribbon.js"></script>
+
+  <div class="settings-container" style="padding-top: 12px;">
+
+    <div class="bm-toolbar">
+      <div class="bm-toolbar-left">
+        <input type="text" id="bm-search" placeholder="Search bookmarks..." class="bm-search-input">
+      </div>
+      <div class="bm-toolbar-right">
+        <button id="bm-refresh" class="pill-chip" title="Refresh bookmarks">Refresh</button>
+        <button id="bm-analyze-selected" class="pill-chip hidden">Analyze Selected</button>
+        <button id="bm-select-toggle" class="pill-chip">Select</button>
+        <button id="bm-export" class="pill-chip">Export JSON</button>
+        <button id="bm-sync-github" class="pill-chip" title="Sync metadata to GitHub + snapshots to connected drives">Sync to Cloud</button>
+      </div>
+    </div>
+
+    <div class="bm-layout">
+      <aside class="bm-sidebar">
+        <div class="bm-sidebar-section">
+          <h3 class="bm-sidebar-heading">Folders <button id="bm-new-folder" class="btn-icon" title="New folder">+</button></h3>
+          <div id="bm-folder-tree" class="bm-folder-tree">
+            <div class="bm-folder-item active" data-folder-id="">All Bookmarks</div>
+          </div>
+        </div>
+        <div class="bm-sidebar-section">
+          <h3 class="bm-sidebar-heading">Categories</h3>
+          <div id="bm-category-list" class="bm-filter-list"></div>
+        </div>
+        <div class="bm-sidebar-section">
+          <h3 class="bm-sidebar-heading">Tags</h3>
+          <div id="bm-tag-cloud" class="bm-tag-cloud"></div>
+        </div>
+        <div class="bm-sidebar-section">
+          <a href="#" id="bm-customize-tagging" class="bm-sidebar-link">Customize AI tagging &rarr;</a>
+        </div>
+      </aside>
+
+      <div class="bm-main">
+        <div id="bm-active-filters" class="bm-active-filters hidden"></div>
+        <div id="bm-count" class="bm-count"></div>
+        <div id="bm-list" class="bm-list"></div>
+        <div id="bm-empty" class="bm-empty hidden">
+          <p>No bookmarks yet. Right-click any page and choose <strong>Argus &gt; Bookmark with AI Tags</strong> to get started.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit modal -->
+    <div id="bm-edit-modal" class="bm-modal-overlay hidden">
+      <div class="bm-modal">
+        <div class="bm-modal-header">
+          <h2 class="bm-modal-title">Edit Bookmark</h2>
+          <button id="bm-modal-close" class="bm-modal-close">&times;</button>
+        </div>
+        <div class="bm-modal-body">
+          <label class="bm-field-label">Folder</label>
+          <select id="bm-edit-folder" class="bm-field-input"></select>
+          <label class="bm-field-label">Tags (comma-separated)</label>
+          <input type="text" id="bm-edit-tags" class="bm-field-input">
+          <label class="bm-field-label">Category</label>
+          <input type="text" id="bm-edit-category" class="bm-field-input">
+          <label class="bm-field-label">Notes</label>
+          <textarea id="bm-edit-notes" class="bm-field-textarea" rows="4"></textarea>
+        </div>
+        <div class="bm-modal-footer">
+          <button id="bm-edit-save" class="pill-chip btn-primary">Save</button>
+          <button id="bm-edit-cancel" class="pill-chip">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
   <script src="bookmarks.js"></script>
 </body>
 </html>

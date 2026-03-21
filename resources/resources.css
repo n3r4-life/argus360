@@ -1,0 +1,451 @@
+/* resources.css — extracted from options.css */
+
+.res-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  flex-wrap: wrap;
+}
+.res-ip-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.res-ip-label { font-size: 13px; color: var(--text-secondary); }
+.res-ip-row code { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.res-update-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.res-version-info { font-size: 11px; color: var(--text-muted); }
+
+/* Resources — Dashboard Grid */
+.res-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 16px;
+}
+
+/* Resource Card */
+.res-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.res-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+
+/* Card Header */
+.res-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.res-card-icon { font-size: 20px; flex-shrink: 0; line-height: 1; margin-top: 2px; }
+.res-card-header > div { flex: 1; min-width: 0; }
+.res-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.3;
+}
+.res-card-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 2px 0 0;
+  line-height: 1.4;
+}
+.res-card-count {
+  flex-shrink: 0;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+}
+
+/* Card Note */
+.res-card-note {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 8px 16px 0;
+  margin: 0;
+  font-style: italic;
+}
+
+/* Card Links (columned list) */
+.res-card-links {
+  padding: 10px 16px 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 4px 0;
+  flex: 1;
+  align-content: start;
+}
+.res-link-item {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 8px;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background 0.12s;
+  align-self: start;
+}
+.res-link-item:hover {
+  background: var(--bg-secondary, rgba(0,0,0,0.04));
+}
+.res-link-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  line-height: 1.3;
+}
+.res-link-desc {
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.3;
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Master list link */
+.res-card-master {
+  display: block;
+  padding: 8px 16px;
+  font-size: 11px;
+  color: var(--accent);
+  text-decoration: none;
+  border-top: 1px solid var(--border);
+}
+.res-card-master:hover { text-decoration: underline; }
+
+/* User-added links (per-card) */
+.res-link-user .res-link-name {
+  color: #26c6da;
+}
+.res-link-user::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #26c6da;
+  flex-shrink: 0;
+  margin-top: 6px;
+  margin-right: 4px;
+}
+.res-link-user {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0;
+}
+.res-link-user .res-link-desc {
+  width: 100%;
+  padding-left: 8px;
+}
+
+/* Edit mode for user links */
+.res-link-edit-cb {
+  margin-right: 6px;
+  accent-color: #26c6da;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.res-link-edit-active {
+  background: rgba(38, 198, 218, 0.08);
+  border: 1px solid rgba(38, 198, 218, 0.25);
+  cursor: pointer;
+}
+.res-card-editing .res-link-user::before {
+  display: none;
+}
+.res-card-remove-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 0;
+  margin-left: 10px;
+  transition: color 0.12s;
+  font-family: inherit;
+}
+.res-card-remove-btn:hover { color: #ef5350; }
+.res-card-done-btn, .res-card-cancel-edit-btn {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.12);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 3px 10px;
+  border-radius: 4px;
+  margin-right: 4px;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.res-card-done-btn {
+  color: #ef5350;
+  border-color: rgba(239, 83, 80, 0.3);
+}
+.res-card-done-btn:hover {
+  background: rgba(239, 83, 80, 0.12);
+  border-color: #ef5350;
+}
+.res-card-cancel-edit-btn:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+/* Per-card add link footer */
+.res-card-add-footer {
+  padding: 6px 16px 10px;
+  border-top: 1px solid var(--border);
+}
+.res-card-add-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 0;
+  transition: color 0.12s;
+}
+.res-card-add-btn:hover { color: var(--accent); }
+.res-card-add-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 0;
+}
+.res-card-add-input {
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 4px);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  width: 120px;
+}
+.res-card-add-input-wide { width: 180px; }
+.res-card-add-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.res-card-add-save, .res-card-add-cancel {
+  font-size: 10px;
+  padding: 3px 10px;
+}
+
+/* Custom links top card */
+.res-custom-top {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  background: var(--bg-primary);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+}
+.res-custom-top-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.res-custom-top-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+.res-custom-add-link {
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+.res-custom-add-link:hover { text-decoration: underline; }
+
+/* Custom sources */
+.resource-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.resource-link-btn {
+  display: inline-block;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s;
+  cursor: pointer;
+}
+.resource-link-btn:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.res-custom-item {
+  position: relative;
+  padding-right: 20px;
+}
+.res-custom-item .res-remove {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: #f44336;
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.res-custom-item:hover .res-remove { opacity: 1; }
+
+/* Companion extensions strip */
+.res-companions {
+  text-align: center;
+  padding: 0 16px;
+}
+.res-companions-disclaimer {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  font-style: italic;
+  line-height: 1.4;
+}
+.res-companions-row {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.res-companion {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text-muted);
+  transition: color 0.15s, background 0.15s;
+  min-width: 70px;
+}
+.res-companion:hover {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+.res-companion span {
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* Custom sources top card — grid layout for link items */
+.res-custom-top .resource-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0;
+}
+
+/* Editable custom source rows (bottom card) */
+.res-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.res-edit-row:last-of-type { border-bottom: none; }
+.res-edit-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.res-edit-field label {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.res-edit-field input {
+  font-size: 12px;
+  padding: 4px 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.res-edit-field input:focus {
+  border-color: var(--accent);
+}
+.res-edit-label { flex: 1; min-width: 80px; }
+.res-edit-url   { flex: 2; min-width: 120px; }
+.res-edit-desc  { flex: 2; min-width: 100px; }
+.res-edit-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.res-edit-btn:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.res-edit-btn.res-edit-remove {
+  color: #f44336;
+  border-color: #f44336;
+}
+.res-edit-btn.res-edit-remove:hover {
+  background: #f44336;
+  color: #fff;
+}
+
+/* Hidden utility */
+.hidden { display: none !important; }

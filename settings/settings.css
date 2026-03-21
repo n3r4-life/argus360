@@ -1,0 +1,151 @@
+/* settings.css — extracted from options.css */
+
+/* ═══ Settings grid layout ═══ */
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.settings-grid .card {
+  margin-bottom: 0;
+  background: var(--bg-card, rgba(255,255,255,0.04));
+}
+
+.settings-wide {
+  grid-column: 1 / -1;
+}
+
+.settings-half {
+  grid-column: span 2;
+}
+
+.settings-third {
+  grid-column: span 1;
+}
+
+@media (max-width: 1024px) {
+  .settings-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .settings-half {
+    grid-column: span 2;
+  }
+  .settings-third {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 680px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+  .settings-half,
+  .settings-third {
+    grid-column: span 1;
+  }
+}
+
+/* ═══ Save indicator ═══ */
+.save-indicator {
+  background: var(--success);
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  transition: opacity 0.3s;
+  flex-shrink: 0;
+}
+
+.save-indicator.hidden {
+  opacity: 0;
+}
+
+/* ═══ Vault status badges ═══ */
+.vault-status-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 12px;
+  border-radius: 12px;
+  margin-right: 8px;
+}
+.vault-status-badge.vault-unlocked {
+  background: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+}
+.vault-status-badge.vault-locked {
+  background: rgba(233, 69, 96, 0.15);
+  color: #e94560;
+}
+
+/* ═══ Keyboard shortcuts ═══ */
+.shortcuts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.shortcut-key {
+  display: inline-block;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: monospace;
+  font-weight: 600;
+  color: var(--accent);
+  min-width: 130px;
+  text-align: center;
+}
+
+/* ═══ About meta ═══ */
+.about-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* ═══ Incognito sites list ═══ */
+.incognito-site-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.incognito-site-item:last-child { border-bottom: none; }
+.incognito-site-item .site-domain {
+  font-weight: 600;
+  color: #ce93d8;
+}
+.incognito-site-item .site-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 16px;
+  line-height: 1;
+  transition: all 0.15s;
+}
+.incognito-site-item .site-remove:hover {
+  color: var(--error);
+  background: rgba(255, 82, 82, 0.1);
+}
+
+/* ═══ Flex utility ═══ */
+.flex-1 { flex: 1; }

@@ -1,0 +1,132 @@
+/* monitors.css — extracted from options.css */
+
+/* ── Flex utilities ── */
+.flex-1 { flex: 1; }
+.flex-2 { flex: 2; }
+
+/* ── Interval stepper ── */
+.interval-stepper {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  width: 90px;
+  height: 38px;
+}
+.interval-step-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0 8px;
+  font-size: 10px;
+  line-height: 38px;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.interval-step-btn:hover { color: var(--text-primary); background: var(--bg-surface); }
+.interval-step-btn:active { background: var(--accent); color: #fff; }
+.interval-display {
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  user-select: none;
+  white-space: nowrap;
+}
+
+/* ── Rule items / form ── */
+.rule-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+}
+
+.rule-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.rule-info strong {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rule-info span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.rule-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.rule-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.rule-form {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+/* ── Monitor 2-column grid ── */
+.monitor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.monitor-grid .rule-item {
+  flex-direction: column;
+  align-items: stretch;
+  padding: 8px 10px;
+  margin-bottom: 0;
+  font-size: 12px;
+}
+
+.monitor-grid .rule-info strong { font-size: 12px; }
+.monitor-grid .rule-info span { font-size: 11px; }
+.monitor-grid .rule-actions {
+  gap: 4px;
+  margin-top: 6px;
+  justify-content: flex-start;
+}
+.monitor-grid .rule-actions .pill-chip { font-size: 10px; padding: 2px 6px; }
+
+/* ── Refresh button — light blue accent ── */
+.btn-refresh {
+  background: transparent;
+  border: 1px solid #4fc3f7;
+  color: #4fc3f7;
+  font-weight: 600;
+}
+.btn-refresh:hover {
+  background: #4fc3f7;
+  color: #0f0f1a;
+}
+
+@media (max-width: 700px) {
+  .monitor-grid { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Providers - Argus</title>
+  <link rel="stylesheet" href="../shared/argus-std.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../shared/options-ui.css">
+  <link rel="stylesheet" href="providers.css">
+</head>
+<body>
+  <script src="../lib/vendor/browser-polyfill.min.js"></script>
+  <script src="../shared/theme.js"></script>
+  <script src="../shared/ribbon.js"></script>
+
+  <div class="settings-container" style="padding-top: 12px;">
+
+      <!-- Defaults (AI + Cloud + Paste) -->
+      <section class="card">
+        <h2 class="card-title">Defaults</h2>
+        <div class="card-body">
+          <div class="form-row" style="gap:16px;">
+            <div class="form-group flex-1">
+              <label for="default-provider">AI Provider</label>
+              <select id="default-provider">
+                <option value="xai">xAI (Grok)</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="gemini">Google (Gemini)</option>
+                <option value="custom">Custom (OpenAI-compatible)</option>
+              </select>
+              <span class="hint">Used by default when analyzing pages</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="default-cloud-provider">Cloud Storage</label>
+              <select id="default-cloud-provider">
+                <option value="all">All connected</option>
+                <option value="google">Google Drive</option>
+                <option value="dropbox">Dropbox</option>
+                <option value="webdav">WebDAV</option>
+                <option value="s3">S3</option>
+              </select>
+              <span class="hint">Used by "Save to Cloud" and backup actions</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="default-paste-provider">Paste Service</label>
+              <select id="default-paste-provider">
+                <option value="">None</option>
+                <option value="gist">GitHub Gist</option>
+                <option value="pastebin">Pastebin</option>
+                <option value="privatebin">PrivateBin</option>
+              </select>
+              <span class="hint">Used by "Paste to Service" automation steps</span>
+            </div>
+          </div>
+          <div id="default-provider-status" style="font-size:11px;color:var(--text-muted);margin-top:6px;"></div>
+        </div>
+      </section>
+
+      <!-- AI Settings -->
+      <section class="card" id="providers-ai-settings">
+        <h2 class="card-title">AI Settings</h2>
+        <div class="card-body">
+          <!-- Sub-row A: limits + language + badge -->
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="max-tokens">Max Response Tokens</label>
+              <input type="number" id="max-tokens" value="2048" min="256" max="16384" step="256">
+              <span class="hint">256 - 16,384</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="max-input-chars">Max Input Characters</label>
+              <input type="number" id="max-input-chars" value="100000" min="1000" max="500000" step="1000">
+              <span class="hint">How much page text to send</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="temperature">Temperature</label>
+              <div class="range-row">
+                <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.3">
+                <span id="temp-value" class="range-value">0.3</span>
+              </div>
+              <span class="hint">Lower = focused, higher = creative</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="response-language">Response Language</label>
+              <select id="response-language">
+                <option value="auto">Auto-detect</option>
+                <option value="English">English</option>
+                <option value="Spanish">Spanish</option>
+                <option value="French">French</option>
+                <option value="German">German</option>
+                <option value="Portuguese">Portuguese</option>
+                <option value="Italian">Italian</option>
+                <option value="Dutch">Dutch</option>
+                <option value="Russian">Russian</option>
+                <option value="Japanese">Japanese</option>
+                <option value="Korean">Korean</option>
+                <option value="Chinese (Simplified)">Chinese (Simplified)</option>
+                <option value="Chinese (Traditional)">Chinese (Traditional)</option>
+                <option value="Arabic">Arabic</option>
+                <option value="Hindi">Hindi</option>
+                <option value="Turkish">Turkish</option>
+                <option value="Polish">Polish</option>
+                <option value="Ukrainian">Ukrainian</option>
+                <option value="Vietnamese">Vietnamese</option>
+                <option value="Thai">Thai</option>
+                <option value="Indonesian">Indonesian</option>
+                <option value="Swedish">Swedish</option>
+                <option value="Czech">Czech</option>
+                <option value="Romanian">Romanian</option>
+                <option value="Hungarian">Hungarian</option>
+                <option value="Greek">Greek</option>
+                <option value="Hebrew">Hebrew</option>
+                <option value="Filipino">Filipino</option>
+              </select>
+            </div>
+            <div class="form-group" style="justify-content:flex-end;">
+              <label class="toggle-label">
+                <input type="checkbox" id="show-badge" checked>
+                <span>Show badge on toolbar icon</span>
+              </label>
+            </div>
+          </div>
+          <!-- Sub-row B: thinking + reasoning -->
+          <div class="form-row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+            <div class="form-group flex-1">
+              <label class="toggle-label">
+                <input type="checkbox" id="extended-thinking-enabled">
+                <span>Extended Thinking</span>
+              </label>
+              <span class="hint" style="margin-top:4px;">Claude uses native thinking output &mdash; OpenAI &amp; Grok get a visible REASONING block</span>
+            </div>
+            <div class="form-group flex-1">
+              <label for="thinking-budget">Thinking Budget (tokens)</label>
+              <input type="number" id="thinking-budget" value="10000" min="1000" max="100000" step="1000">
+              <span class="hint" id="thinking-budget-hint">Claude only &mdash; OpenAI/Grok ignore this value</span>
+            </div>
+            <div class="form-group flex-1" id="openai-reasoning-card">
+              <label for="openai-reasoning-effort">Reasoning Effort
+                <span class="badge" style="margin-left:6px;">o-series</span>
+              </label>
+              <select id="openai-reasoning-effort">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+              <span class="hint" id="openai-reasoning-hint">OpenAI o3/o4-mini when Extended Thinking is on</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Provider API Keys & Models -->
+      <section class="card" id="providers-api-keys">
+        <h2 class="card-title">AI Providers</h2>
+        <div class="card-body">
+          <p class="info-text">Configure API keys for each provider you want to use. You can switch between providers when analyzing pages.</p>
+
+          <div class="provider-tabs">
+            <div id="provider-tab-list" class="tab-list">
+              <button class="tab-btn active" data-provider="xai">xAI (Grok)</button>
+              <button class="tab-btn" data-provider="openai">OpenAI</button>
+              <button class="tab-btn" data-provider="anthropic">Claude</button>
+              <button class="tab-btn" data-provider="gemini">Gemini</button>
+              <button class="tab-btn" data-provider="custom">Custom</button>
+            </div>
+          </div>
+
+          <div id="provider-config" class="prompt-editor">
+            <div class="form-group">
+              <label for="provider-api-key">API Key</label>
+              <div class="input-row">
+                <input type="password" id="provider-api-key" placeholder="Enter API key...">
+                <button id="toggle-key-vis" class="icon-btn" title="Show/hide key">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                       stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </button>
+              </div>
+              <span id="provider-key-hint" class="hint"></span>
+            </div>
+            <div id="custom-provider-fields" class="hidden">
+              <div class="form-group">
+                <label for="custom-base-url">Base URL</label>
+                <input type="text" id="custom-base-url" placeholder="e.g. https://api.example.com or http://localhost:1234">
+                <span class="hint">OpenAI-compatible endpoint. Argus will call {baseUrl}/v1/chat/completions</span>
+              </div>
+              <div class="form-group">
+                <label for="custom-model-name">Model Name</label>
+                <input type="text" id="custom-model-name" placeholder="e.g. meta-llama/Llama-3-70b, mistral-7b, etc.">
+                <span class="hint">The model identifier your endpoint expects</span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="provider-model">Default Model</label>
+              <select id="provider-model"></select>
+            </div>
+            <div class="provider-status-row">
+              <span id="provider-status" class="provider-status"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Data / Cloud Providers -->
+      <section class="card">
+        <h2 class="card-title">Data Providers</h2>
+        <div class="card-body">
+          <p class="info-text">Connect cloud storage and repositories for backup, file saving, and data sync. Your credentials stay local &mdash; never shared with Argus.</p>
+
+          <div class="provider-tabs">
+            <div id="data-provider-tab-list" class="tab-list">
+              <button class="tab-btn active" data-dprovider="gdrive">Google Drive</button>
+              <button class="tab-btn" data-dprovider="dropbox">Dropbox</button>
+              <button class="tab-btn" data-dprovider="webdav">WebDAV</button>
+              <button class="tab-btn" data-dprovider="s3">S3</button>
+              <button class="tab-btn" data-dprovider="github">GitHub</button>
+              <button class="tab-btn" data-dprovider="xmpp">XMPP / SMS</button>
+            </div>
+          </div>
+
+          <div id="data-provider-config" class="prompt-editor">
+            <!-- Google Drive fields (default visible) -->
+            <div id="dp-gdrive-fields">
+              <div class="form-group">
+                <label for="dp-gdrive-client-id">OAuth Client ID</label>
+                <input type="text" id="dp-gdrive-client-id" placeholder="e.g. 123456789.apps.googleusercontent.com">
+              </div>
+              <details class="dp-setup-guide">
+                <summary>Setup Guide</summary>
+                <ol class="dp-guide-steps">
+                  <li>Go to <a href="https://console.cloud.google.com/projectcreate" target="_blank">Google Cloud Console</a> and create a project</li>
+                  <li>Search for and enable the <strong>Google Drive API</strong> under APIs &amp; Services &rarr; Library</li>
+                  <li>Go to <strong>OAuth consent screen</strong> &rarr; choose <strong>External</strong> &rarr; fill App name, User support email, Developer email &rarr; Save</li>
+                  <li>Under <strong>Test users</strong>, click "Add users" and add your own Google email address (required while app is in "Testing" mode)</li>
+                  <li>Go to <strong>Credentials</strong> &rarr; Create Credentials &rarr; <strong>OAuth client ID</strong> &rarr; Application type: <strong>Web application</strong></li>
+                  <li><strong style="color:var(--accent);">CRITICAL:</strong> Under "Authorized redirect URIs", click "Add URI" and paste the <strong>exact</strong> redirect URI shown below &mdash; must match character-for-character</li>
+                  <li>Copy the <strong>Client ID</strong> (ends in <code>.apps.googleusercontent.com</code>), paste it above, then click Connect</li>
+                </ol>
+                <div style="margin-top:8px;padding:8px 10px;background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;">
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent);margin-bottom:4px;">Your Redirect URI (copy this exactly into GCP)</div>
+                  <p style="font-size:12px;color:var(--text-primary);word-break:break-all;font-family:monospace;user-select:all;cursor:text;" id="dp-gdrive-redirect">Loading...</p>
+                </div>
+                <div style="margin-top:8px;font-size:11px;color:var(--text-muted);line-height:1.5;">
+                  <strong>Common errors:</strong><br>
+                  <strong>redirect_uri_mismatch</strong> &mdash; the URI above isn't in your GCP OAuth client's Authorized redirect URIs<br>
+                  <strong>access_denied</strong> &mdash; your Google email isn't listed as a Test User in the consent screen<br>
+                  <strong>invalid_client</strong> &mdash; wrong Client ID (must end in .apps.googleusercontent.com)
+                </div>
+              </details>
+              <div class="dp-action-row">
+                <button id="dp-gdrive-connect" class="pill-chip">Connect</button>
+                <button id="dp-gdrive-disconnect" class="pill-chip hidden">Disconnect</button>
+                <span id="dp-gdrive-status" class="dp-status"></span>
+              </div>
+              <div class="form-group" id="dp-gdrive-folder-section" style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">
+                <label for="dp-gdrive-folder">Default Upload Folder</label>
+                <input type="text" id="dp-gdrive-folder" placeholder="e.g. exports  or  projects/argus">
+                <span class="hint">Subfolder inside your Argus Drive root. Leave blank to upload directly into Argus/.</span>
+              </div>
+            </div>
+
+            <!-- Dropbox fields -->
+            <div id="dp-dropbox-fields" class="hidden">
+              <div class="form-group">
+                <label for="dp-dropbox-app-key">App Key</label>
+                <input type="text" id="dp-dropbox-app-key" placeholder="e.g. abc123def456">
+              </div>
+              <details class="dp-setup-guide">
+                <summary>Setup Guide</summary>
+                <ol class="dp-guide-steps">
+                  <li>Go to <a href="https://www.dropbox.com/developers/apps/create" target="_blank">Dropbox App Console</a> and create an app</li>
+                  <li>Choose <strong>Scoped access</strong> &rarr; <strong>App folder</strong></li>
+                  <li>Under Permissions, enable <strong>files.content.write</strong> and <strong>files.content.read</strong></li>
+                  <li>Copy the <strong>App Key</strong> and paste it above</li>
+                </ol>
+              </details>
+              <div class="dp-action-row">
+                <button id="dp-dropbox-connect" class="pill-chip">Connect</button>
+                <button id="dp-dropbox-disconnect" class="pill-chip hidden">Disconnect</button>
+                <span id="dp-dropbox-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- WebDAV fields -->
+            <div id="dp-webdav-fields" class="hidden">
+              <div class="form-group">
+                <label for="dp-webdav-url">Server URL</label>
+                <input type="text" id="dp-webdav-url" placeholder="e.g. https://cloud.example.com/remote.php/dav/files/user/Argus/">
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="dp-webdav-user">Username</label>
+                  <input type="text" id="dp-webdav-user" placeholder="Username">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="dp-webdav-pass">Password / App Token</label>
+                  <input type="password" id="dp-webdav-pass" placeholder="Password or app token">
+                </div>
+              </div>
+              <details class="dp-setup-guide">
+                <summary>Setup Guide</summary>
+                <ol class="dp-guide-steps">
+                  <li>Enter your WebDAV server URL (Nextcloud, ownCloud, Synology, TrueNAS, etc.)</li>
+                  <li>For Nextcloud: use an <strong>App Password</strong> from Settings &rarr; Security</li>
+                  <li>Click <strong>Test Connection</strong> to verify</li>
+                </ol>
+              </details>
+              <div class="dp-action-row">
+                <button id="dp-webdav-test" class="pill-chip">Test Connection</button>
+                <span id="dp-webdav-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- S3 fields -->
+            <div id="dp-s3-fields" class="hidden">
+              <div class="form-group">
+                <label for="dp-s3-endpoint">Endpoint URL</label>
+                <input type="text" id="dp-s3-endpoint" placeholder="e.g. s3.us-west-004.backblazeb2.com">
+                <span class="hint">Backblaze B2, Wasabi, Cloudflare R2, MinIO, or AWS S3</span>
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="dp-s3-bucket">Bucket Name</label>
+                  <input type="text" id="dp-s3-bucket" placeholder="my-argus-backup">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="dp-s3-region">Region <span class="hint" style="display:inline;margin:0;">(optional)</span></label>
+                  <input type="text" id="dp-s3-region" placeholder="e.g. us-west-1">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="dp-s3-access-key">Access Key</label>
+                  <input type="text" id="dp-s3-access-key" placeholder="Access Key ID">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="dp-s3-secret-key">Secret Key</label>
+                  <input type="password" id="dp-s3-secret-key" placeholder="Secret Access Key">
+                </div>
+              </div>
+              <details class="dp-setup-guide">
+                <summary>Setup Guide</summary>
+                <ol class="dp-guide-steps">
+                  <li>Create a bucket in your S3-compatible provider</li>
+                  <li>Create an access key with read/write permissions for the bucket</li>
+                  <li>Enter the endpoint URL, bucket name, and credentials above</li>
+                  <li>Endpoint hints: Backblaze <code>s3.us-west-004.backblazeb2.com</code>, Wasabi <code>s3.wasabisys.com</code>, R2 <code>&lt;accountId&gt;.r2.cloudflarestorage.com</code></li>
+                </ol>
+              </details>
+              <div class="dp-action-row">
+                <button id="dp-s3-test" class="pill-chip">Test Connection</button>
+                <span id="dp-s3-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- GitHub fields -->
+            <div id="dp-github-fields" class="hidden">
+              <div class="form-group">
+                <label for="dp-github-pat">Personal Access Token</label>
+                <input type="password" id="dp-github-pat" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="dp-github-repo">Repository</label>
+                  <input type="text" id="dp-github-repo" placeholder="owner/repo-name">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="dp-github-branch">Branch</label>
+                  <input type="text" id="dp-github-branch" placeholder="main" value="main">
+                </div>
+              </div>
+              <details class="dp-setup-guide">
+                <summary>Setup Guide</summary>
+                <ol class="dp-guide-steps">
+                  <li>Create a <strong>private repository</strong> on GitHub for your Argus data</li>
+                  <li>Go to <a href="https://github.com/settings/tokens?type=beta" target="_blank">Settings &rarr; Developer Settings &rarr; Personal Access Tokens</a></li>
+                  <li>Generate a token with <strong>repo</strong> scope (or fine-grained: Contents read/write)</li>
+                  <li>Paste the token and enter your repo as <code>owner/repo-name</code></li>
+                </ol>
+              </details>
+              <div class="dp-action-row">
+                <button id="dp-github-test" class="pill-chip">Test Connection</button>
+                <span id="dp-github-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- XMPP / SMS fields -->
+            <div id="dp-xmpp-fields" class="hidden">
+              <div class="form-group">
+                <label for="dp-xmpp-server">WebSocket Server URL</label>
+                <input type="text" id="dp-xmpp-server" placeholder="e.g. wss://xmpp.example.com:5281/ws">
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="dp-xmpp-jid">JID (Jabber ID)</label>
+                  <input type="text" id="dp-xmpp-jid" placeholder="user@jabber.example.com">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="dp-xmpp-password">Password</label>
+                  <input type="password" id="dp-xmpp-password" placeholder="XMPP password (stored in Vault)">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="dp-xmpp-gateway">SMS Gateway Domain</label>
+                  <input type="text" id="dp-xmpp-gateway" placeholder="e.g. cheogram.com">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="dp-xmpp-country">Default Country Code</label>
+                  <select id="dp-xmpp-country" class="select-compact">
+                    <option value="US">US (+1)</option>
+                    <option value="CA">CA (+1)</option>
+                    <option value="GB">GB (+44)</option>
+                    <option value="AU">AU (+61)</option>
+                    <option value="DE">DE (+49)</option>
+                    <option value="FR">FR (+33)</option>
+                    <option value="IN">IN (+91)</option>
+                    <option value="JP">JP (+81)</option>
+                    <option value="BR">BR (+55)</option>
+                    <option value="MX">MX (+52)</option>
+                    <option value="IT">IT (+39)</option>
+                    <option value="ES">ES (+34)</option>
+                    <option value="NL">NL (+31)</option>
+                    <option value="SE">SE (+46)</option>
+                    <option value="NO">NO (+47)</option>
+                    <option value="DK">DK (+45)</option>
+                    <option value="FI">FI (+358)</option>
+                    <option value="PL">PL (+48)</option>
+                    <option value="CH">CH (+41)</option>
+                    <option value="AT">AT (+43)</option>
+                    <option value="BE">BE (+32)</option>
+                    <option value="IE">IE (+353)</option>
+                    <option value="NZ">NZ (+64)</option>
+                    <option value="ZA">ZA (+27)</option>
+                    <option value="KR">KR (+82)</option>
+                    <option value="SG">SG (+65)</option>
+                    <option value="IL">IL (+972)</option>
+                    <option value="AE">AE (+971)</option>
+                    <option value="RU">RU (+7)</option>
+                    <option value="CN">CN (+86)</option>
+                  </select>
+                </div>
+              </div>
+              <details class="dp-setup-guide">
+                <summary>Setup Guide</summary>
+                <ol class="dp-guide-steps">
+                  <li><strong>XMPP Server:</strong> Enter the WebSocket URL of your XMPP server (Prosody, ejabberd, Openfire). Usually <code>wss://server:5281/ws</code> or <code>wss://server/xmpp-websocket</code></li>
+                  <li><strong>JID:</strong> Your Jabber ID, e.g. <code>nick@jabber.example.com</code></li>
+                  <li><strong>Password:</strong> Your XMPP account password (encrypted via Vault)</li>
+                  <li><strong>SMS Gateway:</strong> The domain of your SMS-over-XMPP gateway provider:
+                    <ul style="margin-top:4px;">
+                      <li><strong>JMP.chat / Cheogram:</strong> <code>cheogram.com</code> &mdash; hosted service (~$4.99/mo, sign up at <a href="https://jmp.chat" target="_blank">jmp.chat</a>)</li>
+                      <li><strong>sms-over-xmpp:</strong> Self-hosted Go binary with GSM modem or Twilio backend</li>
+                      <li><strong>SMStoXMPP:</strong> Self-hosted PHP gateway using Android phone as SMS bridge</li>
+                    </ul>
+                  </li>
+                  <li>Click <strong>Test Connection</strong> to verify your credentials and gateway reachability</li>
+                </ol>
+                <div style="margin-top:8px;font-size:11px;color:var(--text-muted);line-height:1.5;">
+                  <strong>How it works:</strong> Argus connects directly to your XMPP server via WebSocket. Messages to phone numbers are routed as XMPP stanzas to <code>+number@gateway</code>, where the gateway delivers them as SMS. No Argus servers involved.
+                </div>
+              </details>
+              <div class="dp-action-row">
+                <button id="dp-xmpp-test" class="pill-chip">Test Connection</button>
+                <span id="dp-xmpp-status" class="dp-status"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Intelligence Providers -->
+      <section class="card" id="intel-providers">
+        <h2 class="card-title">Intelligence Providers</h2>
+        <div class="card-body">
+          <p class="info-text">Connect OSINT and intelligence data sources. OpenSanctions and SEC EDGAR work without credentials. Others require API keys.</p>
+
+          <div class="provider-tabs">
+            <div id="intel-provider-tab-list" class="tab-list">
+              <button class="tab-btn active" data-iprovider="opensanctions">OpenSanctions</button>
+              <button class="tab-btn" data-iprovider="csl">U.S. CSL</button>
+              <button class="tab-btn" data-iprovider="eusanctions">EU Sanctions</button>
+              <button class="tab-btn" data-iprovider="samgov">SAM.gov</button>
+              <button class="tab-btn" data-iprovider="patentsview">PatentsView</button>
+              <button class="tab-btn" data-iprovider="lensorg">Lens.org</button>
+              <button class="tab-btn" data-iprovider="pqai">PQAI</button>
+              <button class="tab-btn" data-iprovider="secedgar">SEC EDGAR</button>
+              <button class="tab-btn" data-iprovider="courtlistener">CourtListener</button>
+              <button class="tab-btn" data-iprovider="opensky">OpenSky</button>
+              <button class="tab-btn" data-iprovider="adsbexchange">ADS-B Exchange</button>
+              <button class="tab-btn" data-iprovider="marinetraffic">MarineTraffic</button>
+              <button class="tab-btn" data-iprovider="gdelt">GDELT</button>
+              <button class="tab-btn" data-iprovider="sentinelhub">Sentinel Hub</button>
+              <button class="tab-btn" data-iprovider="opencorporates">OpenCorporates</button>
+              <button class="tab-btn" data-iprovider="gleif">GLEIF</button>
+              <button class="tab-btn" data-iprovider="blockstream">Blockstream</button>
+              <button class="tab-btn" data-iprovider="broadcastify">Broadcastify</button>
+              <button class="tab-btn" data-iprovider="vesselfinder">VesselFinder</button>
+              <button class="tab-btn" data-iprovider="flightaware">FlightAware</button>
+              <button class="tab-btn" data-iprovider="wigle">WiGLE</button>
+              <button class="tab-btn" data-iprovider="stadiamaps">Stadia Maps</button>
+              <button class="tab-btn" data-iprovider="windywebcams">Windy Webcams</button>
+              <button class="tab-btn" data-iprovider="windyforecast">Windy Forecast</button>
+              <button class="tab-btn" data-iprovider="openweathermap">OpenWeatherMap</button>
+              <button class="tab-btn" data-iprovider="dol">DOL (MSHA)</button>
+              <button class="tab-btn" data-iprovider="fec">FEC</button>
+              <button class="tab-btn" data-iprovider="propublica990">ProPublica</button>
+            </div>
+          </div>
+
+          <div id="intel-provider-config" class="prompt-editor">
+            <!-- OpenSanctions fields (default visible) -->
+            <div id="intel-opensanctions-fields">
+              <div class="form-group">
+                <label for="intel-opensanctions-apikey">API Key <span class="hint">(required &mdash; free at opensanctions.org/api/)</span></label>
+                <div class="input-row"><input type="password" id="intel-opensanctions-apikey" placeholder="Optional API key for higher rate limits"><button class="icon-btn intel-eye-toggle" data-target="intel-opensanctions-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">A free API key is required. Get one at <a href="https://www.opensanctions.org/api/" target="_blank" style="color:var(--accent);">opensanctions.org/api/ &#8599;</a>. Provides sanctions lists, PEP databases, and entity screening across 30+ datasets.</p>
+              <div class="dp-action-row">
+                <button id="intel-opensanctions-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-opensanctions-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- SEC EDGAR fields -->
+            <div id="intel-secedgar-fields" class="hidden">
+              <p class="info-text">SEC EDGAR requires no credentials. Provides corporate filings, insider transactions, and company facts for all US public companies.</p>
+              <p class="info-text" style="margin-top:4px;font-size:11px;color:var(--text-muted);">All requests include a User-Agent header as required by SEC policy.</p>
+              <div class="dp-action-row">
+                <button id="intel-secedgar-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-secedgar-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- CourtListener fields -->
+            <div id="intel-courtlistener-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-courtlistener-apikey">API Key <span class="hint">(free &mdash; courtlistener.com/sign-in/)</span></label>
+                <div class="input-row"><input type="password" id="intel-courtlistener-apikey" placeholder="CourtListener API key"><button class="icon-btn intel-eye-toggle" data-target="intel-courtlistener-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Free account required. Sign up at <a href="https://www.courtlistener.com/sign-in/" target="_blank" style="color:var(--accent);">courtlistener.com/sign-in/ &#8599;</a>, then get your token at <a href="https://www.courtlistener.com/profile/api-token/" target="_blank" style="color:var(--accent);">courtlistener.com/profile/api-token/ &#8599;</a>. Searches US federal and state court opinions, dockets, and citations.</p>
+              <div class="dp-action-row">
+                <button id="intel-courtlistener-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-courtlistener-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- U.S. CSL fields -->
+            <div id="intel-csl-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-csl-apikey">Subscription Key <span class="hint">(free &mdash; developer.trade.gov)</span></label>
+                <div class="input-row"><input type="password" id="intel-csl-apikey" placeholder="Azure subscription key"><button class="icon-btn intel-eye-toggle" data-target="intel-csl-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Free subscription key required. Sign up at <a href="https://developer.trade.gov" target="_blank" style="color:var(--accent);">developer.trade.gov &#8599;</a>, subscribe to "Data Services Platform APIs", then copy your key from your profile. Covers SDN, Entity List, Denied Persons, and 10 more U.S. sanctions lists.</p>
+              <div class="dp-action-row">
+                <button id="intel-csl-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-csl-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- EU Sanctions fields -->
+            <div id="intel-eusanctions-fields" class="hidden">
+              <p class="info-text">EU Consolidated Financial Sanctions List requires no credentials. The full list is downloaded from the European Commission and searched locally. Updated within one working day of new Official Journal publications.</p>
+              <div class="dp-action-row">
+                <button id="intel-eusanctions-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-eusanctions-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- SAM.gov fields -->
+            <div id="intel-samgov-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-samgov-apikey">API Key <span class="hint">(free &mdash; sam.gov)</span></label>
+                <div class="input-row"><input type="password" id="intel-samgov-apikey" placeholder="SAM.gov API key"><button class="icon-btn intel-eye-toggle" data-target="intel-samgov-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Free API key required. Register at <a href="https://sam.gov" target="_blank" style="color:var(--accent);">sam.gov &#8599;</a>, then request a public API key from your profile. Searches U.S. federal entity registrations by name, UEI, or CAGE code. Note: rate limited to ~1,000 requests/day.</p>
+              <div class="dp-action-row">
+                <button id="intel-samgov-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-samgov-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- PatentsView fields -->
+            <div id="intel-patentsview-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-patentsview-apikey">API Key <span class="hint">(free &mdash; patentsview.org)</span></label>
+                <div class="input-row"><input type="password" id="intel-patentsview-apikey" placeholder="PatentsView API key"><button class="icon-btn intel-eye-toggle" data-target="intel-patentsview-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Free API key required. Request at <a href="https://patentsview.org/apis/keyrequest" target="_blank" style="color:var(--accent);">patentsview.org/apis/keyrequest &#8599;</a>. Searches U.S. patent data &mdash; titles, inventors, assignees, CPC classifications. Rate limit: 45 requests/minute.</p>
+              <div class="dp-action-row">
+                <button id="intel-patentsview-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-patentsview-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- Lens.org fields -->
+            <div id="intel-lensorg-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-lensorg-apikey">API Token <span class="hint">(free academic &mdash; lens.org)</span></label>
+                <div class="input-row"><input type="password" id="intel-lensorg-apikey" placeholder="Lens.org Bearer token"><button class="icon-btn intel-eye-toggle" data-target="intel-lensorg-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Free academic access available. Apply at <a href="https://www.lens.org/lens/user/subscriptions" target="_blank" style="color:var(--accent);">lens.org/subscriptions &#8599;</a>. Searches global patents across 100+ jurisdictions plus scholarly works. Free tier: 500 requests/day, 50,000 records/month.</p>
+              <div class="dp-action-row">
+                <button id="intel-lensorg-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-lensorg-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- PQAI fields -->
+            <div id="intel-pqai-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-pqai-apikey">Token <span class="hint">(optional &mdash; email sam@projectpq.ai)</span></label>
+                <div class="input-row"><input type="password" id="intel-pqai-apikey" placeholder="PQAI token (optional)"><button class="icon-btn intel-eye-toggle" data-target="intel-pqai-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">AI-powered semantic patent search. Works without a token for basic use. For higher limits, email <strong>sam@projectpq.ai</strong> for a free academic/non-commercial token. Finds prior art using natural language queries.</p>
+              <div class="dp-action-row">
+                <button id="intel-pqai-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-pqai-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- OpenSky fields -->
+            <div id="intel-opensky-fields" class="hidden">
+              <div class="form-group">
+                <label>Client Credentials (OAuth2)</label>
+                <div class="dp-action-row" style="margin-bottom:8px;">
+                  <button id="intel-opensky-load-json" class="pill-chip">Load credentials.json</button>
+                  <input type="file" id="intel-opensky-file" accept=".json" style="display:none;">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="intel-opensky-clientid">Client ID</label>
+                <div class="input-row">
+                  <input type="password" id="intel-opensky-clientid" placeholder="e.g. myuser-api-client">
+                  <button class="icon-btn intel-eye-toggle" data-target="intel-opensky-clientid" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="intel-opensky-clientsecret">Client Secret</label>
+                <div class="input-row">
+                  <input type="password" id="intel-opensky-clientsecret" placeholder="Client secret from credentials.json">
+                  <button class="icon-btn intel-eye-toggle" data-target="intel-opensky-clientsecret" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                </div>
+              </div>
+              <div class="dp-action-row">
+                <button id="intel-opensky-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-opensky-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- ADS-B Exchange fields -->
+            <div id="intel-adsbexchange-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-adsbexchange-apikey">API Key</label>
+                <div class="input-row"><input type="password" id="intel-adsbexchange-apikey" placeholder="ADS-B Exchange API key"><button class="icon-btn intel-eye-toggle" data-target="intel-adsbexchange-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <div class="dp-action-row">
+                <button id="intel-adsbexchange-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-adsbexchange-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- MarineTraffic fields -->
+            <div id="intel-marinetraffic-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-marinetraffic-apikey">API Key</label>
+                <div class="input-row"><input type="password" id="intel-marinetraffic-apikey" placeholder="MarineTraffic API key"><button class="icon-btn intel-eye-toggle" data-target="intel-marinetraffic-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <div class="dp-action-row">
+                <button id="intel-marinetraffic-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-marinetraffic-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- GDELT fields -->
+            <div id="intel-gdelt-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-gdelt-apikey">API Key</label>
+                <div class="input-row"><input type="password" id="intel-gdelt-apikey" placeholder="GDELT API key"><button class="icon-btn intel-eye-toggle" data-target="intel-gdelt-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <div class="dp-action-row">
+                <button id="intel-gdelt-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-gdelt-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- Sentinel Hub fields -->
+            <div id="intel-sentinelhub-fields" class="hidden">
+              <div class="form-group">
+                <label>OAuth2 Client Credentials (Copernicus Data Space)</label>
+                <div class="dp-action-row" style="margin-bottom:8px;">
+                  <button id="intel-sentinelhub-load-json" class="pill-chip">Load credentials.json</button>
+                  <input type="file" id="intel-sentinelhub-file" accept=".json" style="display:none;">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="intel-sentinelhub-clientid">Client ID</label>
+                <div class="input-row"><input type="password" id="intel-sentinelhub-clientid" placeholder="OAuth2 Client ID"><button class="icon-btn intel-eye-toggle" data-target="intel-sentinelhub-clientid" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <div class="form-group">
+                <label for="intel-sentinelhub-clientsecret">Client Secret</label>
+                <div class="input-row"><input type="password" id="intel-sentinelhub-clientsecret" placeholder="OAuth2 Client Secret"><button class="icon-btn intel-eye-toggle" data-target="intel-sentinelhub-clientsecret" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <div class="form-group">
+                <label for="intel-sentinelhub-instanceid">WMS Instance ID <span class="hint">(optional &mdash; for Leaflet tile layer)</span></label>
+                <div class="input-row"><input type="text" id="intel-sentinelhub-instanceid" placeholder="From Dashboard &rarr; Configuration Utility"><button class="icon-btn intel-eye-toggle" data-target="intel-sentinelhub-instanceid" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Get credentials at <a href="https://shapps.dataspace.copernicus.eu/dashboard/" target="_blank" style="color:var(--accent);">Copernicus Dashboard &#8599;</a>. Create an OAuth Client for Client ID + Secret. Instance ID is from Configuration Utility (needed for WMS tile layers).</p>
+              <div class="dp-action-row">
+                <button id="intel-sentinelhub-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-sentinelhub-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- OpenCorporates fields -->
+            <div id="intel-opencorporates-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-opencorporates-apikey">API Key</label>
+                <div class="input-row"><input type="password" id="intel-opencorporates-apikey" placeholder="OpenCorporates API key"><button class="icon-btn intel-eye-toggle" data-target="intel-opencorporates-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <div class="dp-action-row">
+                <button id="intel-opencorporates-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-opencorporates-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- GLEIF fields -->
+            <div id="intel-gleif-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-gleif-apikey">API Key</label>
+                <div class="input-row"><input type="password" id="intel-gleif-apikey" placeholder="GLEIF API key"><button class="icon-btn intel-eye-toggle" data-target="intel-gleif-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <div class="dp-action-row">
+                <button id="intel-gleif-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-gleif-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- Blockstream fields -->
+            <div id="intel-blockstream-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-blockstream-apikey">API Key</label>
+                <div class="input-row"><input type="password" id="intel-blockstream-apikey" placeholder="Blockstream API key"><button class="icon-btn intel-eye-toggle" data-target="intel-blockstream-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <div class="dp-action-row">
+                <button id="intel-blockstream-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-blockstream-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- Broadcastify fields -->
+            <div id="intel-broadcastify-fields" class="hidden">
+              <p class="dp-desc">
+                Login to <a href="https://www.radioreference.com/account/premium" target="_blank" rel="noopener">RadioReference.com</a>
+                &rarr; Account &rarr; Premium Subscription &rarr; copy your <strong>Service Key</strong>.
+                Your $30/yr premium subscription unlocks the SOAP API used for county-level feed lookup.
+              </p>
+              <div class="form-group">
+                <label for="intel-broadcastify-apikey">Service Key</label>
+                <div class="input-row"><input type="password" id="intel-broadcastify-apikey" placeholder="RadioReference service key"><button class="icon-btn intel-eye-toggle" data-target="intel-broadcastify-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <div class="dp-action-row">
+                <button id="intel-broadcastify-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-broadcastify-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- FlightAware fields -->
+            <div id="intel-flightaware-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-flightaware-apikey">AeroAPI Key</label>
+                <div class="input-row"><input type="password" id="intel-flightaware-apikey" placeholder="FlightAware AeroAPI key"><button class="icon-btn intel-eye-toggle" data-target="intel-flightaware-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">FlightAware AeroAPI provides flight tracking, history, and airport data. Search by tail number, flight ID, or airline. Get your key at <a href="https://www.flightaware.com/aeroapi/portal" target="_blank" style="color:var(--accent);">flightaware.com/aeroapi &#8599;</a></p>
+              <div class="dp-action-row">
+                <button id="intel-flightaware-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-flightaware-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- VesselFinder fields -->
+            <div id="intel-vesselfinder-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-vesselfinder-apikey">API Key</label>
+                <div class="input-row"><input type="password" id="intel-vesselfinder-apikey" placeholder="VesselFinder API key ($10/mo)"><button class="icon-btn intel-eye-toggle" data-target="intel-vesselfinder-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">VesselFinder provides live vessel positions, details, and port calls. Optional &mdash; the ITU Ship Station database works for free vessel lookup without this key.</p>
+              <div class="dp-action-row">
+                <button id="intel-vesselfinder-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-vesselfinder-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- WiGLE fields -->
+            <div id="intel-wigle-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-wigle-apiname">API Name</label>
+                <div class="input-row"><input type="text" id="intel-wigle-apiname" placeholder="e.g. AID91a7b0e60c075b54d..."></div>
+              </div>
+              <div class="form-group" style="margin-top:8px;">
+                <label for="intel-wigle-apikey">API Token</label>
+                <div class="input-row"><input type="password" id="intel-wigle-apikey" placeholder="WiGLE API Token"><button class="icon-btn intel-eye-toggle" data-target="intel-wigle-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">WiGLE maps WiFi, Bluetooth, and cellular networks by location. Create a free account at <a href="https://wigle.net" target="_blank" style="color:var(--accent);">wigle.net &#8599;</a>, then go to <strong>Profile &rarr; API Token</strong> and copy your <em>API Name</em> (starts with AID) and <em>API Token</em>. Used to overlay detected wireless networks on the satellite and geomap views.</p>
+              <div class="dp-action-row">
+                <button id="intel-wigle-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-wigle-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- Stadia Maps fields -->
+            <div id="intel-stadiamaps-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-stadiamaps-apikey">API Key</label>
+                <div class="input-row"><input type="password" id="intel-stadiamaps-apikey" placeholder="Stadia Maps API key"><button class="icon-btn intel-eye-toggle" data-target="intel-stadiamaps-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Stadia Maps provides premium map tiles including Stamen styles (Toner, Watercolor, Terrain), Alidade Satellite, and Outdoors. Sign up at <a href="https://client.stadiamaps.com/signup/" target="_blank" style="color:var(--accent);">client.stadiamaps.com &#8599;</a>, create a property, then generate an API key under Authentication. Used as basemap tile providers on the satellite page.</p>
+              <div class="dp-action-row">
+                <button id="intel-stadiamaps-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-stadiamaps-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- Windy Webcams fields -->
+            <div id="intel-windywebcams-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-windywebcams-apikey">API Key</label>
+                <div class="input-row"><input type="password" id="intel-windywebcams-apikey" placeholder="Windy Webcams API key"><button class="icon-btn intel-eye-toggle" data-target="intel-windywebcams-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Windy Webcams API v3 provides access to thousands of live webcams worldwide, searchable by location. Sign up at <a href="https://api.windy.com/" target="_blank" style="color:var(--accent);">api.windy.com &#8599;</a> and create a Webcams API key. Used to overlay live camera locations on the satellite map with thumbnail previews and live stream links.</p>
+              <div class="dp-action-row">
+                <button id="intel-windywebcams-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-windywebcams-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- Windy Forecast fields -->
+            <div id="intel-windyforecast-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-windyforecast-tilekey">Map Tiles Key <span class="hint">(tiles.windy.com)</span></label>
+                <div class="input-row"><input type="password" id="intel-windyforecast-tilekey" placeholder="Windy map tile API key"><button class="icon-btn intel-eye-toggle" data-target="intel-windyforecast-tilekey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <div class="form-group" style="margin-top:8px;">
+                <label for="intel-windyforecast-forecastkey">Point Forecast Key <span class="hint">(api.windy.com/api/point-forecast/v2)</span></label>
+                <div class="input-row"><input type="password" id="intel-windyforecast-forecastkey" placeholder="Windy point forecast API key"><button class="icon-btn intel-eye-toggle" data-target="intel-windyforecast-forecastkey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Windy provides two separate API keys. The <strong>Map Tiles key</strong> powers the weather tile overlay on the satellite map (wind, rain, temperature, etc). The <strong>Point Forecast key</strong> powers the right-click weather popup with 48h forecasts from GFS/ECMWF/ICON. Both are optional independently. Get keys at <a href="https://api.windy.com/" target="_blank" style="color:var(--accent);">api.windy.com &#8599;</a>.</p>
+              <div class="dp-action-row">
+                <button id="intel-windyforecast-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-windyforecast-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- OpenWeatherMap fields -->
+            <div id="intel-openweathermap-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-openweathermap-apikey">API Key</label>
+                <div class="input-row"><input type="password" id="intel-openweathermap-apikey" placeholder="OpenWeatherMap API key"><button class="icon-btn intel-eye-toggle" data-target="intel-openweathermap-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">OpenWeatherMap provides weather tile overlays (rain, wind, temperature, clouds, pressure) and current conditions at any lat/lon. Get a free API key at <a href="https://home.openweathermap.org/api_keys" target="_blank" style="color:var(--accent);">home.openweathermap.org/api_keys &#8599;</a>. Without a key, current conditions fall back to <strong>Open-Meteo</strong> (free, no key needed) but tile overlays require the OWM key.</p>
+              <div class="dp-action-row">
+                <button id="intel-openweathermap-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-openweathermap-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- DOL (MSHA) -->
+            <div id="intel-dol-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-dol-apikey">API Key <span class="hint">(required &mdash; register at dataportal.dol.gov)</span></label>
+                <div class="input-row"><input type="password" id="intel-dol-apikey" placeholder="DOL Data Portal API key"><button class="icon-btn intel-eye-toggle" data-target="intel-dol-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Department of Labor Data Portal. Currently provides MSHA mine safety data (accidents, mine addresses). OSHA inspections will be available when DOL publishes them to the v4 API. Register for a free key at <a href="https://dataportal.dol.gov/registration" target="_blank" style="color:var(--accent);">dataportal.dol.gov/registration &#8599;</a>.</p>
+              <div class="dp-action-row">
+                <button id="intel-dol-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-dol-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- FEC Campaign Finance -->
+            <div id="intel-fec-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-fec-apikey">API Key <span class="hint">(free &mdash; api.open.fec.gov)</span></label>
+                <div class="input-row"><input type="password" id="intel-fec-apikey" placeholder="FEC API key"><button class="icon-btn intel-eye-toggle" data-target="intel-fec-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">Federal Election Commission campaign finance data &mdash; political donations, PAC spending, candidate committees. Get a free API key at <a href="https://api.open.fec.gov/developers/" target="_blank" style="color:var(--accent);">api.open.fec.gov/developers &#8599;</a>.</p>
+              <div class="dp-action-row">
+                <button id="intel-fec-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-fec-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- ProPublica Nonprofit Explorer -->
+            <div id="intel-propublica990-fields" class="hidden">
+              <div class="form-group">
+                <label for="intel-propublica990-apikey">API Key <span class="hint">(free &mdash; propublica.org)</span></label>
+                <div class="input-row"><input type="password" id="intel-propublica990-apikey" placeholder="ProPublica API key"><button class="icon-btn intel-eye-toggle" data-target="intel-propublica990-apikey" title="Show/hide"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </div>
+              <p class="info-text" style="margin-top:8px;">ProPublica Nonprofit Explorer &mdash; 990 filings for every US nonprofit, including revenue, expenses, officer salaries. Get a free API key at <a href="https://www.propublica.org/datastore/api/nonprofit-explorer-api" target="_blank" style="color:var(--accent);">propublica.org/datastore/api &#8599;</a>.</p>
+              <div class="dp-action-row">
+                <button id="intel-propublica990-test-btn" class="pill-chip">Test Connection</button>
+                <span id="intel-propublica990-status" class="dp-status"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Satellite Defaults -->
+      <section class="card">
+        <h2 class="card-title">Satellite Defaults</h2>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="sat-default-location">Default Location</label>
+              <input type="text" id="sat-default-location" placeholder="e.g. 40.7128,-74.0060">
+            </div>
+            <div class="form-group flex-1">
+              <label for="sat-default-zoom">Default Zoom</label>
+              <input type="number" id="sat-default-zoom" value="12" min="1" max="20">
+            </div>
+            <div class="form-group flex-1">
+              <label for="sat-default-resolution">Default Resolution</label>
+              <input type="number" id="sat-default-resolution" value="1024" min="256" max="4096" step="256">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Paste Providers -->
+      <section class="card">
+        <h2 class="card-title">Paste Providers</h2>
+        <div class="card-body">
+          <p class="info-text">Push analysis reports, KG exports, and findings to paste services for sharing or archiving.</p>
+
+          <div class="provider-tabs">
+            <div id="paste-provider-tab-list" class="tab-list">
+              <button class="tab-btn active" data-pprovider="gist">GitHub Gist</button>
+              <button class="tab-btn" data-pprovider="pastebin">Pastebin</button>
+              <button class="tab-btn" data-pprovider="privatebin">PrivateBin</button>
+            </div>
+          </div>
+
+          <div id="paste-provider-config" class="prompt-editor">
+            <!-- GitHub Gist fields (default visible) -->
+            <div id="pp-gist-fields">
+              <div class="form-group">
+                <label for="pp-gist-pat">Personal Access Token</label>
+                <input type="password" id="pp-gist-pat" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+                <span class="hint">Same PAT as GitHub repo provider works here &mdash; needs <code>gist</code> scope</span>
+              </div>
+              <details class="dp-setup-guide">
+                <summary>Setup Guide</summary>
+                <ol class="dp-guide-steps">
+                  <li>Go to <a href="https://github.com/settings/tokens?type=beta" target="_blank">GitHub Settings &rarr; Developer Settings &rarr; Personal Access Tokens</a></li>
+                  <li>Generate a token with the <strong>gist</strong> scope (or use your existing repo PAT if it has gist scope)</li>
+                  <li>Pastes are created as <strong>secret gists</strong> (unlisted, not indexed, but accessible via URL)</li>
+                </ol>
+              </details>
+              <div class="dp-action-row">
+                <button id="pp-gist-test" class="pill-chip">Test Connection</button>
+                <span id="pp-gist-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- Pastebin fields -->
+            <div id="pp-pastebin-fields" class="hidden">
+              <div class="form-group">
+                <label for="pp-pastebin-api-key">API Developer Key</label>
+                <input type="password" id="pp-pastebin-api-key" placeholder="Your Pastebin API key">
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="pp-pastebin-user">Username <span class="hint" style="display:inline;margin:0;">(optional)</span></label>
+                  <input type="text" id="pp-pastebin-user" placeholder="For private pastes">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="pp-pastebin-pass">Password <span class="hint" style="display:inline;margin:0;">(optional)</span></label>
+                  <input type="password" id="pp-pastebin-pass" placeholder="For private pastes">
+                </div>
+              </div>
+              <details class="dp-setup-guide">
+                <summary>Setup Guide</summary>
+                <ol class="dp-guide-steps">
+                  <li>Go to <a href="https://pastebin.com/doc_api" target="_blank">pastebin.com/doc_api</a> (free account required)</li>
+                  <li>Copy your <strong>Unique Developer API Key</strong> from the top of the page</li>
+                  <li>Username + password are optional &mdash; without them, pastes are created as guest (unlisted only)</li>
+                  <li>With login, you can create <strong>private pastes</strong> visible only to your account</li>
+                </ol>
+              </details>
+              <div class="dp-action-row">
+                <button id="pp-pastebin-test" class="pill-chip">Test Connection</button>
+                <span id="pp-pastebin-status" class="dp-status"></span>
+              </div>
+            </div>
+
+            <!-- PrivateBin fields -->
+            <div id="pp-privatebin-fields" class="hidden">
+              <div class="form-group">
+                <label for="pp-privatebin-url">Server URL</label>
+                <input type="text" id="pp-privatebin-url" placeholder="e.g. https://privatebin.example.com">
+                <span class="hint">Self-hosted PrivateBin instance &mdash; zero-knowledge encrypted, server never sees plaintext</span>
+              </div>
+              <details class="dp-setup-guide">
+                <summary>Setup Guide</summary>
+                <ol class="dp-guide-steps">
+                  <li>Deploy PrivateBin on your own server (<a href="https://github.com/PrivateBin/PrivateBin" target="_blank">github.com/PrivateBin/PrivateBin</a>)</li>
+                  <li>Or use a public instance: <code>privatebin.net</code>, <code>paste.debian.net</code></li>
+                  <li>Enter the server URL above &mdash; no account or API key needed</li>
+                  <li>All encryption happens client-side &mdash; the server never sees your data</li>
+                </ol>
+              </details>
+              <div class="dp-action-row">
+                <button id="pp-privatebin-test" class="pill-chip">Test Connection</button>
+                <span id="pp-privatebin-status" class="dp-status"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Backup Schedule -->
+      <section class="card">
+        <h2 class="card-title">Backup Schedule</h2>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label class="toggle-label">
+                <input type="checkbox" id="backup-enabled">
+                <span>Enable Scheduled Backups</span>
+              </label>
+            </div>
+            <div class="form-group flex-1">
+              <label for="backup-interval">Interval (minutes)</label>
+              <input type="number" id="backup-interval" value="1440" min="60" max="43200">
+            </div>
+            <div class="form-group flex-1">
+              <label class="toggle-label">
+                <input type="checkbox" id="backup-all-providers" checked>
+                <span>Backup to all connected providers</span>
+              </label>
+            </div>
+          </div>
+          <div class="dp-action-row">
+            <button id="backup-now" class="pill-chip btn-primary">Backup Now</button>
+            <span id="backup-status" class="dp-status"></span>
+          </div>
+        </div>
+      </section>
+
+  </div>
+
+  <span id="save-indicator" class="hidden" style="position:fixed;bottom:16px;right:16px;background:var(--success);color:#fff;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;z-index:999;">Saved</span>
+
+  <script src="providers.js"></script>
+</body>
+</html>
