@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prompts — Argus</title>
+  <link rel="stylesheet" href="../shared/argus-std.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../options/options.css">
+</head>
+<body>
+  <script src="../lib/vendor/browser-polyfill.min.js"></script>
+  <script src="../shared/theme.js"></script>
+  <script src="../shared/ribbon.js"></script>
+
+  <!-- Prompts Page Content -->
+  <div class="settings-container" style="padding-top: 12px;">
+    <div class="tab-panel" data-panel="prompts">
+
+      <!-- Prompt Editor -->
+      <section class="card">
+        <h2 class="card-title">Analysis Prompts</h2>
+        <div class="card-body">
+          <div class="form-group" style="margin-bottom:16px;">
+            <label for="default-preset">Default Analysis Prompt</label>
+            <select id="default-preset" style="max-width:280px;"></select>
+            <span class="hint">The preset selected by default when you open the popup.</span>
+          </div>
+
+          <p class="info-text">Customize the system and user prompts for each analysis type. Changes are saved automatically. Click "Reset" to restore defaults.</p>
+          <p class="info-text">Available variables: <code>{title}</code> <code>{url}</code> <code>{domain}</code> <code>{date}</code> <code>{wordcount}</code></p>
+
+          <div class="prompt-tabs">
+            <div id="prompt-tab-list" class="tab-list"></div>
+            <button id="add-preset" class="btn btn-sm btn-secondary" style="margin-left:8px;">+ New Preset</button>
+          </div>
+
+          <div id="prompt-editor" class="prompt-editor">
+            <div class="form-group">
+              <label for="prompt-provider">Preferred Provider <span class="hint" style="display:inline;margin:0;">(optional — overrides default when using this preset)</span></label>
+              <select id="prompt-provider">
+                <option value="">Use Default Provider</option>
+                <option value="xai">xAI (Grok)</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="gemini">Google (Gemini)</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="prompt-system">System Prompt</label>
+              <textarea id="prompt-system" rows="2" placeholder="System role instruction..."></textarea>
+            </div>
+            <div class="form-group">
+              <label for="prompt-user">User Prompt</label>
+              <textarea id="prompt-user" rows="4" placeholder="Analysis instruction sent with page content..."></textarea>
+            </div>
+            <div class="prompt-actions">
+              <div style="display:flex;gap:8px;">
+                <button id="reset-prompt" class="btn btn-secondary btn-sm">Reset to Default</button>
+                <button id="delete-preset" class="btn btn-secondary btn-sm hidden">Delete Preset</button>
+              </div>
+              <span id="prompt-status" class="prompt-status"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Multi-Agent Settings -->
+      <section class="card" id="multi-agent-card">
+        <h2 class="card-title">Multi-Agent Settings
+          <span class="badge">Grok 4.20 Swarm</span>
+        </h2>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label for="reasoning-effort">Reasoning Effort</label>
+              <select id="reasoning-effort">
+                <option value="low">Low (4 agents, quick)</option>
+                <option value="medium" selected>Medium (4 agents, balanced)</option>
+                <option value="high">High (16 agents, deep)</option>
+                <option value="xhigh">Extra High (16 agents, exhaustive)</option>
+              </select>
+              <span class="hint">Controls depth and number of agents in swarm mode</span>
+            </div>
+          </div>
+          <p class="info-text">Multi-agent mode dispatches your query to multiple agents in parallel. Higher effort = more agents and deeper research, but higher cost.</p>
+        </div>
+      </section>
+
+      <!-- Bookmark Tagging Prompt -->
+      <section class="card" id="bookmark-tag-card">
+        <h2 class="card-title">Bookmark Tagging Prompt</h2>
+        <div class="card-body">
+          <p class="info-text">Customize how AI tags your bookmarks. Add research focus, domain-specific categories, or bias detection — whatever fits your workflow.</p>
+          <div class="form-group">
+            <label for="bookmark-tag-prompt">Tagging Instructions</label>
+            <textarea id="bookmark-tag-prompt" rows="10" spellcheck="false" style="font-family:monospace;font-size:12px;"></textarea>
+            <span class="hint">Tell the AI what kind of tags, categories, and summaries to generate. Must return JSON with: tags, category, summary, readingTime.</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button id="reset-bookmark-tag-prompt" class="btn btn-secondary btn-sm">Reset to Default</button>
+            <span id="bookmark-tag-prompt-status" class="prompt-status"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Advanced Prompts -->
+      <section class="card" id="advanced-prompts-card">
+        <h2 class="card-title">Advanced Prompts
+          <span class="badge">All Features</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Customize the AI prompts used across Argus. Select a feature prompt from the dropdown, edit the system and user instructions, and click Reset to restore the default. Changes auto-save.</p>
+
+          <div class="form-group" style="margin-bottom:12px;">
+            <label for="adv-prompt-select">Feature Prompt</label>
+            <select id="adv-prompt-select" style="max-width:360px;"></select>
+          </div>
+          <div class="form-group">
+            <label for="adv-prompt-system">System Prompt <span class="hint">(persona / role)</span></label>
+            <textarea id="adv-prompt-system" rows="3" spellcheck="false" style="font-family:monospace;font-size:12px;"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="adv-prompt-user">User Prompt <span class="hint">(instructions — template variables like {projectName} are filled at runtime)</span></label>
+            <textarea id="adv-prompt-user" rows="12" spellcheck="false" style="font-family:monospace;font-size:12px;"></textarea>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button id="adv-prompt-reset" class="btn btn-secondary btn-sm">Reset to Default</button>
+            <span id="adv-prompt-status" class="prompt-status"></span>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+  </div>
+
+  <script src="prompts.js"></script>
+</body>
+</html>

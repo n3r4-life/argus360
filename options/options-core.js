@@ -582,12 +582,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   initIntervalStepper("feed-interval-stepper", "feed-interval", "feed-interval-display", 60);
 
   await loadAllSettings();
-  buildPromptTabs();
-  selectPromptTab("summary");
   selectProviderTab("xai");
   selectDataProviderTab("gdrive");
-  populateRulePresets();
-  renderAutoRules();
   renderMonitors();
   attachListeners();
   updateReasoningControls();
@@ -595,7 +591,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   loadVersion();
   initMainTabs();
   initHelpExtLinks();
-  initWatchlist();
   initStorageManagement();
   initCloudBackup();
   initUserProfile();
@@ -605,14 +600,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (bmState.initialized) bmLoadBookmarks();
   });
   document.getElementById("mon-refresh")?.addEventListener("click", () => renderMonitors());
-  document.getElementById("feed-refresh")?.addEventListener("click", () => {
-    renderFeeds();
-    renderFeedRoutes();
-  });
-  document.getElementById("kg-refresh")?.addEventListener("click", () => {
-    updateKGStats();
-    loadPendingMerges();
-  });
 
   // Live data refresh — listen for background data changes
   let _refreshDebounce = {};
@@ -622,10 +609,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (_refreshDebounce[store]) clearTimeout(_refreshDebounce[store]);
     _refreshDebounce[store] = setTimeout(() => {
       delete _refreshDebounce[store];
-      if (store === "projects" && typeof projLoadProjects === "function") projLoadProjects();
-      if (store === "feeds" && typeof renderFeeds === "function") renderFeeds();
       if (store === "monitors" && typeof renderMonitors === "function") renderMonitors();
-      if (store === "drafts" && projState.activeProjectId && typeof projRenderDrafts === "function") projRenderDrafts(projState.activeProjectId);
       if (store === "history") { /* history page handles its own refresh */ }
       updateTabBadges();
     }, 500);
@@ -2315,18 +2299,9 @@ function switchMainTab(tabName, tabs, panels) {
   if (tabName === "bookmarks" && !bmState.initialized) {
     initBookmarks();
   }
-  if (tabName === "projects" && !projState.initialized) {
-    initProjects();
-  }
   // Check for detected feeds when switching to feeds tab
   if (tabName === "feeds") {
     checkDetectedFeeds();
-  }
-  if (tabName === "tracker") {
-    loadTracker();
-  }
-  if (tabName === "sources" && !srcState.initialized) {
-    initSources();
   }
 }
 

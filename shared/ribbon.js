@@ -192,7 +192,7 @@
 
   // Data-driven tab definitions — default order
   const APP_TAB_DEFS = {
-    "app-projects": { label: "Projects", icon: [["path", { d: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" }]], path: "options/options.html", hash: "projects" },
+    "app-projects": { label: "Projects", icon: [["path", { d: "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" }]], path: "projects/projects.html" },
     "app-reader":   { label: "Reader",   icon: [["path", { d: "M4 11a9 9 0 0 1 9 9" }], ["path", { d: "M4 4a16 16 0 0 1 16 16" }], ["circle", { cx: "5", cy: "19", r: "1" }]], path: "feeds/feeds.html" },
     "app-reports":  { label: "Reports",  icon: [["path", { d: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" }], ["polyline", { points: "14 2 14 8 20 8" }], ["line", { x1: "16", y1: "13", x2: "8", y2: "13" }], ["line", { x1: "16", y1: "17", x2: "8", y2: "17" }]], path: "history/history.html" },
     "app-kg":       { label: "KG",       icon: [["circle", { cx: "6", cy: "6", r: "3" }], ["circle", { cx: "18", cy: "6", r: "3" }], ["circle", { cx: "6", cy: "18", r: "3" }], ["circle", { cx: "18", cy: "18", r: "3" }], ["line", { x1: "9", y1: "6", x2: "15", y2: "6" }], ["line", { x1: "6", y1: "9", x2: "6", y2: "15" }], ["line", { x1: "18", y1: "9", x2: "18", y2: "15" }], ["line", { x1: "9", y1: "18", x2: "15", y2: "18" }]], path: "osint/graph.html" },
@@ -574,15 +574,21 @@
 
   // Console-tab icon buttons → open console at that tab
   document.getElementById("ribbon-bookmarks").addEventListener("click", () => nav("bookmarks"));
-  document.getElementById("ribbon-projects").addEventListener("click", () => nav("projects"));
+  document.getElementById("ribbon-projects").addEventListener("click", () => {
+    window.location.href = browser.runtime.getURL("projects/projects.html");
+  });
   document.getElementById("ribbon-monitors").addEventListener("click", () => nav("monitors"));
   document.getElementById("ribbon-feeds").addEventListener("click", () => nav("feeds"));
   document.getElementById("ribbon-osint").addEventListener("click", () => nav("osint"));
   document.getElementById("ribbon-intel").addEventListener("click", () => navigateTo("intel/hub.html"));
-  document.getElementById("ribbon-automate").addEventListener("click", () => nav("automation"));
+  document.getElementById("ribbon-automate").addEventListener("click", () => {
+    window.location.href = browser.runtime.getURL("automations/automations.html");
+  });
   document.getElementById("ribbon-redirects").addEventListener("click", () => nav("archive"));
   document.getElementById("ribbon-tracker").addEventListener("click", () => nav("tracker"));
-  document.getElementById("ribbon-sources").addEventListener("click", () => nav("sources"));
+  document.getElementById("ribbon-sources").addEventListener("click", () => {
+    window.location.href = browser.runtime.getURL("sources/sources.html");
+  });
   document.getElementById("ribbon-prompts").addEventListener("click", () => nav("prompts"));
   document.getElementById("ribbon-providers").addEventListener("click", () => nav("providers"));
   document.getElementById("ribbon-resources").addEventListener("click", () => nav("resources"));

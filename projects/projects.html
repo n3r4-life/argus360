@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Projects — Argus</title>
+  <link rel="stylesheet" href="../shared/argus-std.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../options/options.css">
+</head>
+<body>
+  <script src="../lib/vendor/browser-polyfill.min.js"></script>
+  <script src="../shared/theme.js"></script>
+  <script src="../shared/ribbon.js"></script>
+
+  <!-- Projects Page Content -->
+  <div class="settings-container" style="padding-top: 12px;">
+
+    <section class="card">
+      <h2 class="card-title">Projects</h2>
+      <div class="card-body">
+        <p class="info-text">Organize your analyses, bookmarks, and notes into projects. Save to a project from any results page or bookmark.</p>
+
+        <div class="proj-toolbar">
+          <input type="text" id="proj-search" class="proj-search" placeholder="Search projects...">
+          <button id="proj-refresh" class="btn btn-secondary btn-sm" title="Refresh project list">Refresh</button>
+          <button id="proj-new" class="btn btn-secondary btn-sm">+ New Project</button>
+          <button id="proj-import" class="btn btn-secondary btn-sm">Import</button>
+          <button id="proj-export-all" class="btn btn-secondary btn-sm">Export All</button>
+        </div>
+
+        <div class="proj-layout">
+          <aside class="proj-sidebar" id="proj-sidebar">
+            <div class="proj-list" id="proj-list">
+              <p class="info-text" style="padding:16px;text-align:center;">No projects yet. Click "+ New Project" to get started.</p>
+            </div>
+          </aside>
+          <div class="proj-main" id="proj-main">
+            <div class="proj-empty" id="proj-empty">
+              <p>Select a project from the sidebar, or create a new one.</p>
+            </div>
+            <div class="proj-detail hidden" id="proj-detail">
+              <div class="proj-detail-header" id="proj-detail-header"></div>
+              <div class="proj-items-toolbar">
+                <button id="proj-add-note" class="btn btn-secondary btn-sm">+ Add Note</button>
+                <button id="proj-add-url" class="btn btn-secondary btn-sm">+ Add URL</button>
+                <button id="proj-export" class="btn btn-secondary btn-sm">Export Project</button>
+                <span style="flex:1;"></span>
+                <select id="proj-batch-preset" class="btn btn-secondary btn-sm" style="min-width:120px;">
+                  <option value="">Analyze Project...</option>
+                </select>
+                <button id="proj-batch-run" class="btn btn-accent btn-sm">Run</button>
+              </div>
+              <div id="proj-batch-progress" class="proj-batch-progress hidden">
+                <div class="proj-batch-bar-bg">
+                  <div id="proj-batch-bar" class="proj-batch-bar" style="width:0%"></div>
+                </div>
+                <span id="proj-batch-pct" class="proj-batch-pct">0%</span>
+              </div>
+              <div id="proj-batch-status" class="prompt-status" style="padding:4px 0;font-size:12px;"></div>
+              <!-- OSINT Project Tools -->
+              <div class="proj-items-toolbar" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;">
+                <span style="font-size:12px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">OSINT Tools</span>
+                <span style="flex:1;"></span>
+                <button id="proj-entity-extract" class="btn btn-secondary btn-sm" title="Run entity extraction on all project items">Entities</button>
+                <button id="proj-connection-graph" class="btn btn-secondary btn-sm" title="Build connection graph from entities">Graph</button>
+                <button id="proj-heatmap" class="btn btn-secondary btn-sm" title="Entity mention heatmap">Heatmap</button>
+                <button id="proj-geomap" class="btn btn-secondary btn-sm" title="Geolocation map of entities">Geomap</button>
+                <button id="proj-timeline" class="btn btn-secondary btn-sm" title="Build timeline from dates">Timeline</button>
+                <button id="proj-report" class="btn btn-secondary btn-sm" title="Generate investigation report">Report</button>
+                <button id="proj-anomaly" class="btn btn-secondary btn-sm" title="AI anomaly &amp; outlier detection">Anomaly Scan</button>
+                <button id="proj-skeleton" class="btn btn-secondary btn-sm" title="Structural overview of all project connections">Skeleton</button>
+                <button id="proj-workbench" class="btn btn-secondary btn-sm" title="Open project in Workbench for deep-dive analysis" style="color:var(--accent);">Workbench</button>
+                <button id="proj-dashboard" class="pill-chip" title="Open project dashboard with at-a-glance widgets">Dashboard</button>
+              </div>
+              <div id="proj-skeleton-panel" class="proj-skeleton hidden"></div>
+              <!-- Automation toolbar -->
+              <div class="proj-items-toolbar hidden" id="proj-automation-toolbar" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;">
+                <span style="font-size:12px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Automations</span>
+                <span style="flex:1;"></span>
+                <select id="proj-automation-select" class="btn btn-secondary btn-sm" style="min-width:160px;">
+                  <option value="">Select automation...</option>
+                </select>
+                <button id="proj-automation-run" class="btn btn-accent btn-sm" title="Run selected automation on all project items with URLs">Run on All</button>
+                <button id="proj-automation-run-selected" class="btn btn-secondary btn-sm" title="Run on a single item (select from items list)">Run on Item</button>
+              </div>
+              <div id="proj-automation-status" class="prompt-status" style="padding:4px 0;font-size:12px;"></div>
+              <div id="proj-osint-status" class="prompt-status" style="padding:4px 0;font-size:12px;"></div>
+              <div class="proj-items-list" id="proj-items-list"></div>
+              <div class="proj-drafts-list" id="proj-drafts-list"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Create/Edit Project Modal -->
+    <div class="proj-modal-overlay hidden" id="proj-modal">
+      <div class="proj-modal">
+        <h3 id="proj-modal-title">New Project</h3>
+        <div class="form-group">
+          <label for="proj-modal-name">Project Name</label>
+          <input type="text" id="proj-modal-name" placeholder="My Research Project">
+        </div>
+        <div class="form-group">
+          <label for="proj-modal-desc">Description <span class="hint" style="display:inline;margin:0;">(optional)</span></label>
+          <textarea id="proj-modal-desc" rows="2" placeholder="What's this project about?"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="proj-modal-color">Color</label>
+          <input type="color" id="proj-modal-color" value="#e94560" style="width:40px;height:30px;border:none;cursor:pointer;">
+        </div>
+        <div class="form-group" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+          <label class="toggle-label small">
+            <input type="checkbox" id="proj-modal-cloud-sync">
+            <span>Sync project to cloud (BYOC)</span>
+          </label>
+          <select id="proj-modal-cloud-provider" style="display:none;margin-top:6px;width:100%;font-size:12px;">
+            <option value="">Choose provider…</option>
+            <option value="google">Google Drive</option>
+            <option value="dropbox">Dropbox</option>
+            <option value="github">GitHub</option>
+            <option value="s3">S3</option>
+            <option value="webdav">WebDAV</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button id="proj-modal-save" class="btn btn-secondary btn-sm">Save</button>
+          <button id="proj-modal-cancel" class="btn btn-secondary btn-sm">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Item Notes Modal -->
+    <div class="proj-modal-overlay hidden" id="proj-item-modal">
+      <div class="proj-modal">
+        <h3>Edit Notes</h3>
+        <div class="form-group">
+          <textarea id="proj-item-notes" rows="5" placeholder="Your notes..."></textarea>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button id="proj-item-save" class="btn btn-secondary btn-sm">Save</button>
+          <button id="proj-item-cancel" class="btn btn-secondary btn-sm">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="projects.js"></script>
+</body>
+</html>

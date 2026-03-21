@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sources — Argus</title>
+  <link rel="stylesheet" href="../shared/argus-std.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../options/options.css">
+</head>
+<body>
+  <script src="../lib/vendor/browser-polyfill.min.js"></script>
+  <script src="../shared/theme.js"></script>
+  <script src="../shared/ribbon.js"></script>
+
+  <!-- Sources Page Content -->
+  <div class="settings-container" style="padding-top: 12px;">
+    <div class="tab-panel" data-panel="sources">
+
+      <!-- Toolbar -->
+      <div class="src-toolbar">
+        <div class="src-filter-row">
+          <select id="src-filter-type" class="src-filter-select">
+            <option value="">All Types</option>
+            <option value="person">People</option>
+            <option value="organization">Organizations</option>
+            <option value="group">Groups</option>
+            <option value="handle">Handles</option>
+            <option value="journalist">Journalists</option>
+            <option value="informant">Informants</option>
+            <option value="target">Targets</option>
+            <option value="adversary">Adversaries</option>
+            <option value="scammer">Scammers</option>
+            <option value="asset">Assets</option>
+            <option value="service">Services</option>
+            <option value="webservice">Web Services</option>
+            <option value="device">Devices</option>
+            <option value="academic">Academic</option>
+            <option value="medical">Medical</option>
+            <option value="legal">Legal</option>
+            <option value="lead">Leads</option>
+            <option value="alias">Aliases</option>
+            <option value="entity">Other</option>
+          </select>
+          <select id="src-filter-folder" class="src-filter-select">
+            <option value="">All Folders</option>
+          </select>
+          <button id="src-folder-add" class="btn btn-secondary btn-sm" title="Create folder">+ Folder</button>
+          <button id="src-folder-rename" class="btn btn-secondary btn-sm" title="Rename selected folder" disabled>Rename</button>
+          <button id="src-folder-delete" class="btn btn-secondary btn-sm" title="Delete selected folder" disabled>Delete Folder</button>
+          <select id="src-filter-tag" class="src-filter-select">
+            <option value="">All Tags</option>
+          </select>
+        </div>
+        <div class="src-actions-row">
+          <button id="src-add-new" class="btn btn-secondary btn-sm">+ New Source</button>
+          <button id="src-import" class="btn btn-secondary btn-sm">Import</button>
+          <button id="src-export" class="btn btn-secondary btn-sm">Export</button>
+          <input type="file" id="src-import-file" accept=".json" style="display:none;">
+          <span id="src-count" style="margin-left:auto;font-size:11px;color:var(--text-muted);"></span>
+        </div>
+      </div>
+
+      <!-- Add/Edit form (hidden by default) -->
+      <div id="src-editor" class="src-editor hidden">
+        <section class="card">
+          <h2 class="card-title" id="src-editor-title">New Source</h2>
+          <div class="card-body">
+            <div class="form-row">
+              <div class="form-group flex-2">
+                <label for="src-name">Name</label>
+                <input type="text" id="src-name" placeholder="Display name or label">
+              </div>
+              <div class="form-group flex-1">
+                <label for="src-type">Type</label>
+                <select id="src-type">
+                  <option value="person">Person</option>
+                  <option value="organization">Organization</option>
+                  <option value="group">Group</option>
+                  <option value="handle">Handle</option>
+                  <option value="journalist">Journalist</option>
+                  <option value="informant">Informant</option>
+                  <option value="target">Target</option>
+                  <option value="adversary">Adversary</option>
+                  <option value="scammer">Scammer</option>
+                  <option value="asset">Asset</option>
+                  <option value="service">Service</option>
+                  <option value="webservice">Web Service</option>
+                  <option value="device">Device</option>
+                  <option value="academic">Academic</option>
+                  <option value="medical">Medical</option>
+                  <option value="legal">Legal</option>
+                  <option value="lead">Lead</option>
+                  <option value="alias">Alias</option>
+                  <option value="entity">Other</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="src-folder">Folder</label>
+                <input type="text" id="src-folder" placeholder="e.g. OSINT / Journalists — leave blank for ungrouped" list="src-folder-list">
+                <datalist id="src-folder-list"></datalist>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="src-aliases">Aliases <span class="hint" style="display:inline;">(comma-separated)</span></label>
+                <input type="text" id="src-aliases" placeholder="alt name, nickname, ...">
+              </div>
+            </div>
+            <!-- Addresses: the universal list of anything reachable -->
+            <div class="form-group">
+              <label>Addresses <button type="button" id="src-add-addr" class="btn btn-secondary btn-sm" style="margin-left:8px;">+ Add</button></label>
+              <span class="hint">Any reachable address: social handle, email, phone, URL, RSS feed, IP, Google Doc, pastebin, anything.</span>
+              <div id="src-addr-list" class="src-addr-list"></div>
+            </div>
+            <!-- Location + Tags -->
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="src-location">Location</label>
+                <input type="text" id="src-location" placeholder="City, State, Country — e.g. Washington, DC, US">
+                <span class="hint">Matches with KG entity locations for cross-referencing</span>
+              </div>
+              <div class="form-group flex-1">
+                <label for="src-tags">Tags <span class="hint" style="display:inline;">(comma-separated)</span></label>
+                <input type="text" id="src-tags" placeholder="journalist, priority, tech, ...">
+              </div>
+            </div>
+            <!-- Notes -->
+            <div class="form-group">
+              <label for="src-notes">Notes</label>
+              <textarea id="src-notes" rows="3" placeholder="Notes about this source..."></textarea>
+            </div>
+            <!-- Save / Cancel -->
+            <div class="form-row" style="justify-content:flex-end;gap:8px;">
+              <button id="src-cancel" class="btn btn-secondary btn-sm">Cancel</button>
+              <button id="src-save" class="btn btn-secondary btn-sm" style="color:var(--success);">Save Source</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Search bar -->
+      <div class="src-search-bar" id="src-search-bar">
+        <span class="src-search-slash" style="display:none">/</span>
+        <input type="text" id="src-search" class="src-search-input" placeholder="Search sources..." spellcheck="false">
+        <span class="src-search-slash" style="display:none">/i</span>
+        <button class="src-search-mode" id="src-search-mode" title="Toggle regex mode">RE</button>
+        <span class="src-search-count" id="src-search-count"></span>
+      </div>
+
+      <!-- Source cards grid -->
+      <div id="src-grid" class="src-grid">
+        <div class="src-empty">
+          <p>No sources yet. Click <strong>+ New Source</strong> to add people, handles, feeds, IPs, emails — anything you want to watch or reach.</p>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script src="sources.js"></script>
+</body>
+</html>

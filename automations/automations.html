@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Automations — Argus</title>
+  <link rel="stylesheet" href="../shared/argus-std.css">
+  <link rel="stylesheet" href="../shared/ribbon.css">
+  <link rel="stylesheet" href="../options/options.css">
+</head>
+<body>
+  <script src="../lib/vendor/browser-polyfill.min.js"></script>
+  <script src="../shared/theme.js"></script>
+  <script src="../shared/ribbon.js"></script>
+
+  <!-- Automations Page Content -->
+  <div class="settings-container" style="padding-top: 12px;">
+    <div class="tab-panel" data-panel="automation">
+
+      <!-- Auto-Analyze Rules -->
+      <section class="card">
+        <h2 class="card-title">Auto-Analyze Rules
+          <span class="badge">Automation</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Automatically analyze pages that match URL patterns. Analysis results open in a new tab.</p>
+
+          <div id="auto-rules-list" class="rules-list"></div>
+
+          <div class="rule-form">
+            <div class="form-row">
+              <div class="form-group flex-2">
+                <label for="rule-url">URL Pattern</label>
+                <input type="text" id="rule-url" placeholder="*.example.com/*">
+                <span class="hint">Use * as wildcard. e.g. *://news.ycombinator.com/*</span>
+              </div>
+              <div class="form-group flex-1">
+                <label for="rule-preset">Analysis Type</label>
+                <select id="rule-preset"></select>
+              </div>
+              <div class="form-group flex-1">
+                <label for="rule-provider">Provider</label>
+                <select id="rule-provider">
+                  <option value="">Default</option>
+                  <option value="xai">Grok</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="anthropic">Claude</option>
+                  <option value="gemini">Gemini</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="rule-delay">Delay (ms)</label>
+                <input type="number" id="rule-delay" value="2000" min="500" max="30000" step="500">
+              </div>
+              <div class="form-group flex-1" style="justify-content:flex-end;">
+                <button id="add-rule" class="btn btn-secondary btn-sm">Add Rule</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Named Automations -->
+      <section class="card" id="named-automations-card">
+        <h2 class="card-title">Named Automations
+          <span class="badge">Multi-Step</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Build reusable multi-step analysis workflows. Chain analysis presets, custom prompts, entity extraction, pipelines, and project routing into named scripts.</p>
+
+          <div id="automations-list" class="rules-list"></div>
+
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button id="new-automation-btn" class="btn btn-secondary btn-sm">+ New Automation</button>
+            <button id="seed-prebuilt-btn" class="btn btn-secondary btn-sm" title="Restore pre-built templates">Restore Pre-built</button>
+            <span style="flex:1;"></span>
+            <button id="export-automations-btn" class="btn btn-secondary btn-sm">Export All</button>
+            <button id="import-automations-btn" class="btn btn-secondary btn-sm">Import</button>
+            <input type="file" id="import-automations-file" accept=".json" style="display:none;">
+            <select id="import-automations-mode" style="padding:4px 8px;font-size:12px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;color:var(--text-color);" title="Import mode">
+              <option value="merge">Merge</option>
+              <option value="replace">Replace All</option>
+            </select>
+            <span id="automations-io-status" class="prompt-status" style="font-size:12px;"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Automation Editor (inline, hidden until editing) -->
+      <section class="card hidden" id="automation-editor-card">
+        <h2 class="card-title" id="automation-editor-title">New Automation</h2>
+        <div class="card-body">
+          <!-- Name -->
+          <div class="form-group">
+            <label for="auto-name">Automation Name</label>
+            <input type="text" id="auto-name" placeholder="e.g. News Intel Pipeline">
+          </div>
+
+          <!-- Triggers -->
+          <fieldset class="form-fieldset">
+            <legend>Triggers</legend>
+            <div class="form-group">
+              <label for="auto-url-patterns">URL Patterns <span class="hint">(one per line, use * as wildcard)</span></label>
+              <textarea id="auto-url-patterns" rows="3" placeholder="*://reuters.com/*&#10;*://apnews.com/*"></textarea>
+            </div>
+            <div class="form-row">
+              <label class="checkbox-label">
+                <input type="checkbox" id="auto-manual" checked> Allow manual run
+              </label>
+              <div class="form-group flex-1">
+                <label for="auto-project-trigger">Linked Project</label>
+                <select id="auto-project-trigger">
+                  <option value="">None</option>
+                </select>
+              </div>
+            </div>
+            <!-- Schedule Trigger -->
+            <div class="form-group" style="margin-top:8px;">
+              <label class="checkbox-label">
+                <input type="checkbox" id="auto-schedule-enabled"> Scheduled run
+              </label>
+            </div>
+            <div id="auto-schedule-options" class="hidden" style="margin-top:4px;padding-left:12px;">
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="auto-schedule-type">Schedule Type</label>
+                  <select id="auto-schedule-type">
+                    <option value="once">One-time (specific date/time)</option>
+                    <option value="interval">Interval (every N minutes)</option>
+                    <option value="daily">Daily (at specific time)</option>
+                    <option value="weekly">Weekly (day + time)</option>
+                    <option value="cron">Custom (hours + days)</option>
+                  </select>
+                </div>
+              </div>
+              <div id="auto-schedule-once" class="form-row">
+                <div class="form-group flex-1">
+                  <label for="auto-schedule-datetime">Date &amp; Time</label>
+                  <input type="datetime-local" id="auto-schedule-datetime">
+                </div>
+              </div>
+              <div id="auto-schedule-interval" class="form-row hidden">
+                <div class="form-group flex-1">
+                  <label for="auto-schedule-interval-ms">Every (minutes)</label>
+                  <input type="number" id="auto-schedule-interval-ms" value="60" min="1" max="10080">
+                </div>
+              </div>
+              <div id="auto-schedule-daily-opts" class="form-row hidden">
+                <div class="form-group flex-1">
+                  <label for="auto-schedule-time">Time</label>
+                  <input type="time" id="auto-schedule-time" value="09:00">
+                </div>
+              </div>
+              <div id="auto-schedule-weekly-opts" class="form-row hidden">
+                <div class="form-group flex-1">
+                  <label for="auto-schedule-day">Day</label>
+                  <select id="auto-schedule-day">
+                    <option value="0">Sunday</option>
+                    <option value="1" selected>Monday</option>
+                    <option value="2">Tuesday</option>
+                    <option value="3">Wednesday</option>
+                    <option value="4">Thursday</option>
+                    <option value="5">Friday</option>
+                    <option value="6">Saturday</option>
+                  </select>
+                </div>
+                <div class="form-group flex-1">
+                  <label for="auto-schedule-weekly-time">Time</label>
+                  <input type="time" id="auto-schedule-weekly-time" value="09:00">
+                </div>
+              </div>
+              <div id="auto-schedule-cron-opts" class="form-row hidden">
+                <div class="form-group flex-1">
+                  <label>Hours <span class="hint">(check which hours to run)</span></label>
+                  <div class="cron-hours-grid" id="auto-schedule-cron-hours" style="display:grid;grid-template-columns:repeat(8,1fr);gap:2px;font-size:11px;"></div>
+                </div>
+                <div class="form-group flex-1">
+                  <label>Days <span class="hint">(check which days)</span></label>
+                  <div id="auto-schedule-cron-days" style="display:flex;flex-wrap:wrap;gap:4px;font-size:11px;"></div>
+                </div>
+              </div>
+              <div class="form-group" style="margin-top:4px;">
+                <label for="auto-schedule-url">URL for scheduled runs <span class="hint">(optional &mdash; if blank, runs without page)</span></label>
+                <input type="text" id="auto-schedule-url" placeholder="https://example.com/page-to-check">
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- Steps -->
+          <fieldset class="form-fieldset">
+            <legend>Steps <span id="auto-step-count" class="hint"></span></legend>
+            <div id="auto-steps-list" class="auto-steps-list"></div>
+            <div class="form-row" style="margin-top:8px;gap:8px;">
+              <select id="auto-add-step-type">
+                <optgroup label="Actions">
+                  <option value="analyze">Analyze (Preset)</option>
+                  <option value="prompt">Custom Prompt</option>
+                  <option value="extractEntities">Extract Entities</option>
+                  <option value="runPipeline">Run Pipeline</option>
+                  <option value="addToProject">Save Link to Project</option>
+                  <option value="addToMonitors">Add to Monitors</option>
+                  <option value="paste">Paste to Service</option>
+                  <option value="saveToCloud">Save to Cloud</option>
+                </optgroup>
+                <optgroup label="Logic">
+                  <option value="condition">IF / THEN / ELSE</option>
+                  <option value="filter">Filter (Check List)</option>
+                  <option value="switch">Switch (Multi-Branch)</option>
+                  <option value="classify">Classify (AI Decision)</option>
+                  <option value="gate">Gate (Ask User)</option>
+                  <option value="loop">Loop (Iterate)</option>
+                  <option value="setVar">Set Variable</option>
+                </optgroup>
+              </select>
+              <button id="auto-add-step-btn" class="btn btn-secondary btn-sm">+ Add Step</button>
+            </div>
+          </fieldset>
+
+          <!-- Options -->
+          <fieldset class="form-fieldset">
+            <legend>Options</legend>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="auto-cooldown">Cooldown (ms)</label>
+                <input type="number" id="auto-cooldown" value="60000" min="5000" max="600000" step="5000">
+              </div>
+              <div class="form-group flex-1">
+                <label for="auto-delay">Delay After Load (ms)</label>
+                <input type="number" id="auto-delay" value="2000" min="500" max="30000" step="500">
+              </div>
+            </div>
+            <div class="form-row">
+              <label class="checkbox-label">
+                <input type="checkbox" id="auto-notify" checked> Notify on complete
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="auto-continue-error"> Continue on step error
+              </label>
+            </div>
+          </fieldset>
+
+          <!-- Actions -->
+          <div class="form-row" style="margin-top:12px;gap:8px;">
+            <button id="auto-save-btn" class="btn btn-accent btn-sm">Save Automation</button>
+            <button id="auto-cancel-btn" class="btn btn-secondary btn-sm">Cancel</button>
+            <button id="auto-delete-btn" class="btn btn-danger btn-sm hidden">Delete</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Named Lists (Watchlists, Blocklists, Allowlists) -->
+      <section class="card" id="named-lists-card">
+        <h2 class="card-title">Named Lists
+          <span class="badge">Logic</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Create reusable lists for automation logic. Use them in Condition, Filter, and Switch steps to check if a value (author, source, ticker, entity, domain) is in a list.</p>
+
+          <div id="named-lists-list" class="rules-list">
+            <span class="hint">No lists yet.</span>
+          </div>
+
+          <button id="new-list-btn" class="btn btn-secondary btn-sm" style="margin-top:8px;">+ New List</button>
+        </div>
+      </section>
+
+      <!-- List Editor (inline, hidden until editing) -->
+      <section class="card hidden" id="list-editor-card">
+        <h2 class="card-title" id="list-editor-title">New List</h2>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group flex-2">
+              <label for="list-name">List Name</label>
+              <input type="text" id="list-name" placeholder="e.g. Flagged Reporters">
+            </div>
+            <div class="form-group flex-1">
+              <label for="list-type">Type</label>
+              <select id="list-type">
+                <option value="blocklist">Blocklist</option>
+                <option value="watchlist">Watchlist</option>
+                <option value="allowlist">Allowlist</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="list-description">Description <span class="hint">(optional)</span></label>
+            <input type="text" id="list-description" placeholder="What this list is used for">
+          </div>
+          <div class="form-group">
+            <label for="list-items">Items <span class="hint">(one per line &mdash; supports * wildcards)</span></label>
+            <textarea id="list-items" rows="8" placeholder="John Smith&#10;*.reuters.com&#10;suspicious-author@email.com&#10;AAPL&#10;0x1234...abcd"></textarea>
+          </div>
+          <div class="form-row" style="margin-top:8px;gap:8px;">
+            <button id="list-save-btn" class="btn btn-accent btn-sm">Save List</button>
+            <button id="list-cancel-btn" class="btn btn-secondary btn-sm">Cancel</button>
+            <button id="list-delete-btn" class="btn btn-danger btn-sm hidden">Delete</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pending Gates (decision points waiting for user input) -->
+      <section class="card" id="pending-gates-card">
+        <h2 class="card-title">Pending Decisions
+          <span class="badge" id="gates-count-badge" style="display:none;">0</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Automations paused at decision gates, waiting for your input.</p>
+          <div id="pending-gates-list" class="rules-list">
+            <span class="hint">No pending decisions.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Feed Keyword Routes -->
+      <section class="card">
+        <h2 class="card-title">Keyword Routes
+          <span class="badge">Auto-file</span>
+        </h2>
+        <div class="card-body">
+          <p class="info-text">Automatically route matching feed entries to projects. When new entries arrive, Argus scans headlines and descriptions for your keywords. Matches are flagged and auto-added to the target project.</p>
+
+          <div id="feed-route-list" class="rules-list"></div>
+
+          <div class="rule-form">
+            <div class="form-row">
+              <div class="form-group flex-2">
+                <label for="route-keywords">Keywords <span class="hint">(comma-separated)</span></label>
+                <input type="text" id="route-keywords" placeholder="trump, !tariff, biden">
+              </div>
+              <div class="form-group flex-1">
+                <label for="route-project">Target Project</label>
+                <select id="route-project"><option value="">Select project...</option></select>
+              </div>
+              <div class="form-group flex-1">
+                <label for="route-feed">Feed (optional)</label>
+                <select id="route-feed"><option value="">All feeds</option></select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label class="toggle-label">
+                  <input type="checkbox" id="route-notify" checked>
+                  <span>Notify on match</span>
+                </label>
+              </div>
+              <div class="form-group flex-1" style="justify-content:flex-end;">
+                <button id="add-feed-route" class="btn btn-secondary btn-sm">Add Route</button>
+              </div>
+            </div>
+            <p class="info-text" style="margin-top:6px;font-size:11px;opacity:0.7;">
+              <strong>keyword</strong> = include (OR) &mdash; matches if entry contains any keyword.<br>
+              <strong>!keyword</strong> = exclude &mdash; rejects entry if that word appears, even if other keywords match.<br>
+              Example: <code>trump, biden, !tariff</code> = entries with "trump" or "biden", but never "tariff".
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Automation Run Log -->
+      <section class="card" id="automation-log-card">
+        <h2 class="card-title">Run Log</h2>
+        <div class="card-body">
+          <div id="automation-log-list" class="rules-list">
+            <span class="hint">No runs yet.</span>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+  </div>
+
+  <script src="automations.js"></script>
+</body>
+</html>
