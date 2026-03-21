@@ -1183,7 +1183,7 @@ function attachListeners() {
 
   // Reports
   el.openHistory?.addEventListener("click", () => {
-    window.location.href = browser.runtime.getURL("options/options.html#history");
+    window.location.href = browser.runtime.getURL("history/history.html");
   });
   el.clearHistory?.addEventListener("click", async () => {
     if (!confirm("Clear all analysis history?")) return;

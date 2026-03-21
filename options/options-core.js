@@ -220,110 +220,7 @@ let autoAnalyzeRules = [];
 let feedKeywordRoutes = [];
 let saveTimeout = null;
 
-// ──────────────────────────────────────────────
-// Interval stepper utility
-// ──────────────────────────────────────────────
-const INTERVAL_STEPS = [
-  1, 2, 3, 4, 5, 10, 15, 30, 45,
-  60, 75, 90, 180, 360, 720,
-  1440, 2160, 2880, 4320,
-  10080, 20160, 43200
-];
-
-function formatInterval(mins) {
-  if (mins >= 43200) return `${Math.round(mins / 43200)}mo`;
-  if (mins >= 10080) return `${Math.round(mins / 10080)}w`;
-  if (mins >= 1440) return `${(mins / 1440).toFixed(mins % 1440 ? 1 : 0).replace(/\.0$/, "")}d`;
-  if (mins >= 60) return `${(mins / 60).toFixed(mins % 60 ? 1 : 0).replace(/\.0$/, "")}h`;
-  return `${mins}m`;
-}
-
-function nearestStepIndex(mins) {
-  let best = 0;
-  let bestDist = Infinity;
-  for (let i = 0; i < INTERVAL_STEPS.length; i++) {
-    const d = Math.abs(INTERVAL_STEPS[i] - mins);
-    if (d < bestDist) { bestDist = d; best = i; }
-  }
-  return best;
-}
-
-function initIntervalStepper(containerId, hiddenId, displayId, initialMins) {
-  const container = document.getElementById(containerId);
-  const hidden = document.getElementById(hiddenId);
-  const display = document.getElementById(displayId);
-  if (!container || !hidden || !display) return;
-
-  let idx = nearestStepIndex(initialMins || 60);
-  hidden.value = INTERVAL_STEPS[idx];
-  display.textContent = formatInterval(INTERVAL_STEPS[idx]);
-
-  container.querySelectorAll(".interval-step-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const dir = parseInt(btn.dataset.dir);
-      idx = Math.max(0, Math.min(INTERVAL_STEPS.length - 1, idx + dir));
-      hidden.value = INTERVAL_STEPS[idx];
-      display.textContent = formatInterval(INTERVAL_STEPS[idx]);
-    });
-  });
-
-  return {
-    getValue: () => INTERVAL_STEPS[idx],
-    setValue: (mins) => {
-      idx = nearestStepIndex(mins);
-      hidden.value = INTERVAL_STEPS[idx];
-      display.textContent = formatInterval(INTERVAL_STEPS[idx]);
-    }
-  };
-}
-
-function createInlineIntervalStepper(currentMins, onChange) {
-  const outer = document.createElement("div");
-  outer.style.cssText = "display:inline-flex;flex-direction:column;align-items:center;gap:2px;";
-
-  const wrap = document.createElement("div");
-  wrap.className = "interval-stepper";
-  wrap.title = "Pause & resume for new interval to take effect";
-
-  let idx = nearestStepIndex(currentMins || 60);
-  const origIdx = idx;
-
-  const downBtn = document.createElement("button");
-  downBtn.type = "button";
-  downBtn.className = "interval-step-btn";
-  downBtn.textContent = "\u25BE";
-
-  const display = document.createElement("span");
-  display.className = "interval-display";
-  display.textContent = formatInterval(INTERVAL_STEPS[idx]);
-
-  const upBtn = document.createElement("button");
-  upBtn.type = "button";
-  upBtn.className = "interval-step-btn";
-  upBtn.textContent = "\u25B4";
-
-  const hint = document.createElement("span");
-  hint.style.cssText = "font-size:10px;color:var(--accent);opacity:0;transition:opacity 0.3s;white-space:nowrap;";
-  hint.textContent = "pause & resume to apply";
-
-  function step(dir) {
-    idx = Math.max(0, Math.min(INTERVAL_STEPS.length - 1, idx + dir));
-    display.textContent = formatInterval(INTERVAL_STEPS[idx]);
-    if (onChange) onChange(INTERVAL_STEPS[idx]);
-    // Show hint when interval changed from original
-    hint.style.opacity = idx !== origIdx ? "1" : "0";
-  }
-
-  downBtn.addEventListener("click", () => step(-1));
-  upBtn.addEventListener("click", () => step(1));
-
-  wrap.appendChild(downBtn);
-  wrap.appendChild(display);
-  wrap.appendChild(upBtn);
-  outer.appendChild(wrap);
-  outer.appendChild(hint);
-  return outer;
-}
+// Interval stepper utility — graduated to monitors.js
 
 // ──────────────────────────────────────────────
 // Bookmark tagging default
@@ -503,63 +400,19 @@ const el = {
   maxHistory: document.getElementById("max-history"),
   openHistory: document.getElementById("open-history"),
   clearHistory: document.getElementById("clear-history"),
-  // Monitors
-  monitorList: document.getElementById("monitor-list"),
-  monitorUrl: document.getElementById("monitor-url"),
-  monitorInterval: document.getElementById("monitor-interval"),
-  monitorTitle: document.getElementById("monitor-title"),
-  monitorAi: document.getElementById("monitor-ai"),
-  monitorAutoOpen: document.getElementById("monitor-auto-open"),
-  monitorAutoBookmark: document.getElementById("monitor-auto-bookmark"),
-  monitorDuration: document.getElementById("monitor-duration"),
-  monitorPreset: document.getElementById("monitor-preset"),
-  monitorAutomation: document.getElementById("monitor-automation"),
-  monitorProjectSelect: document.getElementById("monitor-project-select"),
-  addMonitor: document.getElementById("add-monitor"),
-  monitorStatus: document.getElementById("monitor-status"),
-  monitorStorageBar: document.getElementById("monitor-storage-bar"),
-  monitorStorageLabel: document.getElementById("monitor-storage-label"),
-  monitorStorageFill: document.getElementById("monitor-storage-fill"),
-  // RSS Feeds
-  // Feed Keyword Routes
-  // Archive Redirect
-  archiveEnabled: document.getElementById("archive-enabled"),
-  archiveProvider: document.getElementById("archive-provider"),
-  archiveCustomGroup: document.getElementById("archive-custom-group"),
-  archiveCustomUrl: document.getElementById("archive-custom-url"),
-  archiveDomains: document.getElementById("archive-domains"),
-  archiveSave: document.getElementById("archive-save"),
-  archiveReset: document.getElementById("archive-reset"),
-  archiveStatus: document.getElementById("archive-status"),
 };
 
 // ──────────────────────────────────────────────
 // Init
 // ──────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
-  // Init interval steppers for add-new forms
-  initIntervalStepper("monitor-interval-stepper", "monitor-interval", "monitor-interval-display", 60);
-  initIntervalStepper("feed-interval-stepper", "feed-interval", "feed-interval-display", 60);
-
   try { await loadAllSettings(); } catch(e) { console.error("[Argus init] loadAllSettings failed:", e); }
-  try { selectProviderTab("xai"); } catch(e) { console.error("[Argus init] selectProviderTab failed:", e); }
-  try { selectDataProviderTab("gdrive"); } catch(e) { console.error("[Argus init] selectDataProviderTab failed:", e); }
-  try { renderMonitors(); } catch(e) { console.error("[Argus init] renderMonitors failed:", e); }
   try { attachListeners(); } catch(e) { console.error("[Argus init] attachListeners failed:", e); }
   try { updateReasoningControls(); } catch(e) { console.error("[Argus init] updateReasoningControls failed:", e); }
   try { updateConsoleStatusStrip(); } catch(e) { console.error("[Argus init] updateConsoleStatusStrip failed:", e); }
   try { loadVersion(); } catch(e) { console.error("[Argus init] loadVersion failed:", e); }
   try { initMainTabs(); } catch(e) { console.error("[Argus init] initMainTabs failed:", e); }
   try { initHelpExtLinks(); } catch(e) { console.error("[Argus init] initHelpExtLinks failed:", e); }
-  try { initStorageManagement(); } catch(e) { console.error("[Argus init] initStorageManagement failed:", e); }
-  try { initCloudBackup(); } catch(e) { console.error("[Argus init] initCloudBackup failed:", e); }
-  try { initUserProfile(); } catch(e) { console.error("[Argus init] initUserProfile failed:", e); }
-
-  // Refresh buttons on data tabs
-  document.getElementById("bm-refresh")?.addEventListener("click", () => {
-    if (bmState.initialized) bmLoadBookmarks();
-  });
-  document.getElementById("mon-refresh")?.addEventListener("click", () => renderMonitors());
 
   // Live data refresh — listen for background data changes
   let _refreshDebounce = {};
@@ -569,14 +422,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (_refreshDebounce[store]) clearTimeout(_refreshDebounce[store]);
     _refreshDebounce[store] = setTimeout(() => {
       delete _refreshDebounce[store];
-      if (store === "monitors" && typeof renderMonitors === "function") renderMonitors();
-      if (store === "history") { /* history page handles its own refresh */ }
       updateTabBadges();
     }, 500);
   });
 
-  // Resources tab — IP fetch
-  initResourcesTab();
   updateTabBadges();
 });
 
@@ -934,20 +783,6 @@ function initMainTabs() {
   }
 
   switchMainTab(savedTab, tabs, panels);
-
-  // Pre-fill automation rule URL from query param (sent by popup)
-  const urlParams = new URLSearchParams(window.location.search);
-  const prefillRule = urlParams.get("prefillRule");
-  if (prefillRule && el.ruleUrl) {
-    try {
-      const u = new URL(prefillRule);
-      // Graduated tab element - guard against null
-      if (el.ruleUrl) el.ruleUrl.value = `*${u.hostname}${u.pathname}*`;
-    } catch {
-      // Graduated tab element - guard against null
-      if (el.ruleUrl) el.ruleUrl.value = prefillRule;
-    }
-  }
 
   tabs.forEach(tab => {
     tab.addEventListener("click", () => {
@@ -1968,10 +1803,7 @@ function switchMainTab(tabName, tabs, panels) {
   tabs.forEach(t => t.classList.toggle("active", t.dataset.tab === tabName));
   panels.forEach(p => p.classList.toggle("active", p.dataset.panel === tabName));
 
-  // Lazy-load bookmarks when tab is first shown
-  if (tabName === "bookmarks" && !bmState.initialized) {
-    initBookmarks();
-  }
+  // Bookmarks graduated to standalone page — initBookmarks is now a no-op stub
 }
 
 function handleHashNav(hash, tabs, panels) {
@@ -2024,8 +1856,6 @@ function handleHashNav(hash, tabs, panels) {
     });
   }
 }
-
-const AI_STRIP_LABELS = { xai: "xAI", openai: "GPT", anthropic: "Claude", gemini: "Gemini", custom: "Custom" };
 
 let _statusStripTimer = null;
 function updateConsoleStatusStrip() {

@@ -52,7 +52,7 @@
         // If all unconfigured, show "Setup →" instead
         if (configuredCount === 0 && link) {
           link.textContent = "Setup →";
-          link.href = "../options/options.html#intel-providers";
+          link.href = "../providers/providers.html";
         }
       }
     } catch (e) {

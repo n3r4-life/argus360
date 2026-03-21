@@ -522,7 +522,7 @@
         // No API results — show external links
         const links = resp.links || [];
         const noKeyMsg = !resp.hasKey
-          ? `<br><br><strong>VesselFinder API key not configured.</strong> Add your key in <a href="../options/options.html#intel-providers" style="color:var(--accent);">Settings \u2192 Intelligence Providers \u2192 VesselFinder</a> for live vessel data ($10/mo).`
+          ? `<br><br><strong>VesselFinder API key not configured.</strong> Add your key in <a href="../providers/providers.html" style="color:var(--accent);">Settings \u2192 Intelligence Providers \u2192 VesselFinder</a> for live vessel data ($10/mo).`
           : '';
 
         container.innerHTML = `<div class="comp-empty">
@@ -646,7 +646,7 @@
   function renderNoProvider(name) {
     const container = document.getElementById('mvmtResults');
     container.innerHTML = `<div class="comp-empty">
-      ${name} is not configured. <a href="../options/options.html#intel-providers" style="color:var(--accent);">Add your API key</a> to enable search.
+      ${name} is not configured. <a href="../providers/providers.html" style="color:var(--accent);">Add your API key</a> to enable search.
     </div>`;
   }
 

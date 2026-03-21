@@ -5241,7 +5241,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
 
   // Wipe All Data — opens console Settings tab scrolled to wipe section
   if (info.menuItemId === "argus-wipe") {
-    openArgusPage(browser.runtime.getURL("options/options.html#settings-wipe"));
+    openArgusPage(browser.runtime.getURL("settings/settings.html"));
     return;
   }
 
@@ -5253,7 +5253,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
 
   // Open OSINT Dashboard
   if (info.menuItemId === "argus-osint-dashboard") {
-    openArgusPage(browser.runtime.getURL("options/options.html#osint"));
+    openArgusPage(browser.runtime.getURL("osint/graph.html"));
     return;
   }
 
@@ -5361,7 +5361,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
 
   // Handle ArgusMarks — manage bookmarks
   if (info.menuItemId === "argus-marks-manage") {
-    browser.tabs.create({ url: browser.runtime.getURL("options/options.html#bookmarks") });
+    browser.tabs.create({ url: browser.runtime.getURL("bookmarks/bookmarks.html") });
     return;
   }
 

@@ -626,7 +626,7 @@ async function checkTrackingStatus() {
     if (trackMyPages) badge.classList.add("status-track-on");
 
     const openSettings = () => {
-      browser.tabs.create({ url: browser.runtime.getURL("options/options.html#tracker") });
+      browser.tabs.create({ url: browser.runtime.getURL("settings/settings.html") });
     };
     const toggleTracker = async () => {
       const cur = await browser.storage.local.get({ trackMyPages: false });

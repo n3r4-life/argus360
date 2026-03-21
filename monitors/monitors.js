@@ -484,7 +484,7 @@ async function updateMonitorStorageUsage() {
       manageLink.addEventListener("click", (e) => {
         e.preventDefault();
         // Navigate to options settings page for storage management
-        window.location.href = browser.runtime.getURL("options/options.html#settings");
+        window.location.href = browser.runtime.getURL("settings/settings.html");
       });
     }
   } catch { /* non-critical */ }
