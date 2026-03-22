@@ -780,8 +780,8 @@
       srcInfo.querySelectorAll('.src-match-open').forEach(btn => {
         btn.addEventListener('click', () => {
           const srcId = btn.dataset.srcId;
-          const base = browser.runtime.getURL('options/options.html');
-          window.location.href = srcId ? `${base}?highlight=${encodeURIComponent(srcId)}#sources` : `${base}#sources`;
+          const base = browser.runtime.getURL('sources/sources.html');
+          window.location.href = srcId ? `${base}?highlight=${encodeURIComponent(srcId)}` : base;
         });
       });
     } else {

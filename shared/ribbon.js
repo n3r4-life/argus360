@@ -47,6 +47,25 @@
   brand.textContent = "Argus";
   left.appendChild(brand);
 
+  // Profile username badge (next to logo)
+  const profileBadge = document.createElement("span");
+  profileBadge.id = "ribbon-profile-badge";
+  profileBadge.style.cssText = "font-size:10px;color:#5a5a78;margin-left:8px;font-weight:600;letter-spacing:0.3px;";
+  left.appendChild(profileBadge);
+
+  // Populate profile badge
+  (async () => {
+    const { argusActiveProfile } = await browser.storage.local.get("argusActiveProfile");
+    const name = argusActiveProfile || "guest";
+    if (name === "guest") {
+      profileBadge.textContent = "Guest";
+      profileBadge.style.color = "#5a5a78";
+    } else {
+      const vs = await browser.runtime.sendMessage({ action: "vaultGetStatus" });
+      profileBadge.textContent = name + (vs?.unlocked ? "" : " \uD83D\uDD12");
+    }
+  })();
+
   ribbon.appendChild(left);
 
   // Centre: live connection status pills
@@ -194,10 +213,11 @@
   intelTray.id = "ribbon-intel-strip";
   intelSlideout.appendChild(intelTray);
 
+  const plugSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a6 6 0 0 1-12 0V8z"/></svg>`;
   const intelIcon = document.createElement("button");
   intelIcon.className = "provider-slideout-trigger";
-  intelIcon.title = "Intel providers";
-  intelIcon.innerHTML = gridSvg;
+  intelIcon.title = "Connected services";
+  intelIcon.innerHTML = plugSvg;
   intelSlideout.appendChild(intelIcon);
 
   aiStrip.appendChild(intelSlideout);
@@ -217,8 +237,47 @@
       slideoutTimer = null;
     }
   }
-  aiIcon.addEventListener("click", () => openSlideout(aiSlideout, intelSlideout));
-  intelIcon.addEventListener("click", () => openSlideout(intelSlideout, aiSlideout));
+  // On settings-type pages, replace slide-outs with contextual message
+  const SLIDEOUT_HIDDEN_PAGES = ["/providers/"];
+  const currentPath = window.location.pathname;
+  const isSettingsPage = SLIDEOUT_HIDDEN_PAGES.some(p => currentPath.includes(p));
+  let ctxMsg = null;
+
+  if (isSettingsPage) {
+    try {
+      aiDefaultPill.style.display = "none";
+      aiTray.style.display = "none";
+      intelTray.style.display = "none";
+      intelLabel.style.display = "none";
+      ctxMsg = document.createElement("span");
+      ctxMsg.style.cssText = "flex:1;text-align:center;font-size:10px;color:#5a5a78;letter-spacing:0.5px;transition:all 0.3s ease;";
+      ctxMsg.textContent = "\u2014 set defaults and additional api keys and providers below \u2014";
+      aiStrip.insertBefore(ctxMsg, intelSlideout);
+    } catch (e) { console.error("[Ribbon] slideout hide failed:", e); }
+  }
+
+  function pulseCtxMsg() {
+    if (!ctxMsg) return;
+    ctxMsg.style.color = "#22c55e";
+    ctxMsg.style.fontWeight = "700";
+    ctxMsg.style.fontSize = "11.5px";
+    ctxMsg.style.textShadow = "0 0 6px rgba(34,197,94,0.3)";
+    setTimeout(() => {
+      ctxMsg.style.color = "#5a5a78";
+      ctxMsg.style.fontWeight = "";
+      ctxMsg.style.fontSize = "10px";
+      ctxMsg.style.textShadow = "none";
+    }, 1200);
+  }
+
+  aiIcon.addEventListener("click", () => {
+    if (isSettingsPage) pulseCtxMsg();
+    else openSlideout(aiSlideout, intelSlideout);
+  });
+  intelIcon.addEventListener("click", () => {
+    if (isSettingsPage) pulseCtxMsg();
+    else openSlideout(intelSlideout, aiSlideout);
+  });
 
   // ── App launcher tab bar (below ribbon) ──
   const appBar = document.createElement("nav");
@@ -617,35 +676,23 @@
   }
 
   // Brand / logo → console home landing
-  document.getElementById("ribbon-console").addEventListener("click", () => nav("home"));
+  document.getElementById("ribbon-console").addEventListener("click", () => navigateTo("options/options.html"));
 
-  // Console-tab icon buttons → open console at that tab
-  document.getElementById("ribbon-bookmarks").addEventListener("click", () => nav("bookmarks"));
-  document.getElementById("ribbon-projects").addEventListener("click", () => {
-    window.location.href = browser.runtime.getURL("projects/projects.html");
-  });
-  document.getElementById("ribbon-monitors").addEventListener("click", () => nav("monitors"));
-  document.getElementById("ribbon-feeds").addEventListener("click", () => {
-    window.location.href = browser.runtime.getURL("feeds/feeds.html");
-  });
-  document.getElementById("ribbon-osint").addEventListener("click", () => {
-    window.location.href = browser.runtime.getURL("osint/graph.html");
-  });
+  // Ribbon icon buttons → navigate directly to standalone pages
+  document.getElementById("ribbon-bookmarks").addEventListener("click", () => navigateTo("bookmarks/bookmarks.html"));
+  document.getElementById("ribbon-projects").addEventListener("click", () => navigateTo("projects/projects.html"));
+  document.getElementById("ribbon-monitors").addEventListener("click", () => navigateTo("monitors/monitors.html"));
+  document.getElementById("ribbon-feeds").addEventListener("click", () => navigateTo("feeds/feeds.html"));
+  document.getElementById("ribbon-osint").addEventListener("click", () => navigateTo("osint/graph.html"));
   document.getElementById("ribbon-intel").addEventListener("click", () => navigateTo("intel/hub.html"));
-  document.getElementById("ribbon-automate").addEventListener("click", () => {
-    window.location.href = browser.runtime.getURL("automations/automations.html");
-  });
-  document.getElementById("ribbon-redirects").addEventListener("click", () => nav("archive"));
-  document.getElementById("ribbon-tracker").addEventListener("click", () => nav("tracker"));
-  document.getElementById("ribbon-sources").addEventListener("click", () => {
-    window.location.href = browser.runtime.getURL("sources/sources.html");
-  });
-  document.getElementById("ribbon-prompts").addEventListener("click", () => {
-    window.location.href = browser.runtime.getURL("prompts/prompts.html");
-  });
-  document.getElementById("ribbon-providers").addEventListener("click", () => nav("providers"));
-  document.getElementById("ribbon-resources").addEventListener("click", () => nav("resources"));
-  document.getElementById("ribbon-settings").addEventListener("click", () => nav("settings"));
+  document.getElementById("ribbon-automate").addEventListener("click", () => navigateTo("automations/automations.html"));
+  document.getElementById("ribbon-redirects").addEventListener("click", () => navigateTo("archive/archive.html"));
+  document.getElementById("ribbon-tracker").addEventListener("click", () => navigateTo("trawl/trawl.html"));
+  document.getElementById("ribbon-sources").addEventListener("click", () => navigateTo("sources/sources.html"));
+  document.getElementById("ribbon-prompts").addEventListener("click", () => navigateTo("prompts/prompts.html"));
+  document.getElementById("ribbon-providers").addEventListener("click", () => navigateTo("providers/providers.html"));
+  document.getElementById("ribbon-resources").addEventListener("click", () => navigateTo("resources/resources.html"));
+  document.getElementById("ribbon-settings").addEventListener("click", () => navigateTo("settings/settings.html"));
   document.getElementById("ribbon-help").addEventListener("click", () => {
     browser.tabs.create({ url: "https://github.com/n3r4-life/argus360#readme" });
   });
@@ -717,14 +764,7 @@
       }
     } catch { /* background not ready */ }
 
-    try {
-      const pr = await browser.runtime.sendMessage({ action: "profileGetState" });
-      if (pr?.profile?.username) {
-        const u = pr.profile.username;
-        const syncTip = pr.profile.lastSync ? `Last sync ${pr.profile.lastSync.slice(0,10)}` : "Never synced";
-        pills.push(`<button class="ribbon-status-pill ribbon-user-pill" data-nav="settings" title="${u} · ${syncTip} — click to manage"><span class="ribbon-status-dot"></span>${u}</button>`);
-      }
-    } catch { /* background not ready */ }
+    // Profile pill removed — profile badge is shown next to the Argus logo instead
 
     strip.innerHTML = pills.join("");
     strip.querySelectorAll("[data-nav]").forEach(btn => {
@@ -773,6 +813,21 @@
       tray.innerHTML = pills.length
         ? pills.join("") + `<span class="ribbon-ai-sep">|</span>` + provLink
         : provLink;
+      // Click a tray pill → switch default AI provider
+      tray.querySelectorAll("[data-provider]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const newProvider = btn.dataset.provider;
+          await browser.storage.local.set({ defaultProvider: newProvider });
+          // Collapse the slide-out
+          const slideout = btn.closest(".provider-slideout");
+          if (slideout) {
+            slideout.classList.remove("open");
+            if (slideoutTimer) { clearTimeout(slideoutTimer); slideoutTimer = null; }
+          }
+          // Refresh the strip to reflect the change
+          _doUpdateAiStrip();
+        });
+      });
     } catch { /* background not ready */ }
   }
 
@@ -869,6 +924,12 @@
         highlightActiveTab();
       }
     }
+    // Refresh AI/Intel strips when provider settings change
+    if (changes.providers || changes.defaultProvider || changes.dataProviders) {
+      _doUpdateAiStrip();
+      _doUpdateIntelStrip();
+      _doUpdateRibbonStatus();
+    }
     if (changes.appTabOrder) {
       const ord = changes.appTabOrder.newValue;
       if (Array.isArray(ord)) {
@@ -882,6 +943,10 @@
   // ── Vault Lock Screen ──
   (async function checkVaultLock() {
     try {
+      // Guest profile never locks — skip lock screen entirely
+      const { argusActiveProfile } = await browser.storage.local.get("argusActiveProfile");
+      if (!argusActiveProfile || argusActiveProfile === "guest") return;
+
       const status = await browser.runtime.sendMessage({ action: "vaultGetStatus" });
       if (!status || !status.enabled || status.unlocked) return;
 
@@ -987,6 +1052,23 @@
       btn.textContent = "Unlock";
       btn.addEventListener("click", doUnlock);
       box.appendChild(btn);
+
+      // Switch Profile — signs out (falls to Guest), redirects to Settings if multiple profiles
+      const switchBtn = document.createElement("button");
+      switchBtn.className = "argus-lock-btn";
+      switchBtn.style.cssText = "background:transparent;border:1px solid rgba(255,255,255,0.15);color:var(--text-muted);margin-top:4px;";
+      switchBtn.textContent = "Switch Profile";
+      switchBtn.addEventListener("click", async () => {
+        switchBtn.disabled = true;
+        await browser.runtime.sendMessage({ action: "profileSignOut" });
+        overlay.classList.add("hidden");
+        setTimeout(() => {
+          overlay.remove();
+          // Go to settings where profile picker is
+          window.location.href = browser.runtime.getURL("settings/settings.html");
+        }, 300);
+      });
+      box.appendChild(switchBtn);
 
       box.appendChild(errorEl);
 

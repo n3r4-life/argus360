@@ -911,8 +911,10 @@ input::placeholder, textarea::placeholder { color: var(--text-muted); }
 .ribbon-intel-pill {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 3px;
   padding: 1px 7px;
+  min-width: 60px;
   font-size: 10px;
   font-weight: 700;
   color: #5a5a78;

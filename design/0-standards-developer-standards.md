@@ -368,6 +368,9 @@ Reference implementations: `osint/graph.html` (`.graph-header`), `finance/financ
 ### Buttons
 All buttons use `pill-chip` class from `shared/argus-std.css`. No rectangular buttons. No `btn-primary` (except the popup Analyze button which is a special case). The only pink/red accent-colored element is the "Discuss with AI" chat toggle.
 
+### Pill Sizing
+All pill-chip buttons and ribbon pills MUST have a fixed `min-width` so that changing their text content (e.g. switching between provider names) does not cause layout shifts. The content is centered within the pill. This applies everywhere pills are used: ribbon AI/Intel strips, toolbars, card headers, action bars. Never let pill width be dictated solely by text length — set `min-width` and `justify-content: center`.
+
 ### External Links
 Any pill-chip or button that opens an external website (target="_blank") MUST include the ↗ arrow character (`\u2197`) at the end of the label text. Example: `FAA Registry ↗`, `FlightAware ↗`, `ADS-B Exchange ↗`. This tells the user they're leaving Argus. Internal navigation buttons do NOT get the arrow.
 

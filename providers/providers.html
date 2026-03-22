@@ -18,7 +18,7 @@
 
       <!-- Defaults (AI + Cloud + Paste) -->
       <section class="card">
-        <h2 class="card-title">Defaults</h2>
+        <h2 class="card-title" style="display:flex;align-items:center;justify-content:space-between;">Defaults <span id="default-provider-status" style="font-size:11px;font-weight:400;color:var(--text-muted);"></span></h2>
         <div class="card-body">
           <div class="form-row" style="gap:16px;">
             <div class="form-group flex-1">
@@ -53,8 +53,21 @@
               </select>
               <span class="hint">Used by "Paste to Service" automation steps</span>
             </div>
+            <div class="form-group flex-1">
+              <label for="default-cms-provider">CMS / Publishing</label>
+              <select id="default-cms-provider" disabled>
+                <option value="">None</option>
+                <option value="wordpress">WordPress</option>
+                <option value="blogger">Blogger</option>
+                <option value="ghost">Ghost</option>
+                <option value="medium">Medium</option>
+                <option value="substack">Substack</option>
+                <option value="hugo">Hugo (Git)</option>
+                <option value="jekyll">Jekyll (Git)</option>
+              </select>
+              <span class="hint">Coming soon — publish from Publisher directly to your CMS</span>
+            </div>
           </div>
-          <div id="default-provider-status" style="font-size:11px;color:var(--text-muted);margin-top:6px;"></div>
         </div>
       </section>
 
@@ -301,11 +314,17 @@
                   <input type="password" id="dp-webdav-pass" placeholder="Password or app token">
                 </div>
               </div>
+              <div class="form-group">
+                <label for="dp-webdav-folder">Upload Folder <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
+                <input type="text" id="dp-webdav-folder" placeholder="e.g. /argustest — leave blank for root">
+                <span class="hint">Subfolder path for file uploads. Connection test uses the server URL above; uploads go to server URL + this folder.</span>
+              </div>
               <details class="dp-setup-guide">
                 <summary>Setup Guide</summary>
                 <ol class="dp-guide-steps">
                   <li>Enter your WebDAV server URL (Nextcloud, ownCloud, Synology, TrueNAS, etc.)</li>
                   <li>For Nextcloud: use an <strong>App Password</strong> from Settings &rarr; Security</li>
+                  <li>Set <strong>Upload Folder</strong> if your WebDAV files should go in a subdirectory</li>
                   <li>Click <strong>Test Connection</strong> to verify</li>
                 </ol>
               </details>
@@ -1023,10 +1042,42 @@
         </div>
       </section>
 
-      <!-- Backup Schedule -->
+      <!-- Credential Backup (encrypted) -->
       <section class="card">
-        <h2 class="card-title">Backup Schedule</h2>
+        <h2 class="card-title" style="display:flex;align-items:center;justify-content:space-between;">Credential Backup <span id="cred-backup-status" style="font-size:11px;font-weight:400;color:var(--text-muted);"></span></h2>
         <div class="card-body">
+          <p class="info-text">Export or backup your API keys and credentials. All credential backups are encrypted with your Vault passcode (AES-256-GCM). You must have a Vault passcode set before backing up.</p>
+          <div class="form-row" style="margin-top:12px;">
+            <div class="form-group flex-1">
+              <label for="cred-backup-dest">Backup Destination</label>
+              <select id="cred-backup-dest">
+                <option value="local">Local file (download)</option>
+                <option value="gdrive">Google Drive</option>
+                <option value="webdav">WebDAV</option>
+                <option value="github">GitHub</option>
+                <option value="s3">S3</option>
+              </select>
+              <span class="hint">Where to store the encrypted credential file</span>
+            </div>
+            <div class="form-group flex-1">
+              <label>Actions</label>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button id="cred-export" class="pill-chip btn-primary">Export Credentials</button>
+                <button id="cred-import" class="pill-chip">Import Credentials</button>
+                <button id="cred-cloud-backup" class="pill-chip">Backup to Cloud</button>
+                <button id="cred-cloud-restore" class="pill-chip">Restore from Cloud</button>
+              </div>
+            </div>
+          </div>
+          <input type="file" id="cred-import-file" accept=".argus-cred,.json" style="display:none;">
+        </div>
+      </section>
+
+      <!-- Full Backup Schedule -->
+      <section class="card">
+        <h2 class="card-title">Full Backup Schedule</h2>
+        <div class="card-body">
+          <p class="info-text">Scheduled backups include all Argus data (projects, bookmarks, monitors, feeds, history) but exclude API keys. Credentials are backed up separately above.</p>
           <div class="form-row">
             <div class="form-group flex-1">
               <label class="toggle-label">
@@ -1039,10 +1090,13 @@
               <input type="number" id="backup-interval" value="1440" min="60" max="43200">
             </div>
             <div class="form-group flex-1">
-              <label class="toggle-label">
-                <input type="checkbox" id="backup-all-providers" checked>
-                <span>Backup to all connected providers</span>
-              </label>
+              <label for="backup-dest">Destination</label>
+              <select id="backup-dest">
+                <option value="gdrive">Google Drive</option>
+                <option value="webdav">WebDAV</option>
+                <option value="github">GitHub</option>
+                <option value="s3">S3</option>
+              </select>
             </div>
           </div>
           <div class="dp-action-row">

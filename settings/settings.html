@@ -55,61 +55,115 @@
         </div>
       </section>
 
-      <!-- ── User Profile / Multi-user ── -->
+      <!-- ── Profile & Security (unified) ── -->
       <section class="card settings-wide" id="profile-card">
-        <h2 class="card-title">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          User Profile
-        </h2>
+        <h2 class="card-title" style="display:flex;align-items:center;justify-content:space-between;">Profile &amp; Security <span id="profile-status-badge" style="font-size:11px;font-weight:400;"></span></h2>
         <div class="card-body">
-          <!-- Logged-out state -->
-          <div id="profile-logged-out">
-            <p class="info-text">Sign in with a username and passcode to sync your data across devices via your connected cloud provider. Your data is encrypted before it leaves this device.</p>
-            <div class="form-row" style="gap:8px;flex-wrap:wrap;align-items:flex-end;">
-              <div class="form-group" style="min-width:140px;flex:1;">
-                <label for="profile-username">Username</label>
-                <input type="text" id="profile-username" placeholder="e.g. alice" autocomplete="username">
+          <!-- Guest mode (default) — show option to create named profile -->
+          <div id="profile-guest" class="hidden">
+            <p class="info-text">You're using Argus as <strong>Guest</strong>. Credentials are stored locally without encryption. Create a named profile to encrypt and protect your API keys.</p>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="profile-new-username">Create Named Profile</label>
+                <input type="text" id="profile-new-username" placeholder="e.g. admin, work, personal">
               </div>
-              <div class="form-group" style="min-width:140px;flex:1;">
-                <label for="profile-passcode">Passcode</label>
-                <input type="password" id="profile-passcode" placeholder="Your passcode" autocomplete="current-password">
-              </div>
-              <div class="form-group" style="min-width:130px;flex:1;">
-                <label for="profile-cloud-provider">Cloud Provider</label>
-                <select id="profile-cloud-provider">
-                  <option value="">— select —</option>
-                  <option value="google">Google Drive</option>
-                  <option value="dropbox">Dropbox</option>
-                  <option value="webdav">WebDAV</option>
-                  <option value="s3">S3</option>
-                  <option value="github">GitHub</option>
+              <div class="form-group flex-1">
+                <label for="profile-new-type">Security Type</label>
+                <select id="profile-new-type">
+                  <option value="pin4">4-digit PIN</option>
+                  <option value="pin6">6-digit PIN</option>
+                  <option value="password">Password</option>
                 </select>
               </div>
-              <div class="form-group" style="flex-shrink:0;">
-                <label>&nbsp;</label>
-                <button id="profile-login-btn" class="pill-chip">Sign In</button>
+            </div>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="profile-new-pin">PIN / Password</label>
+                <input type="password" id="profile-new-pin" placeholder="Enter PIN or password" maxlength="4">
+              </div>
+              <div class="form-group flex-1">
+                <label for="profile-new-pin-confirm">Confirm</label>
+                <input type="password" id="profile-new-pin-confirm" placeholder="Confirm" maxlength="4">
               </div>
             </div>
-            <div id="profile-login-status" class="dp-status" style="margin-top:4px;"></div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+              <button id="profile-create-btn" class="pill-chip btn-primary">Create Profile</button>
+              <span id="profile-create-status" style="font-size:11px;"></span>
+            </div>
           </div>
-          <!-- Logged-in state -->
-          <div id="profile-logged-in" style="display:none;">
-            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-              <div style="display:flex;align-items:center;gap:8px;">
-                <span style="width:32px;height:32px;border-radius:50%;background:var(--bg-card);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:var(--accent);" id="profile-avatar">?</span>
-                <div>
-                  <div style="font-weight:600;font-size:13px;color:var(--text-primary);" id="profile-display-name">—</div>
-                  <div style="font-size:11px;color:var(--text-muted);">Last sync: <span id="profile-last-sync">never</span></div>
+
+          <!-- Named profiles exist, need to sign in -->
+          <div id="profile-login" class="hidden">
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="profile-select">Profile</label>
+                <select id="profile-select"></select>
+              </div>
+              <div class="form-group flex-1">
+                <label for="profile-login-pin">PIN / Password</label>
+                <input type="password" id="profile-login-pin" placeholder="Enter PIN or password">
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+              <button id="profile-signin-btn" class="pill-chip btn-primary">Sign In</button>
+              <button id="profile-guest-btn" class="pill-chip">Continue as Guest</button>
+              <button id="profile-new-btn" class="pill-chip">New Profile</button>
+              <span id="profile-login-status" style="font-size:11px;"></span>
+            </div>
+          </div>
+
+          <!-- Named profile active and unlocked -->
+          <div id="profile-active" class="hidden">
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label>Signed in as</label>
+                <div id="profile-active-name" style="font-size:14px;font-weight:700;color:var(--accent);padding:6px 0;"></div>
+              </div>
+              <div class="form-group flex-1">
+                <label>Status</label>
+                <div id="profile-active-status" style="font-size:12px;padding:6px 0;color:var(--success);">Unlocked</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+              <button id="profile-signout-btn" class="pill-chip">Sign Out</button>
+              <button id="profile-lock-btn" class="pill-chip">Lock</button>
+              <button id="profile-change-pin-btn" class="pill-chip">Change PIN</button>
+              <button id="profile-switch-btn" class="pill-chip">Switch Profile</button>
+              <button id="profile-delete-btn" class="pill-chip" style="color:var(--error);">Delete Profile</button>
+            </div>
+            <div id="profile-change-pin-form" class="hidden" style="margin-top:12px;">
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="profile-change-new-pin">New PIN / Password</label>
+                  <input type="password" id="profile-change-new-pin" placeholder="New PIN">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="profile-change-confirm-pin">Confirm</label>
+                  <input type="password" id="profile-change-confirm-pin" placeholder="Confirm">
                 </div>
               </div>
-              <div style="display:flex;gap:6px;margin-left:auto;flex-wrap:wrap;">
-                <button id="profile-sync-btn" class="pill-chip">Sync Now</button>
-                <button id="profile-logout-btn" class="pill-chip" style="color:var(--error);border-color:var(--error);">Sign Out</button>
+              <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+                <button id="profile-change-pin-save" class="pill-chip btn-primary">Save New PIN</button>
+                <button id="profile-change-pin-cancel" class="pill-chip">Cancel</button>
+                <span id="profile-change-pin-status" style="font-size:11px;"></span>
               </div>
             </div>
-            <div id="profile-sync-status" class="dp-status" style="margin-top:6px;"></div>
-            <div style="margin-top:8px;font-size:11px;color:var(--text-muted);">
-              <label class="toggle-label small"><input type="checkbox" id="profile-clear-on-logout"><span>Clear local data on sign out</span></label>
+          </div>
+
+          <!-- Named profile locked (browser restart) -->
+          <div id="profile-locked" class="hidden">
+            <p class="info-text">Profile <strong id="profile-locked-name"></strong> is locked. Enter your PIN to unlock.</p>
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label for="profile-unlock-pin">PIN / Password</label>
+                <input type="password" id="profile-unlock-pin" placeholder="Enter PIN or password">
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+              <button id="profile-unlock-btn" class="pill-chip btn-primary">Unlock</button>
+              <button id="profile-guest-locked-btn" class="pill-chip">Continue as Guest</button>
+              <button id="profile-switch-locked-btn" class="pill-chip">Switch Profile</button>
+              <span id="profile-unlock-status" style="font-size:11px;"></span>
             </div>
           </div>
         </div>
@@ -429,63 +483,7 @@
         </div>
       </section>
 
-      <!-- Security / Vault -->
-      <section class="card settings-third">
-        <h2 class="card-title">Security</h2>
-        <div class="card-body">
-          <p class="info-text">Passcode-protect Argus. Locks on browser restart and encrypts API keys, SSH sessions, and cloud credentials at rest.</p>
-          <div id="vault-setup-section">
-            <div id="vault-not-configured">
-              <div class="form-row">
-                <div class="form-group flex-1">
-                  <label>Protection type</label>
-                  <select id="vault-type-select" class="input">
-                    <option value="pin4">4-digit PIN</option>
-                    <option value="pin6">6-digit PIN</option>
-                    <option value="password">Password</option>
-                  </select>
-                </div>
-              </div>
-              <div class="form-row">
-                <div class="form-group flex-1">
-                  <label id="vault-setup-label">Enter PIN</label>
-                  <input type="password" id="vault-setup-input" class="input" placeholder="Enter PIN" maxlength="4" inputmode="numeric" autocomplete="off">
-                </div>
-                <div class="form-group flex-1">
-                  <label>Confirm</label>
-                  <input type="password" id="vault-setup-confirm" class="input" placeholder="Confirm" maxlength="4" inputmode="numeric" autocomplete="off">
-                </div>
-              </div>
-              <div class="form-row">
-                <div class="form-group flex-1">
-                  <button id="vault-enable-btn" class="pill-chip btn-primary">Enable Encryption</button>
-                </div>
-              </div>
-              <span id="vault-setup-status" class="prompt-status"></span>
-            </div>
-            <div id="vault-configured" class="hidden">
-              <div class="form-row" style="align-items:center;">
-                <div class="form-group flex-1">
-                  <span class="vault-status-badge" id="vault-status-badge">Encrypted</span>
-                  <span class="hint" id="vault-type-display"></span>
-                </div>
-              </div>
-              <div class="form-row">
-                <div class="form-group flex-1">
-                  <button id="vault-lock-btn" class="pill-chip">Lock Now</button>
-                </div>
-                <div class="form-group flex-1">
-                  <button id="vault-change-btn" class="pill-chip">Change Passcode</button>
-                </div>
-                <div class="form-group flex-1">
-                  <button id="vault-remove-btn" class="pill-chip" style="color:var(--error);border-color:var(--error);">Remove Encryption</button>
-                </div>
-              </div>
-              <span id="vault-action-status" class="prompt-status"></span>
-            </div>
-          </div>
-        </div>
-      </section>
+      <!-- Security / Vault card removed — merged into Profile & Security above -->
 
       <!-- ── Row 4: Storage Management (full width) ── -->
       <section class="card settings-wide" id="storage-management">

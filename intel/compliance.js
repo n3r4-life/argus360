@@ -690,11 +690,11 @@
     var html;
     if (isKeyError) {
       if (provider === "csl") {
-        html = 'CSL subscription key not configured. <a href="https://developer.trade.gov" target="_blank" style="color:var(--accent);">Sign up free at developer.trade.gov ↗</a>, then add your key in <a href="../options/options.html" style="color:var(--accent);">Settings → Providers</a>.';
+        html = 'CSL subscription key not configured. <a href="https://developer.trade.gov" target="_blank" style="color:var(--accent);">Sign up free at developer.trade.gov ↗</a>, then add your key in <a href="../providers/providers.html" style="color:var(--accent);">Settings → Providers</a>.';
       } else if (provider === "courtlistener") {
-        html = 'CourtListener API key not configured. <a href="https://www.courtlistener.com/profile/api-token/" target="_blank" style="color:var(--accent);">Get a free token ↗</a>, then add it in <a href="../options/options.html" style="color:var(--accent);">Settings → Providers</a>.';
+        html = 'CourtListener API key not configured. <a href="https://www.courtlistener.com/profile/api-token/" target="_blank" style="color:var(--accent);">Get a free token ↗</a>, then add it in <a href="../providers/providers.html" style="color:var(--accent);">Settings → Providers</a>.';
       } else {
-        html = 'OpenSanctions API key not configured. <a href="https://opensanctions.org/api/" target="_blank" style="color:var(--accent);">Get a key ↗</a>, then add it in <a href="../options/options.html" style="color:var(--accent);">Settings → Providers</a>.';
+        html = 'OpenSanctions API key not configured. <a href="https://opensanctions.org/api/" target="_blank" style="color:var(--accent);">Get a key ↗</a>, then add it in <a href="../providers/providers.html" style="color:var(--accent);">Settings → Providers</a>.';
       }
     } else {
       html = "Error: " + escapeHtml(msg);

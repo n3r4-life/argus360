@@ -37,6 +37,19 @@ try { browser.runtime.setUninstallURL(""); } catch(e) { /* optional — Chrome r
 if (typeof ArgusVault !== "undefined") {
   ArgusVault.onStartup().catch(e => console.warn("[Vault] startup cleanup:", e.message));
 }
+
+// Ensure Guest profile exists on startup
+(async () => {
+  const { argusProfiles, argusActiveProfile } = await browser.storage.local.get(["argusProfiles", "argusActiveProfile"]);
+  const profiles = argusProfiles || {};
+  if (!profiles.guest) {
+    profiles.guest = { type: "guest", createdAt: new Date().toISOString() };
+    await browser.storage.local.set({ argusProfiles: profiles });
+  }
+  if (!argusActiveProfile) {
+    await browser.storage.local.set({ argusActiveProfile: "guest" });
+  }
+})();
 // OSINT tools: background-osint.js
 // ──────────────────────────────────────────────
 
@@ -2025,6 +2038,89 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "vaultDecrypt") return ArgusVault.decrypt(message.iv, message.ciphertext);
   if (message.action === "vaultReadSensitive") return ArgusVault.readSensitive(message.key).then(v => ({ value: v }));
   if (message.action === "vaultWriteSensitive") return ArgusVault.writeSensitive(message.key, message.value).then(() => ({ success: true }));
+
+  // ── Credential Backup (encrypted with Vault) ──
+  if (message.action === "credentialExport") {
+    return (async () => {
+      try {
+        if (!ArgusVault.isUnlocked()) return { success: false, error: "Vault is locked" };
+        const keys = ["providers", "dataProviders", "pasteProviders", "sshSessions"];
+        const raw = await browser.storage.local.get(keys);
+        // Also check for vault-encrypted versions
+        const vaultKeys = keys.map(k => "_vault_" + k);
+        const vaultData = await browser.storage.local.get(vaultKeys);
+        // Merge: prefer plaintext (vault unlocked means data is decrypted in memory)
+        const creds = {};
+        for (const k of keys) {
+          if (raw[k]) creds[k] = raw[k];
+          else if (vaultData["_vault_" + k]) creds[k] = vaultData["_vault_" + k]; // already encrypted blob
+        }
+        const json = JSON.stringify(creds);
+        const encrypted = await ArgusVault.encrypt(json);
+        return { success: true, payload: { version: 1, type: "argus-credentials", createdAt: new Date().toISOString(), encrypted } };
+      } catch (e) { return { success: false, error: e.message }; }
+    })();
+  }
+
+  if (message.action === "credentialImport") {
+    return (async () => {
+      try {
+        if (!ArgusVault.isUnlocked()) return { success: false, error: "Vault is locked" };
+        const { payload } = message;
+        if (!payload?.encrypted) return { success: false, error: "Invalid credential file" };
+        const json = await ArgusVault.decrypt(payload.encrypted.iv, payload.encrypted.ciphertext);
+        const creds = JSON.parse(json);
+        const allowed = ["providers", "dataProviders", "pasteProviders", "sshSessions"];
+        const toSet = {};
+        for (const k of allowed) { if (creds[k]) toSet[k] = creds[k]; }
+        await browser.storage.local.set(toSet);
+        return { success: true };
+      } catch (e) { return { success: false, error: e.message }; }
+    })();
+  }
+
+  if (message.action === "credentialCloudBackup") {
+    return (async () => {
+      try {
+        const { provider, payload } = message;
+        const filename = "argus-credentials.argus-cred";
+        const content = JSON.stringify(payload, null, 2);
+        const providerMap = { gdrive: "google", webdav: "webdav", github: "github", s3: "s3" };
+        const backendKey = providerMap[provider] || provider;
+        const cp = CloudProviders[backendKey];
+        if (!cp) return { success: false, error: "Unknown provider: " + provider };
+        const blob = new Blob([content], { type: "application/json" });
+        await cp.upload(blob, filename);
+        return { success: true };
+      } catch (e) { return { success: false, error: e.message }; }
+    })();
+  }
+
+  if (message.action === "credentialCloudRestore") {
+    return (async () => {
+      try {
+        if (!ArgusVault.isUnlocked()) return { success: false, error: "Vault is locked" };
+        const { provider } = message;
+        const filename = "argus-credentials.argus-cred";
+        const providerMap = { gdrive: "google", webdav: "webdav", github: "github", s3: "s3" };
+        const backendKey = providerMap[provider] || provider;
+        const cp = CloudProviders[backendKey];
+        if (!cp) return { success: false, error: "Unknown provider: " + provider };
+        const content = await cp.download(filename);
+        if (!content) return { success: false, error: "No credential backup found on " + provider };
+        const payload = JSON.parse(content);
+        if (!payload?.encrypted) return { success: false, error: "Invalid credential file" };
+        const json = await ArgusVault.decrypt(payload.encrypted.iv, payload.encrypted.ciphertext);
+        const creds = JSON.parse(json);
+        const allowed = ["providers", "dataProviders", "pasteProviders", "sshSessions"];
+        const toSet = {};
+        for (const k of allowed) { if (creds[k]) toSet[k] = creds[k]; }
+        await browser.storage.local.set(toSet);
+        return { success: true };
+      } catch (e) { return { success: false, error: e.message }; }
+    })();
+  }
+
   // ── Incognito / Forced-Private Sites ──
   if (message.action === "openIncognito") {
     return (async () => {
@@ -2098,10 +2194,156 @@ browser.runtime.onMessage.addListener((message, sender) => {
   if (message.action === "cloudExportStore") return handleCloudExportStore(message.store, message.providerKey);
   if (message.action === "exportStoreData") return handleExportStoreData(message.store);
   if (message.action === "importStoreData") return handleImportStoreData(message.store, message.json);
-  if (message.action === "profileGetState") return handleProfileGetState();
-  if (message.action === "profileLogin") return handleProfileLogin(message.username, message.passcode, message.cloudProvider);
-  if (message.action === "profileLogout") return handleProfileLogout(message.syncFirst);
-  if (message.action === "profileSyncAll") return handleProfileSyncAll();
+  // ── Old profile handlers (kept commented for potential re-enable with cloud sync) ──
+  // if (message.action === "profileGetState") return handleProfileGetState();
+  // if (message.action === "profileLogin") return handleProfileLogin(message.username, message.passcode, message.cloudProvider);
+  // if (message.action === "profileLogout") return handleProfileLogout(message.syncFirst);
+  // if (message.action === "profileSyncAll") return handleProfileSyncAll();
+
+  // ── Unified Profile System ──
+  if (message.action === "profileCreate") {
+    return (async () => {
+      try {
+        const { username, passcode, type } = message;
+        if (!username || !passcode || !type) return { success: false, error: "Missing fields" };
+        if (username.toLowerCase() === "guest") return { success: false, error: "Reserved name" };
+
+        const { argusProfiles } = await browser.storage.local.get("argusProfiles");
+        const profiles = argusProfiles || {};
+        if (profiles[username]) return { success: false, error: "Profile already exists" };
+
+        // Generate vault config for this profile without activating the vault
+        // Vault only activates when user explicitly locks or signs out
+        const vaultConfig = await ArgusVault.generateConfig(passcode, type);
+
+        profiles[username] = {
+          type,
+          createdAt: new Date().toISOString(),
+          vaultConfig: vaultConfig,
+        };
+        await browser.storage.local.set({
+          argusProfiles: profiles,
+          argusActiveProfile: username
+        });
+
+        return { success: true };
+      } catch (e) { return { success: false, error: e.message }; }
+    })();
+  }
+
+  if (message.action === "profileSignIn") {
+    return (async () => {
+      try {
+        const { username, passcode } = message;
+        const { argusProfiles } = await browser.storage.local.get("argusProfiles");
+        const profiles = argusProfiles || {};
+        if (!profiles[username]) return { success: false, error: "Profile not found" };
+
+        // Restore this profile's vault config before unlocking
+        if (profiles[username].vaultConfig) {
+          await browser.storage.local.set({ vaultConfig: profiles[username].vaultConfig });
+        }
+
+        const result = await ArgusVault.unlock(passcode);
+        if (!result?.success) return { success: false, error: result?.error || "Incorrect PIN" };
+
+        await browser.storage.local.set({ argusActiveProfile: username });
+
+        return { success: true };
+      } catch (e) { return { success: false, error: e.message }; }
+    })();
+  }
+
+  if (message.action === "profileSignOut") {
+    return (async () => {
+      try {
+        // Lock vault (encrypts sensitive data)
+        if (ArgusVault.isUnlocked()) ArgusVault.lock();
+        // Remove vault config so Guest doesn't trigger lock screen
+        await browser.storage.local.remove("vaultConfig");
+        // Fall back to Guest profile
+        await browser.storage.local.set({ argusActiveProfile: "guest" });
+        return { success: true };
+      } catch (e) { return { success: false, error: e.message }; }
+    })();
+  }
+
+  if (message.action === "profileLock") {
+    return (async () => {
+      try {
+        const { argusActiveProfile, argusProfiles } = await browser.storage.local.get(["argusActiveProfile", "argusProfiles"]);
+        const profiles = argusProfiles || {};
+        const profile = profiles[argusActiveProfile];
+        // Restore vaultConfig so lock screen triggers on reload
+        if (profile?.vaultConfig) {
+          await browser.storage.local.set({ vaultConfig: profile.vaultConfig });
+        }
+        if (ArgusVault.isUnlocked()) ArgusVault.lock();
+        return { success: true };
+      } catch (e) { return { success: false, error: e.message }; }
+    })();
+  }
+
+  if (message.action === "profileUnlock") {
+    return (async () => {
+      try {
+        // Restore vaultConfig for this profile before unlocking
+        const { argusActiveProfile, argusProfiles } = await browser.storage.local.get(["argusActiveProfile", "argusProfiles"]);
+        const profile = (argusProfiles || {})[argusActiveProfile];
+        if (profile?.vaultConfig) {
+          await browser.storage.local.set({ vaultConfig: profile.vaultConfig });
+        }
+        const result = await ArgusVault.unlock(message.passcode);
+        if (result?.success) {
+          // Remove vaultConfig so restart doesn't auto-lock
+          await browser.storage.local.remove("vaultConfig");
+        }
+        return result;
+      } catch (e) { return { success: false, error: e.message }; }
+    })();
+  }
+
+  if (message.action === "profileDelete") {
+    return (async () => {
+      try {
+        const { username, passcode } = message;
+        if (username === "guest") return { success: false, error: "Cannot delete Guest profile" };
+        if (!username || !passcode) return { success: false, error: "Username and PIN required" };
+        const { argusProfiles, argusActiveProfile } = await browser.storage.local.get(["argusProfiles", "argusActiveProfile"]);
+        const profiles = argusProfiles || {};
+        if (!profiles[username]) return { success: false, error: "Profile not found" };
+        // Must be signed into this profile to delete it
+        if (argusActiveProfile !== username) return { success: false, error: "Sign into this profile first to delete it" };
+        // Restore this profile's vault config and verify PIN
+        if (profiles[username].vaultConfig) {
+          await browser.storage.local.set({ vaultConfig: profiles[username].vaultConfig });
+        }
+        const verify = await ArgusVault.unlock(passcode);
+        if (!verify?.success) return { success: false, error: "Incorrect PIN" };
+        // Lock and remove
+        ArgusVault.lock();
+        delete profiles[username];
+        await browser.storage.local.set({ argusProfiles: profiles, argusActiveProfile: "guest" });
+        // Clean up vault config and profile-scoped data
+        await browser.storage.local.remove(["vaultConfig"]);
+        const keysToRemove = ["providers", "dataProviders", "pasteProviders", "sshSessions"]
+          .map(k => `_profile_${username}_${k}`)
+          .concat(["_vault_providers", "_vault_dataProviders", "_vault_pasteProviders", "_vault_sshSessions"]);
+        await browser.storage.local.remove(keysToRemove);
+        return { success: true };
+      } catch (e) { return { success: false, error: e.message }; }
+    })();
+  }
+
+  if (message.action === "profileChangePIN") {
+    return (async () => {
+      try {
+        if (!ArgusVault.isUnlocked()) return { success: false, error: "Profile must be unlocked" };
+        await ArgusVault.changePasscode(message.passcode, message.type);
+        return { success: true };
+      } catch (e) { return { success: false, error: e.message }; }
+    })();
+  }
   if (message.action === "cloudListSessions") return handleCloudListSessions(message.providerKey);
   if (message.action === "cloudLocalBackup") return handleCloudLocalBackup();
   if (message.action === "cloudLocalRestore") return handleCloudLocalRestore(message.data);
@@ -2982,9 +3224,14 @@ async function handleImportStoreData(store, json) {
 }
 
 // ════════════════════════════════════════════
-// Profile / Multi-user system
+// Profile / Multi-user cloud sync system (COMMENTED OUT — kept for future re-enable)
+// The unified profile system now uses background message handlers
+// (profileCreate, profileSignIn, profileSignOut, profileLock, profileUnlock,
+//  profileDelete, profileChangePIN) defined in the message router above.
+// The cloud sync code below can be re-enabled when BYOC is wired in.
 // ════════════════════════════════════════════
 
+/*
 const PROFILE_SYNC_STORES = ["history","projects","bookmarks","monitors","feeds","feedEntries",
   "chatSessions","drafts","pageTracker","sources","changes","_settings","_conversations"];
 
@@ -3045,7 +3292,6 @@ async function handleProfileLogin(username, passcode, cloudProvider) {
     let profileKey = null;
     let saltB64 = null;
 
-    // Try to fetch existing profile from cloud
     try {
       const files = await provider.list();
       const found = files.find(f => f.path === manifestPath || f.name === "sync-state.json");
@@ -3053,11 +3299,9 @@ async function handleProfileLogin(username, passcode, cloudProvider) {
         const raw = await provider.download(found.id || found.path);
         const manifestJson = typeof raw === "string" ? raw : await raw.text();
         const outer = JSON.parse(manifestJson);
-        // Derive key using stored salt
         const derived = await _profileDeriveKey(passcode, outer.salt);
         profileKey = derived.key;
         saltB64 = outer.salt;
-        // Verify passcode by decrypting the verify blob
         const verifyText = await _profileDecrypt(profileKey, outer.verify.iv, outer.verify.ct);
         if (verifyText !== `argus-profile:${username}`) {
           return { success: false, error: "Incorrect passcode" };
@@ -3066,26 +3310,18 @@ async function handleProfileLogin(username, passcode, cloudProvider) {
       }
     } catch (e) {
       if (e.message?.includes("Incorrect passcode")) throw e;
-      // Not found = new profile, continue
     }
 
     if (!manifest) {
-      // First login — create new profile
       const derived = await _profileDeriveKey(passcode, null);
       profileKey = derived.key;
       saltB64 = derived.saltB64;
       const verify = await _profileEncrypt(profileKey, `argus-profile:${username}`);
       manifest = {
-        version: 1,
-        username,
-        salt: saltB64,
-        verify,
-        createdAt: new Date().toISOString(),
-        lastSync: null,
-        stores: {}
+        version: 1, username, salt: saltB64, verify,
+        createdAt: new Date().toISOString(), lastSync: null, stores: {}
       };
     } else {
-      // Restore stores from cloud
       const storeManifest = manifest.stores || {};
       for (const store of PROFILE_SYNC_STORES) {
         if (!storeManifest[store]?.syncedAt) continue;
@@ -3105,27 +3341,20 @@ async function handleProfileLogin(username, passcode, cloudProvider) {
       }
     }
 
-    // Persist profile session
     const session = {
-      username,
-      cloudProvider,
+      username, cloudProvider,
       loggedInAt: new Date().toISOString(),
-      lastSync: manifest.lastSync,
-      dirty: false,
-      salt: saltB64
+      lastSync: manifest.lastSync, dirty: false, salt: saltB64
     };
     await browser.storage.local.set({ argusProfile: session, _profileKey: { salt: saltB64 } });
-    // Store passcode-derived key salt for re-derivation — actual key stays in memory
     _activeProfileKey = profileKey;
     _activeProfileUser = username;
-
     return { success: true, username, isNew: !manifest.lastSync };
   } catch (e) {
     return { success: false, error: e.message };
   }
 }
 
-// In-memory profile key (cleared on extension restart — user must re-login)
 let _activeProfileKey = null;
 let _activeProfileUser = null;
 
@@ -3142,19 +3371,15 @@ async function _getActiveProfileKey(passcode) {
 async function handleProfileSyncAll(passcode) {
   const { argusProfile } = await browser.storage.local.get({ argusProfile: null });
   if (!argusProfile) return { success: false, error: "Not logged in" };
-
   const key = await _getActiveProfileKey(passcode);
   if (!key) return { success: false, error: "Profile key not available — re-enter passcode" };
-
   const provider = CloudProviders[argusProfile.cloudProvider];
   if (!provider || !await provider.isConnected()) {
     return { success: false, error: "Cloud provider not connected" };
   }
-
   const { username } = argusProfile;
   const storeResults = {};
   const syncedAt = new Date().toISOString();
-
   for (const store of PROFILE_SYNC_STORES) {
     try {
       const { json } = await _fetchStoreJson(store);
@@ -3168,8 +3393,6 @@ async function handleProfileSyncAll(passcode) {
       storeResults[store] = { success: false, error: e.message };
     }
   }
-
-  // Write manifest
   const { _profileKey: pkMeta } = await browser.storage.local.get({ _profileKey: {} });
   const verify = await _profileEncrypt(key, `argus-profile:${username}`);
   const manifest = {
@@ -3182,27 +3405,23 @@ async function handleProfileSyncAll(passcode) {
   };
   const manifestBlob = new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" });
   await provider.upload(manifestBlob, await _profilePath(username));
-
-  // Update local session
   const updated = { ...argusProfile, lastSync: syncedAt, dirty: false };
   await browser.storage.local.set({ argusProfile: updated });
-
   return { success: true, syncedAt, stores: storeResults };
 }
 
 async function handleProfileLogout(syncFirst = true) {
   const { argusProfile } = await browser.storage.local.get({ argusProfile: null });
-  if (!argusProfile) return { success: true }; // already logged out
-
+  if (!argusProfile) return { success: true };
   if (syncFirst && _activeProfileKey) {
-    try { await handleProfileSyncAll(); } catch { /* sync failed — still log out */ }
+    try { await handleProfileSyncAll(); } catch {}
   }
-
   _activeProfileKey = null;
   _activeProfileUser = null;
   await browser.storage.local.remove(["argusProfile", "_profileKey"]);
   return { success: true };
 }
+*/
 
 async function _gdriveFolder() {
   try {
@@ -5153,12 +5372,12 @@ async function handleReAnalyze(message) {
 // Per-page tab navigation — reuse the tab already showing this page, or open a new one
 // ──────────────────────────────────────────────
 async function openArgusPage(url) {
-  // Strip query/hash to match on the page path only
-  const pagePath = url.split("?")[0].split("#")[0];
-  const existing = await browser.tabs.query({ url: pagePath + "*" });
-  if (existing.length > 0) {
-    await browser.tabs.update(existing[0].id, { active: true, url });
-    await browser.windows.update(existing[0].windowId, { focused: true });
+  // Find ANY open Argus extension tab and reuse it (single-tab mode)
+  const extOrigin = browser.runtime.getURL("");
+  const allArgus = await browser.tabs.query({ url: extOrigin + "*" });
+  if (allArgus.length > 0) {
+    await browser.tabs.update(allArgus[0].id, { active: true, url });
+    await browser.windows.update(allArgus[0].windowId, { focused: true });
   } else {
     await browser.tabs.create({ url });
   }

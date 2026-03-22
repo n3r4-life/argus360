@@ -375,12 +375,20 @@ function loadDataProviderFields() {
   document.getElementById("dp-gdrive-folder").value = g.defaultFolder || "";
   updateDpConnectState("gdrive", g);
 
-  // Show redirect URI for Google Drive
+  // Show redirect URI for Google Drive with copy button
   const dpRedirectEl = document.getElementById("dp-gdrive-redirect");
   if (dpRedirectEl) {
     browser.runtime.sendMessage({ action: "cloudGetRedirectURL" }).then(resp => {
-      if (resp?.success) dpRedirectEl.textContent = "Redirect URI (add to your GCP OAuth client): " + resp.url;
-      else dpRedirectEl.textContent = "Could not get redirect URI: " + (resp?.error || "identity API unavailable");
+      if (resp?.success) {
+        dpRedirectEl.innerHTML = `<span style="user-select:all;word-break:break-all;">${resp.url}</span> <button class="pill-chip" style="margin-left:6px;font-size:10px;padding:1px 8px;" title="Copy redirect URI to clipboard">Copy</button>`;
+        dpRedirectEl.querySelector("button").addEventListener("click", () => {
+          navigator.clipboard.writeText(resp.url);
+          dpRedirectEl.querySelector("button").textContent = "Copied!";
+          setTimeout(() => { dpRedirectEl.querySelector("button").textContent = "Copy"; }, 2000);
+        });
+      } else {
+        dpRedirectEl.textContent = "Could not get redirect URI: " + (resp?.error || "identity API unavailable");
+      }
     }).catch(() => {});
   }
 
@@ -392,6 +400,7 @@ function loadDataProviderFields() {
   document.getElementById("dp-webdav-url").value = w.serverUrl || "";
   document.getElementById("dp-webdav-user").value = w.username || "";
   document.getElementById("dp-webdav-pass").value = w.password || "";
+  document.getElementById("dp-webdav-folder").value = w.folder || "";
   updateDpConnectState("webdav", w);
 
   const s = dataProviders.s3 || {};
@@ -467,6 +476,7 @@ function saveDataProviderField(key) {
       dp.serverUrl = document.getElementById("dp-webdav-url").value.trim();
       dp.username = document.getElementById("dp-webdav-user").value.trim();
       dp.password = document.getElementById("dp-webdav-pass").value.trim();
+      dp.folder = document.getElementById("dp-webdav-folder").value.trim().replace(/^\/+|\/+$/g, "");
       break;
     case "s3":
       dp.endpoint = document.getElementById("dp-s3-endpoint").value.trim();
@@ -1030,7 +1040,7 @@ function initCloudProviderListeners() {
     btn.addEventListener("click", () => selectDataProviderTab(btn.dataset.dprovider));
   });
   // Data provider field inputs — auto-save on change
-  for (const id of ["dp-gdrive-client-id", "dp-gdrive-folder", "dp-dropbox-app-key", "dp-webdav-url", "dp-webdav-user", "dp-webdav-pass",
+  for (const id of ["dp-gdrive-client-id", "dp-gdrive-folder", "dp-dropbox-app-key", "dp-webdav-url", "dp-webdav-user", "dp-webdav-pass", "dp-webdav-folder",
     "dp-s3-endpoint", "dp-s3-bucket", "dp-s3-access-key", "dp-s3-secret-key", "dp-s3-region",
     "dp-github-pat", "dp-github-repo", "dp-github-branch",
     "dp-xmpp-server", "dp-xmpp-jid", "dp-xmpp-gateway", "dp-xmpp-country"]) {
@@ -1168,7 +1178,59 @@ function initAiProviderListeners() {
 // Init
 // ──────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
+  // Show warning banner for Guest mode (unencrypted credentials)
+  const { argusActiveProfile } = await browser.storage.local.get("argusActiveProfile");
+  if (!argusActiveProfile || argusActiveProfile === "guest") {
+    const banner = document.createElement("div");
+    banner.style.cssText = "background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:10px 16px;margin-bottom:12px;font-size:12px;color:var(--text-primary);";
+    banner.innerHTML = 'You\'re using Guest mode \u2014 credentials are stored without encryption. <a href="' + browser.runtime.getURL("settings/settings.html") + '" style="color:var(--accent);">Create a profile</a> to encrypt your API keys.';
+    document.querySelector(".settings-container")?.prepend(banner);
+  }
   try { await loadProviderSettings(); } catch(e) { console.error("[Providers] loadProviderSettings failed:", e); }
+  // Disable AI providers with no API key configured
+  try {
+    const aiResp = await browser.runtime.sendMessage({ action: "aiGetStatus" });
+    const aiSel = document.getElementById("default-provider");
+    if (aiSel && aiResp?.providers) {
+      for (const opt of aiSel.options) {
+        if (opt.value) {
+          const info = aiResp.providers[opt.value];
+          if (!info || (!info.configured && info.status !== "live")) {
+            opt.disabled = true;
+            opt.textContent += " (no key)";
+          }
+        }
+      }
+    }
+  } catch { /* */ }
+  // Disable unconnected cloud providers in the default dropdown
+  try {
+    const cloudResp = await browser.runtime.sendMessage({ action: "cloudGetStatus" });
+    const cloudSel = document.getElementById("default-cloud-provider");
+    if (cloudSel) {
+      for (const opt of cloudSel.options) {
+        if (opt.value && opt.value !== "all" && !cloudResp?.providers?.[opt.value]) {
+          opt.disabled = true;
+          opt.textContent += " (not connected)";
+        }
+      }
+    }
+    // Same for paste provider dropdown
+    const pasteSel = document.getElementById("default-paste-provider");
+    if (pasteSel) {
+      const pasteKeyMap = { gist: "github", pastebin: "pastebin", privatebin: "privatebin" };
+      for (const opt of pasteSel.options) {
+        if (opt.value) {
+          const backendKey = pasteKeyMap[opt.value] || opt.value;
+          const connected = pasteProviders?.[opt.value]?.connected || cloudResp?.providers?.[backendKey];
+          if (!connected) {
+            opt.disabled = true;
+            opt.textContent += " (not connected)";
+          }
+        }
+      }
+    }
+  } catch { /* */ }
   try { selectProviderTab("xai"); } catch(e) { console.error("[Providers] selectProviderTab failed:", e); }
   try { selectDataProviderTab("gdrive"); } catch(e) { console.error("[Providers] selectDataProviderTab failed:", e); }
   try { selectPasteProviderTab("gist"); } catch(e) { console.error("[Providers] selectPasteProviderTab failed:", e); }
@@ -1176,4 +1238,130 @@ document.addEventListener("DOMContentLoaded", async () => {
   try { initCloudProviderListeners(); } catch(e) { console.error("[Providers] initCloudProviderListeners failed:", e); }
   try { initIntelProviders(); } catch(e) { console.error("[Providers] initIntelProviders failed:", e); }
   try { updateReasoningControls(); } catch(e) { console.error("[Providers] updateReasoningControls failed:", e); }
+  try { initCredentialBackup(); } catch(e) { console.error("[Providers] initCredentialBackup failed:", e); }
+
+  // Disable unconnected destinations in backup dropdowns
+  try {
+    const credDestSel = document.getElementById("cred-backup-dest");
+    const backupDestSel = document.getElementById("backup-dest");
+    const cloudResp2 = await browser.runtime.sendMessage({ action: "cloudGetStatus" });
+    const destMap = { gdrive: "google", webdav: "webdav", github: "github", s3: "s3" };
+    for (const sel of [credDestSel, backupDestSel]) {
+      if (!sel) continue;
+      for (const opt of sel.options) {
+        const backend = destMap[opt.value];
+        if (backend && !cloudResp2?.providers?.[backend]) {
+          opt.disabled = true;
+          opt.textContent += " (not connected)";
+        }
+      }
+    }
+  } catch { /* */ }
 });
+
+// ── Credential Backup (encrypted with Vault) ──
+const CREDENTIAL_KEYS = ["providers", "dataProviders", "pasteProviders", "sshSessions"];
+
+function initCredentialBackup() {
+  const statusEl = document.getElementById("cred-backup-status");
+  const destSel = document.getElementById("cred-backup-dest");
+  const fileInput = document.getElementById("cred-import-file");
+
+  function setStatus(msg, color) {
+    if (!statusEl) return;
+    statusEl.textContent = msg;
+    statusEl.style.color = color || "var(--text-muted)";
+    if (msg) setTimeout(() => { statusEl.textContent = ""; }, 4000);
+  }
+
+  // Export credentials (encrypted) to local file
+  document.getElementById("cred-export")?.addEventListener("click", async () => {
+    try {
+      const vaultStatus = await browser.runtime.sendMessage({ action: "vaultGetStatus" });
+      if (!vaultStatus?.enabled || !vaultStatus?.unlocked) {
+        setStatus("Vault must be set up and unlocked to export credentials", "var(--error)");
+        return;
+      }
+      setStatus("Encrypting...", "var(--accent)");
+      const resp = await browser.runtime.sendMessage({ action: "credentialExport" });
+      if (!resp?.success) { setStatus(resp?.error || "Export failed", "var(--error)"); return; }
+
+      if (destSel.value === "local") {
+        const blob = new Blob([JSON.stringify(resp.payload, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `argus-credentials-${new Date().toISOString().slice(0,10)}.argus-cred`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setStatus("Credentials exported (encrypted)", "var(--success)");
+      } else {
+        // Upload to cloud
+        const uploadResp = await browser.runtime.sendMessage({
+          action: "credentialCloudBackup",
+          provider: destSel.value,
+          payload: resp.payload
+        });
+        setStatus(uploadResp?.success ? "Backed up to " + destSel.value : (uploadResp?.error || "Upload failed"),
+          uploadResp?.success ? "var(--success)" : "var(--error)");
+      }
+    } catch (e) { setStatus("Export failed: " + e.message, "var(--error)"); }
+  });
+
+  // Import credentials from local file
+  document.getElementById("cred-import")?.addEventListener("click", () => fileInput?.click());
+  fileInput?.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const vaultStatus = await browser.runtime.sendMessage({ action: "vaultGetStatus" });
+      if (!vaultStatus?.enabled || !vaultStatus?.unlocked) {
+        setStatus("Vault must be unlocked to import credentials", "var(--error)");
+        return;
+      }
+      setStatus("Decrypting...", "var(--accent)");
+      const text = await file.text();
+      const payload = JSON.parse(text);
+      const resp = await browser.runtime.sendMessage({ action: "credentialImport", payload });
+      setStatus(resp?.success ? "Credentials restored" : (resp?.error || "Import failed"),
+        resp?.success ? "var(--success)" : "var(--error)");
+      if (resp?.success) setTimeout(() => location.reload(), 1500);
+    } catch (e) { setStatus("Import failed: " + e.message, "var(--error)"); }
+    fileInput.value = "";
+  });
+
+  // Cloud backup
+  document.getElementById("cred-cloud-backup")?.addEventListener("click", async () => {
+    if (destSel.value === "local") { setStatus("Select a cloud destination", "var(--error)"); return; }
+    try {
+      const vaultStatus = await browser.runtime.sendMessage({ action: "vaultGetStatus" });
+      if (!vaultStatus?.enabled || !vaultStatus?.unlocked) {
+        setStatus("Vault must be unlocked", "var(--error)"); return;
+      }
+      setStatus("Encrypting & uploading...", "var(--accent)");
+      const exportResp = await browser.runtime.sendMessage({ action: "credentialExport" });
+      if (!exportResp?.success) { setStatus(exportResp?.error || "Export failed", "var(--error)"); return; }
+      const uploadResp = await browser.runtime.sendMessage({
+        action: "credentialCloudBackup", provider: destSel.value, payload: exportResp.payload
+      });
+      setStatus(uploadResp?.success ? "Backed up to " + destSel.value : (uploadResp?.error || "Upload failed"),
+        uploadResp?.success ? "var(--success)" : "var(--error)");
+    } catch (e) { setStatus("Backup failed: " + e.message, "var(--error)"); }
+  });
+
+  // Cloud restore
+  document.getElementById("cred-cloud-restore")?.addEventListener("click", async () => {
+    if (destSel.value === "local") { setStatus("Select a cloud source", "var(--error)"); return; }
+    try {
+      const vaultStatus = await browser.runtime.sendMessage({ action: "vaultGetStatus" });
+      if (!vaultStatus?.enabled || !vaultStatus?.unlocked) {
+        setStatus("Vault must be unlocked", "var(--error)"); return;
+      }
+      setStatus("Downloading & decrypting...", "var(--accent)");
+      const resp = await browser.runtime.sendMessage({ action: "credentialCloudRestore", provider: destSel.value });
+      setStatus(resp?.success ? "Credentials restored from " + destSel.value : (resp?.error || "Restore failed"),
+        resp?.success ? "var(--success)" : "var(--error)");
+      if (resp?.success) setTimeout(() => location.reload(), 1500);
+    } catch (e) { setStatus("Restore failed: " + e.message, "var(--error)"); }
+  });
+}

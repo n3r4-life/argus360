@@ -77,11 +77,14 @@ async function focusOrCreateConsole(hash) {
 // Initialization
 // ──────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
-  // ── Vault lock check ──
+  // ── Vault lock check (skip for Guest profile) ──
   try {
-    const vaultStatus = await browser.runtime.sendMessage({ action: "vaultGetStatus" });
-    if (vaultStatus && vaultStatus.enabled && !vaultStatus.unlocked) {
-      await showPopupLockScreen(vaultStatus);
+    const { argusActiveProfile } = await browser.storage.local.get("argusActiveProfile");
+    if (argusActiveProfile && argusActiveProfile !== "guest") {
+      const vaultStatus = await browser.runtime.sendMessage({ action: "vaultGetStatus" });
+      if (vaultStatus && vaultStatus.enabled && !vaultStatus.unlocked) {
+        await showPopupLockScreen(vaultStatus);
+      }
     }
   } catch (_) { /* vault unavailable — proceed */ }
 
@@ -2261,6 +2264,21 @@ function showPopupLockScreen(status) {
     btn.style.cssText += "font-size:12px;padding:8px 24px;";
     btn.addEventListener("click", doUnlock);
     overlay.appendChild(btn);
+
+    // Switch Profile button — always shows, falls back to Guest if only 1 named profile
+    const switchBtn = document.createElement("button");
+    switchBtn.className = "argus-lock-btn";
+    switchBtn.style.cssText = "font-size:11px;padding:6px 16px;background:transparent;border:1px solid rgba(255,255,255,0.15);color:#6a6a80;margin-top:6px;";
+    switchBtn.textContent = "Switch Profile";
+    switchBtn.addEventListener("click", async () => {
+      switchBtn.disabled = true;
+      await browser.runtime.sendMessage({ action: "profileSignOut" });
+      overlay.remove();
+      document.querySelectorAll("header, section, .prev-analysis, .archive-available, .toast").forEach(el => el.style.display = "");
+      resolve();
+    });
+    overlay.appendChild(switchBtn);
+
     overlay.appendChild(errorEl);
 
     document.body.appendChild(overlay);

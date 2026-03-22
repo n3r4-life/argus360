@@ -355,139 +355,274 @@ function saveTrawlDuration() {
 }
 
 // ──────────────────────────────────────────────
-// User Profile
+// Unified Profile & Security System
 // ──────────────────────────────────────────────
-function _profileFmtDate(iso) {
-  if (!iso) return "never";
-  const d = new Date(iso);
-  const pad = n => String(n).padStart(2, "0");
-  const yr = String(d.getFullYear()).slice(2);
-  return `${yr}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+function _profileSetStatus(section, msg, type) {
+  const map = {
+    create: "profile-create-status",
+    login: "profile-login-status",
+    unlock: "profile-unlock-status",
+    changepin: "profile-change-pin-status",
+  };
+  const el = document.getElementById(map[section]);
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = type === "error" ? "var(--error)" : type === "success" ? "var(--success)" : "var(--text-muted)";
 }
 
-function updateProfileUI(profile) {
-  const loggedOut = document.getElementById("profile-logged-out");
-  const loggedIn  = document.getElementById("profile-logged-in");
-  if (!loggedOut || !loggedIn) return;
-
-  if (profile) {
-    loggedOut.style.display = "none";
-    loggedIn.style.display  = "";
-    const initial = (profile.username || "?")[0].toUpperCase();
-    document.getElementById("profile-avatar").textContent        = initial;
-    document.getElementById("profile-display-name").textContent  = profile.username;
-    document.getElementById("profile-last-sync").textContent     = _profileFmtDate(profile.lastSync);
-  } else {
-    loggedOut.style.display = "";
-    loggedIn.style.display  = "none";
+function _updateRibbonBadge(name) {
+  const badge = document.getElementById("ribbon-profile-badge");
+  if (badge) {
+    badge.textContent = name === "guest" ? "Guest" : name;
+    badge.style.color = name === "guest" ? "#5a5a78" : "var(--accent)";
   }
 }
 
-function initUserProfile() {
-  // Filter provider selector to only connected providers
-  (async () => {
-    try {
-      const resp = await browser.runtime.sendMessage({ action: "cloudGetStatus" });
-      const sel = document.getElementById("profile-cloud-provider");
-      if (!sel) return;
-      for (const opt of sel.options) {
-        if (opt.value && !resp?.providers?.[opt.value]) {
-          opt.disabled = true;
-          opt.textContent += " (not connected)";
-        }
-      }
-    } catch { /* */ }
+async function renderProfileState() {
+  const { argusProfiles, argusActiveProfile } = await browser.storage.local.get(["argusProfiles", "argusActiveProfile"]);
+  const profiles = argusProfiles || {};
+  const active = argusActiveProfile || "guest";
+  const namedProfiles = Object.keys(profiles).filter(n => n !== "guest");
 
-    // Restore logged-in state if active
-    const resp = await browser.runtime.sendMessage({ action: "profileGetState" });
-    updateProfileUI(resp?.profile || null);
-  })();
+  // Update ribbon badge
+  _updateRibbonBadge(active);
 
-  // Login
-  document.getElementById("profile-login-btn")?.addEventListener("click", async () => {
-    const username  = document.getElementById("profile-username").value.trim();
-    const passcode  = document.getElementById("profile-passcode").value;
-    const provider  = document.getElementById("profile-cloud-provider").value;
-    const statusEl  = document.getElementById("profile-login-status");
+  // Hide all states
+  for (const id of ["profile-guest", "profile-login", "profile-active", "profile-locked"]) {
+    document.getElementById(id)?.classList.add("hidden");
+  }
 
-    if (!username || !passcode || !provider) {
-      statusEl.textContent = "Fill in all fields.";
-      statusEl.style.color = "var(--error)";
-      return;
+  // Update status badge
+  const badge = document.getElementById("profile-status-badge");
+
+  if (active === "guest") {
+    if (badge) { badge.textContent = "Guest"; badge.style.color = "var(--text-muted)"; }
+    if (namedProfiles.length > 0) {
+      // Named profiles exist — show login dropdown so user can sign into them
+      const sel = document.getElementById("profile-select");
+      if (sel) sel.innerHTML = namedProfiles.map(n => `<option value="${n}">${n}</option>`).join("");
+      document.getElementById("profile-login")?.classList.remove("hidden");
+    } else {
+      // No named profiles — show create form
+      document.getElementById("profile-guest")?.classList.remove("hidden");
     }
+    return;
+  }
 
-    statusEl.textContent = "Signing in\u2026";
-    statusEl.style.color = "var(--text-muted)";
-    const btn = document.getElementById("profile-login-btn");
-    btn.disabled = true;
-
-    try {
-      const r = await browser.runtime.sendMessage({ action: "profileLogin", username, passcode, cloudProvider: provider });
-      if (r?.success) {
-        statusEl.textContent = r.isNew ? "New profile created. Welcome!" : "Restored from last sync.";
-        statusEl.style.color = "var(--success)";
-        document.getElementById("profile-passcode").value = "";
-        const stateResp = await browser.runtime.sendMessage({ action: "profileGetState" });
-        updateProfileUI(stateResp?.profile || null);
-      } else {
-        statusEl.textContent = r?.error || "Sign in failed.";
-        statusEl.style.color = "var(--error)";
-      }
-    } catch (e) {
-      statusEl.textContent = e.message;
-      statusEl.style.color = "var(--error)";
+  // Named profile active — check vault status
+  try {
+    const vaultStatus = await browser.runtime.sendMessage({ action: "vaultGetStatus" });
+    if (vaultStatus?.unlocked) {
+      if (badge) { badge.textContent = active + " \u00b7 Unlocked"; badge.style.color = "var(--success)"; }
+      document.getElementById("profile-active-name").textContent = active;
+      document.getElementById("profile-active")?.classList.remove("hidden");
+    } else {
+      if (badge) { badge.textContent = active + " \u00b7 Locked"; badge.style.color = "var(--error)"; }
+      document.getElementById("profile-locked-name").textContent = active;
+      document.getElementById("profile-locked")?.classList.remove("hidden");
     }
-    btn.disabled = false;
+  } catch {
+    // If vault not enabled, treat as unlocked
+    if (badge) { badge.textContent = active + " \u00b7 Unlocked"; badge.style.color = "var(--success)"; }
+    document.getElementById("profile-active-name").textContent = active;
+    document.getElementById("profile-active")?.classList.remove("hidden");
+  }
+}
+
+function initProfile() {
+  // ── PIN type selector updates maxlength on inputs ──
+  const typeSelect = document.getElementById("profile-new-type");
+  const pinInput = document.getElementById("profile-new-pin");
+  const pinConfirm = document.getElementById("profile-new-pin-confirm");
+  if (typeSelect && pinInput && pinConfirm) {
+    typeSelect.addEventListener("change", () => {
+      const type = typeSelect.value;
+      const isPassword = type === "password";
+      const maxLen = isPassword ? 128 : (type === "pin6" ? 6 : 4);
+      pinInput.maxLength = maxLen;
+      pinConfirm.maxLength = maxLen;
+      pinInput.placeholder = isPassword ? "Enter password" : "Enter PIN";
+      pinConfirm.placeholder = isPassword ? "Confirm password" : "Confirm";
+      pinInput.inputMode = isPassword ? "text" : "numeric";
+      pinConfirm.inputMode = isPassword ? "text" : "numeric";
+      pinInput.value = "";
+      pinConfirm.value = "";
+    });
+  }
+
+  // ── Create Profile ──
+  document.getElementById("profile-create-btn")?.addEventListener("click", async () => {
+    const username = document.getElementById("profile-new-username").value.trim();
+    const type = document.getElementById("profile-new-type").value;
+    const pin = document.getElementById("profile-new-pin").value;
+    const confirm_ = document.getElementById("profile-new-pin-confirm").value;
+    if (!username) { _profileSetStatus("create", "Username required", "error"); return; }
+    if (!pin) { _profileSetStatus("create", "PIN required", "error"); return; }
+    if (type !== "password" && !/^\d+$/.test(pin)) { _profileSetStatus("create", "PIN must be digits only", "error"); return; }
+    if (type === "pin4" && pin.length !== 4) { _profileSetStatus("create", "PIN must be 4 digits", "error"); return; }
+    if (type === "pin6" && pin.length !== 6) { _profileSetStatus("create", "PIN must be 6 digits", "error"); return; }
+    if (type === "password" && pin.length < 4) { _profileSetStatus("create", "Password must be at least 4 characters", "error"); return; }
+    if (pin !== confirm_) { _profileSetStatus("create", "PINs don't match", "error"); return; }
+
+    _profileSetStatus("create", "Creating\u2026", "info");
+    const resp = await browser.runtime.sendMessage({
+      action: "profileCreate", username, passcode: pin, type
+    });
+    if (resp?.success) {
+      _profileSetStatus("create", "Profile created!", "success");
+      setTimeout(() => { renderProfileState(); _updateRibbonBadge(username); }, 500);
+    } else {
+      _profileSetStatus("create", resp?.error || "Failed", "error");
+    }
   });
 
-  // Sync Now
-  document.getElementById("profile-sync-btn")?.addEventListener("click", async () => {
-    const statusEl = document.getElementById("profile-sync-status");
-    const btn = document.getElementById("profile-sync-btn");
-    btn.textContent = "Syncing\u2026";
-    btn.disabled = true;
-    statusEl.textContent = "";
-    try {
-      const r = await browser.runtime.sendMessage({ action: "profileSyncAll" });
-      if (r?.success) {
-        statusEl.textContent = `Synced ${Object.keys(r.stores || {}).length} stores \u00b7 ${_profileFmtDate(r.syncedAt)}`;
-        statusEl.style.color = "var(--success)";
-        document.getElementById("profile-last-sync").textContent = _profileFmtDate(r.syncedAt);
-      } else {
-        statusEl.textContent = r?.error || "Sync failed.";
-        statusEl.style.color = "var(--error)";
-      }
-    } catch (e) {
-      statusEl.textContent = e.message;
-      statusEl.style.color = "var(--error)";
+  // ── Sign In ──
+  document.getElementById("profile-signin-btn")?.addEventListener("click", async () => {
+    const username = document.getElementById("profile-select").value;
+    const pin = document.getElementById("profile-login-pin").value;
+    if (!pin) { _profileSetStatus("login", "Enter your PIN", "error"); return; }
+    _profileSetStatus("login", "Signing in\u2026", "info");
+    const resp = await browser.runtime.sendMessage({
+      action: "profileSignIn", username, passcode: pin
+    });
+    if (resp?.success) {
+      document.getElementById("profile-login-pin").value = "";
+      renderProfileState();
+    } else {
+      _profileSetStatus("login", resp?.error || "Incorrect PIN", "error");
     }
-    btn.textContent = "Sync Now";
-    btn.disabled = false;
   });
 
-  // Sign Out
-  document.getElementById("profile-logout-btn")?.addEventListener("click", async () => {
-    const syncFirst = !document.getElementById("profile-clear-on-logout")?.checked;
-    const confirmMsg = syncFirst
-      ? "Sync to cloud then sign out?"
-      : "Sign out without syncing? Any unsynced changes will stay local.";
-    if (!confirm(confirmMsg)) return;
-
-    const btn = document.getElementById("profile-logout-btn");
-    btn.textContent = syncFirst ? "Syncing\u2026" : "Signing out\u2026";
-    btn.disabled = true;
-
-    try {
-      await browser.runtime.sendMessage({ action: "profileLogout", syncFirst });
-      updateProfileUI(null);
-    } catch (e) {
-      const statusEl = document.getElementById("profile-sync-status");
-      statusEl.textContent = e.message;
-      statusEl.style.color = "var(--error)";
-    }
-    btn.textContent = "Sign Out";
-    btn.disabled = false;
+  // ── Continue as Guest (from login screen) ──
+  document.getElementById("profile-guest-btn")?.addEventListener("click", async () => {
+    await browser.runtime.sendMessage({ action: "profileSignOut" }); // falls back to guest
+    renderProfileState();
   });
+
+  // ── Continue as Guest (from locked screen) ──
+  document.getElementById("profile-guest-locked-btn")?.addEventListener("click", async () => {
+    await browser.runtime.sendMessage({ action: "profileSignOut" });
+    renderProfileState();
+  });
+
+  // ── New Profile (from login screen) ──
+  document.getElementById("profile-new-btn")?.addEventListener("click", () => {
+    document.getElementById("profile-login")?.classList.add("hidden");
+    document.getElementById("profile-guest")?.classList.remove("hidden");
+  });
+
+  // ── Delete Profile ──
+  document.getElementById("profile-delete-btn")?.addEventListener("click", async () => {
+    const { argusActiveProfile } = await browser.storage.local.get("argusActiveProfile");
+    if (!argusActiveProfile) return;
+    if (!confirm(`Delete profile "${argusActiveProfile}"? This permanently removes all encrypted credentials for this profile.`)) return;
+    const passcode = prompt(`Enter your PIN/password to confirm deletion of "${argusActiveProfile}":`);
+    if (!passcode) return;
+    const resp = await browser.runtime.sendMessage({ action: "profileDelete", username: argusActiveProfile, passcode });
+    if (resp?.success) {
+      renderProfileState();
+    } else {
+      _profileSetStatus("active", resp?.error || "Delete failed", "var(--error)");
+    }
+  });
+
+  // ── Sign Out ──
+  document.getElementById("profile-signout-btn")?.addEventListener("click", async () => {
+    await browser.runtime.sendMessage({ action: "profileSignOut" });
+    renderProfileState();
+  });
+
+  // ── Lock ──
+  document.getElementById("profile-lock-btn")?.addEventListener("click", async () => {
+    await browser.runtime.sendMessage({ action: "profileLock" });
+    renderProfileState();
+  });
+
+  // ── Unlock ──
+  document.getElementById("profile-unlock-btn")?.addEventListener("click", async () => {
+    const pin = document.getElementById("profile-unlock-pin").value;
+    if (!pin) { _profileSetStatus("unlock", "Enter your PIN", "error"); return; }
+    const resp = await browser.runtime.sendMessage({
+      action: "profileUnlock", passcode: pin
+    });
+    if (resp?.success) {
+      document.getElementById("profile-unlock-pin").value = "";
+      renderProfileState();
+    } else {
+      _profileSetStatus("unlock", resp?.error || "Incorrect PIN", "error");
+    }
+  });
+
+  // ── Unlock on Enter key ──
+  document.getElementById("profile-unlock-pin")?.addEventListener("keydown", e => {
+    if (e.key === "Enter") document.getElementById("profile-unlock-btn")?.click();
+  });
+  document.getElementById("profile-login-pin")?.addEventListener("keydown", e => {
+    if (e.key === "Enter") document.getElementById("profile-signin-btn")?.click();
+  });
+
+  // ── Switch Profile (from active state) ──
+  document.getElementById("profile-switch-btn")?.addEventListener("click", async () => {
+    // Lock current profile first
+    await browser.runtime.sendMessage({ action: "profileLock" });
+    // Show login with profile list
+    const { argusProfiles } = await browser.storage.local.get("argusProfiles");
+    const namedProfiles = Object.keys(argusProfiles || {}).filter(n => n !== "guest");
+    const sel = document.getElementById("profile-select");
+    if (sel) sel.innerHTML = namedProfiles.map(n => `<option value="${n}">${n}</option>`).join("");
+    for (const id of ["profile-guest", "profile-active", "profile-locked"]) {
+      document.getElementById(id)?.classList.add("hidden");
+    }
+    document.getElementById("profile-login")?.classList.remove("hidden");
+  });
+
+  // ── Switch Profile (from locked state) ──
+  document.getElementById("profile-switch-locked-btn")?.addEventListener("click", async () => {
+    // Show login with profile list (already locked)
+    const { argusProfiles } = await browser.storage.local.get("argusProfiles");
+    const namedProfiles = Object.keys(argusProfiles || {}).filter(n => n !== "guest");
+    const sel = document.getElementById("profile-select");
+    if (sel) sel.innerHTML = namedProfiles.map(n => `<option value="${n}">${n}</option>`).join("");
+    for (const id of ["profile-guest", "profile-active", "profile-locked"]) {
+      document.getElementById(id)?.classList.add("hidden");
+    }
+    document.getElementById("profile-login")?.classList.remove("hidden");
+  });
+
+  // ── Change PIN ──
+  document.getElementById("profile-change-pin-btn")?.addEventListener("click", () => {
+    document.getElementById("profile-change-pin-form")?.classList.toggle("hidden");
+  });
+
+  document.getElementById("profile-change-pin-cancel")?.addEventListener("click", () => {
+    document.getElementById("profile-change-pin-form")?.classList.add("hidden");
+    document.getElementById("profile-change-new-pin").value = "";
+    document.getElementById("profile-change-confirm-pin").value = "";
+    _profileSetStatus("changepin", "", "");
+  });
+
+  document.getElementById("profile-change-pin-save")?.addEventListener("click", async () => {
+    const newPin = document.getElementById("profile-change-new-pin").value;
+    const confirmPin = document.getElementById("profile-change-confirm-pin").value;
+    if (!newPin) { _profileSetStatus("changepin", "Enter new PIN", "error"); return; }
+    if (newPin !== confirmPin) { _profileSetStatus("changepin", "PINs don't match", "error"); return; }
+    _profileSetStatus("changepin", "Changing\u2026", "info");
+    const resp = await browser.runtime.sendMessage({
+      action: "profileChangePIN", passcode: newPin, type: null
+    });
+    if (resp?.success) {
+      _profileSetStatus("changepin", "PIN changed!", "success");
+      document.getElementById("profile-change-new-pin").value = "";
+      document.getElementById("profile-change-confirm-pin").value = "";
+      setTimeout(() => document.getElementById("profile-change-pin-form")?.classList.add("hidden"), 1200);
+    } else {
+      _profileSetStatus("changepin", resp?.error || "Failed", "error");
+    }
+  });
+
+  // Initial render
+  renderProfileState();
 }
 
 // ──────────────────────────────────────────────
@@ -764,155 +899,12 @@ function initStorageManagement() {
 }
 
 // ──────────────────────────────────────────────
-// Vault / Security
+// Vault / Security — REMOVED (merged into initProfile above)
+// Old initVault() function removed — vault is now managed through
+// the unified profile system. Vault backend handlers (vaultGetStatus,
+// vaultUnlock, vaultLock, etc.) remain in background.js for backward
+// compatibility with ribbon lock screen and credential backup.
 // ──────────────────────────────────────────────
-function initVault() {
-  const vaultTypeSelect   = document.getElementById("vault-type-select");
-  const vaultSetupInput   = document.getElementById("vault-setup-input");
-  const vaultSetupConfirm = document.getElementById("vault-setup-confirm");
-  const vaultSetupLabel   = document.getElementById("vault-setup-label");
-  const vaultEnableBtn    = document.getElementById("vault-enable-btn");
-  const vaultSetupStatus  = document.getElementById("vault-setup-status");
-  const vaultNotConfigured = document.getElementById("vault-not-configured");
-  const vaultConfigured   = document.getElementById("vault-configured");
-  const vaultStatusBadge  = document.getElementById("vault-status-badge");
-  const vaultTypeDisplay  = document.getElementById("vault-type-display");
-  const vaultLockBtn      = document.getElementById("vault-lock-btn");
-  const vaultChangeBtn    = document.getElementById("vault-change-btn");
-  const vaultRemoveBtn    = document.getElementById("vault-remove-btn");
-  const vaultActionStatus = document.getElementById("vault-action-status");
-
-  if (vaultTypeSelect) {
-    vaultTypeSelect.addEventListener("change", () => {
-      const type = vaultTypeSelect.value;
-      const isPassword = type === "password";
-      vaultSetupLabel.textContent = isPassword ? "Enter password" : "Enter PIN";
-      vaultSetupInput.placeholder = isPassword ? "Password" : "Enter PIN";
-      vaultSetupConfirm.placeholder = isPassword ? "Confirm password" : "Confirm PIN";
-      vaultSetupInput.maxLength = isPassword ? 128 : (type === "pin6" ? 6 : 4);
-      vaultSetupConfirm.maxLength = vaultSetupInput.maxLength;
-      vaultSetupInput.inputMode = isPassword ? "text" : "numeric";
-      vaultSetupConfirm.inputMode = vaultSetupInput.inputMode;
-      vaultSetupInput.value = "";
-      vaultSetupConfirm.value = "";
-    });
-  }
-
-  async function loadVaultStatus() {
-    try {
-      const status = await browser.runtime.sendMessage({ action: "vaultGetStatus" });
-      if (status?.enabled) {
-        vaultNotConfigured.classList.add("hidden");
-        vaultConfigured.classList.remove("hidden");
-        const typeNames = { pin4: "4-digit PIN", pin6: "6-digit PIN", password: "Password" };
-        vaultTypeDisplay.textContent = "Protected with " + (typeNames[status.type] || status.type);
-        vaultStatusBadge.textContent = status.unlocked ? "Unlocked" : "Locked";
-        vaultStatusBadge.className = "vault-status-badge " + (status.unlocked ? "vault-unlocked" : "vault-locked");
-      } else {
-        vaultNotConfigured.classList.remove("hidden");
-        vaultConfigured.classList.add("hidden");
-      }
-    } catch { /* */ }
-  }
-  loadVaultStatus();
-
-  if (vaultEnableBtn) {
-    vaultEnableBtn.addEventListener("click", async () => {
-      if (vaultEnableBtn._isChange) return;
-      const type = vaultTypeSelect.value;
-      const pass = vaultSetupInput.value;
-      const confirm_ = vaultSetupConfirm.value;
-
-      if (!pass) { vaultSetupStatus.textContent = "Enter a passcode."; return; }
-      if (type !== "password" && !/^\d+$/.test(pass)) { vaultSetupStatus.textContent = "PIN must be digits only."; return; }
-      if (type === "pin4" && pass.length !== 4) { vaultSetupStatus.textContent = "PIN must be 4 digits."; return; }
-      if (type === "pin6" && pass.length !== 6) { vaultSetupStatus.textContent = "PIN must be 6 digits."; return; }
-      if (type === "password" && pass.length < 4) { vaultSetupStatus.textContent = "Password must be at least 4 characters."; return; }
-      if (pass !== confirm_) { vaultSetupStatus.textContent = "Entries don't match."; return; }
-
-      vaultEnableBtn.disabled = true;
-      vaultSetupStatus.textContent = "Encrypting...";
-      try {
-        const result = await browser.runtime.sendMessage({ action: "vaultSetup", passcode: pass, type });
-        if (result?.success) {
-          vaultSetupStatus.textContent = "Encryption enabled!";
-          vaultSetupInput.value = "";
-          vaultSetupConfirm.value = "";
-          loadVaultStatus();
-        } else {
-          vaultSetupStatus.textContent = "Failed: " + (result.error || "unknown error");
-        }
-      } catch (e) {
-        vaultSetupStatus.textContent = "Error: " + e.message;
-      }
-      vaultEnableBtn.disabled = false;
-    });
-  }
-
-  if (vaultLockBtn) {
-    vaultLockBtn.addEventListener("click", async () => {
-      await browser.runtime.sendMessage({ action: "vaultLock" });
-      vaultActionStatus.textContent = "Locked. Reload any Argus page to see the lock screen.";
-      loadVaultStatus();
-    });
-  }
-
-  if (vaultChangeBtn) {
-    vaultChangeBtn.addEventListener("click", () => {
-      vaultConfigured.classList.add("hidden");
-      vaultNotConfigured.classList.remove("hidden");
-      vaultSetupStatus.textContent = "";
-      vaultEnableBtn.textContent = "Change Passcode";
-      vaultEnableBtn._isChange = true;
-    });
-
-    vaultEnableBtn?.addEventListener("click", async function changeHandler() {
-      if (!vaultEnableBtn._isChange) return;
-      const type = vaultTypeSelect.value;
-      const pass = vaultSetupInput.value;
-      const confirm_ = vaultSetupConfirm.value;
-
-      if (!pass) { vaultSetupStatus.textContent = "Enter a passcode."; return; }
-      if (type !== "password" && !/^\d+$/.test(pass)) { vaultSetupStatus.textContent = "PIN must be digits only."; return; }
-      if (type === "pin4" && pass.length !== 4) { vaultSetupStatus.textContent = "PIN must be 4 digits."; return; }
-      if (type === "pin6" && pass.length !== 6) { vaultSetupStatus.textContent = "PIN must be 6 digits."; return; }
-      if (type === "password" && pass.length < 4) { vaultSetupStatus.textContent = "Password too short."; return; }
-      if (pass !== confirm_) { vaultSetupStatus.textContent = "Entries don't match."; return; }
-
-      vaultEnableBtn.disabled = true;
-      vaultSetupStatus.textContent = "Changing...";
-      try {
-        const result = await browser.runtime.sendMessage({ action: "vaultChange", passcode: pass, type });
-        if (result?.success) {
-          vaultSetupStatus.textContent = "Passcode changed!";
-          vaultSetupInput.value = "";
-          vaultSetupConfirm.value = "";
-          vaultEnableBtn.textContent = "Enable Encryption";
-          vaultEnableBtn._isChange = false;
-          loadVaultStatus();
-        }
-      } catch (e) {
-        vaultSetupStatus.textContent = "Error: " + e.message;
-      }
-      vaultEnableBtn.disabled = false;
-    });
-  }
-
-  if (vaultRemoveBtn) {
-    vaultRemoveBtn.addEventListener("click", async () => {
-      vaultActionStatus.textContent = "Decrypting...";
-      try {
-        const result = await browser.runtime.sendMessage({ action: "vaultRemove" });
-        if (result?.success) {
-          vaultActionStatus.textContent = "Encryption removed.";
-          loadVaultStatus();
-        }
-      } catch (e) {
-        vaultActionStatus.textContent = "Error: " + e.message;
-      }
-    });
-  }
-}
 
 // ──────────────────────────────────────────────
 // Import / Export
@@ -1222,8 +1214,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Init subsystems
   initStorageManagement();
-  initUserProfile();
-  initVault();
+  initProfile();
   initCloudBackup();
   initHomepageButton();
   initSettingsProjectDropdowns();
