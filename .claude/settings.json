@@ -126,7 +126,14 @@
       "Bash(grep -l \"audio\\\\|video\\\\|youtube\\\\|twitch\\\\|rumble\\\\|spotify\" /home/birdman/argus-byo/my-ideas/*.md)",
       "Bash(node --check av/av.js)",
       "Bash(node --check player/player.js)",
-      "Bash(node --check player/sandbox.js)"
+      "Bash(node --check player/sandbox.js)",
+      "Bash(find /home/birdman/argus-byo -name \"package.json\" -exec cat {} \\\\;)",
+      "Bash(grep -E \"\\\\.js$\")",
+      "Bash(grep -n \"ProviderRegistry\\\\s*=\" /home/birdman/argus-byo/lib/*.js)",
+      "Bash(find /home/birdman/argus-byo -name \"*.js\" -type f -exec grep -l \"ProviderRegistry.*=.*{\" {} \\\\;)",
+      "Bash(grep -oP '.{0,30}\\(new Function|eval\\\\\\(\\).{0,30}' /home/birdman/argus-byo/lib/vendor/pdf.min.js)",
+      "Bash(grep -oP '.{0,80}')",
+      "Bash(grep -oP '.{0,100}\\(import\\\\.meta|globalThis\\\\.pdfjsLib|export \\)')"
     ]
   }
 }
