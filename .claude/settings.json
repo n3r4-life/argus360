@@ -134,6 +134,9 @@
       "Bash(grep -oP '.{0,30}\\(new Function|eval\\\\\\(\\).{0,30}' /home/birdman/argus-byo/lib/vendor/pdf.min.js)",
       "Bash(grep -oP '.{0,80}')",
       "Bash(grep -oP '.{0,100}\\(import\\\\.meta|globalThis\\\\.pdfjsLib|export \\)')"
+    ],
+    "additionalDirectories": [
+      "/home/birdman/Desktop/test"
     ]
   }
 }
